@@ -4,6 +4,7 @@ use nom::{IResult, space, multispace, Needed, Err};
 use nom::IResult::*;
 use std::str;
 use std::collections::HashMap;
+use std::cmp;
 
 fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
@@ -18,7 +19,7 @@ fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
 fn just_about_everything(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
-            33...126 => continue,
+            32...126 => continue,
             _ => return IResult::Done(&input[idx..], &input[..idx]),
         }
     }
@@ -33,7 +34,7 @@ fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
     }
     IResult::Incomplete(Needed::Size(1))
 }
-named!(pub init_line <&[u8], (&str, &str)>,
+named!(init_line <&[u8], (&str, &str)>,
 dbg!(chain!(
         multispace?                  ~
         tag!("WARC")                ~
@@ -45,7 +46,7 @@ dbg!(chain!(
         || {("WARCVERSION", version)}
         )
     ));
-named!(pub header_match <&[u8], (&str, &str)>,
+named!(header_match <&[u8], (&str, &str)>,
 dbg!(chain!(
         name: map_res!(token, str::from_utf8)~
         space?                      ~
@@ -58,9 +59,9 @@ dbg!(chain!(
         )
     ));
 
-named!(pub header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
+named!(header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
 
-named!(pub warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
+named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
 chain!(
     version: init_line              ~
     headers: header_aggregator      ,
@@ -68,7 +69,7 @@ chain!(
     )
 );
 
-pub fn warc_record(input: &[u8]) -> IResult<&[u8], HashMap<&str,&str>>{
+pub fn record(input: &[u8]) -> IResult<&[u8], HashMap<&str,&str>>{
     let mut h: HashMap<&str,  &str> = HashMap::new();
     match warc_header(input) {
         IResult::Done(mut i, tuple_vec) => {
@@ -78,12 +79,15 @@ pub fn warc_record(input: &[u8]) -> IResult<&[u8], HashMap<&str,&str>>{
             for &(k,ref v) in headers.iter() {
                 h.insert(k, v.clone());
             }
+            println!("{:?}", h);
             match h.get(&"Content-Length"){
                 Some(&length) => {
-                    let length_number = length.parse::<u32>().unwrap();
-                    let content = &i[0..length_number as usize];
+                    let length_number = length.parse::<usize>().unwrap();
+                    println!("{:?} :: {:?}", length_number, i.len());
+                    let truncated = std::cmp::min(length_number, i.len()-1);
+                    let content = &i[0..truncated as usize];
                     let content_str = str::from_utf8(content).unwrap();
-                    i = &i[length_number as usize ..];
+                    i = &i[truncated as usize ..];
                     h.insert(&"CONTENT", content_str);
                     IResult::Done(i, h)
                 }
@@ -98,4 +102,4 @@ pub fn warc_record(input: &[u8]) -> IResult<&[u8], HashMap<&str,&str>>{
     }
 }
 
-named!(pub warc_records<&[u8], Vec<HashMap<&str,&str>> >, many1!(warc_record));
+named!(pub records<&[u8], Vec<HashMap<&str,&str>> >, many1!(record));
