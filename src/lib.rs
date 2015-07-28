@@ -67,34 +67,36 @@ chain!(
     move ||{(version, headers)}
     )
 );
-
-pub fn record(input: &[u8]) -> IResult<&[u8], HashMap<&str,&str>>{
-    let mut h: HashMap<&str,  &str> = HashMap::new();
+pub struct Record{
+    headers: HashMap<String, String>,
+    content: Vec<u8>
+}
+pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
+    let mut h: HashMap<String,  String> = HashMap::new();
     match warc_header(input) {
         IResult::Done(mut i, tuple_vec) => {
             let (name, version) = tuple_vec.0;
-            h.insert(name, version);
+            h.insert(name.to_string(), version.to_string());
             let headers =  tuple_vec.1;
             for &(k,ref v) in headers.iter() {
-                h.insert(k, v.clone());
+                h.insert(k.to_string(), v.clone().to_string());
             }
-            println!("{:?}", h);
-            match h.get(&"Content-Length"){
-                Some(&length) => {
+            let mut content: &[u8];
+            match h.get("Content-Length"){
+                Some(length) => {
                     let mut length_number = length.parse::<usize>().unwrap();
                     println!("{:?} :: {:?}", length_number, i.len());
-                    match h.get(&"WARC-Truncated"){
+                    match h.get("WARC-Truncated"){
                         Some(_) =>{
                             length_number = std::cmp::min(length_number, i.len());
                         }
                         _ => {}
                     }
                     println!("{:?} :: {:?}", length_number, i.len());
-                    let content = &i[0..length_number as usize];
-                    let content_str = str::from_utf8(content).unwrap();
+                    content = &i[0..length_number as usize];
                     i = &i[length_number as usize ..];
-                    h.insert(&"CONTENT", content_str);
-                    IResult::Done(i, h)
+                    let record = Record{headers: h, content: content.to_vec()};
+                    IResult::Done(i, record)
                 }
                 None => {
                     IResult::Incomplete(Needed::Size(1))
@@ -107,4 +109,4 @@ pub fn record(input: &[u8]) -> IResult<&[u8], HashMap<&str,&str>>{
     }
 }
 
-named!(pub records<&[u8], Vec<HashMap<&str,&str>> >, many1!(record));
+named!(pub records<&[u8], Vec<Record> >, many1!(record));
