@@ -34,29 +34,29 @@ fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
     IResult::Incomplete(Needed::Size(1))
 }
 named!(init_line <&[u8], (&str, &str)>,
-    chain!(
-        multispace?                  ~
-        tag!("WARC")                ~
-        tag!("/")                   ~
-        space?                      ~
-        version: map_res!(version_number, str::from_utf8)~
-        tag!("\r")?                 ~
-        tag!("\n")                  ,
-        || {("WARCVERSION", version)}
-        )
-    );
+chain!(
+    multispace?                  ~
+    tag!("WARC")                ~
+    tag!("/")                   ~
+    space?                      ~
+    version: map_res!(version_number, str::from_utf8)~
+    tag!("\r")?                 ~
+    tag!("\n")                  ,
+    || {("WARCVERSION", version)}
+    )
+);
 named!(header_match <&[u8], (&str, &str)>,
-    chain!(
-        name: map_res!(token, str::from_utf8)~
-        space?                      ~
-        tag!(":")                   ~
-        space?                      ~
-        value: map_res!(just_about_everything, str::from_utf8)~
-        tag!("\r")?                 ~
-        tag!("\n")                  ,
-        || {(name, value)}
-        )
-    );
+chain!(
+    name: map_res!(token, str::from_utf8)~
+    space?                      ~
+    tag!(":")                   ~
+    space?                      ~
+    value: map_res!(just_about_everything, str::from_utf8)~
+    tag!("\r")?                 ~
+    tag!("\n")                  ,
+    || {(name, value)}
+    )
+);
 
 named!(header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
 
@@ -67,6 +67,7 @@ chain!(
     move ||{(version, headers)}
     )
 );
+#[derive(Debug)]
 pub struct Record{
     headers: HashMap<String, String>,
     content: Vec<u8>
@@ -81,7 +82,7 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
             for &(k,ref v) in headers.iter() {
                 h.insert(k.to_string(), v.clone().to_string());
             }
-            let mut content: &[u8];
+            let mut content = None;
             match h.get("Content-Length"){
                 Some(length) => {
                     let mut length_number = length.parse::<usize>().unwrap();
@@ -93,11 +94,17 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
                         _ => {}
                     }
                     println!("{:?} :: {:?}", length_number, i.len());
-                    content = &i[0..length_number as usize];
+                    content = Some(&i[0..length_number as usize]);
                     i = &i[length_number as usize ..];
+                }
+                _ => { }
+            }
+            match content {
+                Some(content) => {
                     let record = Record{headers: h, content: content.to_vec()};
                     IResult::Done(i, record)
                 }
+
                 None => {
                     IResult::Incomplete(Needed::Size(1))
                 }
