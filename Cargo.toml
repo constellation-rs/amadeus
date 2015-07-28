@@ -1,0 +1,40 @@
+[package]
+name = "warc_parser"
+version = "0.0.1"
+authors = ["Stephen Becker IV <github@deathbyescalator.com>"]
+description = "Web ARChive parsing library using nom"
+documentation = ""
+homepage = ""
+repository = "https://github.com/sbeckeriv/warc_nom_parser"
+readme = "./README.md"
+keywords = ["web", "archive", "parsing", "warc"]
+license-file = "./LICENSE-MIT"
+
+[dependencies]
+nom = "*"
+
+[profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+
+[profile.test]
+opt-level = 0
+debug = true
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0  # Controls the --opt-level the compiler builds with
+debug = true   # Controls whether the compiler passes `-g`
+rpath = false  # Controls whether the compiler passes `-C rpath`
+lto = false    # Controls `-C lto` for binaries and staticlibs
+debug-assertions = true  # Controls whether debug assertions are enabled
+codegen-units = 1 # Controls whether the compiler passes `-C codegen-units`
+                  # `codegen-units` is ignored when `lto = true`
+
