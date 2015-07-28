@@ -2,10 +2,8 @@
 extern crate test;
 extern crate warc_parser;
 mod tests{
-    use std::error::Error;
     use std::fs::File;
     use std::io::prelude::*;
-    use std::path::Path;
 
     fn read_sample_file(sample_name: &str) -> Vec<u8> {
         let full_path = "sample/".to_string()+sample_name;
