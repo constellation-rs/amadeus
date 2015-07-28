@@ -15,13 +15,18 @@ mod tests{
                                Error::description(&why)),
             Ok(file) => file,
         };
-
-        // Read the file contents into a string, returns `io::Result<usize>`
         let mut s = String::new();
         file.read_to_string(&mut s).unwrap();
         s
     }
     use warc_parser;
+    #[test]
+    fn it_parses_a_plethora(){
+        let examples = read_sample_file("plethora.warc");
+        let parsed = warc_parser::records(examples.as_bytes());
+        println!("{:?}",parsed);
+        assert!(parsed.is_done());
+    }
 
     #[test]
     fn it_parses_single(){

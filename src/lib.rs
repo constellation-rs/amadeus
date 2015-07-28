@@ -4,7 +4,6 @@ use nom::{IResult, space, multispace, Needed, Err};
 use nom::IResult::*;
 use std::str;
 use std::collections::HashMap;
-use std::cmp;
 
 fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
@@ -35,7 +34,7 @@ fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
     IResult::Incomplete(Needed::Size(1))
 }
 named!(init_line <&[u8], (&str, &str)>,
-dbg!(chain!(
+    chain!(
         multispace?                  ~
         tag!("WARC")                ~
         tag!("/")                   ~
@@ -45,9 +44,9 @@ dbg!(chain!(
         tag!("\n")                  ,
         || {("WARCVERSION", version)}
         )
-    ));
+    );
 named!(header_match <&[u8], (&str, &str)>,
-dbg!(chain!(
+    chain!(
         name: map_res!(token, str::from_utf8)~
         space?                      ~
         tag!(":")                   ~
@@ -57,7 +56,7 @@ dbg!(chain!(
         tag!("\n")                  ,
         || {(name, value)}
         )
-    ));
+    );
 
 named!(header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
 
@@ -82,12 +81,18 @@ pub fn record(input: &[u8]) -> IResult<&[u8], HashMap<&str,&str>>{
             println!("{:?}", h);
             match h.get(&"Content-Length"){
                 Some(&length) => {
-                    let length_number = length.parse::<usize>().unwrap();
+                    let mut length_number = length.parse::<usize>().unwrap();
                     println!("{:?} :: {:?}", length_number, i.len());
-                    let truncated = std::cmp::min(length_number, i.len()-1);
-                    let content = &i[0..truncated as usize];
+                    match h.get(&"WARC-Truncated"){
+                        Some(_) =>{
+                            length_number = std::cmp::min(length_number, i.len());
+                        }
+                        _ => {}
+                    }
+                    println!("{:?} :: {:?}", length_number, i.len());
+                    let content = &i[0..length_number as usize];
                     let content_str = str::from_utf8(content).unwrap();
-                    i = &i[truncated as usize ..];
+                    i = &i[length_number as usize ..];
                     h.insert(&"CONTENT", content_str);
                     IResult::Done(i, h)
                 }
