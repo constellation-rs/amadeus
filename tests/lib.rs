@@ -17,7 +17,7 @@ mod tests{
     use warc_parser;
     #[test]
     fn it_parses_a_plethora(){
-        let examples = read_sample_file("picplz.warc");
+        let examples = read_sample_file("plethora.warc");
         let parsed = warc_parser::records(&examples);
         println!("{:?}",parsed);
         assert!(parsed.is_done());
