@@ -9,20 +9,15 @@ mod tests{
 
     fn read_sample_file(sample_name: &str) -> String{
         let full_path = "sample/".to_string()+sample_name;
-        let path = Path::new(&full_path);
-        let mut file = match File::open(&path) {
-            Err(why) => panic!("couldn't open {}: {}", full_path,
-                               Error::description(&why)),
-            Ok(file) => file,
-        };
+        let mut f = File::open(full_path).unwrap();
         let mut s = String::new();
-        file.read_to_string(&mut s).unwrap();
+        f.read_to_string(&mut s).unwrap();
         s
     }
     use warc_parser;
     #[test]
     fn it_parses_a_plethora(){
-        let examples = read_sample_file("plethora.warc");
+        let examples = read_sample_file("picplz.warc");
         let parsed = warc_parser::records(examples.as_bytes());
         println!("{:?}",parsed);
         assert!(parsed.is_done());
