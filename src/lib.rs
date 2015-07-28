@@ -5,6 +5,12 @@ use nom::IResult::*;
 use std::str;
 use std::collections::HashMap;
 
+#[derive(Debug)]
+pub struct Record{
+    headers: HashMap<String, String>,
+    content: Vec<u8>
+}
+
 fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
@@ -15,6 +21,7 @@ fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
     IResult::Incomplete(Needed::Size(1))
 }
 
+//should allow utf8 chars too
 fn just_about_everything(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
@@ -24,6 +31,7 @@ fn just_about_everything(input: &[u8]) -> IResult<&[u8], &[u8]> {
     }
     IResult::Incomplete(Needed::Size(1))
 }
+
 fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
@@ -33,52 +41,49 @@ fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
     }
     IResult::Incomplete(Needed::Size(1))
 }
+
 named!(init_line <&[u8], (&str, &str)>,
-chain!(
-    multispace?                  ~
-    tag!("WARC")                ~
-    tag!("/")                   ~
-    space?                      ~
-    version: map_res!(version_number, str::from_utf8)~
-    tag!("\r")?                 ~
-    tag!("\n")                  ,
-    || {("WARCVERSION", version)}
+    chain!(
+        multispace?                  ~
+        tag!("WARC")                ~
+        tag!("/")                   ~
+        space?                      ~
+        version: map_res!(version_number, str::from_utf8)~
+        tag!("\r")?                 ~
+        tag!("\n")                  ,
+        || {("WARCVERSION", version)}
     )
 );
 named!(header_match <&[u8], (&str, &str)>,
-chain!(
-    name: map_res!(token, str::from_utf8)~
-    space?                      ~
-    tag!(":")                   ~
-    space?                      ~
-    value: map_res!(just_about_everything, str::from_utf8)~
-    tag!("\r")?                 ~
-    tag!("\n")                  ,
-    || {(name, value)}
+    chain!(
+        name: map_res!(token, str::from_utf8)~
+        space?                      ~
+        tag!(":")                   ~
+        space?                      ~
+        value: map_res!(just_about_everything, str::from_utf8)~
+        tag!("\r")?                 ~
+        tag!("\n")                  ,
+        || {(name, value)}
     )
 );
 
 named!(header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
 
 named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
-chain!(
-    version: init_line              ~
-    headers: header_aggregator      ,
-    move ||{(version, headers)}
+    chain!(
+        version: init_line              ~
+        headers: header_aggregator      ,
+        move ||{(version, headers)}
     )
 );
-#[derive(Debug)]
-pub struct Record{
-    headers: HashMap<String, String>,
-    content: Vec<u8>
-}
+
 pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
     let mut h: HashMap<String,  String> = HashMap::new();
     match warc_header(input) {
         IResult::Done(mut i, tuple_vec) => {
             let (name, version) = tuple_vec.0;
             h.insert(name.to_string(), version.to_string());
-            let headers =  tuple_vec.1;
+            let headers =  tuple_vec.1; // not need figure it out
             for &(k,ref v) in headers.iter() {
                 h.insert(k.to_string(), v.clone().to_string());
             }
@@ -104,12 +109,10 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
                     let record = Record{headers: h, content: content.to_vec()};
                     IResult::Done(i, record)
                 }
-
                 None => {
                     IResult::Incomplete(Needed::Size(1))
                 }
             }
-
         },
         IResult::Incomplete(a)     => IResult::Incomplete(a),
         IResult::Error(a)          => IResult::Error(a)
