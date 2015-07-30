@@ -1,14 +1,14 @@
 #[macro_use]
 extern crate nom;
-use nom::{IResult, space, multispace, Needed, Err};
+use nom::{IResult, space, Needed, Err};
 use nom::IResult::*;
 use std::str;
 use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Record{
-    headers: HashMap<String, String>,
-    content: Vec<u8>
+    pub headers: HashMap<String, String>,
+    pub content: Vec<u8>
 }
 
 fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -44,7 +44,6 @@ fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 named!(init_line <&[u8], (&str, &str)>,
     chain!(
-        multispace?                  ~
         tag!("WARC")                ~
         tag!("/")                   ~
         space?                      ~
@@ -119,4 +118,14 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
     }
 }
 
-named!(pub records<&[u8], Vec<Record> >, many1!(record));
+named!(record_complete <&[u8], Record >,
+    chain!(
+        record: record              ~
+        tag!("\r")?                 ~
+        tag!("\n")                  ~
+        tag!("\r")?                 ~
+        tag!("\n")                  ,
+        move ||{record}
+    )
+);
+named!(pub records<&[u8], Vec<Record> >, many1!(record_complete));
