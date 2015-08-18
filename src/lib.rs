@@ -4,11 +4,30 @@ use nom::{IResult, space, Needed, Err};
 use nom::IResult::*;
 use std::str;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter, Result};
 
-#[derive(Debug)]
 pub struct Record{
     pub headers: HashMap<String, String>,
     pub content: Vec<u8>
+}
+
+impl<'a> Debug for Record {
+    fn fmt(&self, form:&mut Formatter) -> Result {
+        write!(form, "\nHeaders:\n");
+        for (name, value) in &self.headers {
+            write!(form, "{}", name);
+            write!(form, ": ");
+            write!(form, "{}", value);
+            write!(form, "\n");
+        }
+        write!(form, "Content Length:{}\n", self.content.len());
+        let s = match String::from_utf8(self.content.clone()){
+            Ok(s) => s,
+            Err(_) => {"Could not convert".to_string()}
+        };
+        write!(form, "Content :{:?}\n", s);
+        write!(form, "\n")
+    }
 }
 
 fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -44,6 +63,8 @@ fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 named!(init_line <&[u8], (&str, &str)>,
     chain!(
+        tag!("\r")?                 ~
+        tag!("\n")?                 ~
         tag!("WARC")                ~
         tag!("/")                   ~
         space?                      ~
@@ -70,8 +91,10 @@ named!(header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
 
 named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
     chain!(
-        version: init_line              ~
-        headers: header_aggregator      ,
+        version: init_line          ~
+        headers: header_aggregator  ~
+        tag!("\r")?                 ~
+        tag!("\n")                  ,
         move ||{(version, headers)}
     )
 );

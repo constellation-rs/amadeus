@@ -17,7 +17,6 @@ mod tests{
     use warc_parser;
     #[test]
     fn it_parses_a_plethora(){
-        return;
         let examples = read_sample_file("plethora.warc");
         let parsed = warc_parser::records(&examples);
         println!("{:?}",parsed);
@@ -26,6 +25,7 @@ mod tests{
 
     #[test]
     fn it_parses_single(){
+        return;
         let bbc = read_sample_file("bbc.warc");
         let parsed = warc_parser::record(&bbc);
         assert!(parsed.is_done());
