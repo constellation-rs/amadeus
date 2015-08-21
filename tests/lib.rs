@@ -19,13 +19,20 @@ mod tests{
     fn it_parses_a_plethora(){
         let examples = read_sample_file("plethora.warc");
         let parsed = warc_parser::records(&examples);
-        println!("{:?}",parsed);
         assert!(parsed.is_done());
+        match parsed{
+            IResult::Error(_) => assert!(false),
+            IResult::Incomplete(_) => assert!(false),
+            IResult::Done(i, records) => {
+                let empty: Vec<u8> =  Vec::new();
+                assert_eq!(empty, i);
+                assert_eq!(8, records.len());
+            }
+        }
     }
 
     #[test]
     fn it_parses_single(){
-        return;
         let bbc = read_sample_file("bbc.warc");
         let parsed = warc_parser::record(&bbc);
         assert!(parsed.is_done());

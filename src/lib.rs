@@ -113,14 +113,12 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
             match h.get("Content-Length"){
                 Some(length) => {
                     let mut length_number = length.parse::<usize>().unwrap();
-                    println!("{:?} :: {:?}", length_number, i.len());
                     match h.get("WARC-Truncated"){
                         Some(_) =>{
                             length_number = std::cmp::min(length_number, i.len());
                         }
                         _ => {}
                     }
-                    println!("{:?} :: {:?}", length_number, i.len());
                     content = Some(&i[0..length_number as usize]);
                     i = &i[length_number as usize ..];
                 }
