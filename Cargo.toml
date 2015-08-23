@@ -2,7 +2,7 @@
 name = "warc_parser"
 version = "0.0.1"
 authors = ["Stephen Becker IV <github@deathbyescalator.com>"]
-description = "Web ARChive parsing library using nom"
+description = "Web ARChive parsing library using nom lib"
 documentation = ""
 homepage = ""
 repository = "https://github.com/sbeckeriv/warc_nom_parser"

@@ -6,11 +6,17 @@ use std::str;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Result};
 
+/// The WArc `Record` struct
+///
+/// headers: HashMap<String, String>
+///
+/// content: Vec<u8>
+///
+/// matrix:  DMat<isize>
 pub struct Record{
     pub headers: HashMap<String, String>,
     pub content: Vec<u8>
 }
-
 impl<'a> Debug for Record {
     fn fmt(&self, form:&mut Formatter) -> Result {
         write!(form, "\nHeaders:\n");
@@ -40,12 +46,11 @@ fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
     IResult::Incomplete(Needed::Size(1))
 }
 
-//should allow utf8 chars too
-fn just_about_everything(input: &[u8]) -> IResult<&[u8], &[u8]> {
+fn utf8_allowed(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
-            32...126 => continue,
-            _ => return IResult::Done(&input[idx..], &input[..idx]),
+            0...31 => return IResult::Done(&input[idx..], &input[..idx]),
+            _ => continue
         }
     }
     IResult::Incomplete(Needed::Size(1))
@@ -80,7 +85,7 @@ named!(header_match <&[u8], (&str, &str)>,
         space?                      ~
         tag!(":")                   ~
         space?                      ~
-        value: map_res!(just_about_everything, str::from_utf8)~
+        value: map_res!(utf8_allowed, str::from_utf8)~
         tag!("\r")?                 ~
         tag!("\n")                  ,
         || {(name, value)}
@@ -99,6 +104,24 @@ named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
     )
 );
 
+/// Parses one record and returns an IResult from nom
+///
+/// IResult<&[u8], Record>
+///
+/// # Examples
+///  extern crate warc_parser;
+///  extern crate nom;
+///  use nom::{IResult};
+///  let parsed = warc_parser::record(&bbc);
+///  match parsed{
+///      IResult::Error(_) => assert!(false),
+///      IResult::Incomplete(_) => assert!(false),
+///      IResult::Done(i, record) => {
+///          let empty: Vec<u8> =  Vec::new();
+///          assert_eq!(empty, i);
+///          assert_eq!(13, record.headers.len());
+///      }
+///  }
 pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
     let mut h: HashMap<String,  String> = HashMap::new();
     match warc_header(input) {
@@ -149,4 +172,21 @@ named!(record_complete <&[u8], Record >,
         move ||{record}
     )
 );
+
+/// Parses one record and returns an IResult from nom
+///
+/// IResult<&[u8], Vec<Record>>
+///
+/// # Examples
+///  extern crate warc_parser;
+///  extern crate nom;
+///  use nom::{IResult};
+///  let parsed = warc_parser::records(&bbc);
+///  match parsed{
+///      IResult::Error(_) => assert!(false),
+///      IResult::Incomplete(_) => assert!(false),
+///      IResult::Done(i, records) => {
+///          assert_eq!(8, records.len());
+///      }
+///  }
 named!(pub records<&[u8], Vec<Record> >, many1!(record_complete));
