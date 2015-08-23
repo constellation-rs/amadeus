@@ -7,14 +7,10 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Result};
 
 /// The WArc `Record` struct
-///
-/// headers: HashMap<String, String>
-///
-/// content: Vec<u8>
-///
-/// matrix:  DMat<isize>
 pub struct Record{
+    /// WArc headers
     pub headers: HashMap<String, String>,
+    /// Content for call in a raw format
     pub content: Vec<u8>
 }
 impl<'a> Debug for Record {
