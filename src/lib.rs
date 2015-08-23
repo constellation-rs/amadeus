@@ -1,3 +1,6 @@
+//! Web ARChive format parser
+//!
+//!Takes data and separates records in headers and content.
 #[macro_use]
 extern crate nom;
 use nom::{IResult, space, Needed, Err};
@@ -104,7 +107,10 @@ named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
 ///
 /// IResult<&[u8], Record>
 ///
+/// See records for processing more then one. The documentation is not displaying.
+///
 /// # Examples
+/// ```ignore
 ///  extern crate warc_parser;
 ///  extern crate nom;
 ///  use nom::{IResult};
@@ -118,6 +124,7 @@ named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
 ///          assert_eq!(13, record.headers.len());
 ///      }
 ///  }
+/// ```
 pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
     let mut h: HashMap<String,  String> = HashMap::new();
     match warc_header(input) {
@@ -169,11 +176,12 @@ named!(record_complete <&[u8], Record >,
     )
 );
 
-/// Parses one record and returns an IResult from nom
+/// Parses many record and returns an IResult with a Vec of Record
 ///
 /// IResult<&[u8], Vec<Record>>
 ///
 /// # Examples
+/// ```ignore
 ///  extern crate warc_parser;
 ///  extern crate nom;
 ///  use nom::{IResult};
@@ -185,4 +193,5 @@ named!(record_complete <&[u8], Record >,
 ///          assert_eq!(8, records.len());
 ///      }
 ///  }
+/// ```
 named!(pub records<&[u8], Vec<Record> >, many1!(record_complete));
