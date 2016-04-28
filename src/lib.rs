@@ -3,8 +3,7 @@
 //!Takes data and separates records in headers and content.
 #[macro_use]
 extern crate nom;
-use nom::{IResult, space, Needed, Err};
-use nom::IResult::*;
+use nom::{IResult, space, Needed};
 use std::str;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Result};
@@ -18,19 +17,19 @@ pub struct Record{
 }
 impl<'a> Debug for Record {
     fn fmt(&self, form:&mut Formatter) -> Result {
-        write!(form, "\nHeaders:\n");
+        write!(form, "\nHeaders:\n").unwrap();
         for (name, value) in &self.headers {
-            write!(form, "{}", name);
-            write!(form, ": ");
-            write!(form, "{}", value);
-            write!(form, "\n");
+            write!(form, "{}", name).unwrap();
+            write!(form, ": ").unwrap();
+            write!(form, "{}", value).unwrap();
+            write!(form, "\n").unwrap();
         }
-        write!(form, "Content Length:{}\n", self.content.len());
+        write!(form, "Content Length:{}\n", self.content.len()).unwrap();
         let s = match String::from_utf8(self.content.clone()){
             Ok(s) => s,
             Err(_) => {"Could not convert".to_string()}
         };
-        write!(form, "Content :{:?}\n", s);
+        write!(form, "Content :{:?}\n", s).unwrap();
         write!(form, "\n")
     }
 }
