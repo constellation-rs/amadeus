@@ -1,7 +1,6 @@
 extern crate warc_parser;
 extern crate nom;
 
-#[cfg(tests)]
 mod tests{
     use std::fs::File;
     use std::io::prelude::*;

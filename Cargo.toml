@@ -8,7 +8,6 @@ homepage = "http://sbeckeriv.github.io/warc_nom_parser/warc_parser/index.html"
 repository = "https://github.com/sbeckeriv/warc_nom_parser"
 readme = "./README.md"
 keywords = ["web", "archive", "parsing", "warc"]
-license-file = "./LICENSE-MIT"
 license = "MIT"
 
 [dependencies]
