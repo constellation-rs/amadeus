@@ -1,6 +1,6 @@
 //! Web ARChive format parser
 //!
-//!Takes data and separates records in headers and content.
+//! Takes data and separates records in headers and content.
 #[macro_use]
 extern crate nom;
 use nom::{IResult, space, Needed};
@@ -9,14 +9,14 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Result};
 
 /// The WArc `Record` struct
-pub struct Record{
+pub struct Record {
     /// WArc headers
     pub headers: HashMap<String, String>,
     /// Content for call in a raw format
-    pub content: Vec<u8>
+    pub content: Vec<u8>,
 }
 impl<'a> Debug for Record {
-    fn fmt(&self, form:&mut Formatter) -> Result {
+    fn fmt(&self, form: &mut Formatter) -> Result {
         write!(form, "\nHeaders:\n").unwrap();
         for (name, value) in &self.headers {
             write!(form, "{}", name).unwrap();
@@ -25,9 +25,9 @@ impl<'a> Debug for Record {
             write!(form, "\n").unwrap();
         }
         write!(form, "Content Length:{}\n", self.content.len()).unwrap();
-        let s = match String::from_utf8(self.content.clone()){
+        let s = match String::from_utf8(self.content.clone()) {
             Ok(s) => s,
-            Err(_) => {"Could not convert".to_string()}
+            Err(_) => "Could not convert".to_string(),
         };
         write!(form, "Content :{:?}\n", s).unwrap();
         write!(form, "\n")
@@ -37,7 +37,7 @@ impl<'a> Debug for Record {
 fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
-            46 | 48...57  => continue,
+            46 | 48...57 => continue,
             _ => return IResult::Done(&input[idx..], &input[..idx]),
         }
     }
@@ -48,7 +48,7 @@ fn utf8_allowed(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
             0...31 => return IResult::Done(&input[idx..], &input[..idx]),
-            _ => continue
+            _ => continue,
         }
     }
     IResult::Incomplete(Needed::Size(1))
@@ -77,6 +77,7 @@ named!(init_line <&[u8], (&str, &str)>,
         || {("WARCVERSION", version)}
     )
 );
+
 named!(header_match <&[u8], (&str, &str)>,
     chain!(
         name: map_res!(token, str::from_utf8)~
@@ -124,43 +125,44 @@ named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
 ///      }
 ///  }
 /// ```
-pub fn record(input: &[u8]) -> IResult<&[u8], Record>{
-    let mut h: HashMap<String,  String> = HashMap::new();
+pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
+    let mut h: HashMap<String, String> = HashMap::new();
     match warc_header(input) {
         IResult::Done(mut i, tuple_vec) => {
             let (name, version) = tuple_vec.0;
             h.insert(name.to_string(), version.to_string());
-            let headers =  tuple_vec.1; // not need figure it out
-            for &(k,ref v) in headers.iter() {
+            let headers = tuple_vec.1; // not need figure it out
+            for &(k, ref v) in headers.iter() {
                 h.insert(k.to_string(), v.clone().to_string());
             }
             let mut content = None;
-            match h.get("Content-Length"){
+            match h.get("Content-Length") {
                 Some(length) => {
                     let mut length_number = length.parse::<usize>().unwrap();
-                    match h.get("WARC-Truncated"){
-                        Some(_) =>{
+                    match h.get("WARC-Truncated") {
+                        Some(_) => {
                             length_number = std::cmp::min(length_number, i.len());
                         }
                         _ => {}
                     }
                     content = Some(&i[0..length_number as usize]);
-                    i = &i[length_number as usize ..];
+                    i = &i[length_number as usize..];
                 }
-                _ => { }
+                _ => {}
             }
             match content {
                 Some(content) => {
-                    let record = Record{headers: h, content: content.to_vec()};
+                    let record = Record {
+                        headers: h,
+                        content: content.to_vec(),
+                    };
                     IResult::Done(i, record)
                 }
-                None => {
-                    IResult::Incomplete(Needed::Size(1))
-                }
+                None => IResult::Incomplete(Needed::Size(1)),
             }
-        },
-        IResult::Incomplete(a)     => IResult::Incomplete(a),
-        IResult::Error(a)          => IResult::Error(a)
+        }
+        IResult::Incomplete(a) => IResult::Incomplete(a),
+        IResult::Error(a) => IResult::Error(a),
     }
 }
 

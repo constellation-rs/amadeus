@@ -1,6 +1,6 @@
 [package]
 name = "warc_parser"
-version = "0.0.1"
+version = "1.0.0"
 authors = ["Stephen Becker IV <github@deathbyescalator.com>"]
 description = "Web ARChive parsing library using nom lib"
 documentation = "http://sbeckeriv.github.io/warc_nom_parser/warc_parser/index.html"
@@ -9,9 +9,10 @@ repository = "https://github.com/sbeckeriv/warc_nom_parser"
 readme = "./README.md"
 keywords = ["web", "archive", "parsing", "warc"]
 license-file = "./LICENSE-MIT"
+license = "MIT"
 
 [dependencies]
-nom = "*"
+nom = "0.3.9"
 
 [profile.bench]
 opt-level = 3
