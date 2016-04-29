@@ -136,19 +136,19 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
                 h.insert(k.to_string(), v.clone().to_string());
             }
             let mut content = None;
+            let mut bytes_needed = 1;
             match h.get("Content-Length") {
                 Some(length) => {
-                    let mut length_number = length.parse::<usize>().unwrap();
-                    match h.get("WARC-Truncated") {
-                        Some(_) => {
-                            length_number = std::cmp::min(length_number, i.len());
-                        }
-                        _ => {}
+                    let length_number = length.parse::<usize>().unwrap();
+                    if length_number <= i.len() {
+                        content = Some(&i[0..length_number as usize]);
+                        i = &i[length_number as usize..];
+                        bytes_needed = 0;
+                    } else {
+                        bytes_needed = length_number - i.len();
                     }
-                    content = Some(&i[0..length_number as usize]);
-                    i = &i[length_number as usize..];
                 }
-                _ => {}
+                _ => { /* TODO: Custom error type, this field is mandatory */ }
             }
             match content {
                 Some(content) => {
@@ -158,7 +158,7 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
                     };
                     IResult::Done(i, record)
                 }
-                None => IResult::Incomplete(Needed::Size(1)),
+                None => IResult::Incomplete(Needed::Size(bytes_needed)),
             }
         }
         IResult::Incomplete(a) => IResult::Incomplete(a),
