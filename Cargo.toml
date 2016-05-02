@@ -11,7 +11,7 @@ keywords = ["web", "archive", "parsing", "warc"]
 license = "MIT"
 
 [dependencies]
-nom = "0.3.9"
+nom = "1.2"
 
 [profile.bench]
 opt-level = 3
