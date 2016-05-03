@@ -4,8 +4,8 @@ extern crate nom;
 mod tests {
     use std::fs::File;
     use std::io::prelude::*;
-    use nom::{IResult, Needed};
-
+    use nom::{IResult, Needed, FileProducer};
+    use nom::{Producer, Consumer, ConsumerState, Move};
     fn read_sample_file(sample_name: &str) -> Vec<u8> {
         let full_path = "sample/".to_string() + sample_name;
         let mut f = File::open(full_path).unwrap();
@@ -14,6 +14,47 @@ mod tests {
         s
     }
     use warc_parser;
+    // TODO organize this mess
+    #[test]
+    fn it_iterators() {
+        let mut warc_streamer = warc_parser::WarcStreamer::new("sample/plethora.warc").unwrap();
+        let mut count = 0;
+        for record in warc_streamer {
+            println!("record::{:?}", record);
+            count += 1;
+        }
+        assert_eq!(count, 8);
+    }
+    #[test]
+    fn it_stream_parses_incomplete_file() {
+        let mut producer = FileProducer::new("sample/bbc.warc", 5000).unwrap();
+        let mut consumer = warc_parser::WarcConsumer {
+            state: warc_parser::State::Beginning,
+            c_state: ConsumerState::Continue(Move::Consume(0)),
+            counter: 0,
+            last_record: None,
+        };
+        while let &ConsumerState::Continue(_) = producer.apply(&mut consumer) {
+        }
+        assert_eq!(consumer.counter, 0);
+        assert_eq!(consumer.state, warc_parser::State::Error);
+    }
+
+    #[test]
+    fn it_stream_parses_file() {
+        let mut producer = FileProducer::new("sample/plethora.warc", 50000).unwrap();
+        let mut consumer = warc_parser::WarcConsumer {
+            state: warc_parser::State::Beginning,
+            c_state: ConsumerState::Continue(Move::Consume(0)),
+            counter: 0,
+            last_record: None,
+        };
+        while let &ConsumerState::Continue(_) = producer.apply(&mut consumer) {
+        }
+        assert_eq!(consumer.counter, 8);
+        assert_eq!(consumer.state, warc_parser::State::Done);
+    }
+
     #[test]
     fn it_parses_a_plethora() {
         let examples = read_sample_file("plethora.warc");
