@@ -3,11 +3,10 @@
 //! Takes data and separates records in headers and content.
 #[macro_use]
 extern crate nom;
-use nom::{space, Needed};
 use std::str;
 use std::collections::HashMap;
 use std::fmt;
-use nom::{Consumer, ConsumerState, Input, Move, IResult, HexDisplay, FileProducer, Producer};
+use nom::{Offset, space, Needed, Consumer, ConsumerState, Input, Move, IResult, FileProducer, Producer};
 
 /// The WArc `Record` struct
 #[derive(Clone)]

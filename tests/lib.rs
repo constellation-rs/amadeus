@@ -5,7 +5,7 @@ mod tests {
     use std::fs::File;
     use std::io::prelude::*;
     use nom::{IResult, Needed, FileProducer};
-    use nom::{Producer, Consumer, ConsumerState, Move};
+    use nom::{Producer, ConsumerState, Move};
     fn read_sample_file(sample_name: &str) -> Vec<u8> {
         let full_path = "sample/".to_string() + sample_name;
         let mut f = File::open(full_path).unwrap();
@@ -17,7 +17,7 @@ mod tests {
     // TODO organize this mess
     #[test]
     fn it_iterators() {
-        let mut warc_streamer = warc_parser::WarcStreamer::new("sample/plethora.warc").unwrap();
+        let warc_streamer = warc_parser::WarcStreamer::new("sample/plethora.warc").unwrap();
         let mut count = 0;
         for record in warc_streamer {
             println!("record::{:?}", record);
