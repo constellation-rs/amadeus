@@ -1,6 +1,6 @@
 [package]
 name = "warc_parser"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Stephen Becker IV <github@deathbyescalator.com>"]
 description = "Web ARChive parsing library using nom lib"
 documentation = "http://sbeckeriv.github.io/warc_nom_parser/warc_parser/index.html"
