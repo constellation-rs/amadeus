@@ -8,14 +8,42 @@ use std::collections::HashMap;
 use std::fmt;
 use nom::{Offset, space, Needed, Consumer, ConsumerState, Input, Move, IResult, FileProducer, Producer};
 
+#[derive(Clone,Copy,PartialEq,Eq)]
+pub enum RecordType {
+    WARCInfo,
+    Response,
+    Resource,
+    Request,
+    Metadata,
+    Revisit,
+    Conversion,
+    Continuation,
+}
+impl RecordType {
+    pub fn parse(x: &str) -> RecordType {
+        match x {
+            "warcinfo" => RecordType::WARCInfo,
+            "response" => RecordType::Response,
+            "resource" => RecordType::Resource,
+            "request" => RecordType::Request,
+            "metadata" => RecordType::Metadata,
+            "revisit" => RecordType::Revisit,
+            "conversion" => RecordType::Conversion,
+            "continuation" => RecordType::Continuation,
+            _ => panic!("bad RecordType")
+        }
+    }
+}
+
 /// The WArc `Record` struct
-#[derive(Clone)]
-pub struct Record {
+// #[derive(Clone)]
+pub struct Record<'a> {
     // lazy design should not use pub
     /// WArc headers
-    pub headers: HashMap<String, String>,
+    // pub headers: HashMap<String, String>,
+    pub type_: RecordType,
     /// Content for call in a raw format
-    pub content: Vec<u8>,
+    pub content: &'a [u8],
 }
 
 #[derive(PartialEq,Eq,Debug,Clone)]
@@ -26,122 +54,122 @@ pub enum State {
     Error,
 }
 
-pub struct WarcConsumer {
-    pub c_state: ConsumerState<usize, (), Move>,
-    pub state: State,
-    // bad design should not be pub
-    pub counter: usize,
-    pub last_record: Option<Record>,
-}
+// pub struct WarcConsumer {
+//     pub c_state: ConsumerState<usize, (), Move>,
+//     pub state: State,
+//     // bad design should not be pub
+//     pub counter: usize,
+//     pub last_record: Option<Record>,
+// }
 
-impl WarcConsumer {
-    pub fn new() -> Self {
-        WarcConsumer {
-            state: State::Beginning,
-            c_state: ConsumerState::Continue(Move::Consume(0)),
-            counter: 0,
-            last_record: None,
-        }
-    }
-}
+// impl WarcConsumer {
+//     pub fn new() -> Self {
+//         WarcConsumer {
+//             state: State::Beginning,
+//             c_state: ConsumerState::Continue(Move::Consume(0)),
+//             counter: 0,
+//             last_record: None,
+//         }
+//     }
+// }
 
-pub struct WarcStreamer {
-    file_producer: FileProducer,
-    consumer: WarcConsumer,
-}
+// pub struct WarcStreamer {
+//     file_producer: FileProducer,
+//     consumer: WarcConsumer,
+// }
 
-impl WarcStreamer {
-    pub fn new(file: &str) -> Result<Self, String> {
-        match FileProducer::new(file, 5000) {
-            Ok(producer) => {
-                Ok(WarcStreamer {
-                    file_producer: producer,
-                    consumer: WarcConsumer::new(),
-                })
-            }
-            Err(_) => Err(format!("Could not create FileProducer for {:?}", file)),
-        }
-    }
-}
-impl Iterator for WarcStreamer {
-    type Item = Record;
+// impl WarcStreamer {
+//     pub fn new(file: &str) -> Result<Self, String> {
+//         match FileProducer::new(file, 5000) {
+//             Ok(producer) => {
+//                 Ok(WarcStreamer {
+//                     file_producer: producer,
+//                     consumer: WarcConsumer::new(),
+//                 })
+//             }
+//             Err(_) => Err(format!("Could not create FileProducer for {:?}", file)),
+//         }
+//     }
+// }
+// impl Iterator for WarcStreamer {
+//     type Item = Record;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.file_producer.apply(&mut self.consumer);
-        match self.consumer.state {
-            State::Error => None,
-            _ => {
-                let result = self.consumer.last_record.clone();
-                result
-            }
-        }
-    }
-}
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.file_producer.apply(&mut self.consumer);
+//         match self.consumer.state {
+//             State::Error => None,
+//             _ => {
+//                 let result = self.consumer.last_record.clone();
+//                 result
+//             }
+//         }
+//     }
+// }
 
-impl<'a> Consumer<&'a [u8], usize, (), Move> for WarcConsumer {
-    fn state(&self) -> &ConsumerState<usize, (), Move> {
-        &self.c_state
-    }
+// impl<'a> Consumer<&'a [u8], usize, (), Move> for WarcConsumer {
+//     fn state(&self) -> &ConsumerState<usize, (), Move> {
+//         &self.c_state
+//     }
 
-    fn handle(&mut self, input: Input<&'a [u8]>) -> &ConsumerState<usize, (), Move> {
-        match self.state {
-            State::Beginning => {
-                let end_of_file = match input {
-                    Input::Eof(_) => true,
-                    _ => false,
-                };
-                match input {
-                    Input::Empty | Input::Eof(None) => {
-                        self.state = State::Done;
-                        self.c_state = ConsumerState::Error(());
-                    }
-                    Input::Element(sl) | Input::Eof(Some(sl)) => {
-                        match record_complete(sl) {
-                            IResult::Error(_) => {
-                                self.state = State::End;
-                            }
-                            IResult::Incomplete(n) => {
-                                if !end_of_file {
-                                    self.c_state = ConsumerState::Continue(Move::Await(n));
-                                } else {
-                                    self.state = State::End;
-                                }
-                            }
-                            IResult::Done(i, entry) => {
-                                self.last_record = Some(entry);
-                                self.counter = self.counter + 1;
-                                self.state = State::Beginning;
-                                self.c_state = ConsumerState::Continue(Move::Consume(sl.offset(i)));
-                            }
-                        }
-                    }
-                }
-            }
-            State::End => {
-                self.state = State::Done;
-            }
-            State::Done | State::Error => {
-                self.state = State::Error;
-                self.c_state = ConsumerState::Error(())
-            }
-        };
-        &self.c_state
-    }
-}
+//     fn handle(&mut self, input: Input<&'a [u8]>) -> &ConsumerState<usize, (), Move> {
+//         match self.state {
+//             State::Beginning => {
+//                 let end_of_file = match input {
+//                     Input::Eof(_) => true,
+//                     _ => false,
+//                 };
+//                 match input {
+//                     Input::Empty | Input::Eof(None) => {
+//                         self.state = State::Done;
+//                         self.c_state = ConsumerState::Error(());
+//                     }
+//                     Input::Element(sl) | Input::Eof(Some(sl)) => {
+//                         match record_complete(sl) {
+//                             IResult::Error(_) => {
+//                                 self.state = State::End;
+//                             }
+//                             IResult::Incomplete(n) => {
+//                                 if !end_of_file {
+//                                     self.c_state = ConsumerState::Continue(Move::Await(n));
+//                                 } else {
+//                                     self.state = State::End;
+//                                 }
+//                             }
+//                             IResult::Done(i, entry) => {
+//                                 self.last_record = Some(entry);
+//                                 self.counter = self.counter + 1;
+//                                 self.state = State::Beginning;
+//                                 self.c_state = ConsumerState::Continue(Move::Consume(sl.offset(i)));
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//             State::End => {
+//                 self.state = State::Done;
+//             }
+//             State::Done | State::Error => {
+//                 self.state = State::Error;
+//                 self.c_state = ConsumerState::Error(())
+//             }
+//         };
+//         &self.c_state
+//     }
+// }
 
-impl<'a> fmt::Debug for Record {
+impl<'a> fmt::Debug for Record<'a> {
     fn fmt(&self, form: &mut fmt::Formatter) -> fmt::Result {
         write!(form, "\nHeaders:\n").unwrap();
-        for (name, value) in &self.headers {
-            write!(form, "{}", name).unwrap();
-            write!(form, ": ").unwrap();
-            write!(form, "{}", value).unwrap();
-            write!(form, "\n").unwrap();
-        }
+        // for (name, value) in &self.headers {
+        //     write!(form, "{}", name).unwrap();
+        //     write!(form, ": ").unwrap();
+        //     write!(form, "{}", value).unwrap();
+        //     write!(form, "\n").unwrap();
+        // }
         write!(form, "Content Length:{}\n", self.content.len()).unwrap();
-        let s = match String::from_utf8(self.content.clone()) {
+        let s = match str::from_utf8(self.content) {
             Ok(s) => s,
-            Err(_) => "Could not convert".to_string(),
+            Err(_) => "Could not convert",
         };
         write!(form, "Content :{:?}\n", s).unwrap();
         write!(form, "\n")
@@ -239,40 +267,59 @@ named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
 ///      }
 ///  }
 /// ```
+#[inline(always)]
 pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
-    let mut h: HashMap<String, String> = HashMap::new();
+    // let mut h: HashMap<String, String> = HashMap::new();
     // TODO if the stream parser does not get all the header it fails .
     // like a default size of 10 doesnt for for a producer
     match warc_header(input) {
         IResult::Done(mut i, tuple_vec) => {
             let (name, version) = tuple_vec.0;
-            h.insert(name.to_string(), version.to_string());
+            // h.insert(name.to_string(), version.to_string());
             let headers = tuple_vec.1; // not need figure it out
-            for &(k, ref v) in headers.iter() {
-                h.insert(k.to_string(), v.clone().to_string());
-            }
             let mut content = None;
             let mut bytes_needed = 1;
-            match h.get("Content-Length") {
-                Some(length) => {
-                    let length_number = length.parse::<usize>().unwrap();
-                    if length_number <= i.len() {
-                        content = Some(&i[0..length_number as usize]);
-                        i = &i[length_number as usize..];
-                        bytes_needed = 0;
-                    } else {
-                        bytes_needed = length_number - i.len();
+            let mut type_ = None;
+            for &(k, v) in headers.iter() {
+                // h.insert(k.to_string(), v.clone().to_string());
+                match k {
+                    "Content-Length" => {
+                        let length_number = v.parse::<usize>().unwrap();
+                        if length_number <= i.len() {
+                            content = Some(&i[0..length_number as usize]);
+                            i = &i[length_number as usize..];
+                            bytes_needed = 0;
+                        } else {
+                            bytes_needed = length_number - i.len();
+                        }
                     }
-                }
-                _ => {
-                    // TODO: Custom error type, this field is mandatory
+                    "WARC-Type" => {
+                        type_ = Some(v);
+                    }
+                    _ => ()
                 }
             }
+            // match h.get("Content-Length") {
+            //     Some(length) => {
+            //         let length_number = length.parse::<usize>().unwrap();
+            //         if length_number <= i.len() {
+            //             content = Some(&i[0..length_number as usize]);
+            //             i = &i[length_number as usize..];
+            //             bytes_needed = 0;
+            //         } else {
+            //             bytes_needed = length_number - i.len();
+            //         }
+            //     }
+            //     _ => {
+            //         // TODO: Custom error type, this field is mandatory
+            //     }
+            // }
             match content {
                 Some(content) => {
                     let entry = Record {
-                        headers: h,
-                        content: content.to_vec(),
+                        // headers: h,
+                        type_: RecordType::parse(type_.unwrap()),
+                        content: content,
                     };
                     IResult::Done(i, entry)
                 }
