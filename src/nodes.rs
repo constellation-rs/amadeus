@@ -58,7 +58,7 @@ pub trait Node: fmt::Debug + Sized {
     fn backward(&self, &Ref<Self::InputGradient>);
     /// Return the value of the node.
     fn value(&self) -> Bor<Self::Value>;
-    /// If the node needs to used in the backward step.
+    /// If the node needs to be used in the backward step.
     fn needs_gradient(&self) -> bool;
 }
 
