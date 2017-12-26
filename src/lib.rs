@@ -1,5 +1,5 @@
 #![feature(test)]
-//! A backward-mode, define-by-run, low-overhead autodifferentiation library.
+//! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
 //! # Features
 //!
