@@ -255,8 +255,8 @@ impl HogwildParameter {
 /// Parameter node, holds the optimizable parameters of the model.
 #[derive(Debug)]
 pub struct ParameterNode {
-    pub value: Arc<HogwildParameter>,
-    pub gradient: RefCell<GradientAccumulator>,
+    pub(crate) value: Arc<HogwildParameter>,
+    pub(crate) gradient: RefCell<GradientAccumulator>,
 }
 
 impl ParameterNode {
