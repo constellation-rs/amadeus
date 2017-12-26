@@ -397,7 +397,7 @@ where
     }
 }
 
-/// Standard stochtic gradient descent optimizer with a fixed learning rate.
+/// Standard stochastic gradient descent optimizer with a fixed learning rate.
 pub struct SGD {
     learning_rate: f32,
     parameters: Vec<Variable<ParameterNode>>,
