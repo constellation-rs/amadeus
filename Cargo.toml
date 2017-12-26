@@ -1,8 +1,11 @@
 [package]
 name = "wyrm"
 version = "0.1.0"
-authors = ["maciejkula <maciej.kula@gmail.com>"]
+authors = ["Maciej Kula"]
 license = "MIT"
+description = "A low-overhead, define-by-run autodifferentiation library."
+repository = "https://github.com/maciejkula/wyrm"
+readme = "readme.md"
 
 [dependencies]
 ndarray = { version = "0.10.13", features = ["serde-1"] }
