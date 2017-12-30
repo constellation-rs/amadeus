@@ -48,6 +48,27 @@ pub fn simd_scaled_assign(xs: &mut [f32], ys: &[f32], alpha: f32) {
     }
 }
 
+pub fn simd_scaled_add(xs: &mut [f32], ys: &[f32], alpha: f32) {
+    let stride = 8;
+    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
+
+    let split_idx = xs.len() / stride * stride;
+    let (simd_xs, scalar_xs) = xs.split_at_mut(split_idx);
+    let (simd_ys, scalar_ys) = ys.split_at(split_idx);
+
+    for (x, y) in simd_xs.chunks_mut(stride).zip(simd_ys.chunks(stride)) {
+        unsafe {
+            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0) +
+                stdsimd::simd::f32x8::load_unchecked(y, 0) * simd_alpha;
+            elem.store_unchecked(x, 0);
+        }
+    }
+
+    for (x_scalar, y_scalar) in scalar_xs.iter_mut().zip(scalar_ys.iter()) {
+        *x_scalar += y_scalar * alpha;
+    }
+}
+
 pub fn slice_assign(xs: &mut [f32], ys: &[f32]) {
     for (x, &y) in xs.iter_mut().zip(ys.iter()) {
         *x = y;
