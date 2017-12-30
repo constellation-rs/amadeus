@@ -241,6 +241,16 @@ where
         Variable::new(Rc::new(SquareNode::new(Rc::clone(&self.node))))
     }
 
+    /// Sum this variable.
+    pub fn scalar_sum(&self) -> Variable<SumNode<T>> {
+        Variable::new(Rc::new(SumNode::new(Rc::clone(&self.node))))
+    }
+
+    /// Take the natural logarithm of this variable.
+    pub fn ln(&self) -> Variable<LogNode<T>> {
+        Variable::new(Rc::new(LogNode::new(Rc::clone(&self.node))))
+    }
+
     /// Transpose this variable.
     pub fn t(&self) -> Variable<TransposeNode<T>> {
         Variable::new(Rc::new(TransposeNode::new(Rc::clone(&self.node))))
@@ -576,7 +586,23 @@ mod tests {
         assert_close(&finite_difference, &gradient, TOLERANCE);
     }
     #[test]
-    fn tranpose_finite_difference() {
+    fn ln_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut z = (x.clone() + x.clone()).ln();
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn sum_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut z = (x.clone() + x.clone()).scalar_sum();
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn transpose_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut z = (x.clone() + x.clone()).t();
 

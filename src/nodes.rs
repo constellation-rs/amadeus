@@ -814,6 +814,69 @@ where
 }
 
 #[derive(Debug)]
+pub struct LogNode<OP> {
+    value: RefCell<Arr>,
+    operand_gradient: RefCell<Arr>,
+    operand: Rc<OP>,
+    needs_gradient: bool,
+}
+
+impl<OP> LogNode<OP>
+where
+    OP: Node<Value = Arr>,
+{
+    pub fn new(operand: Rc<OP>) -> Self {
+        let value = operand.value().map(|x| x.ln());
+        let gradient = &value * 0.0;
+        let needs_gradient = operand.needs_gradient();
+
+        LogNode {
+            value: RefCell::new(value),
+            operand_gradient: RefCell::new(gradient),
+            operand: operand,
+            needs_gradient: needs_gradient,
+        }
+    }
+}
+
+impl<OP> Node for LogNode<OP>
+where
+    OP: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    type OutputGradient = Arr;
+    fn forward(&self) {
+        self.operand.forward();
+
+        let mut dest = self.value.borrow_mut();
+
+        dest.assign(self.operand.value().deref());
+        dest.map_inplace(|x| *x = x.ln());
+    }
+
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        for (dest, operand_val, grad_val) in izip!(
+            self.operand_gradient.borrow_mut().iter_mut(),
+            self.operand.value().iter(),
+            gradient.iter()
+        ) {
+            *dest = grad_val / operand_val;
+        }
+
+        self.operand.backward(&self.operand_gradient.borrow());
+    }
+
+    fn value(&self) -> Bor<Self::Value> {
+        Bor::RefGuard(self.value.borrow())
+    }
+
+    fn needs_gradient(&self) -> bool {
+        self.needs_gradient
+    }
+}
+
+#[derive(Debug)]
 pub struct SigmoidNode<T> {
     value: RefCell<Arr>,
     operand_gradient: RefCell<Arr>,
@@ -1146,6 +1209,67 @@ where
                 0.0,
                 self.operand_gradient.borrow_mut().deref_mut(),
             );
+        }
+
+        self.operand.backward(&self.operand_gradient.borrow());
+    }
+    fn value(&self) -> Bor<Self::Value> {
+        Bor::RefGuard(self.value.borrow())
+    }
+    fn needs_gradient(&self) -> bool {
+        self.needs_gradient
+    }
+}
+
+#[derive(Debug)]
+pub struct SumNode<OP> {
+    value: RefCell<Arr>,
+    operand_gradient: RefCell<Arr>,
+    operand: Rc<OP>,
+    needs_gradient: bool,
+}
+
+impl<OP> SumNode<OP>
+where
+    OP: Node<Value = Arr>,
+{
+    pub fn new(operand: Rc<OP>) -> Self {
+        let value = {
+            let mut value = Arr::zeros((1, 1));
+            value.fill(operand.value().scalar_sum());
+            value
+        };
+
+        let gradient = operand.value().deref() * 0.0;
+        let needs_gradient = operand.needs_gradient();
+
+        SumNode {
+            value: RefCell::new(value),
+            operand_gradient: RefCell::new(gradient),
+            operand: operand,
+            needs_gradient: needs_gradient,
+        }
+    }
+}
+
+impl<OP> Node for SumNode<OP>
+where
+    OP: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    type OutputGradient = Arr;
+    fn forward(&self) {
+        self.operand.forward();
+
+        let mut dest = self.value.borrow_mut();
+        dest[(0, 0)] = self.operand.value().scalar_sum();
+    }
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        debug_assert!(gradient.len() == 1, "Input gradient must be a scalar.");
+
+        {
+            self.operand_gradient.borrow_mut().fill(gradient[(0, 0)]);
         }
 
         self.operand.backward(&self.operand_gradient.borrow());
