@@ -58,8 +58,8 @@ pub fn simd_scaled_add(xs: &mut [f32], ys: &[f32], alpha: f32) {
 
     for (x, y) in simd_xs.chunks_mut(stride).zip(simd_ys.chunks(stride)) {
         unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0) +
-                stdsimd::simd::f32x8::load_unchecked(y, 0) * simd_alpha;
+            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
+                + stdsimd::simd::f32x8::load_unchecked(y, 0) * simd_alpha;
             elem.store_unchecked(x, 0);
         }
     }
