@@ -864,4 +864,20 @@ mod tests {
 
         assert!(sum_loss / (losses.len() as f32) < 1e-3);
     }
+
+    use test::Bencher;
+
+    #[bench]
+    fn bench_node_reuse(b: &mut Bencher) {
+        let dim = 128;
+
+        let x = ParameterNode::new(random_matrix(1, dim));
+        let y = ParameterNode::new(random_matrix(dim, 10));
+        let v = x.dot(&y);
+        let z = v.clone() + v.clone() + v.clone() + v.clone();
+
+        b.iter(|| {
+            z.forward();
+        });
+    }
 }
