@@ -878,6 +878,7 @@ mod tests {
 
         b.iter(|| {
             z.forward();
+            z.zero_gradient();
         });
     }
 }
