@@ -587,7 +587,7 @@ mod tests {
     }
     #[test]
     fn ln_finite_difference() {
-        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut x = ParameterNode::new(random_matrix(2, 2));
         let mut z = (x.clone() + x.clone()).ln();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
