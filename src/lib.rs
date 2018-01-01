@@ -498,7 +498,9 @@ where
         output.forward();
         output.backward(1.0);
 
-        input.dense_gradient().unwrap()
+        input
+            .dense_gradient()
+            .expect("Expecting a gradient but gradient not present.")
     };
 
     output.zero_gradient();
