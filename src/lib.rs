@@ -123,6 +123,16 @@
 //!        });
 //! # }
 //! ```
+//!
+//! ## BLAS support
+//! You should enable BLAS support to get (much) better performance out of matrix-multiplication-heavy
+//! workloads. To do so, add the following to your `Cargo.toml`:
+//!
+//! ```
+//! ndarray = { version = "0.11.0", features = ["blas", "serde-1"] }
+//! blas-src = { version = "0.1.2", default-features = false, features = ["openblas"] }
+//! openblas-src = { version = "0.5.6", default-features = false, features = ["cblas"] }
+//! ```
 
 // TODO: pass through of parent values in .value(),
 // optimizations in forward
@@ -427,9 +437,8 @@ impl SGD {
         let learning_rate = self.learning_rate;
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe {
-                &mut *(&parameter.node.value.deref().value as *const Arr as *mut Arr)
-            };
+            let mut param_value =
+                unsafe { &mut *(&parameter.node.value.deref().value as *const Arr as *mut Arr) };
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
@@ -881,6 +890,31 @@ mod tests {
         b.iter(|| {
             z.forward();
             z.zero_gradient();
+        });
+    }
+
+    #[bench]
+    fn bench_matrix_multiply(b: &mut Bencher) {
+        let dim = 64;
+        let num_epochs = 20;
+
+        let x_data = Arc::new(HogwildParameter::new(random_matrix(1, dim)));
+        let y_data = Arc::new(HogwildParameter::new(random_matrix(dim, 10)));
+
+        b.iter(|| {
+            (0..rayon::current_num_threads())
+                .into_par_iter()
+                .for_each(|_| {
+                    let x = ParameterNode::shared(x_data.clone());
+                    let y = ParameterNode::shared(y_data.clone());
+
+                    let v = x.dot(&y);
+
+                    for _ in 0..num_epochs {
+                        v.forward();
+                        v.zero_gradient();
+                    }
+                });
         });
     }
 }
