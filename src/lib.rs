@@ -72,7 +72,7 @@
 //!     loss.backward(1.0);
 //!
 //!     optimizer.step();
-//!     optimizer.zero_gradients();
+//!     loss.zero_gradient();
 //! }
 //! # }
 //! ```
@@ -118,7 +118,7 @@
 //!                loss.backward(1.0);
 //!
 //!                optimizer.step();
-//!                optimizer.zero_gradients();
+//!                loss.zero_gradient();
 //!            }
 //!        });
 //! # }
@@ -217,6 +217,10 @@ where
     pub fn forward(&self) {
         self.node.forward()
     }
+    /// Zero the gradients. Must be called after a backward step or whenever inputs change.
+    pub fn zero_gradient(&self) {
+        self.node.zero_gradient();
+    }
 }
 
 impl<T> Variable<T>
@@ -295,10 +299,6 @@ where
 }
 
 impl Variable<ParameterNode> {
-    /// Zero the accumulated gradients of this parameter node.
-    pub fn zero_gradients(&self) {
-        self.node.zero_gradient()
-    }
     /// Return the (dense) gradient value of this node.
     pub fn dense_gradient(&self) -> Option<Arr> {
         match self.node.gradient.borrow().dense_gradient {
@@ -421,10 +421,6 @@ impl SGD {
             parameters: parameters,
         }
     }
-    /// Zero the gradients on each of the parameters being optimized.
-    pub fn zero_gradients(&self) {
-        self.parameters.iter().for_each(|x| x.zero_gradients())
-    }
 
     /// Perform a single SGD step.
     pub fn step(&mut self) {
@@ -474,6 +470,7 @@ where
 
     for (idx, diff) in central_difference.indexed_iter_mut() {
         let positive_difference = {
+            output.zero_gradient();
             let mut changed_input = initial_input.clone();
             changed_input[idx] += 0.5 * delta_x;
             input.set_value(&changed_input);
@@ -482,6 +479,7 @@ where
         };
 
         let negative_difference = {
+            output.zero_gradient();
             let mut changed_input = initial_input.clone();
             changed_input[idx] -= 0.5 * delta_x;
             input.set_value(&changed_input);
@@ -495,13 +493,17 @@ where
     }
 
     let gradient = {
-        input.zero_gradients();
+        output.zero_gradient();
         input.set_value(&initial_input);
         output.forward();
         output.backward(1.0);
 
-        input.dense_gradient().unwrap()
+        input
+            .dense_gradient()
+            .expect("Expecting a gradient but gradient not present.")
     };
+
+    output.zero_gradient();
 
     (central_difference, gradient)
 }
@@ -677,7 +679,7 @@ mod tests {
             loss.backward(1.0);
 
             optimizer.step();
-            optimizer.zero_gradients();
+            loss.zero_gradient();
         }
 
         println!(
@@ -726,7 +728,7 @@ mod tests {
             loss.backward(1.0);
 
             optimizer.step();
-            optimizer.zero_gradients();
+            loss.zero_gradient();
         }
 
         println!(
@@ -787,7 +789,7 @@ mod tests {
                     loss_val += loss.value().scalar_sum();
 
                     optimizer.step();
-                    optimizer.zero_gradients();
+                    loss.zero_gradient();
                 }
             }
 
@@ -849,7 +851,7 @@ mod tests {
                             loss_val += loss.value().scalar_sum();
 
                             optimizer.step();
-                            optimizer.zero_gradients();
+                            loss.zero_gradient();
                         }
                     }
                 }
@@ -878,6 +880,7 @@ mod tests {
 
         b.iter(|| {
             z.forward();
+            z.zero_gradient();
         });
     }
 }
