@@ -349,6 +349,24 @@ where
             merge_parameters(&self.parameters, &other.parameters),
         )
     }
+
+    pub fn stack<S>(
+        &self,
+        other: &Variable<S>,
+        axis: ndarray::Axis,
+    ) -> Variable<ConcatenateNode<T, S>>
+    where
+        S: Node<Value = Arr, InputGradient = Arr>,
+    {
+        Variable::new(
+            Rc::new(ConcatenateNode::new(
+                Rc::clone(&self.node),
+                Rc::clone(&other.node),
+                axis,
+            )),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
+    }
 }
 
 impl Variable<ParameterNode> {
@@ -730,6 +748,40 @@ mod tests {
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn rowwise_stack_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut y = ParameterNode::new(random_matrix(10, 5));
+        let v = x.clone() + y.clone();
+
+        let mut z = v.stack(&v, ndarray::Axis(0)).sigmoid();
+
+        assert_eq!(z.value().rows(), 20);
+        assert_eq!(z.value().cols(), 5);
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn columnwise_stack_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut y = ParameterNode::new(random_matrix(10, 5));
+        let v = x.clone() + y.clone();
+
+        let mut z = v.stack(&v, ndarray::Axis(1)).sigmoid();
+
+        assert_eq!(z.value().rows(), 10);
+        assert_eq!(z.value().cols(), 10);
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn univariate_regression() {

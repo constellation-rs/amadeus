@@ -199,6 +199,203 @@ where
     }
 }
 
+fn row_wise_stack(dest: &mut Arr, lhs: &Arr, rhs: &Arr) {
+    for (mut dest_row, source_row) in dest.genrows_mut()
+        .into_iter()
+        .zip(lhs.genrows().into_iter().chain(rhs.genrows()))
+    {
+        numerics::slice_assign(
+            dest_row.as_slice_mut().unwrap(),
+            source_row.as_slice().unwrap(),
+        );
+    }
+}
+
+fn column_wise_stack(dest: &mut Arr, lhs: &Arr, rhs: &Arr) {
+    for (mut dest_row, lhs_row, rhs_row) in izip!(
+        dest.genrows_mut().into_iter(),
+        lhs.genrows().into_iter(),
+        rhs.genrows().into_iter()
+    ) {
+        let dest_row = dest_row.as_slice_mut().unwrap();
+        let lhs_row = lhs_row.as_slice().unwrap();
+        let rhs_row = rhs_row.as_slice().unwrap();
+
+        let (left, right) = dest_row.split_at_mut(lhs_row.len());
+        numerics::slice_assign(left, lhs_row);
+        numerics::slice_assign(right, rhs_row);
+    }
+}
+
+fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: BackwardAction) {
+    for (grad_row, mut lhs_row, mut rhs_row) in izip!(
+        gradient.genrows().into_iter(),
+        lhs.genrows_mut().into_iter(),
+        rhs.genrows_mut().into_iter()
+    ) {
+        let grad_row = grad_row.as_slice().unwrap();
+        let lhs_row = lhs_row.as_slice_mut().unwrap();
+        let rhs_row = rhs_row.as_slice_mut().unwrap();
+
+        let (left, right) = grad_row.split_at(lhs_row.len());
+
+        match op {
+            BackwardAction::Increment => {
+                for (x, y) in lhs_row.iter_mut().zip(left.iter()) {
+                    *x += y;
+                }
+                for (x, y) in rhs_row.iter_mut().zip(right.iter()) {
+                    *x += y;
+                }
+            }
+            BackwardAction::Set => {
+                for (x, &y) in lhs_row.iter_mut().zip(left.iter()) {
+                    *x = y;
+                }
+                for (x, &y) in rhs_row.iter_mut().zip(right.iter()) {
+                    *x = y;
+                }
+            }
+        }
+    }
+}
+
+fn row_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: BackwardAction) {
+    for (grad_row, mut dest_row) in gradient
+        .genrows()
+        .into_iter()
+        .zip(lhs.genrows_mut().into_iter().chain(rhs.genrows_mut()))
+    {
+        let grad_row = grad_row.as_slice().unwrap();
+        let dest_row = dest_row.as_slice_mut().unwrap();
+
+        match op {
+            BackwardAction::Increment => for (x, y) in dest_row.iter_mut().zip(grad_row.iter()) {
+                *x += y;
+            },
+            BackwardAction::Set => for (x, &y) in dest_row.iter_mut().zip(grad_row.iter()) {
+                *x = y;
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ConcatenateNode<LHS, RHS> {
+    axis: ndarray::Axis,
+    value: RefCell<Arr>,
+    lhs_gradient: RefCell<Arr>,
+    rhs_gradient: RefCell<Arr>,
+    lhs: Rc<LHS>,
+    rhs: Rc<RHS>,
+    needs_gradient: bool,
+    counter: PassCounter,
+}
+
+impl<LHS, RHS> ConcatenateNode<LHS, RHS>
+where
+    LHS: Node<Value = Arr>,
+    RHS: Node<Value = Arr>,
+{
+    pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>, axis: ndarray::Axis) -> Self {
+        let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
+
+        let value = ndarray::stack(
+            axis,
+            &[lhs.value().deref().view(), rhs.value().deref().view()],
+        ).expect("Unable to concatenate arrays.");
+
+        let lhs_gradient = lhs.value().deref() * 0.0;
+        let rhs_gradient = rhs.value().deref() * 0.0;
+
+        ConcatenateNode {
+            axis: axis,
+            value: RefCell::new(value),
+            lhs_gradient: RefCell::new(lhs_gradient),
+            rhs_gradient: RefCell::new(rhs_gradient),
+            lhs: lhs,
+            rhs: rhs,
+            needs_gradient: needs_gradient,
+            counter: PassCounter::default(),
+        }
+    }
+}
+
+impl<LHS, RHS> Node for ConcatenateNode<LHS, RHS>
+where
+    LHS: Node<Value = Arr, InputGradient = Arr>,
+    RHS: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    type OutputGradient = Arr;
+    fn forward(&self) {
+        if self.counter.forward() == ForwardAction::Cached {
+            return;
+        }
+
+        self.lhs.forward();
+        self.rhs.forward();
+
+        let lhs_value = self.lhs.value();
+        let rhs_value = self.rhs.value();
+
+        let mut self_value = self.value.borrow_mut();
+
+        match self.axis {
+            // Vertically
+            ndarray::Axis(0) => {
+                row_wise_stack(self_value.deref_mut(), lhs_value.deref(), rhs_value.deref())
+            }
+            // Horizontally
+            ndarray::Axis(1) => {
+                column_wise_stack(self_value.deref_mut(), lhs_value.deref(), rhs_value.deref())
+            }
+            // Not allowed
+            _ => panic!("Stacking tensors not allowed."),
+        }
+    }
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        {
+            let mut lhs_grad = self.lhs_gradient.borrow_mut();
+            let mut rhs_grad = self.rhs_gradient.borrow_mut();
+
+            match self.axis {
+                ndarray::Axis(0) => row_wise_stack_gradient(
+                    gradient,
+                    lhs_grad.deref_mut(),
+                    rhs_grad.deref_mut(),
+                    self.counter.backward(),
+                ),
+                ndarray::Axis(1) => column_wise_stack_gradient(
+                    gradient,
+                    lhs_grad.deref_mut(),
+                    rhs_grad.deref_mut(),
+                    self.counter.backward(),
+                ),
+                _ => panic!("Stacking tensors not allowed."),
+            }
+        }
+
+        if self.counter.recurse_backward() {
+            self.lhs.backward(&self.lhs_gradient.borrow());
+            self.rhs.backward(&self.rhs_gradient.borrow());
+        }
+    }
+
+    fn value(&self) -> Bor<Self::Value> {
+        Bor::RefGuard(self.value.borrow())
+    }
+    fn needs_gradient(&self) -> bool {
+        self.needs_gradient
+    }
+    fn zero_gradient(&self) {
+        self.counter.clear();
+        self.lhs.zero_gradient();
+        self.rhs.zero_gradient();
+    }
+}
+
 /// Input node for the graph.
 #[derive(Debug)]
 pub struct InputNode {
