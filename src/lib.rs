@@ -247,7 +247,7 @@ where
 
         unique_params
             .iter()
-            .map(|x| Variable::new(x.clone(), Vec::new()))
+            .map(|x| Variable::new(Rc::clone(x), Vec::new()))
             .collect()
     }
 }
@@ -289,6 +289,14 @@ where
     pub fn ln(&self) -> Variable<LogNode<T>> {
         Variable::new(
             Rc::new(LogNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
+    }
+
+    /// Take the tanh of this variable.
+    pub fn tanh(&self) -> Variable<TanhNode<T>> {
+        Variable::new(
+            Rc::new(TanhNode::new(Rc::clone(&self.node))),
             self.parameters.clone(),
         )
     }
@@ -350,6 +358,8 @@ where
         )
     }
 
+    /// Stack/concatenate LHS and RHS, either row-wise (`ndarray::Axis(0)`) or
+    /// column-wise (`ndarray::Axis(1)`).
     pub fn stack<S>(
         &self,
         other: &Variable<S>,
@@ -691,6 +701,14 @@ mod tests {
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn tanh_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(2, 2));
+        let mut z = (x.clone() + x.clone()).tanh();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn sum_finite_difference() {
