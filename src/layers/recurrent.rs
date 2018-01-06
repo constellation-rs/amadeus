@@ -148,12 +148,39 @@ impl LSTMCell {
     }
 }
 
+// fn lstm_cell_accumulate<C, H, I>(lstm: &LSTMCell, cell: Variable<C>, hidden: Variable<H>, inputs: &[Variable<I>]) ->
+//     Variable<impl Node<Value = Arr, InputGradient = Arr>>
+//     where
+//         C: Node<Value = Arr, InputGradient = Arr>,
+//         H: Node<Value = Arr, InputGradient = Arr>,
+//         I: Node<Value = Arr, InputGradient = Arr>,
+// {
+//     let (head, tail) = inputs.split_at(1);
+//     let (cell, hidden) = lstm.forward(cell.clone(), hidden.clone(), head.first().unwrap().clone());
+
+//     if tail.len() == 0 {
+//         hidden
+//     } else {
+//         lstm_cell_accumulate(lstm, cell, hidden, tail)
+//     }
+// }
+
 #[cfg(test)]
 mod tests {
 
     use super::*;
     use DataInput;
     use SGD;
+
+    fn pi_digits(num: usize) -> Vec<usize> {
+        let pi_str = include_str!("pi.txt");
+        pi_str
+            .chars()
+            .filter_map(|x| x.to_digit(10))
+            .map(|x| x as usize)
+            .take(num)
+            .collect()
+    }
 
     #[test]
     fn test_basic_lstm() {
@@ -185,46 +212,68 @@ mod tests {
     }
 
     #[test]
-    fn test_sequential_numbers() {
-        let max_number = 100;
-        let num_epochs = 1000;
+    fn test_pi_digits() {
+        let num_epochs = 50;
 
+        let sequence_length = 4;
+        let num_digits = 10;
         let input_dim = 16;
         let hidden_dim = 32;
 
         let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
         let lstm = lstm_params.build();
 
-        let final_layer = ParameterNode::new(random_matrix(hidden_dim, max_number));
-        let embeddings = ParameterNode::new(random_matrix(max_number, input_dim));
-        let index = nodes::IndexInputNode::new(&vec![0]);
-        let mut labels = Arr::zeros((1, max_number));
+        let final_layer = ParameterNode::new(random_matrix(hidden_dim, num_digits));
+        let embeddings = ParameterNode::new(random_matrix(num_digits, input_dim));
+
+        let mut labels = Arr::zeros((1, num_digits));
         let y = nodes::InputNode::new(labels.clone());
 
         let state = InputNode::new(Arr::zeros((1, hidden_dim)));
         let hidden = InputNode::new(Arr::zeros((1, hidden_dim)));
-        let input = embeddings.index(&index);
 
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
-        //let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+        let inputs: Vec<_> = (0..sequence_length)
+            .map(|_| nodes::IndexInputNode::new(&vec![0]))
+            .collect();
+        let embeddings: Vec<_> = inputs
+            .iter()
+            .map(|input| embeddings.index(&input))
+            .collect();
+
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[0].clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[1].clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[2].clone());
+        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[3].clone());
 
         let prediction = hidden.dot(&final_layer).softmax();
         let mut loss = (-(y.clone() * prediction.ln())).scalar_sum();
 
-        let mut optimizer = SGD::new(0.5, loss.parameters());
+        let mut optimizer = SGD::new(0.05, loss.parameters());
+
+        let digits = pi_digits(100);
+
+        let mut correct = 0;
+        let mut total = 0;
 
         for _ in 0..num_epochs {
             let mut loss_val = 0.0;
-            let mut correct = 0;
-            let mut total = 0;
 
-            for number in 0..max_number {
-                index.set_value(number);
+            correct = 0;
+            total = 0;
 
+            for i in 0..(digits.len() - sequence_length - 1) {
+                let digit_chunk = &digits[i..(i + sequence_length + 1)];
+                if digit_chunk.len() < sequence_length + 1 {
+                    break;
+                }
+
+                for (&digit, input) in digit_chunk[..digit_chunk.len() - 1].iter().zip(&inputs) {
+                    input.set_value(digit);
+                }
+
+                let target_digit = *digit_chunk.last().unwrap();
                 labels *= 0.0;
-                labels[(0, number)] = 1.0;
+                labels[(0, target_digit)] = 1.0;
 
                 y.set_value(&labels);
 
@@ -236,7 +285,7 @@ mod tests {
                 optimizer.step();
                 loss.zero_gradient();
 
-                if number == predicted_label(prediction.value().deref()) {
+                if target_digit == predicted_label(prediction.value().deref()) {
                     correct += 1;
                 }
 
@@ -249,6 +298,7 @@ mod tests {
                 correct as f32 / total as f32
             );
         }
-    }
 
+        assert!((correct as f32 / total as f32) > 0.75);
+    }
 }
