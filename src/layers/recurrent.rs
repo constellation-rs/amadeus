@@ -1,6 +1,8 @@
 use std::sync::Arc;
+use std::ops::Deref;
 
 use rand;
+use rand::distributions::{IndependentSample, Normal};
 use ndarray;
 
 use nodes;
@@ -10,6 +12,11 @@ use {Arr, Variable};
 
 fn random_matrix(rows: usize, cols: usize) -> Arr {
     Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
+}
+
+fn xavier_normal(rows: usize, cols: usize) -> Arr {
+    let normal = Normal::new(0.0, 1.0 / (rows as f64).sqrt());
+    Arr::zeros((rows, cols)).map(|_| normal.ind_sample(&mut rand::thread_rng()) as f32)
 }
 
 pub struct LSTMParameters {
@@ -35,29 +42,29 @@ impl LSTMParameters {
             input_dim: input_dim,
             hidden_dim: hidden_dim,
 
-            forget_weights: Arc::new(HogwildParameter::new(random_matrix(
+            forget_weights: Arc::new(HogwildParameter::new(xavier_normal(
                 input_dim + hidden_dim,
                 hidden_dim,
             ))),
-            forget_biases: Arc::new(HogwildParameter::new(random_matrix(1, hidden_dim))),
+            forget_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
 
-            update_gate_weights: Arc::new(HogwildParameter::new(random_matrix(
+            update_gate_weights: Arc::new(HogwildParameter::new(xavier_normal(
                 input_dim + hidden_dim,
                 hidden_dim,
             ))),
-            update_gate_biases: Arc::new(HogwildParameter::new(random_matrix(1, hidden_dim))),
+            update_gate_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
 
-            update_value_weights: Arc::new(HogwildParameter::new(random_matrix(
+            update_value_weights: Arc::new(HogwildParameter::new(xavier_normal(
                 input_dim + hidden_dim,
                 hidden_dim,
             ))),
-            update_value_biases: Arc::new(HogwildParameter::new(random_matrix(1, hidden_dim))),
+            update_value_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
 
-            output_gate_weights: Arc::new(HogwildParameter::new(random_matrix(
+            output_gate_weights: Arc::new(HogwildParameter::new(xavier_normal(
                 input_dim + hidden_dim,
                 hidden_dim,
             ))),
-            output_gate_biases: Arc::new(HogwildParameter::new(random_matrix(1, hidden_dim))),
+            output_gate_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
         }
     }
 
@@ -145,6 +152,8 @@ impl LSTMCell {
 mod tests {
 
     use super::*;
+    use DataInput;
+    use SGD;
 
     #[test]
     fn test_basic_lstm() {
@@ -164,6 +173,82 @@ mod tests {
 
         hidden.zero_gradient();
         hidden.forward();
+    }
+
+    fn predicted_label(softmax_output: &Arr) -> usize {
+        softmax_output
+            .iter()
+            .enumerate()
+            .max_by(|&(_, x), &(_, y)| x.partial_cmp(y).unwrap())
+            .unwrap()
+            .0
+    }
+
+    #[test]
+    fn test_sequential_numbers() {
+        let max_number = 100;
+        let num_epochs = 1000;
+
+        let input_dim = 16;
+        let hidden_dim = 32;
+
+        let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
+        let lstm = lstm_params.build();
+
+        let final_layer = ParameterNode::new(random_matrix(hidden_dim, max_number));
+        let embeddings = ParameterNode::new(random_matrix(max_number, input_dim));
+        let index = nodes::IndexInputNode::new(&vec![0]);
+        let mut labels = Arr::zeros((1, max_number));
+        let y = nodes::InputNode::new(labels.clone());
+
+        let state = InputNode::new(Arr::zeros((1, hidden_dim)));
+        let hidden = InputNode::new(Arr::zeros((1, hidden_dim)));
+        let input = embeddings.index(&index);
+
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+        //let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+
+        let prediction = hidden.dot(&final_layer).softmax();
+        let mut loss = (-(y.clone() * prediction.ln())).scalar_sum();
+
+        let mut optimizer = SGD::new(0.5, loss.parameters());
+
+        for _ in 0..num_epochs {
+            let mut loss_val = 0.0;
+            let mut correct = 0;
+            let mut total = 0;
+
+            for number in 0..max_number {
+                index.set_value(number);
+
+                labels *= 0.0;
+                labels[(0, number)] = 1.0;
+
+                y.set_value(&labels);
+
+                loss.forward();
+                loss.backward(1.0);
+
+                loss_val += loss.value().scalar_sum();
+
+                optimizer.step();
+                loss.zero_gradient();
+
+                if number == predicted_label(prediction.value().deref()) {
+                    correct += 1;
+                }
+
+                total += 1;
+            }
+
+            println!(
+                "Loss {}, accuracy {}",
+                loss_val,
+                correct as f32 / total as f32
+            );
+        }
     }
 
 }
