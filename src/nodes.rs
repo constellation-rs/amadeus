@@ -209,9 +209,12 @@ impl InputNode {
     /// Create a new input node with a given value. This fixes the shape
     /// of the node in the graph.
     pub fn new(value: Arr) -> Variable<Self> {
-        Variable::new(Rc::new(InputNode {
-            value: RefCell::new(value),
-        }))
+        Variable::new(
+            Rc::new(InputNode {
+                value: RefCell::new(value),
+            }),
+            Vec::new(),
+        )
     }
 }
 
@@ -330,20 +333,26 @@ impl ParameterNode {
     pub fn shared(value: Arc<HogwildParameter>) -> Variable<Self> {
         let shape = (value.value.rows(), value.value.cols());
 
-        Variable::new(Rc::new(ParameterNode {
+        let node = Rc::new(ParameterNode {
             value: value,
             gradient: RefCell::new(GradientAccumulator::new(shape)),
-        }))
+        });
+        let params = vec![node.clone()];
+
+        Variable::new(node, params)
     }
     /// Create a new parameter node. The parameters held by this node
     /// cannot be shared and optimized in parallel.
     pub fn new(value: Arr) -> Variable<Self> {
         let shape = (value.rows(), value.cols());
 
-        Variable::new(Rc::new(ParameterNode {
+        let node = Rc::new(ParameterNode {
             value: Arc::new(HogwildParameter::new(value)),
             gradient: RefCell::new(GradientAccumulator::new(shape)),
-        }))
+        });
+        let params = vec![node.clone()];
+
+        Variable::new(node, params)
     }
     /// Zero the accumulated gradients of this node.
     pub fn zero_gradient(&self) {
@@ -1666,9 +1675,12 @@ pub struct IndexInputNode {
 impl IndexInputNode {
     /// Create a new index input node.
     pub fn new(value: &[usize]) -> Variable<Self> {
-        Variable::new(Rc::new(IndexInputNode {
-            value: RefCell::new(SmallVec::from(value)),
-        }))
+        Variable::new(
+            Rc::new(IndexInputNode {
+                value: RefCell::new(SmallVec::from(value)),
+            }),
+            Vec::new(),
+        )
     }
 }
 
