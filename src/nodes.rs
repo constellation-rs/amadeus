@@ -28,23 +28,23 @@ pub enum BackwardAction {
 }
 
 #[derive(Debug, Default)]
-struct PassCounter {
+pub struct PassCounter {
     forward_count: Cell<usize>,
     backward_count: Cell<usize>,
 }
 
 impl PassCounter {
-    fn clear(&self) {
+    pub fn clear(&self) {
         self.forward_count.set(0);
         self.backward_count.set(0);
     }
-    fn recurse_backward(&self) -> bool {
+    pub fn recurse_backward(&self) -> bool {
         let backward_count = self.backward_count.get();
         let forward_count = self.forward_count.get();
 
         backward_count == forward_count
     }
-    fn forward(&self) -> ForwardAction {
+    pub fn forward(&self) -> ForwardAction {
         let count = self.forward_count.get();
         self.forward_count.set(count + 1);
 
@@ -53,7 +53,7 @@ impl PassCounter {
             _ => ForwardAction::Cached,
         }
     }
-    fn backward(&self) -> BackwardAction {
+    pub fn backward(&self) -> BackwardAction {
         let backward_count = self.backward_count.get();
 
         let action = match backward_count {

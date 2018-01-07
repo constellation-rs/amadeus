@@ -241,6 +241,10 @@ where
         self.node.zero_gradient();
     }
 
+    pub fn needs_gradient(&self) -> bool {
+        self.node.needs_gradient()
+    }
+
     /// Return the parameters of the graph.
     pub fn parameters(&self) -> Vec<Variable<ParameterNode>> {
         let mut unique_params = self.parameters.clone();

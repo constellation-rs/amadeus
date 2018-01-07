@@ -1,22 +1,20 @@
 use std::sync::Arc;
-use std::ops::Deref;
+use std::rc::Rc;
+use std::cell::{Ref};
+use std::ops::{Deref};
 
 use rand;
-use rand::distributions::{IndependentSample, Normal};
 use ndarray;
 
 use nodes;
-use nodes::{HogwildParameter, InputNode, Node, ParameterNode};
+use nodes::{HogwildParameter, Node, ParameterNode};
 
-use {Arr, Variable};
+use layers::xavier_normal;
 
-fn random_matrix(rows: usize, cols: usize) -> Arr {
+use {Arr, Bor, Variable};
+
+pub fn random_matrix(rows: usize, cols: usize) -> Arr {
     Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
-}
-
-fn xavier_normal(rows: usize, cols: usize) -> Arr {
-    let normal = Normal::new(0.0, 1.0 / (rows as f64).sqrt());
-    Arr::zeros((rows, cols)).map(|_| normal.ind_sample(&mut rand::thread_rng()) as f32)
 }
 
 pub struct LSTMParameters {
@@ -146,6 +144,196 @@ impl LSTMCell {
 
         (cell, hidden)
     }
+
+    pub fn build<C, H, I>(
+        &self,
+        cell: Variable<C>,
+        hidden: Variable<H>,
+        input: Variable<I>,
+    ) -> (Variable<LSTMCellState<C, H, I>>, Variable<LSTMCellHidden<C, H, I>>)
+    where
+        C: Node<Value = Arr, InputGradient = Arr>,
+        H: Node<Value = Arr, InputGradient = Arr>,
+        I: Node<Value = Arr, InputGradient = Arr>,
+    {
+        let stacked_input = hidden.stack(&input, ndarray::Axis(1));
+
+        // Forget part of the cell state
+        let forget_gate =
+            (stacked_input.dot(&self.forget_weights) + self.forget_biases.clone()).sigmoid();
+        let cell = forget_gate * cell;
+
+        // Update the cell state with new input
+        let update_gate = (stacked_input.dot(&self.update_gate_weights)
+            + self.update_gate_biases.clone())
+            .sigmoid();
+        let update_value = (stacked_input.dot(&self.update_value_weights)
+            + self.update_value_biases.clone())
+            .tanh();
+        let update = update_gate * update_value;
+        let cell = cell + update;
+
+        // Emit a hidden state
+        let output_value = cell.tanh();
+        let output_gate = (stacked_input.dot(&self.output_gate_weights)
+            + self.output_gate_biases.clone())
+            .sigmoid();
+        let hidden = output_gate * output_value;
+
+        let state_node = Rc::new(LSTMCellState {
+            cell_state: cell.clone(),
+        });
+        let hidden_node = Rc::new(LSTMCellHidden {
+             hidden_state: hidden.clone(),
+        });
+
+        (Variable::new(Rc::clone(&state_node),
+                       cell.parameters.clone()),
+        Variable::new(Rc::clone(&hidden_node),
+                       hidden.parameters.clone()))
+    }
+}
+
+#[derive(Debug)]
+pub struct LSTMCellState<C, H, I>
+where
+    C: Node<Value = Arr, InputGradient = Arr>,
+    H: Node<Value = Arr, InputGradient = Arr>,
+    I: Node<Value = Arr, InputGradient = Arr>,
+{
+    cell_state: Variable<
+        nodes::AddNode<
+            nodes::MulNode<
+                nodes::SigmoidNode<
+                    nodes::AddNode<
+                        nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
+                        nodes::ParameterNode,
+                    >,
+                >,
+                C,
+            >,
+            nodes::MulNode<
+                nodes::SigmoidNode<
+                    nodes::AddNode<
+                        nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
+                        nodes::ParameterNode,
+                    >,
+                >,
+                nodes::TanhNode<
+                    nodes::AddNode<
+                        nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
+                        nodes::ParameterNode,
+                    >,
+                >,
+            >,
+        >,
+        >,
+}
+
+#[derive(Debug)]
+pub struct LSTMCellHidden<C, H, I>
+where
+    C: Node<Value = Arr, InputGradient = Arr>,
+    H: Node<Value = Arr, InputGradient = Arr>,
+    I: Node<Value = Arr, InputGradient = Arr>,
+{
+    hidden_state: Variable<
+        nodes::MulNode<
+            nodes::SigmoidNode<
+                nodes::AddNode<
+                    nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
+                    nodes::ParameterNode,
+                >,
+            >,
+            nodes::TanhNode<
+                nodes::AddNode<
+                    nodes::MulNode<
+                        nodes::SigmoidNode<
+                            nodes::AddNode<
+                                nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
+                                nodes::ParameterNode,
+                            >,
+                        >,
+                        C,
+                    >,
+                    nodes::MulNode<
+                        nodes::SigmoidNode<
+                            nodes::AddNode<
+                                nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
+                                nodes::ParameterNode,
+                            >,
+                        >,
+                        nodes::TanhNode<
+                            nodes::AddNode<
+                                nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
+                                nodes::ParameterNode,
+                            >,
+                        >,
+                    >,
+                >,
+            >,
+        >,
+    >,
+}
+
+impl<C, H, I> Node for LSTMCellState<C, H, I>
+    where
+    C: Node<Value = Arr, InputGradient = Arr>,
+    H: Node<Value = Arr, InputGradient = Arr>,
+    I: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    type OutputGradient = Arr;
+    fn forward(&self) {
+        self.cell_state.forward();
+    }
+
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        self.cell_state.node.backward(gradient)
+    }
+
+    fn value(&self) -> Bor<Self::Value> {
+        self.cell_state.value()
+    }
+
+    fn needs_gradient(&self) -> bool {
+        self.cell_state.needs_gradient()
+    }
+
+    fn zero_gradient(&self) {
+        self.cell_state.zero_gradient();
+    }
+}
+
+impl<C, H, I> Node for LSTMCellHidden<C, H, I>
+    where
+    C: Node<Value = Arr, InputGradient = Arr>,
+    H: Node<Value = Arr, InputGradient = Arr>,
+    I: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    type OutputGradient = Arr;
+    fn forward(&self) {
+        self.hidden_state.forward();
+    }
+
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        self.hidden_state.node.backward(gradient)
+    }
+
+    fn value(&self) -> Bor<Self::Value> {
+        self.hidden_state.value()
+    }
+
+    fn needs_gradient(&self) -> bool {
+        self.hidden_state.needs_gradient()
+    }
+
+    fn zero_gradient(&self) {
+        self.hidden_state.zero_gradient();
+    }
 }
 
 // fn lstm_cell_accumulate<C, H, I>(lstm: &LSTMCell, cell: Variable<C>, hidden: Variable<H>, inputs: &[Variable<I>]) ->
@@ -168,9 +356,12 @@ impl LSTMCell {
 #[cfg(test)]
 mod tests {
 
+    use std::ops::Deref;
+
     use super::*;
     use DataInput;
     use SGD;
+    use nodes::InputNode;
 
     fn pi_digits(num: usize) -> Vec<usize> {
         let pi_str = include_str!("pi.txt");
@@ -196,7 +387,7 @@ mod tests {
 
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
-        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+        let (_, hidden) = lstm.build(state.clone(), hidden.clone(), input.clone());
 
         hidden.zero_gradient();
         hidden.forward();
