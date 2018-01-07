@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::rc::Rc;
-use std::cell::{Ref};
-use std::ops::{Deref};
+use std::cell::Ref;
+use std::ops::Deref;
 
 use rand;
 use ndarray;
@@ -110,8 +110,8 @@ impl LSTMCell {
         hidden: Variable<H>,
         input: Variable<I>,
     ) -> (
-        Variable<impl Node<Value = Arr, InputGradient = Arr>>,
-        Variable<impl Node<Value = Arr, InputGradient = Arr>>,
+        Variable<Rc<Node<Value = Arr, InputGradient = Arr>>>,
+        Variable<Rc<Node<Value = Arr, InputGradient = Arr>>>,
     )
     where
         C: Node<Value = Arr, InputGradient = Arr>,
@@ -142,197 +142,7 @@ impl LSTMCell {
             .sigmoid();
         let hidden = output_gate * output_value;
 
-        (cell, hidden)
-    }
-
-    pub fn build<C, H, I>(
-        &self,
-        cell: Variable<C>,
-        hidden: Variable<H>,
-        input: Variable<I>,
-    ) -> (Variable<LSTMCellState<C, H, I>>, Variable<LSTMCellHidden<C, H, I>>)
-    where
-        C: Node<Value = Arr, InputGradient = Arr>,
-        H: Node<Value = Arr, InputGradient = Arr>,
-        I: Node<Value = Arr, InputGradient = Arr>,
-    {
-        let stacked_input = hidden.stack(&input, ndarray::Axis(1));
-
-        // Forget part of the cell state
-        let forget_gate =
-            (stacked_input.dot(&self.forget_weights) + self.forget_biases.clone()).sigmoid();
-        let cell = forget_gate * cell;
-
-        // Update the cell state with new input
-        let update_gate = (stacked_input.dot(&self.update_gate_weights)
-            + self.update_gate_biases.clone())
-            .sigmoid();
-        let update_value = (stacked_input.dot(&self.update_value_weights)
-            + self.update_value_biases.clone())
-            .tanh();
-        let update = update_gate * update_value;
-        let cell = cell + update;
-
-        // Emit a hidden state
-        let output_value = cell.tanh();
-        let output_gate = (stacked_input.dot(&self.output_gate_weights)
-            + self.output_gate_biases.clone())
-            .sigmoid();
-        let hidden = output_gate * output_value;
-
-        let state_node = Rc::new(LSTMCellState {
-            cell_state: cell.clone(),
-        });
-        let hidden_node = Rc::new(LSTMCellHidden {
-             hidden_state: hidden.clone(),
-        });
-
-        (Variable::new(Rc::clone(&state_node),
-                       cell.parameters.clone()),
-        Variable::new(Rc::clone(&hidden_node),
-                       hidden.parameters.clone()))
-    }
-}
-
-#[derive(Debug)]
-pub struct LSTMCellState<C, H, I>
-where
-    C: Node<Value = Arr, InputGradient = Arr>,
-    H: Node<Value = Arr, InputGradient = Arr>,
-    I: Node<Value = Arr, InputGradient = Arr>,
-{
-    cell_state: Variable<
-        nodes::AddNode<
-            nodes::MulNode<
-                nodes::SigmoidNode<
-                    nodes::AddNode<
-                        nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
-                        nodes::ParameterNode,
-                    >,
-                >,
-                C,
-            >,
-            nodes::MulNode<
-                nodes::SigmoidNode<
-                    nodes::AddNode<
-                        nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
-                        nodes::ParameterNode,
-                    >,
-                >,
-                nodes::TanhNode<
-                    nodes::AddNode<
-                        nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
-                        nodes::ParameterNode,
-                    >,
-                >,
-            >,
-        >,
-        >,
-}
-
-#[derive(Debug)]
-pub struct LSTMCellHidden<C, H, I>
-where
-    C: Node<Value = Arr, InputGradient = Arr>,
-    H: Node<Value = Arr, InputGradient = Arr>,
-    I: Node<Value = Arr, InputGradient = Arr>,
-{
-    hidden_state: Variable<
-        nodes::MulNode<
-            nodes::SigmoidNode<
-                nodes::AddNode<
-                    nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
-                    nodes::ParameterNode,
-                >,
-            >,
-            nodes::TanhNode<
-                nodes::AddNode<
-                    nodes::MulNode<
-                        nodes::SigmoidNode<
-                            nodes::AddNode<
-                                nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
-                                nodes::ParameterNode,
-                            >,
-                        >,
-                        C,
-                    >,
-                    nodes::MulNode<
-                        nodes::SigmoidNode<
-                            nodes::AddNode<
-                                nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
-                                nodes::ParameterNode,
-                            >,
-                        >,
-                        nodes::TanhNode<
-                            nodes::AddNode<
-                                nodes::DotNode<nodes::ConcatenateNode<H, I>, nodes::ParameterNode>,
-                                nodes::ParameterNode,
-                            >,
-                        >,
-                    >,
-                >,
-            >,
-        >,
-    >,
-}
-
-impl<C, H, I> Node for LSTMCellState<C, H, I>
-    where
-    C: Node<Value = Arr, InputGradient = Arr>,
-    H: Node<Value = Arr, InputGradient = Arr>,
-    I: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Value = Arr;
-    type InputGradient = Arr;
-    type OutputGradient = Arr;
-    fn forward(&self) {
-        self.cell_state.forward();
-    }
-
-    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        self.cell_state.node.backward(gradient)
-    }
-
-    fn value(&self) -> Bor<Self::Value> {
-        self.cell_state.value()
-    }
-
-    fn needs_gradient(&self) -> bool {
-        self.cell_state.needs_gradient()
-    }
-
-    fn zero_gradient(&self) {
-        self.cell_state.zero_gradient();
-    }
-}
-
-impl<C, H, I> Node for LSTMCellHidden<C, H, I>
-    where
-    C: Node<Value = Arr, InputGradient = Arr>,
-    H: Node<Value = Arr, InputGradient = Arr>,
-    I: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Value = Arr;
-    type InputGradient = Arr;
-    type OutputGradient = Arr;
-    fn forward(&self) {
-        self.hidden_state.forward();
-    }
-
-    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        self.hidden_state.node.backward(gradient)
-    }
-
-    fn value(&self) -> Bor<Self::Value> {
-        self.hidden_state.value()
-    }
-
-    fn needs_gradient(&self) -> bool {
-        self.hidden_state.needs_gradient()
-    }
-
-    fn zero_gradient(&self) {
-        self.hidden_state.zero_gradient();
+        (cell.boxed(), hidden.boxed())
     }
 }
 
@@ -387,7 +197,7 @@ mod tests {
 
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
-        let (_, hidden) = lstm.build(state.clone(), hidden.clone(), input.clone());
+        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
 
         hidden.zero_gradient();
         hidden.forward();
@@ -406,7 +216,7 @@ mod tests {
     fn test_pi_digits() {
         let num_epochs = 50;
 
-        let sequence_length = 4;
+        let sequence_length = 8;
         let num_digits = 10;
         let input_dim = 16;
         let hidden_dim = 32;
@@ -434,7 +244,11 @@ mod tests {
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[0].clone());
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[1].clone());
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[2].clone());
-        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[3].clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[3].clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[4].clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[5].clone());
+        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[6].clone());
+        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[7].clone());
 
         let prediction = hidden.dot(&final_layer).softmax();
         let mut loss = (-(y.clone() * prediction.ln())).scalar_sum();

@@ -57,7 +57,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;

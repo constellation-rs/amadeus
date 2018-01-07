@@ -262,6 +262,15 @@ impl<T> Variable<T>
 where
     T: Node<Value = Arr, InputGradient = Arr>,
 {
+    /// Box the variable, erasing its specific type. Use to manage the complexity
+    /// of variable types in deep computation graphs.
+    pub fn boxed(&self) -> Variable<Rc<Node<Value = Arr, InputGradient = Arr>>> {
+        Variable::new(
+            Rc::new(self.node.clone() as Rc<Node<Value = Arr, InputGradient = Arr>>),
+            self.parameters.clone(),
+        )
+    }
+
     /// Run the backward pass through the subgraph terminating at this node.
     /// The weight parameter scales the gradients.
     pub fn backward(&mut self, weight: f32) {

@@ -93,15 +93,12 @@ impl<'value, T: 'value + fmt::Display> fmt::Display for Bor<'value, T> {
 
 /// Trait representing a computation node. Structs implementing
 /// this trait can be used as elements of the computation graph.
-pub trait Node: fmt::Debug + Sized {
+pub trait Node: fmt::Debug + 'static {
     /// Type of the node's value.
     type Value;
     /// Type of the input gradient the node receives
     /// during backpropagation.
     type InputGradient;
-    /// Type of the gradient the node passes down
-    /// to its ancestors during backpropagation.
-    type OutputGradient;
     /// Perform the forward step. Should recursively call
     /// the forward methods of its ancestors.
     fn forward(&self);
@@ -113,6 +110,26 @@ pub trait Node: fmt::Debug + Sized {
     /// If the node needs to be used in the backward step.
     fn needs_gradient(&self) -> bool;
     fn zero_gradient(&self);
+}
+
+impl Node for Rc<Node<Value = Arr, InputGradient = Arr>> {
+    type Value = Arr;
+    type InputGradient = Arr;
+    fn forward(&self) {
+        self.deref().forward()
+    }
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        self.deref().backward(gradient)
+    }
+    fn value(&self) -> Bor<Self::Value> {
+        self.deref().value()
+    }
+    fn needs_gradient(&self) -> bool {
+        self.deref().needs_gradient()
+    }
+    fn zero_gradient(&self) {
+        self.deref().zero_gradient()
+    }
 }
 
 #[derive(Debug)]
@@ -150,7 +167,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -328,7 +344,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -418,7 +433,6 @@ impl InputNode {
 impl Node for InputNode {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = ();
     fn forward(&self) {}
     fn backward(&self, _: &Ref<Self::InputGradient>) {}
     fn value(&self) -> Bor<Self::Value> {
@@ -560,7 +574,6 @@ impl ParameterNode {
 impl Node for ParameterNode {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = ();
     fn forward(&self) {}
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         self.gradient.borrow_mut().accumulate_gradient(gradient);
@@ -619,7 +632,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -709,7 +721,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -814,7 +825,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -931,7 +941,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
 
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
@@ -1054,7 +1063,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
 
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
@@ -1206,7 +1214,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1290,7 +1297,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1375,7 +1381,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1460,7 +1465,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1552,7 +1556,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
 
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
@@ -1635,7 +1638,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1715,7 +1717,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1803,7 +1804,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1905,7 +1905,6 @@ where
 {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
@@ -1969,7 +1968,6 @@ impl IndexInputNode {
 impl Node for IndexInputNode {
     type Value = SmallVec<[usize; 4]>;
     type InputGradient = Arr;
-    type OutputGradient = ();
     fn forward(&self) {}
     fn backward(&self, _: &Ref<Self::InputGradient>) {}
     fn value(&self) -> Bor<Self::Value> {
@@ -2017,7 +2015,6 @@ where
 impl Node for IndexNode<ParameterNode> {
     type Value = Arr;
     type InputGradient = Arr;
-    type OutputGradient = Arr;
     fn forward(&self) {
         if self.counter.forward() == ForwardAction::Cached {
             return;
