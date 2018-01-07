@@ -1,5 +1,4 @@
 pub mod recurrent;
-pub mod dense;
 
 use rand;
 use rand::distributions::{IndependentSample, Normal};

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 use std::rc::Rc;
-use std::cell::Ref;
-use std::ops::Deref;
 
 use rand;
 use ndarray;
@@ -11,7 +9,7 @@ use nodes::{HogwildParameter, Node, ParameterNode};
 
 use layers::xavier_normal;
 
-use {Arr, Bor, Variable};
+use {Arr, Variable};
 
 pub fn random_matrix(rows: usize, cols: usize) -> Arr {
     Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
@@ -149,6 +147,7 @@ impl LSTMCell {
 // fn lstm_cell_accumulate<C, H, I>(lstm: &LSTMCell, cell: Variable<C>, hidden: Variable<H>, inputs: &[Variable<I>]) ->
 //     Variable<impl Node<Value = Arr, InputGradient = Arr>>
 //     where
+//
 //         C: Node<Value = Arr, InputGradient = Arr>,
 //         H: Node<Value = Arr, InputGradient = Arr>,
 //         I: Node<Value = Arr, InputGradient = Arr>,
@@ -195,9 +194,14 @@ mod tests {
         let hidden = InputNode::new(Arr::zeros((1, hidden_dim)));
         let input = InputNode::new(random_matrix(1, input_dim));
 
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
-        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+        let (mut state, mut hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+
+        // Test a deep RNN
+        for _ in 0..10 {
+            let step = lstm.forward(state.clone(), hidden.clone(), input.clone());
+            state = step.0;
+            hidden = step.1;
+        }
 
         hidden.zero_gradient();
         hidden.forward();
@@ -216,7 +220,7 @@ mod tests {
     fn test_pi_digits() {
         let num_epochs = 50;
 
-        let sequence_length = 8;
+        let sequence_length = 4;
         let num_digits = 10;
         let input_dim = 16;
         let hidden_dim = 32;
@@ -244,11 +248,7 @@ mod tests {
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[0].clone());
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[1].clone());
         let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[2].clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[3].clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[4].clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[5].clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[6].clone());
-        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[7].clone());
+        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[3].clone());
 
         let prediction = hidden.dot(&final_layer).softmax();
         let mut loss = (-(y.clone() * prediction.ln())).scalar_sum();

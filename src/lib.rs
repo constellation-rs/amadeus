@@ -190,7 +190,12 @@ pub trait DataInput<T> {
 }
 
 fn merge_parameters(xs: &[Rc<ParameterNode>], ys: &[Rc<ParameterNode>]) -> Vec<Rc<ParameterNode>> {
-    xs.iter().chain(ys.iter()).cloned().collect()
+    let mut unique_params: Vec<_> = xs.iter().chain(ys.iter()).cloned().collect();
+
+    unique_params.sort_unstable_by_key(|x| x.deref() as *const ParameterNode);
+    unique_params.dedup_by_key(|x| (*x).deref() as *const ParameterNode);
+
+    unique_params
 }
 
 /// Handle to a node in the computation graph. The underlying nodes
