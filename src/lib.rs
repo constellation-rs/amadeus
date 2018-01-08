@@ -1,3 +1,4 @@
+#![feature(conservative_impl_trait)]
 #![feature(test)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
@@ -165,6 +166,7 @@ use std::clone::Clone;
 
 mod nodes;
 mod numerics;
+pub mod layers;
 
 use nodes::*;
 
@@ -187,6 +189,15 @@ pub trait DataInput<T> {
     fn set_value(&self, T);
 }
 
+fn merge_parameters(xs: &[Rc<ParameterNode>], ys: &[Rc<ParameterNode>]) -> Vec<Rc<ParameterNode>> {
+    let mut unique_params: Vec<_> = xs.iter().chain(ys.iter()).cloned().collect();
+
+    unique_params.sort_unstable_by_key(|x| x.deref() as *const ParameterNode);
+    unique_params.dedup_by_key(|x| (*x).deref() as *const ParameterNode);
+
+    unique_params
+}
+
 /// Handle to a node in the computation graph. The underlying nodes
 /// are reference counted, so the handles can be freely cloned to
 /// use the nodes multiple times in the same graph.
@@ -197,6 +208,7 @@ where
 {
     node: Rc<T>,
     grad: Option<RefCell<Arr>>,
+    parameters: Vec<Rc<ParameterNode>>,
 }
 
 impl<T: Node> Clone for Variable<T> {
@@ -204,6 +216,7 @@ impl<T: Node> Clone for Variable<T> {
         Variable {
             node: Rc::clone(&self.node),
             grad: None,
+            parameters: self.parameters.clone(),
         }
     }
 }
@@ -212,10 +225,11 @@ impl<T> Variable<T>
 where
     T: Node,
 {
-    fn new(node: Rc<T>) -> Self {
+    fn new(node: Rc<T>, parameters: Vec<Rc<ParameterNode>>) -> Self {
         Variable {
             node: node,
             grad: None,
+            parameters: parameters,
         }
     }
     /// Get the value of the node.
@@ -231,12 +245,37 @@ where
     pub fn zero_gradient(&self) {
         self.node.zero_gradient();
     }
+
+    pub fn needs_gradient(&self) -> bool {
+        self.node.needs_gradient()
+    }
+
+    /// Return the parameters of the graph.
+    pub fn parameters(&self) -> Vec<Variable<ParameterNode>> {
+        let mut unique_params = self.parameters.clone();
+        unique_params.sort_unstable_by_key(|x| x.deref() as *const ParameterNode);
+        unique_params.dedup_by_key(|x| (*x).deref() as *const ParameterNode);
+
+        unique_params
+            .iter()
+            .map(|x| Variable::new(Rc::clone(x), Vec::new()))
+            .collect()
+    }
 }
 
 impl<T> Variable<T>
 where
     T: Node<Value = Arr, InputGradient = Arr>,
 {
+    /// Box the variable, erasing its specific type. Use to manage the complexity
+    /// of variable types in deep computation graphs.
+    pub fn boxed(&self) -> Variable<Rc<Node<Value = Arr, InputGradient = Arr>>> {
+        Variable::new(
+            Rc::new(self.node.clone() as Rc<Node<Value = Arr, InputGradient = Arr>>),
+            self.parameters.clone(),
+        )
+    }
+
     /// Run the backward pass through the subgraph terminating at this node.
     /// The weight parameter scales the gradients.
     pub fn backward(&mut self, weight: f32) {
@@ -252,37 +291,66 @@ where
 
     /// Square this variable.
     pub fn square(&self) -> Variable<SquareNode<T>> {
-        Variable::new(Rc::new(SquareNode::new(Rc::clone(&self.node))))
+        Variable::new(
+            Rc::new(SquareNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
     }
 
     /// Sum this variable.
     pub fn scalar_sum(&self) -> Variable<SumNode<T>> {
-        Variable::new(Rc::new(SumNode::new(Rc::clone(&self.node))))
+        Variable::new(
+            Rc::new(SumNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
     }
 
     /// Take the natural logarithm of this variable.
     pub fn ln(&self) -> Variable<LogNode<T>> {
-        Variable::new(Rc::new(LogNode::new(Rc::clone(&self.node))))
+        Variable::new(
+            Rc::new(LogNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
+    }
+
+    /// Take the tanh of this variable.
+    pub fn tanh(&self) -> Variable<TanhNode<T>> {
+        Variable::new(
+            Rc::new(TanhNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
     }
 
     /// Transpose this variable.
     pub fn t(&self) -> Variable<TransposeNode<T>> {
-        Variable::new(Rc::new(TransposeNode::new(Rc::clone(&self.node))))
+        Variable::new(
+            Rc::new(TransposeNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
     }
 
     /// Exponentiate this variable.
     pub fn exp(&self) -> Variable<ExpNode<T>> {
-        Variable::new(Rc::new(ExpNode::new(Rc::clone(&self.node))))
+        Variable::new(
+            Rc::new(ExpNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
     }
 
     /// Compute the softmax of this variable.
     pub fn softmax(&self) -> Variable<SoftmaxNode<T>> {
-        Variable::new(Rc::new(SoftmaxNode::new(Rc::clone(&self.node))))
+        Variable::new(
+            Rc::new(SoftmaxNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
     }
 
     /// Compute the sigmoid of this variable.
     pub fn sigmoid(&self) -> Variable<SigmoidNode<T>> {
-        Variable::new(Rc::new(SigmoidNode::new(Rc::clone(&self.node))))
+        Variable::new(
+            Rc::new(SigmoidNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
     }
 
     /// Compute the row-wise vector dot product of LHS and RHS.
@@ -290,10 +358,13 @@ where
     where
         S: Node<Value = Arr, InputGradient = Arr>,
     {
-        Variable::new(Rc::new(VectorDotNode::new(
-            Rc::clone(&self.node),
-            Rc::clone(&other.node),
-        )))
+        Variable::new(
+            Rc::new(VectorDotNode::new(
+                Rc::clone(&self.node),
+                Rc::clone(&other.node),
+            )),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
     }
 
     /// Compute the matrix multiplication of LHS and RHS.
@@ -301,10 +372,30 @@ where
     where
         S: Node<Value = Arr, InputGradient = Arr>,
     {
-        Variable::new(Rc::new(DotNode::new(
-            Rc::clone(&self.node),
-            Rc::clone(&other.node),
-        )))
+        Variable::new(
+            Rc::new(DotNode::new(Rc::clone(&self.node), Rc::clone(&other.node))),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
+    }
+
+    /// Stack/concatenate LHS and RHS, either row-wise (`ndarray::Axis(0)`) or
+    /// column-wise (`ndarray::Axis(1)`).
+    pub fn stack<S>(
+        &self,
+        other: &Variable<S>,
+        axis: ndarray::Axis,
+    ) -> Variable<ConcatenateNode<T, S>>
+    where
+        S: Node<Value = Arr, InputGradient = Arr>,
+    {
+        Variable::new(
+            Rc::new(ConcatenateNode::new(
+                Rc::clone(&self.node),
+                Rc::clone(&other.node),
+                axis,
+            )),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
     }
 }
 
@@ -320,10 +411,13 @@ impl Variable<ParameterNode> {
     /// Row-wise indexing of this parameter node. Primiarily used
     /// to implement embedding layers.
     pub fn index(&self, index: &Variable<IndexInputNode>) -> Variable<IndexNode<ParameterNode>> {
-        Variable::new(Rc::new(IndexNode::new(
-            Rc::clone(&self.node),
-            Rc::clone(&index.node),
-        )))
+        Variable::new(
+            Rc::new(IndexNode::new(
+                Rc::clone(&self.node),
+                Rc::clone(&index.node),
+            )),
+            merge_parameters(&self.parameters, &index.parameters),
+        )
     }
 }
 
@@ -370,7 +464,10 @@ where
 {
     type Output = Variable<AddNode<LHS, RHS>>;
     fn add(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(Rc::new(AddNode::new(self.node, other.node)))
+        Variable::new(
+            Rc::new(AddNode::new(self.node, other.node)),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
     }
 }
 
@@ -381,7 +478,10 @@ where
 {
     type Output = Variable<SubNode<LHS, RHS>>;
     fn sub(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(Rc::new(SubNode::new(self.node, other.node)))
+        Variable::new(
+            Rc::new(SubNode::new(self.node, other.node)),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
     }
 }
 
@@ -392,7 +492,10 @@ where
 {
     type Output = Variable<MulNode<LHS, RHS>>;
     fn mul(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(Rc::new(MulNode::new(self.node, other.node)))
+        Variable::new(
+            Rc::new(MulNode::new(self.node, other.node)),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
     }
 }
 
@@ -403,7 +506,10 @@ where
 {
     type Output = Variable<DivNode<LHS, RHS>>;
     fn div(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(Rc::new(DivNode::new(self.node, other.node)))
+        Variable::new(
+            Rc::new(DivNode::new(self.node, other.node)),
+            merge_parameters(&self.parameters, &other.parameters),
+        )
     }
 }
 
@@ -413,7 +519,7 @@ where
 {
     type Output = Variable<NegNode<T>>;
     fn neg(self) -> Self::Output {
-        Variable::new(Rc::new(NegNode::new(self.node)))
+        Variable::new(Rc::new(NegNode::new(self.node)), self.parameters.clone())
     }
 }
 
@@ -545,6 +651,17 @@ mod tests {
     }
 
     #[test]
+    fn parameter_deduplication() {
+        let x = ParameterNode::new(random_matrix(1, 1));
+        let y = ParameterNode::new(random_matrix(1, 1));
+
+        let z = x + y;
+        let z = z.clone() + z.clone();
+
+        assert_eq!(z.parameters().len(), 2);
+    }
+
+    #[test]
     fn add_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(1, 1));
         let y = ParameterNode::new(random_matrix(1, 1));
@@ -606,6 +723,14 @@ mod tests {
         assert_close(&finite_difference, &gradient, TOLERANCE);
     }
     #[test]
+    fn tanh_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(2, 2));
+        let mut z = (x.clone() + x.clone()).tanh();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
     fn sum_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut z = (x.clone() + x.clone()).scalar_sum();
@@ -663,6 +788,40 @@ mod tests {
         assert_close(&finite_difference, &gradient, TOLERANCE);
     }
     #[test]
+    fn rowwise_stack_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut y = ParameterNode::new(random_matrix(10, 5));
+        let v = x.clone() + y.clone();
+
+        let mut z = v.stack(&v, ndarray::Axis(0)).sigmoid();
+
+        assert_eq!(z.value().rows(), 20);
+        assert_eq!(z.value().cols(), 5);
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn columnwise_stack_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut y = ParameterNode::new(random_matrix(10, 5));
+        let v = x.clone() + y.clone();
+
+        let mut z = v.stack(&v, ndarray::Axis(1)).sigmoid();
+
+        assert_eq!(z.value().rows(), 10);
+        assert_eq!(z.value().cols(), 10);
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
     fn univariate_regression() {
         let slope = ParameterNode::new(random_matrix(1, 1));
         let intercept = ParameterNode::new(random_matrix(1, 1));
@@ -676,7 +835,7 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let mut optimizer = SGD::new(0.1, vec![slope.clone(), intercept.clone()]);
+        let mut optimizer = SGD::new(0.1, loss.parameters());
 
         for _ in 0..num_epochs {
             let _x = arr2(&[[rand::random::<f32>()]]);
@@ -719,7 +878,7 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let mut optimizer = SGD::new(0.1, vec![slope.clone(), intercept.clone()]);
+        let mut optimizer = SGD::new(0.1, loss.parameters());
 
         for _ in 0..num_epochs {
             let _x = arr2(&[
@@ -779,7 +938,7 @@ mod tests {
         let mut loss = (output.clone() - y_hat.clone()).square();
 
         let num_epochs = 100;
-        let mut optimizer = SGD::new(0.1, vec![u_embedding.clone(), v_embedding.clone()]);
+        let mut optimizer = SGD::new(0.1, loss.parameters());
 
         let mut loss_val = 0.0;
 
@@ -841,7 +1000,7 @@ mod tests {
 
                 let num_epochs = 100;
 
-                let mut optimizer = SGD::new(0.1, vec![u_embedding.clone(), v_embedding.clone()]);
+                let mut optimizer = SGD::new(0.1, loss.parameters());
 
                 let mut loss_val = 0.0;
 
