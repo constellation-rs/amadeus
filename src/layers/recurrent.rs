@@ -1,3 +1,5 @@
+//! Module holding building blocks for recurrent neural networks.
+
 use std::sync::Arc;
 use std::rc::Rc;
 
@@ -15,6 +17,10 @@ pub fn random_matrix(rows: usize, cols: usize) -> Arr {
     Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 }
 
+/// Holds shared parameters for an LSTM cell.
+///
+/// Construct this first, then use the `build` method to instantiate
+/// LSTM cell nodes.
 pub struct LSTMParameters {
     input_dim: usize,
     hidden_dim: usize,
@@ -33,6 +39,7 @@ pub struct LSTMParameters {
 }
 
 impl LSTMParameters {
+    /// Create a new LSTM parameters object.
     pub fn new(input_dim: usize, hidden_dim: usize) -> Self {
         Self {
             input_dim: input_dim,
@@ -64,6 +71,7 @@ impl LSTMParameters {
         }
     }
 
+    /// Build an LSTM cell.
     pub fn build(&self) -> LSTMCell {
         LSTMCell {
             _input_dim: self.input_dim,
@@ -84,6 +92,7 @@ impl LSTMParameters {
     }
 }
 
+/// An LSTM cell.
 pub struct LSTMCell {
     _input_dim: usize,
     _hidden_dim: usize,
@@ -102,6 +111,10 @@ pub struct LSTMCell {
 }
 
 impl LSTMCell {
+    /// Run a single LSTM iteration over inputs.
+    ///
+    /// If this is the first cell, initialize the cell state and the hidden state;
+    /// otherwise pass the cell and hidden states from previous iterations.
     pub fn forward<C, H, I>(
         &self,
         cell: Variable<C>,
@@ -144,24 +157,6 @@ impl LSTMCell {
     }
 }
 
-// fn lstm_cell_accumulate<C, H, I>(lstm: &LSTMCell, cell: Variable<C>, hidden: Variable<H>, inputs: &[Variable<I>]) ->
-//     Variable<impl Node<Value = Arr, InputGradient = Arr>>
-//     where
-//
-//         C: Node<Value = Arr, InputGradient = Arr>,
-//         H: Node<Value = Arr, InputGradient = Arr>,
-//         I: Node<Value = Arr, InputGradient = Arr>,
-// {
-//     let (head, tail) = inputs.split_at(1);
-//     let (cell, hidden) = lstm.forward(cell.clone(), hidden.clone(), head.first().unwrap().clone());
-
-//     if tail.len() == 0 {
-//         hidden
-//     } else {
-//         lstm_cell_accumulate(lstm, cell, hidden, tail)
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
 
@@ -197,14 +192,14 @@ mod tests {
         let (mut state, mut hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
 
         // Test a deep RNN
-        for _ in 0..10 {
+        for _ in 0..200 {
             let step = lstm.forward(state.clone(), hidden.clone(), input.clone());
             state = step.0;
             hidden = step.1;
         }
 
-        hidden.zero_gradient();
         hidden.forward();
+        hidden.zero_gradient();
     }
 
     fn predicted_label(softmax_output: &Arr) -> usize {
@@ -245,10 +240,15 @@ mod tests {
             .map(|input| embeddings.index(&input))
             .collect();
 
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[0].clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[1].clone());
-        let (state, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[2].clone());
-        let (_, hidden) = lstm.forward(state.clone(), hidden.clone(), embeddings[3].clone());
+        let (mut state, mut hidden) =
+            lstm.forward(state.clone(), hidden.clone(), embeddings[0].clone());
+
+        for i in 1..sequence_length {
+            let out = lstm.forward(state.clone(), hidden.clone(), embeddings[i].clone());
+
+            state = out.0;
+            hidden = out.1;
+        }
 
         let prediction = hidden.dot(&final_layer).softmax();
         let mut loss = (-(y.clone() * prediction.ln())).scalar_sum();

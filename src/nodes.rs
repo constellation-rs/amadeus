@@ -38,6 +38,9 @@ impl PassCounter {
         self.forward_count.set(0);
         self.backward_count.set(0);
     }
+    pub fn is_zero(&self) -> bool {
+        self.forward_count.get() == 0
+    }
     pub fn recurse_backward(&self) -> bool {
         let backward_count = self.backward_count.get();
         let forward_count = self.forward_count.get();
@@ -209,9 +212,11 @@ where
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.lhs.zero_gradient();
-        self.rhs.zero_gradient();
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.rhs.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -405,9 +410,11 @@ where
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.lhs.zero_gradient();
-        self.rhs.zero_gradient();
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.rhs.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -565,10 +572,10 @@ impl ParameterNode {
 
         Variable::new(node, params)
     }
-    /// Zero the accumulated gradients of this node.
-    pub fn zero_gradient(&self) {
-        self.gradient.borrow_mut().zero_gradient();
-    }
+    // /// Zero the accumulated gradients of this node.
+    // pub fn zero_gradient(&self) {
+    //     //self.gradient.borrow_mut().zero_gradient();
+    // }
 }
 
 impl Node for ParameterNode {
@@ -673,9 +680,11 @@ where
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.lhs.zero_gradient();
-        self.rhs.zero_gradient();
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.rhs.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -777,9 +786,11 @@ where
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.lhs.zero_gradient();
-        self.rhs.zero_gradient();
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.rhs.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -893,9 +904,11 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.lhs.zero_gradient();
-        self.rhs.zero_gradient();
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.rhs.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -987,9 +1000,11 @@ where
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.lhs.zero_gradient();
-        self.rhs.zero_gradient();
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.rhs.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1174,9 +1189,11 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.lhs.zero_gradient();
-        self.rhs.zero_gradient();
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.rhs.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1258,8 +1275,10 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1342,8 +1361,10 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1426,8 +1447,10 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1517,8 +1540,10 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1599,8 +1624,10 @@ where
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1678,8 +1705,10 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1749,8 +1778,10 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1861,8 +1892,10 @@ where
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -1941,8 +1974,10 @@ where
     }
 
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
@@ -2056,8 +2091,10 @@ impl Node for IndexNode<ParameterNode> {
         self.needs_gradient
     }
     fn zero_gradient(&self) {
-        self.counter.clear();
-        self.operand.zero_gradient();
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
     }
 }
 
