@@ -423,8 +423,7 @@ impl Variable<ParameterNode> {
 
 impl<'value> DataInput<&'value Arr> for Variable<ParameterNode> {
     fn set_value(&self, value: &Arr) {
-        let param_value =
-            unsafe { &mut *(&self.node.value.deref().value as *const Arr as *mut Arr) };
+        let param_value = unsafe { &mut *(self.node.value.deref().value.as_ptr()) };
         param_value.assign(value)
     }
 }
@@ -543,9 +542,7 @@ impl SGD {
         let learning_rate = self.learning_rate;
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe {
-                &mut *(&parameter.node.value.deref().value as *const Arr as *mut Arr)
-            };
+            let mut param_value = unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());

@@ -1,9 +1,58 @@
 //! Module holding building blocks for recurrent neural networks.
-
+//!
+//! You can create an LSTM layer by repeatedly applying an LSTM cell
+//! to your inputs:
+//!
+//! ```rust
+//! # extern crate rand;
+//! # extern crate wyrm;
+//! # extern crate ndarray;
+//! # use std::sync::Arc;
+//! # use std::rc::Rc;
+//! #
+//! # use wyrm::{HogwildParameter, InputNode, Node, ParameterNode};
+//! #
+//! # use wyrm::layers::xavier_normal;
+//! # use wyrm::layers::recurrent::*;
+//! #
+//! # use wyrm::{Arr, Variable};
+//! # fn main() {
+//! let input_dim = 10;
+//! let hidden_dim = 5;
+//!
+//! // Initialize the parameters.
+//! let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
+//! let lstm = lstm_params.build();
+//!
+//! // Initialize the cell state and hidden state.
+//! let state = InputNode::new(Arr::zeros((1, hidden_dim)));
+//! let hidden = InputNode::new(Arr::zeros((1, hidden_dim)));
+//!
+//! // Construct the input node.
+//! let input = InputNode::new(xavier_normal(1, input_dim));
+//!
+//! // The forward method outputs a tuple of (cell_state, hidden_state).
+//! let mut state = lstm.forward((state, hidden), input.clone());
+//!
+//! // Construct an LSTM with 200 steps of recursion. Usually
+//! // we'd use different inputs for every step, but here we re-use
+//! // the same input for simplicity.
+//! for _ in 0..200 {
+//!     state = lstm.forward(state.clone(), input.clone());
+//! }
+//!
+//! // Unpack the cell and hidden state.
+//! let (_, mut hidden) = state;
+//!
+//! // Run as usual.
+//! hidden.forward();
+//! hidden.backward(1.0);
+//! hidden.zero_gradient();
+//! # }
+//! ```
 use std::sync::Arc;
 use std::rc::Rc;
 
-use rand;
 use ndarray;
 
 use nodes;
@@ -12,10 +61,6 @@ use nodes::{HogwildParameter, Node, ParameterNode};
 use layers::xavier_normal;
 
 use {Arr, Variable};
-
-pub fn random_matrix(rows: usize, cols: usize) -> Arr {
-    Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
-}
 
 /// Holds shared parameters for an LSTM cell.
 ///
@@ -117,8 +162,7 @@ impl LSTMCell {
     /// otherwise pass the cell and hidden states from previous iterations.
     pub fn forward<C, H, I>(
         &self,
-        cell: Variable<C>,
-        hidden: Variable<H>,
+        state: (Variable<C>, Variable<H>),
         input: Variable<I>,
     ) -> (
         Variable<Rc<Node<Value = Arr, InputGradient = Arr>>>,
@@ -129,6 +173,8 @@ impl LSTMCell {
         H: Node<Value = Arr, InputGradient = Arr>,
         I: Node<Value = Arr, InputGradient = Arr>,
     {
+        let (cell, hidden) = state;
+
         let stacked_input = hidden.stack(&input, ndarray::Axis(1));
 
         // Forget part of the cell state
@@ -182,23 +228,31 @@ mod tests {
         let input_dim = 10;
         let hidden_dim = 5;
 
+        // Initialize the parameters.
         let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
         let lstm = lstm_params.build();
 
+        // Initialize the cell state and hidden state.
         let state = InputNode::new(Arr::zeros((1, hidden_dim)));
         let hidden = InputNode::new(Arr::zeros((1, hidden_dim)));
-        let input = InputNode::new(random_matrix(1, input_dim));
 
-        let (mut state, mut hidden) = lstm.forward(state.clone(), hidden.clone(), input.clone());
+        // Construct the input node.
+        let input = InputNode::new(xavier_normal(1, input_dim));
 
-        // Test a deep RNN
+        // The forward method outputs a tuple of (cell_state, hidden_state).
+        let mut state = lstm.forward((state, hidden), input.clone());
+
+        // Construct a deep RNN.
         for _ in 0..200 {
-            let step = lstm.forward(state.clone(), hidden.clone(), input.clone());
-            state = step.0;
-            hidden = step.1;
+            state = lstm.forward(state.clone(), input.clone());
         }
 
+        // Unpack the cell and hidden state.
+        let (_, mut hidden) = state;
+
+        // Run as usual.
         hidden.forward();
+        hidden.backward(1.0);
         hidden.zero_gradient();
     }
 
@@ -223,8 +277,8 @@ mod tests {
         let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
         let lstm = lstm_params.build();
 
-        let final_layer = ParameterNode::new(random_matrix(hidden_dim, num_digits));
-        let embeddings = ParameterNode::new(random_matrix(num_digits, input_dim));
+        let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));
+        let embeddings = ParameterNode::new(xavier_normal(num_digits, input_dim));
 
         let mut labels = Arr::zeros((1, num_digits));
         let y = nodes::InputNode::new(labels.clone());
@@ -240,15 +294,13 @@ mod tests {
             .map(|input| embeddings.index(&input))
             .collect();
 
-        let (mut state, mut hidden) =
-            lstm.forward(state.clone(), hidden.clone(), embeddings[0].clone());
+        let mut state = lstm.forward((state, hidden), embeddings[0].clone());
 
         for i in 1..sequence_length {
-            let out = lstm.forward(state.clone(), hidden.clone(), embeddings[i].clone());
-
-            state = out.0;
-            hidden = out.1;
+            state = lstm.forward(state.clone(), embeddings[i].clone());
         }
+
+        let (_, hidden) = state;
 
         let prediction = hidden.dot(&final_layer).softmax();
         let mut loss = (-(y.clone() * prediction.ln())).scalar_sum();

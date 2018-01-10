@@ -528,13 +528,15 @@ unsafe impl Sync for HogwildParameter {}
 /// multiple `ParameterNode`s for asynchronous, parallel optimization.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HogwildParameter {
-    pub value: Arr,
+    pub value: RefCell<Arr>,
 }
 
 impl HogwildParameter {
     /// Create a new parameter object.
     pub fn new(value: Arr) -> Self {
-        HogwildParameter { value: value }
+        HogwildParameter {
+            value: RefCell::new(value),
+        }
     }
 }
 
@@ -549,7 +551,14 @@ impl ParameterNode {
     /// Create a parameter node that shares its parameter values
     /// with other parameter nodes via the `HogwildParameter` object.
     pub fn shared(value: Arc<HogwildParameter>) -> Variable<Self> {
-        let shape = (value.value.rows(), value.value.cols());
+        let shape = unsafe {
+            // This method can be called in multiple threads, so borrowing
+            // (even immutably) will read to borrow failures.
+            (
+                (*value.value.as_ptr()).rows(),
+                (*value.value.as_ptr()).cols(),
+            )
+        };
 
         let node = Rc::new(ParameterNode {
             value: value,
@@ -586,7 +595,7 @@ impl Node for ParameterNode {
         self.gradient.borrow_mut().accumulate_gradient(gradient);
     }
     fn value(&self) -> Bor<Self::Value> {
-        Bor::Reference(&self.value.value)
+        Bor::Reference(unsafe { &*(self.value.value.as_ptr() as *const Arr) })
     }
     fn needs_gradient(&self) -> bool {
         true
