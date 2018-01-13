@@ -1,4 +1,3 @@
-#![feature(conservative_impl_trait)]
 #![feature(test)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!

@@ -1873,7 +1873,10 @@ where
             .zip(value.iter())
             .enumerate()
         {
-            for (col_idx, (grad, col_val)) in row.iter_mut().zip(value.iter()).enumerate() {
+            for (col_idx, (grad, col_val)) in row.as_slice_mut()
+                .unwrap()
+                .iter_mut()
+                .zip(value.as_slice().unwrap()).enumerate() {
                 if row_idx == col_idx {
                     *grad = row_val * (1.0 - col_val);
                 } else {
