@@ -12,8 +12,8 @@
 //! #
 //! # use wyrm::{HogwildParameter, InputNode, Node, ParameterNode};
 //! #
-//! # use wyrm::layers::xavier_normal;
-//! # use wyrm::layers::recurrent::*;
+//! # use wyrm::nn::xavier_normal;
+//! # use wyrm::nn::recurrent::*;
 //! #
 //! # use wyrm::{Arr, Variable};
 //! # fn main() {
@@ -58,7 +58,7 @@ use ndarray;
 use nodes;
 use nodes::{HogwildParameter, Node, ParameterNode};
 
-use layers::xavier_normal;
+use nn::xavier_normal;
 
 use {Arr, Variable};
 

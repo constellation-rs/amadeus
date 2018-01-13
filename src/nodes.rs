@@ -1873,7 +1873,12 @@ where
             .zip(value.iter())
             .enumerate()
         {
-            for (col_idx, (grad, col_val)) in row.iter_mut().zip(value.iter()).enumerate() {
+            for (col_idx, (grad, col_val)) in row.as_slice_mut()
+                .unwrap()
+                .iter_mut()
+                .zip(value.as_slice().unwrap())
+                .enumerate()
+            {
                 if row_idx == col_idx {
                     *grad = row_val * (1.0 - col_val);
                 } else {
@@ -1890,6 +1895,118 @@ where
                 0.0,
                 self.operand_gradient.borrow_mut().deref_mut(),
             );
+        }
+
+        self.operand.backward(&self.operand_gradient.borrow());
+    }
+    fn value(&self) -> Bor<Self::Value> {
+        Bor::RefGuard(self.value.borrow())
+    }
+    fn needs_gradient(&self) -> bool {
+        self.needs_gradient
+    }
+    fn zero_gradient(&self) {
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LogSoftmaxNode<OP> {
+    value: RefCell<Arr>,
+    operand_gradient: RefCell<Arr>,
+    operand: Rc<OP>,
+    needs_gradient: bool,
+    counter: PassCounter,
+}
+
+impl<OP> LogSoftmaxNode<OP>
+where
+    OP: Node<Value = Arr>,
+{
+    pub fn new(operand: Rc<OP>) -> Self {
+        let value = {
+            let operand_value = operand.value();
+            let operand_slice = operand_value.deref().as_slice().unwrap();
+            let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
+
+            let denominator = max
+                + operand_slice
+                    .iter()
+                    .map(|&x| (x - max).exp())
+                    .sum::<f32>()
+                    .ln();
+
+            operand_value.deref() - denominator
+        };
+
+        let gradient = &value * 0.0;
+        let needs_gradient = operand.needs_gradient();
+
+        LogSoftmaxNode {
+            value: RefCell::new(value),
+            operand_gradient: RefCell::new(gradient),
+            operand: operand,
+            needs_gradient: needs_gradient,
+            counter: PassCounter::default(),
+        }
+    }
+}
+
+impl<OP> Node for LogSoftmaxNode<OP>
+where
+    OP: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    fn forward(&self) {
+        if self.counter.forward() == ForwardAction::Cached {
+            return;
+        }
+
+        self.operand.forward();
+        let mut dest = self.value.borrow_mut();
+        dest.assign(self.operand.value().deref());
+
+        let operand_value = self.operand.value();
+        let operand_slice = operand_value.deref().as_slice().unwrap();
+        let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
+
+        let denominator = max
+            + operand_slice
+                .iter()
+                .map(|&x| (x - max).exp())
+                .sum::<f32>()
+                .ln();
+
+        dest.as_slice_mut()
+            .unwrap()
+            .iter_mut()
+            .for_each(|x| *x -= denominator);
+    }
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        // TODO: accumulate gradients
+        {
+            let value = self.value.borrow();
+            let value_slice = value.as_slice().expect("Can't get value slice.");
+
+            let gradient_slice = gradient
+                .as_slice()
+                .expect("Can't get input gradient slice.");
+            let mut downstream_gradient = self.operand_gradient.borrow_mut();
+            let downstream_gradient_slice = downstream_gradient
+                .as_slice_mut()
+                .expect("Can't get output gradient slice");
+
+            let gradient_sum = numerics::simd_sum(gradient_slice);
+
+            for (out_grad, in_grad, val) in
+                izip!(downstream_gradient_slice, gradient_slice, value_slice)
+            {
+                *out_grad = in_grad - val.exp() * gradient_sum;
+            }
         }
 
         self.operand.backward(&self.operand_gradient.borrow());

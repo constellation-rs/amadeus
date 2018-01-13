@@ -1,5 +1,6 @@
-//! Neural network layers.
+//! Neural network components.
 
+pub mod losses;
 pub mod recurrent;
 
 use rand;

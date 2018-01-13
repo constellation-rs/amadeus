@@ -1,4 +1,3 @@
-#![feature(conservative_impl_trait)]
 #![feature(test)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
@@ -166,7 +165,7 @@ use std::clone::Clone;
 
 mod nodes;
 mod numerics;
-pub mod layers;
+pub mod nn;
 
 use nodes::*;
 
@@ -345,6 +344,14 @@ where
         )
     }
 
+    /// Compute the log-softmax of this variable.
+    pub fn log_softmax(&self) -> Variable<LogSoftmaxNode<T>> {
+        Variable::new(
+            Rc::new(LogSoftmaxNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
+    }
+
     /// Compute the sigmoid of this variable.
     pub fn sigmoid(&self) -> Variable<SigmoidNode<T>> {
         Variable::new(
@@ -418,6 +425,18 @@ impl Variable<ParameterNode> {
             )),
             merge_parameters(&self.parameters, &index.parameters),
         )
+    }
+}
+
+impl<T> Variable<nn::losses::SparseCategoricalCrossentropyNode<T>> where
+    T: Node<Value = Arr, InputGradient = Arr>, {
+    /// Return the log-softmax predictions from a sparse categorical
+    /// cross-entropy node.
+    ///
+    /// Calling `.value()` on the node returns the value of the loss;
+    /// this function allows getting the predictins with low overhead.
+    pub fn predictions(&self) -> Bor<Arr> {
+        self.node.predictions()
     }
 }
 
@@ -542,7 +561,8 @@ impl SGD {
         let learning_rate = self.learning_rate;
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
+            let mut param_value =
+                unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
@@ -782,6 +802,27 @@ mod tests {
         let mut z = (x.clone() + x.clone()).softmax();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn log_softmax_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(1, 10));
+        let mut z = (x.clone() + x.clone()).log_softmax();
+        let v = (x.clone() + x.clone()).softmax().ln();
+
+        assert_close(v.value().deref(), z.value().deref(), TOLERANCE);
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn sparse_categorical_cross_entropy_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(1, 10));
+        let z = x.clone() + x.clone();
+        let idx = IndexInputNode::new(&vec![0][..]);
+        let mut loss = nn::losses::sparse_categorical_crossentropy(&z, &idx);
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut loss);
         assert_close(&finite_difference, &gradient, TOLERANCE);
     }
     #[test]
