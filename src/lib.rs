@@ -428,6 +428,18 @@ impl Variable<ParameterNode> {
     }
 }
 
+impl<T> Variable<nn::losses::SparseCategoricalCrossentropyNode<T>> where
+    T: Node<Value = Arr, InputGradient = Arr>, {
+    /// Return the log-softmax predictions from a sparse categorical
+    /// cross-entropy node.
+    ///
+    /// Calling `.value()` on the node returns the value of the loss;
+    /// this function allows getting the predictins with low overhead.
+    pub fn predictions(&self) -> Bor<Arr> {
+        self.node.predictions()
+    }
+}
+
 impl<'value> DataInput<&'value Arr> for Variable<ParameterNode> {
     fn set_value(&self, value: &Arr) {
         let param_value = unsafe { &mut *(self.node.value.deref().value.as_ptr()) };
@@ -801,6 +813,16 @@ mod tests {
         assert_close(v.value().deref(), z.value().deref(), TOLERANCE);
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn sparse_categorical_cross_entropy_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(1, 10));
+        let z = x.clone() + x.clone();
+        let idx = IndexInputNode::new(&vec![0][..]);
+        let mut loss = nn::losses::sparse_categorical_crossentropy(&z, &idx);
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut loss);
         assert_close(&finite_difference, &gradient, TOLERANCE);
     }
     #[test]

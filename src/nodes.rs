@@ -1944,7 +1944,6 @@ where
 
         let gradient = &value * 0.0;
         let needs_gradient = operand.needs_gradient();
-        let dim = value.shape()[1];
 
         LogSoftmaxNode {
             value: RefCell::new(value),
