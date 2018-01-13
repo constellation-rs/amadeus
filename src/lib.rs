@@ -428,8 +428,10 @@ impl Variable<ParameterNode> {
     }
 }
 
-impl<T> Variable<nn::losses::SparseCategoricalCrossentropyNode<T>> where
-    T: Node<Value = Arr, InputGradient = Arr>, {
+impl<T> Variable<nn::losses::SparseCategoricalCrossentropyNode<T>>
+where
+    T: Node<Value = Arr, InputGradient = Arr>,
+{
     /// Return the log-softmax predictions from a sparse categorical
     /// cross-entropy node.
     ///
