@@ -165,7 +165,7 @@ use std::clone::Clone;
 
 mod nodes;
 mod numerics;
-pub mod layers;
+pub mod nn;
 
 use nodes::*;
 
