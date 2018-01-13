@@ -344,6 +344,14 @@ where
         )
     }
 
+    /// Compute the log-softmax of this variable.
+    pub fn log_softmax(&self) -> Variable<LogSoftmaxNode<T>> {
+        Variable::new(
+            Rc::new(LogSoftmaxNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
+    }
+
     /// Compute the sigmoid of this variable.
     pub fn sigmoid(&self) -> Variable<SigmoidNode<T>> {
         Variable::new(
@@ -541,7 +549,8 @@ impl SGD {
         let learning_rate = self.learning_rate;
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
+            let mut param_value =
+                unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
@@ -779,6 +788,17 @@ mod tests {
     fn softmax_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(1, 10));
         let mut z = (x.clone() + x.clone()).softmax();
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn log_softmax_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(1, 10));
+        let mut z = (x.clone() + x.clone()).log_softmax();
+        let v = (x.clone() + x.clone()).softmax().ln();
+
+        assert_close(v.value().deref(), z.value().deref(), TOLERANCE);
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);

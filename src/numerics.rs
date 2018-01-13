@@ -25,7 +25,32 @@ pub fn simd_dot(xs: &[f32], ys: &[f32]) -> f32 {
         scalar_result += x_scalar * y_scalar;
     }
 
-    scalar_result + (0..8).map(|idx| simd_result.extract(idx)).sum::<f32>()
+    scalar_result
+        + (0..stride as u32)
+            .map(|idx| simd_result.extract(idx))
+            .sum::<f32>()
+}
+
+pub fn simd_sum(xs: &[f32]) -> f32 {
+    let mut simd_result = stdsimd::simd::f32x8::splat(0.0);
+    let mut scalar_result = 0.0;
+    let stride = 8;
+
+    let split_idx = (xs.len() / stride) * stride;
+    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
+
+    for x in simd_xs.chunks(stride) {
+        unsafe { simd_result = simd_result + stdsimd::simd::f32x8::load_unchecked(x, 0) }
+    }
+
+    for x_scalar in scalar_xs.iter() {
+        scalar_result += x_scalar;
+    }
+
+    scalar_result
+        + (0..stride as u32)
+            .map(|idx| simd_result.extract(idx))
+            .sum::<f32>()
 }
 
 pub fn simd_scaled_assign(xs: &mut [f32], ys: &[f32], alpha: f32) {
