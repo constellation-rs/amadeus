@@ -1,7 +1,133 @@
 use std::cmp;
 use stdsimd;
 
+use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
+use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
+
 use super::Arr;
+
+fn vec_mat_mul<S1, S2, S3>(
+    alpha: f32,
+    lhs: &ArrayBase<S1, Ix1>,
+    rhs: &ArrayBase<S2, Ix2>,
+    beta: f32,
+    out: &mut ArrayBase<S3, Ix1>,
+) where
+    S1: Data<Elem = f32>,
+    S2: Data<Elem = f32>,
+    S3: DataMut<Elem = f32>,
+{
+    if lhs.len() != rhs.rows() || rhs.cols() != out.len() {
+        panic!(
+            "Shapes are incompatible for a vec-mat mul: LHS: {} vs RHS ({} x {}) vs out {}",
+            lhs.len(),
+            rhs.rows(),
+            rhs.cols(),
+            out.len()
+        )
+    }
+
+    let out_slice = out.as_slice_mut().expect("Vec-mat result not contiguous.");
+    let lhs_slice = lhs.as_slice().expect("LHS not contiguous");
+
+    for (row_idx, (&x, row)) in lhs_slice.iter().zip(rhs.genrows()).enumerate() {
+        let row_slice = row.as_slice().expect("RHS row not C-contiguous.");
+
+        if row_idx == 0 {
+            saxpy(x * alpha, row_slice, beta, out_slice);
+        } else {
+            saxpy(x * alpha, row_slice, 1.0, out_slice);
+        }
+    }
+}
+
+fn saxpy(alpha: f32, xs: &[f32], beta: f32, outs: &mut [f32]) {
+    let stride = 8;
+    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
+    let simd_beta = stdsimd::simd::f32x8::splat(beta);
+
+    let split_idx = xs.len() / stride * stride;
+    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
+    let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
+
+    for (x, out) in izip!(simd_xs.chunks(stride),
+                          simd_outs.chunks_mut(stride)) {
+        unsafe {
+            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
+                * simd_alpha
+                + stdsimd::simd::f32x8::load_unchecked(out, 0)
+                * simd_beta;
+            elem.store_unchecked(out, 0);
+        }
+    }
+
+    for (&x, out) in izip!(scalar_xs.iter(),
+                             scalar_outs.iter_mut()) {
+        *out = x * alpha + *out * beta;
+    }
+}
+
+enum MatrixLayout {
+    RowMajor,
+    ColumnMajor,
+}
+
+fn layout<S: Data<Elem = f32>>(matrix: &ArrayBase<S, Ix2>) -> MatrixLayout {
+    match matrix.strides()[0] {
+        1 => MatrixLayout::ColumnMajor,
+        _ => MatrixLayout::RowMajor,
+    }
+}
+
+pub fn mat_mul<S1, S2, S3>(
+    alpha: f32,
+    lhs: &ArrayBase<S1, Ix2>,
+    rhs: &ArrayBase<S2, Ix2>,
+    beta: f32,
+    out: &mut ArrayBase<S3, Ix2>,
+) where
+    S1: Data<Elem = f32>,
+    S2: Data<Elem = f32>,
+    S3: DataMut<Elem = f32>,
+{
+    match (lhs.rows(), rhs.cols()) {
+        (_, 1) => {
+            general_mat_vec_mul(
+                alpha,
+                lhs,
+                &rhs.subview(Axis(1), 0),
+                beta,
+                &mut out.subview_mut(Axis(1), 0),
+            );
+        }
+        (1, _) => {
+            // general_mat_vec_mul(
+            //     alpha,
+            //     &rhs,
+            //     &lhs.subview(Axis(0), 0),
+            //     beta,
+            //     &mut out.subview_mut(Axis(0), 0),
+            // );
+            match layout(rhs) {
+                MatrixLayout::RowMajor => vec_mat_mul(
+                    alpha,
+                    &lhs.subview(Axis(0), 0),
+                    rhs,
+                    beta,
+                    &mut out.subview_mut(Axis(0), 0)),
+                MatrixLayout::ColumnMajor => general_mat_vec_mul(
+                    alpha,
+                    &rhs.t(),
+                    &lhs.subview(Axis(0), 0),
+                    beta,
+                    &mut out.subview_mut(Axis(0), 0))
+            }
+        }
+        _ => {
+            general_mat_mul(alpha, lhs, rhs, beta, out);
+        }
+    }
+}
 
 /// SIMD-enabled vector-vector dot product.
 pub fn simd_dot(xs: &[f32], ys: &[f32]) -> f32 {
@@ -288,6 +414,59 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
+    fn assert_close(x: &Arr, y: &Arr, tol: f32) {
+        assert!(
+            x.all_close(y, tol),
+            "{:#?} not within {} of {:#?}",
+            x,
+            tol,
+            y
+        );
+    }
+
+    #[test]
+    fn test_dot_node_specializations_mm() {
+        let x = random_matrix(64, 64);
+        let y = random_matrix(64, 64);
+
+        let mut result = random_matrix(64, 64);
+        let mut expected = random_matrix(64, 64);
+
+        mat_mul(1.0, &x, &y, 0.0, &mut result);
+        general_mat_mul(1.0, &x, &y, 0.0, &mut expected);
+
+        assert_close(&result, &expected, 0.001);
+    }
+
+    #[test]
+    fn test_dot_node_specializations_mv() {
+        let x = random_matrix(64, 64);
+        let y = random_matrix(64, 1);
+
+        let mut result = random_matrix(64, 1);
+        let mut expected = random_matrix(64, 1);
+
+        mat_mul(1.0, &x, &y, 0.0, &mut result);
+        general_mat_mul(1.0, &x, &y, 0.0, &mut expected);
+
+        assert_close(&result, &expected, 0.001);
+    }
+
+    #[test]
+    fn test_dot_node_specializations_vm() {
+        let x = random_matrix(1, 64);
+        let y = random_matrix(64, 64);
+
+        let mut result = random_matrix(1, 64);
+        let mut expected = random_matrix(1, 64);
+
+        mat_mul(1.0, &x, &y, 0.0, &mut result);
+        general_mat_mul(1.0, &x, &y, 0.0, &mut expected);
+
+        assert_close(&result, &expected, 0.001);
+    }
+
     #[bench]
     fn bench_dot(b: &mut Bencher) {
         let xs = vec![0.0; 256];
@@ -342,5 +521,50 @@ mod tests {
         let ys = random_matrix(256, 1);
 
         b.iter(|| assign(&mut xs, &ys));
+    }
+
+    #[bench]
+    fn dot_node_specializations_mm(b: &mut Bencher) {
+        let x = random_matrix(64, 64);
+        let y = random_matrix(64, 64);
+        let mut z = random_matrix(64, 64);
+
+        b.iter(|| mat_mul(1.0, &x, &y, 0.0, &mut z));
+    }
+
+    #[bench]
+    fn dot_node_general_vm(b: &mut Bencher) {
+        let x = random_matrix(1, 64);
+        let y = random_matrix(64, 64);
+        let mut z = random_matrix(1, 64);
+
+        b.iter(|| general_mat_mul(1.0, &x, &y, 0.0, &mut z));
+    }
+
+    #[bench]
+    fn dot_node_specializations_vm(b: &mut Bencher) {
+        let x = random_matrix(1, 64);
+        let y = random_matrix(64, 64);
+        let mut z = random_matrix(1, 64);
+
+        b.iter(|| mat_mul(1.0, &x, &y, 0.0, &mut z));
+    }
+
+    #[bench]
+    fn dot_node_specializations_mv(b: &mut Bencher) {
+        let x = random_matrix(64, 64);
+        let y = random_matrix(64, 1);
+        let mut z = random_matrix(64, 1);
+
+        b.iter(|| mat_mul(1.0, &x, &y, 0.0, &mut z));
+    }
+
+    #[bench]
+    fn dot_node_general_mv(b: &mut Bencher) {
+        let x = random_matrix(64, 64);
+        let y = random_matrix(64, 1);
+        let mut z = random_matrix(64, 1);
+
+        b.iter(|| general_mat_mul(1.0, &x, &y, 0.0, &mut z));
     }
 }

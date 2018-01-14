@@ -7,7 +7,6 @@ use std::rc::Rc;
 
 use ndarray;
 use ndarray::Axis;
-use ndarray::linalg::general_mat_mul;
 
 use smallvec::SmallVec;
 
@@ -972,7 +971,7 @@ where
         self.lhs.forward();
         self.rhs.forward();
 
-        general_mat_mul(
+        numerics::mat_mul(
             1.0,
             self.lhs.value().deref(),
             self.rhs.value().deref(),
@@ -991,8 +990,14 @@ where
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-                general_mat_mul(1.0, gradient, &rhs_value.t(), 0.0, &mut lhs_gradient);
-                general_mat_mul(1.0, &lhs_value.t(), gradient, 0.0, &mut rhs_gradient);
+                numerics::mat_mul(1.0, gradient, &rhs_value.t(), 0.0, &mut lhs_gradient);
+                numerics::mat_mul(
+                    1.0,
+                    &lhs_value.t(),
+                    gradient.deref(),
+                    0.0,
+                    &mut rhs_gradient,
+                );
             }
         }
 
@@ -1888,7 +1893,7 @@ where
         }
 
         {
-            general_mat_mul(
+            numerics::mat_mul(
                 1.0,
                 gradient,
                 jacobian.deref_mut(),
