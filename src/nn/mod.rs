@@ -1,7 +1,7 @@
 //! Neural network components.
 
 pub mod losses;
-pub mod recurrent;
+pub mod lstm;
 
 use rand;
 use rand::distributions::{IndependentSample, Normal};

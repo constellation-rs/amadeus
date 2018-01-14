@@ -1,7 +1,7 @@
-//! Module holding building blocks for recurrent neural networks.
+//! Module for LSTM layers.
 //!
-//! You can create an LSTM layer by repeatedly applying an LSTM cell
-//! to your inputs:
+//! You can create an LSTM layer by first initializing its parameters,
+//! then applying it to your inputs:
 //!
 //! ```rust
 //! # extern crate rand;
@@ -13,7 +13,7 @@
 //! # use wyrm::{HogwildParameter, InputNode, Node, ParameterNode};
 //! #
 //! # use wyrm::nn::xavier_normal;
-//! # use wyrm::nn::recurrent::*;
+//! # use wyrm::nn::lstm;
 //! #
 //! # use wyrm::{Arr, Variable};
 //! # fn main() {
@@ -21,33 +21,25 @@
 //! let hidden_dim = 5;
 //!
 //! // Initialize the parameters.
-//! let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
-//! let lstm = lstm_params.build();
+//! let parameters = lstm::Parameters::new(input_dim, hidden_dim);
+//! let lstm = parameters.build();
+//! 
+//! // Construct the input nodes.
+//! let input: Vec<_> = (0..200)
+//!                      .map(|_| InputNode::new(xavier_normal(1, input_dim))).collect();
 //!
-//! // Initialize the cell state and hidden state.
-//! let state = InputNode::new(Arr::zeros((1, hidden_dim)));
-//! let hidden = InputNode::new(Arr::zeros((1, hidden_dim)));
+//! // Construct an LSTM with 200 steps of recursion.
+//! let mut hidden = lstm.forward(&input);
 //!
-//! // Construct the input node.
-//! let input = InputNode::new(xavier_normal(1, input_dim));
-//!
-//! // The forward method outputs a tuple of (cell_state, hidden_state).
-//! let mut state = lstm.forward((state, hidden), input.clone());
-//!
-//! // Construct an LSTM with 200 steps of recursion. Usually
-//! // we'd use different inputs for every step, but here we re-use
-//! // the same input for simplicity.
-//! for _ in 0..200 {
-//!     state = lstm.forward(state.clone(), input.clone());
-//! }
-//!
-//! // Unpack the cell and hidden state.
-//! let (_, mut hidden) = state;
+//! let mut last_hidden = hidden.last_mut().unwrap();
 //!
 //! // Run as usual.
-//! hidden.forward();
-//! hidden.backward(1.0);
-//! hidden.zero_gradient();
+//! last_hidden.forward();
+//! last_hidden.backward(1.0);
+//! last_hidden.zero_gradient();
+//!
+//! // Reset the hidden state between sequences
+//! lstm.reset_state();
 //! # }
 //! ```
 use std::sync::Arc;
@@ -60,13 +52,13 @@ use nodes::{HogwildParameter, Node, ParameterNode};
 
 use nn::xavier_normal;
 
-use {Arr, Variable};
+use {Arr, DataInput, Variable};
 
 /// Holds shared parameters for an LSTM cell.
 ///
 /// Construct this first, then use the `build` method to instantiate
 /// LSTM cell nodes.
-pub struct LSTMParameters {
+pub struct Parameters {
     input_dim: usize,
     hidden_dim: usize,
 
@@ -83,7 +75,7 @@ pub struct LSTMParameters {
     output_gate_biases: Arc<nodes::HogwildParameter>,
 }
 
-impl LSTMParameters {
+impl Parameters {
     /// Create a new LSTM parameters object.
     pub fn new(input_dim: usize, hidden_dim: usize) -> Self {
         Self {
@@ -116,11 +108,16 @@ impl LSTMParameters {
         }
     }
 
+    /// Build an LSTM layer.
+    pub fn build(&self) -> Layer {
+        Layer::new(self.build_cell())
+    }
+
     /// Build an LSTM cell.
-    pub fn build(&self) -> LSTMCell {
-        LSTMCell {
-            _input_dim: self.input_dim,
-            _hidden_dim: self.hidden_dim,
+    pub fn build_cell(&self) -> Cell {
+        Cell {
+            input_dim: self.input_dim,
+            hidden_dim: self.hidden_dim,
 
             forget_weights: ParameterNode::shared(self.forget_weights.clone()),
             forget_biases: ParameterNode::shared(self.forget_biases.clone()),
@@ -138,9 +135,10 @@ impl LSTMParameters {
 }
 
 /// An LSTM cell.
-pub struct LSTMCell {
-    _input_dim: usize,
-    _hidden_dim: usize,
+#[derive(Debug)]
+pub struct Cell {
+    input_dim: usize,
+    hidden_dim: usize,
 
     forget_weights: Variable<ParameterNode>,
     forget_biases: Variable<ParameterNode>,
@@ -155,7 +153,7 @@ pub struct LSTMCell {
     output_gate_biases: Variable<ParameterNode>,
 }
 
-impl LSTMCell {
+impl Cell {
     /// Run a single LSTM iteration over inputs.
     ///
     /// If this is the first cell, initialize the cell state and the hidden state;
@@ -203,6 +201,55 @@ impl LSTMCell {
     }
 }
 
+/// An LSTM layer.
+#[derive(Debug)]
+pub struct Layer {
+    cell: Cell,
+    state: Variable<nodes::InputNode>,
+    hidden: Variable<nodes::InputNode>,
+}
+
+impl Layer {
+    fn new(cell: Cell) -> Self {
+        let hidden_dim = cell.hidden_dim;
+
+        Layer {
+            cell: cell,
+            state: nodes::InputNode::new(Arr::zeros((1, hidden_dim))),
+            hidden: nodes::InputNode::new(Arr::zeros((1, hidden_dim))),
+        }
+    }
+    /// Construct an LSTM layer over given inputs, returning the emitted
+    /// hidden states.
+    ///
+    /// The state of the layer is initialized with zero vectors. Use
+    /// `Cell` for custom initialization.
+    pub fn forward<T>(
+        &self,
+        inputs: &[Variable<T>],
+    ) -> Vec<Variable<Rc<Node<Value = Arr, InputGradient = Arr>>>>
+    where
+        T: Node<Value = Arr, InputGradient = Arr>,
+    {
+        let mut state = (self.state.clone().boxed(), self.hidden.clone().boxed());
+
+        let outputs: Vec<_> = inputs
+            .iter()
+            .map(|input| {
+                state = self.cell.forward(state.clone(), input.clone());
+                state.1.clone()
+            })
+            .collect();
+
+        outputs
+    }
+    /// Reset the internal state of the layer.
+    pub fn reset_state(&self) {
+        self.state.set_value(0.0);
+        self.hidden.set_value(0.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -212,6 +259,7 @@ mod tests {
     use DataInput;
     use SGD;
     use nodes::InputNode;
+    use nn::losses::sparse_categorical_crossentropy;
 
     fn pi_digits(num: usize) -> Vec<usize> {
         let pi_str = include_str!("pi.txt");
@@ -229,8 +277,8 @@ mod tests {
         let hidden_dim = 5;
 
         // Initialize the parameters.
-        let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
-        let lstm = lstm_params.build();
+        let lstm_params = Parameters::new(input_dim, hidden_dim);
+        let lstm = lstm_params.build_cell();
 
         // Initialize the cell state and hidden state.
         let state = InputNode::new(Arr::zeros((1, hidden_dim)));
@@ -274,17 +322,12 @@ mod tests {
         let input_dim = 16;
         let hidden_dim = 32;
 
-        let lstm_params = LSTMParameters::new(input_dim, hidden_dim);
+        let lstm_params = Parameters::new(input_dim, hidden_dim);
         let lstm = lstm_params.build();
 
         let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));
         let embeddings = ParameterNode::new(xavier_normal(num_digits, input_dim));
-
-        let mut labels = Arr::zeros((1, num_digits));
-        let y = nodes::InputNode::new(labels.clone());
-
-        let state = InputNode::new(Arr::zeros((1, hidden_dim)));
-        let hidden = InputNode::new(Arr::zeros((1, hidden_dim)));
+        let y = nodes::IndexInputNode::new(&vec![0]);
 
         let inputs: Vec<_> = (0..sequence_length)
             .map(|_| nodes::IndexInputNode::new(&vec![0]))
@@ -294,17 +337,11 @@ mod tests {
             .map(|input| embeddings.index(&input))
             .collect();
 
-        let mut state = lstm.forward((state, hidden), embeddings[0].clone());
+        let hidden_states = lstm.forward(&embeddings);
+        let hidden = hidden_states.last().unwrap();
 
-        for i in 1..sequence_length {
-            state = lstm.forward(state.clone(), embeddings[i].clone());
-        }
-
-        let (_, hidden) = state;
-
-        let prediction = hidden.dot(&final_layer).softmax();
-        let mut loss = (-(y.clone() * prediction.ln())).scalar_sum();
-
+        let prediction = hidden.dot(&final_layer);
+        let mut loss = sparse_categorical_crossentropy(&prediction, &y);
         let mut optimizer = SGD::new(0.05, loss.parameters());
 
         let digits = pi_digits(100);
@@ -329,10 +366,7 @@ mod tests {
                 }
 
                 let target_digit = *digit_chunk.last().unwrap();
-                labels *= 0.0;
-                labels[(0, target_digit)] = 1.0;
-
-                y.set_value(&labels);
+                y.set_value(target_digit);
 
                 loss.forward();
                 loss.backward(1.0);
