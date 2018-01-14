@@ -23,7 +23,7 @@
 //! // Initialize the parameters.
 //! let parameters = lstm::Parameters::new(input_dim, hidden_dim);
 //! let lstm = parameters.build();
-//! 
+//!
 //! // Construct the input nodes.
 //! let input: Vec<_> = (0..200)
 //!                      .map(|_| InputNode::new(xavier_normal(1, input_dim))).collect();
