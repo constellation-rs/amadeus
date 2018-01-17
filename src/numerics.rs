@@ -5,6 +5,8 @@ use stdsimd;
 use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
 
+use fast_approx::fastlog;
+
 use super::Arr;
 
 #[inline(always)]
@@ -24,15 +26,11 @@ pub fn exp(x: f32) -> f32 {
     }
 }
 
-fn lnf_fast(x: f32) -> f32 {
-    (unsafe { mem::transmute::<f32, i32>(x) } - 1064866805) as f32 * 8.262958405176314e-8
-}
-
 /// Uses approximate ln(x) when the fast-math feature is enabled.
 #[inline(always)]
 pub fn ln(x: f32) -> f32 {
     if cfg!(feature = "fast-math") {
-        lnf_fast(x)
+        fastlog(x)
     } else {
         x.ln()
     }
@@ -436,10 +434,10 @@ mod tests {
     }
 
     #[test]
-    fn test_lnf() {
+    fn test_fastlog() {
         let values: Vec<f32> = vec![0.1, 0.5, 1.0, 5.0, 10.0];
         for &x in &values {
-            println!("Input: {}, stdlib: {}, fast: {}", x, x.ln(), lnf_fast(x));
+            println!("Input: {}, stdlib: {}, fast: {}", x, x.ln(), fastlog(x));
         }
     }
 
