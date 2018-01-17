@@ -133,6 +133,11 @@
 //! blas-src = { version = "0.1.2", default-features = false, features = ["openblas"] }
 //! openblas-src = { version = "0.5.6", default-features = false, features = ["cblas"] }
 //! ```
+//!
+//! ## Fast numerics
+//!
+//! Enable the `fast-math` option to use fast approximations to transcendental functions.
+//! This should give substantial speed gains in networks that are `exp`, `ln`, or `tanh`-heavy.
 
 // TODO: pass through of parent values in .value(),
 // optimizations in forward
@@ -563,8 +568,7 @@ impl SGD {
         let learning_rate = self.learning_rate;
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value =
-                unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
+            let mut param_value = unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());

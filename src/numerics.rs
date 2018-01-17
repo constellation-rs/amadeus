@@ -1,10 +1,62 @@
 use std::cmp;
+use std::mem;
 use stdsimd;
 
 use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
 
 use super::Arr;
+
+#[inline(always)]
+fn expf_fast(x: f32) -> f32 {
+    let u = (12102203.0 * x + 1064866805.0) as i32;
+
+    unsafe { mem::transmute::<i32, f32>(u) }
+}
+
+/// Uses approximate e^x when the fast-math feature is enabled.
+#[inline(always)]
+pub fn exp(x: f32) -> f32 {
+    if cfg!(feature = "fast-math") {
+        expf_fast(x)
+    } else {
+        x.exp()
+    }
+}
+
+fn lnf_fast(x: f32) -> f32 {
+    (unsafe { mem::transmute::<f32, i32>(x) } - 1064866805) as f32 * 8.262958405176314e-8
+}
+
+/// Uses approximate ln(x) when the fast-math feature is enabled.
+#[inline(always)]
+pub fn ln(x: f32) -> f32 {
+    if cfg!(feature = "fast-math") {
+        lnf_fast(x)
+    } else {
+        x.ln()
+    }
+}
+
+fn tanhf_fast(x: f32) -> f32 {
+    if x < -3.0 {
+        -1.0
+    } else if x > 3.0 {
+        1.0
+    } else {
+        x * (27.0 + x.powi(2)) / (27.0 + 9.0 * x.powi(2))
+    }
+}
+
+/// Uses approximate ln(x) when the fast-math feature is enabled.
+#[inline(always)]
+pub fn tanh(x: f32) -> f32 {
+    if cfg!(feature = "fast-math") {
+        tanhf_fast(x)
+    } else {
+        x.tanh()
+    }
+}
 
 fn vec_mat_mul<S1, S2, S3>(
     alpha: f32,
@@ -50,19 +102,15 @@ fn saxpy(alpha: f32, xs: &[f32], beta: f32, outs: &mut [f32]) {
     let (simd_xs, scalar_xs) = xs.split_at(split_idx);
     let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
 
-    for (x, out) in izip!(simd_xs.chunks(stride),
-                          simd_outs.chunks_mut(stride)) {
+    for (x, out) in izip!(simd_xs.chunks(stride), simd_outs.chunks_mut(stride)) {
         unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
-                * simd_alpha
-                + stdsimd::simd::f32x8::load_unchecked(out, 0)
-                * simd_beta;
+            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0) * simd_alpha
+                + stdsimd::simd::f32x8::load_unchecked(out, 0) * simd_beta;
             elem.store_unchecked(out, 0);
         }
     }
 
-    for (&x, out) in izip!(scalar_xs.iter(),
-                             scalar_outs.iter_mut()) {
+    for (&x, out) in izip!(scalar_xs.iter(), scalar_outs.iter_mut()) {
         *out = x * alpha + *out * beta;
     }
 }
@@ -114,13 +162,15 @@ pub fn mat_mul<S1, S2, S3>(
                     &lhs.subview(Axis(0), 0),
                     rhs,
                     beta,
-                    &mut out.subview_mut(Axis(0), 0)),
+                    &mut out.subview_mut(Axis(0), 0),
+                ),
                 MatrixLayout::ColumnMajor => general_mat_vec_mul(
                     alpha,
                     &rhs.t(),
                     &lhs.subview(Axis(0), 0),
                     beta,
-                    &mut out.subview_mut(Axis(0), 0))
+                    &mut out.subview_mut(Axis(0), 0),
+                ),
             }
         }
         _ => {
@@ -378,6 +428,35 @@ mod tests {
     }
 
     #[test]
+    fn test_expf() {
+        let values: Vec<f32> = vec![-0.5, -0.1, 0.0, 0.1, 0.5];
+        for &x in &values {
+            println!("Input: {}, stdlib: {}, fast: {}", x, x.exp(), expf_fast(x));
+        }
+    }
+
+    #[test]
+    fn test_lnf() {
+        let values: Vec<f32> = vec![0.1, 0.5, 1.0, 5.0, 10.0];
+        for &x in &values {
+            println!("Input: {}, stdlib: {}, fast: {}", x, x.ln(), lnf_fast(x));
+        }
+    }
+
+    #[test]
+    fn test_tanh() {
+        let values: Vec<f32> = vec![-0.5, -0.1, 0.0, 0.1, 0.5];
+        for &x in &values {
+            println!(
+                "Input: {}, stdlib: {}, fast: {}",
+                x,
+                x.tanh(),
+                tanhf_fast(x)
+            );
+        }
+    }
+
+    #[test]
     fn test_dot() {
         for len in 0..32 {
             let xs = (0..len)
@@ -465,6 +544,24 @@ mod tests {
         general_mat_mul(1.0, &x, &y, 0.0, &mut expected);
 
         assert_close(&result, &expected, 0.001);
+    }
+
+    #[bench]
+    fn bench_exp(b: &mut Bencher) {
+        let x: Vec<f32> = vec![1.0; 32];
+
+        let mut v = 0.0;
+
+        b.iter(|| x.iter().for_each(|&y| v += y.exp()));
+    }
+
+    #[bench]
+    fn bench_exp_fast(b: &mut Bencher) {
+        let x: Vec<f32> = vec![1.0; 32];
+
+        let mut v = 0.0;
+
+        b.iter(|| x.iter().for_each(|&y| v += expf_fast(y)));
     }
 
     #[bench]

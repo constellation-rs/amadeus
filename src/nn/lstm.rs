@@ -254,6 +254,7 @@ impl Layer {
 mod tests {
 
     use std::ops::Deref;
+    use test::Bencher;
 
     use super::*;
     use DataInput;
@@ -391,5 +392,59 @@ mod tests {
         }
 
         assert!((correct as f32 / total as f32) > 0.75);
+    }
+
+    #[bench]
+    fn bench_lstm(b: &mut Bencher) {
+        let sequence_length = 4;
+        let num_digits = 10;
+        let input_dim = 16;
+        let hidden_dim = 32;
+
+        let lstm_params = Parameters::new(input_dim, hidden_dim);
+        let lstm = lstm_params.build();
+
+        let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));
+        let embeddings = ParameterNode::new(xavier_normal(num_digits, input_dim));
+        let y = nodes::IndexInputNode::new(&vec![0]);
+
+        let inputs: Vec<_> = (0..sequence_length)
+            .map(|_| nodes::IndexInputNode::new(&vec![0]))
+            .collect();
+        let embeddings: Vec<_> = inputs
+            .iter()
+            .map(|input| embeddings.index(&input))
+            .collect();
+
+        let hidden_states = lstm.forward(&embeddings);
+        let hidden = hidden_states.last().unwrap();
+
+        let prediction = hidden.dot(&final_layer);
+        let mut loss = sparse_categorical_crossentropy(&prediction, &y);
+        let mut optimizer = SGD::new(0.05, loss.parameters());
+
+        let digits = pi_digits(100);
+
+        b.iter(|| {
+            for i in 0..(digits.len() - sequence_length - 1) {
+                let digit_chunk = &digits[i..(i + sequence_length + 1)];
+                if digit_chunk.len() < sequence_length + 1 {
+                    break;
+                }
+
+                for (&digit, input) in digit_chunk[..digit_chunk.len() - 1].iter().zip(&inputs) {
+                    input.set_value(digit);
+                }
+
+                let target_digit = *digit_chunk.last().unwrap();
+                y.set_value(target_digit);
+
+                loss.forward();
+                loss.backward(1.0);
+
+                optimizer.step();
+                loss.zero_gradient();
+            }
+        });
     }
 }

@@ -1310,7 +1310,7 @@ where
     OP: Node<Value = Arr>,
 {
     pub fn new(operand: Rc<OP>) -> Self {
-        let value = operand.value().map(|x| x.ln());
+        let value = operand.value().map(|&x| numerics::ln(x));
         let gradient = &value * 0.0;
         let needs_gradient = operand.needs_gradient();
 
@@ -1340,7 +1340,7 @@ where
         let mut dest = self.value.borrow_mut();
 
         dest.assign(self.operand.value().deref());
-        dest.map_inplace(|x| *x = x.ln());
+        dest.map_inplace(|x| *x = numerics::ln(*x));
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -1396,7 +1396,7 @@ where
     OP: Node<Value = Arr>,
 {
     pub fn new(operand: Rc<OP>) -> Self {
-        let value = operand.value().map(|x| x.tanh());
+        let value = operand.value().map(|&x| numerics::tanh(x));
         let gradient = &value * 0.0;
         let needs_gradient = operand.needs_gradient();
 
@@ -1426,7 +1426,7 @@ where
         let mut dest = self.value.borrow_mut();
 
         dest.assign(self.operand.value().deref());
-        dest.map_inplace(|x| *x = x.tanh());
+        dest.map_inplace(|x| *x = numerics::tanh(*x));
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -1482,7 +1482,10 @@ where
     T: Node<Value = Arr>,
 {
     pub fn new(operand: Rc<T>) -> Self {
-        let value = operand.value().deref().map(|x| 1.0 / (1.0 + (-x).exp()));
+        let value = operand
+            .value()
+            .deref()
+            .map(|x| 1.0 / (1.0 + numerics::exp(-x)));
         let gradient = &value * 0.0;
         let needs_gradient = operand.needs_gradient();
 
@@ -1512,7 +1515,7 @@ where
         let mut dest = self.value.borrow_mut();
 
         numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
-            1.0 / (1.0 + (-x).exp())
+            1.0 / (1.0 + numerics::exp(-x))
         });
     }
 
@@ -1659,7 +1662,7 @@ where
     OP: Node<Value = Arr>,
 {
     pub fn new(operand: Rc<OP>) -> Self {
-        let value = operand.value().deref().map(|x| x.exp());
+        let value = operand.value().deref().map(|&x| numerics::exp(x));
         let gradient = &value * 0.0;
         let needs_gradient = operand.needs_gradient();
 
@@ -1688,7 +1691,7 @@ where
         let mut dest = self.value.borrow_mut();
 
         dest.assign(self.operand.value().deref());
-        dest.map_inplace(|x| *x = x.exp());
+        dest.map_inplace(|x| *x = numerics::exp(*x));
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
@@ -1822,7 +1825,7 @@ where
                 .unwrap()
                 .iter()
                 .fold(std::f32::MIN, |x, y| x.max(*y));
-            let numerator = operand.value().map(|x| (x - max).exp());
+            let numerator = operand.value().map(|x| numerics::exp(x - max));
             let denominator = numerator.scalar_sum();
 
             numerator / denominator
@@ -1863,7 +1866,7 @@ where
             .deref()
             .iter()
             .fold(std::f32::MIN, |x, y| x.max(*y));
-        dest.map_inplace(|x| *x = (*x - max).exp());
+        dest.map_inplace(|x| *x = numerics::exp(*x - max));
         let denominator = dest.scalar_sum();
         dest.map_inplace(|x| *x /= denominator);
     }
@@ -1938,11 +1941,12 @@ where
             let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
 
             let denominator = max
-                + operand_slice
-                    .iter()
-                    .map(|&x| (x - max).exp())
-                    .sum::<f32>()
-                    .ln();
+                + numerics::ln(
+                    operand_slice
+                        .iter()
+                        .map(|&x| numerics::exp(x - max))
+                        .sum::<f32>(),
+                );
 
             operand_value.deref() - denominator
         };
@@ -1980,11 +1984,12 @@ where
         let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
 
         let denominator = max
-            + operand_slice
-                .iter()
-                .map(|&x| (x - max).exp())
-                .sum::<f32>()
-                .ln();
+            + numerics::ln(
+                operand_slice
+                    .iter()
+                    .map(|&x| numerics::exp(x - max))
+                    .sum::<f32>(),
+            );
 
         dest.as_slice_mut()
             .unwrap()
@@ -2007,10 +2012,10 @@ where
 
             let gradient_sum = numerics::simd_sum(gradient_slice);
 
-            for (out_grad, in_grad, val) in
+            for (out_grad, in_grad, &val) in
                 izip!(downstream_gradient_slice, gradient_slice, value_slice)
             {
-                *out_grad = in_grad - val.exp() * gradient_sum;
+                *out_grad = in_grad - numerics::exp(val) * gradient_sum;
             }
         }
 

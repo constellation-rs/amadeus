@@ -6,6 +6,7 @@ use std::ops::Deref;
 
 use {Arr, Node, Variable};
 use nodes::{Bor, ForwardAction, IndexInputNode, LogSoftmaxNode, PassCounter};
+use numerics;
 
 /// Sparse categorical cross entropy loss.
 ///
@@ -119,8 +120,8 @@ where
             let value = self.log_softmax.value();
             let value_slice = value.as_slice().unwrap();
 
-            for (grad, val) in izip!(gradient_slice.iter_mut(), value_slice.iter()) {
-                *grad = val.exp();
+            for (grad, &val) in izip!(gradient_slice.iter_mut(), value_slice.iter()) {
+                *grad = numerics::exp(val);
             }
 
             for &idx in self.y.value().iter() {
