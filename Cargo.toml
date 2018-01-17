@@ -11,6 +11,9 @@ readme = "readme.md"
 [badges]
 travis-ci = { repository = "maciejkula/wyrm", branch = "master" }
 
+[features]
+fast-math = []
+
 [dependencies]
 ndarray = { version = "0.11.0", features = ["serde-1"] }
 rand = "0.3.18"
