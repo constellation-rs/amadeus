@@ -569,7 +569,8 @@ impl SGD {
         let learning_rate = self.learning_rate;
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
+            let mut param_value =
+                unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());

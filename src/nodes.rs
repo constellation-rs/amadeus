@@ -193,9 +193,7 @@ where
 
         let mut self_value = self.value.borrow_mut();
 
-        numerics::add(lhs_value.deref(),
-                      rhs_value.deref(),
-                      self_value.deref_mut());
+        numerics::add(lhs_value.deref(), rhs_value.deref(), self_value.deref_mut());
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         self.lhs.backward(gradient);
@@ -654,9 +652,11 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        numerics::sub(self.lhs.value().deref(),
-                      self.rhs.value().deref(),
-                      dest.deref_mut());
+        numerics::sub(
+            self.lhs.value().deref(),
+            self.rhs.value().deref(),
+            dest.deref_mut(),
+        );
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -664,9 +664,11 @@ where
             BackwardAction::Set => {
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-                numerics::simd_scaled_assign(rhs_gradient.as_slice_mut().unwrap(),
-                                             gradient.as_slice().unwrap(),
-                                             -1.0);
+                numerics::simd_scaled_assign(
+                    rhs_gradient.as_slice_mut().unwrap(),
+                    gradient.as_slice().unwrap(),
+                    -1.0,
+                );
             }
             BackwardAction::Increment => {
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
@@ -747,35 +749,45 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        numerics::mul(self.lhs.value().deref(),
-                      self.rhs.value().deref(),
-                      dest.deref_mut());
+        numerics::mul(
+            self.lhs.value().deref(),
+            self.rhs.value().deref(),
+            dest.deref_mut(),
+        );
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
             BackwardAction::Set => {
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
 
-                numerics::mul(self.rhs.value().deref(),
-                              gradient.deref(),
-                              lhs_gradient.deref_mut());
+                numerics::mul(
+                    self.rhs.value().deref(),
+                    gradient.deref(),
+                    lhs_gradient.deref_mut(),
+                );
 
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-                numerics::mul(self.lhs.value().deref(),
-                              gradient.deref(),
-                              rhs_gradient.deref_mut());
+                numerics::mul(
+                    self.lhs.value().deref(),
+                    gradient.deref(),
+                    rhs_gradient.deref_mut(),
+                );
             }
             BackwardAction::Increment => {
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-                numerics::increment_mul(self.rhs.value().deref(),
-                                        gradient.deref(),
-                                        lhs_gradient.deref_mut());
-                numerics::increment_mul(self.lhs.value().deref(),
-                                        gradient.deref(),
-                                        rhs_gradient.deref_mut());
+                numerics::increment_mul(
+                    self.rhs.value().deref(),
+                    gradient.deref(),
+                    lhs_gradient.deref_mut(),
+                );
+                numerics::increment_mul(
+                    self.lhs.value().deref(),
+                    gradient.deref(),
+                    rhs_gradient.deref_mut(),
+                );
             }
         }
 
@@ -851,9 +863,11 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        numerics::div(self.lhs.value().deref(),
-                      self.rhs.value().deref(),
-                      dest.deref_mut());
+        numerics::div(
+            self.lhs.value().deref(),
+            self.rhs.value().deref(),
+            dest.deref_mut(),
+        );
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
@@ -861,9 +875,11 @@ where
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
                 let rhs_value = self.rhs.value();
 
-                numerics::div(gradient.deref(),
-                              rhs_value.deref(),
-                              lhs_gradient.deref_mut());
+                numerics::div(
+                    gradient.deref(),
+                    rhs_value.deref(),
+                    lhs_gradient.deref_mut(),
+                );
 
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
@@ -880,9 +896,11 @@ where
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
                 let rhs_value = self.rhs.value();
 
-                numerics::increment_div(gradient.deref(),
-                                        rhs_value.deref(),
-                                        lhs_gradient.deref_mut());
+                numerics::increment_div(
+                    gradient.deref(),
+                    rhs_value.deref(),
+                    lhs_gradient.deref_mut(),
+                );
 
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 

@@ -4,7 +4,7 @@ use stdsimd;
 use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
 
-use fast_approx::{expf_fast, fastlog, tanhf_fast};
+use fast_approx::{fastexp, fastlog, tanhf_fast};
 
 use super::Arr;
 
@@ -12,7 +12,7 @@ use super::Arr;
 #[inline(always)]
 pub fn exp(x: f32) -> f32 {
     if cfg!(feature = "fast-math") {
-        expf_fast(x)
+        fastexp(x)
     } else {
         x.exp()
     }
@@ -281,9 +281,9 @@ pub fn simd_scaled_add(xs: &mut [f32], ys: &[f32], alpha: f32) {
     }
 }
 
-
 macro_rules! simd_binary_op {
-    ( $name:ident, $simd_name:ident, $increment_name:ident, $simd_increment_name:ident, $op:tt ) => {
+    ( $name:ident, $simd_name:ident,
+      $increment_name:ident,$simd_increment_name:ident, $op:tt ) => {
         pub fn $name(xs: &Arr, ys: &Arr, out: &mut Arr) {
             $simd_name(xs.as_slice().unwrap(),
                        ys.as_slice().unwrap(),
@@ -520,10 +520,10 @@ mod tests {
     }
 
     #[test]
-    fn test_expf() {
+    fn test_fastexp() {
         let values: Vec<f32> = vec![-0.5, -0.1, 0.0, 0.1, 0.5];
         for &x in &values {
-            println!("Input: {}, stdlib: {}, fast: {}", x, x.exp(), expf_fast(x));
+            println!("Input: {}, stdlib: {}, fast: {}", x, x.exp(), fastexp(x));
         }
     }
 
@@ -664,12 +664,12 @@ mod tests {
     }
 
     #[bench]
-    fn bench_exp_fast(b: &mut Bencher) {
+    fn bench_fastexp(b: &mut Bencher) {
         let x: Vec<f32> = vec![1.0; 32];
 
         let mut v = 0.0;
 
-        b.iter(|| x.iter().for_each(|&y| v += expf_fast(y)));
+        b.iter(|| x.iter().for_each(|&y| v += fastexp(y)));
     }
 
     #[bench]
