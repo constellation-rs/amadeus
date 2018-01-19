@@ -41,8 +41,6 @@
  * Contact: Paul Mineiro <paul@mineiro.com>                            *
  *=====================================================================*/
 
-use std::mem;
-
 #[repr(C)]
 union FloatUint {
     f: f32,
@@ -72,13 +70,6 @@ pub fn fastlog2(x: f32) -> f32 {
 #[inline(always)]
 pub fn fastlog(x: f32) -> f32 {
     0.69314718 * fastlog2(x)
-}
-
-#[inline(always)]
-pub fn expf_fast(x: f32) -> f32 {
-    let u = (12102203.0 * x + 1064866805.0) as i32;
-
-    unsafe { mem::transmute::<i32, f32>(u) }
 }
 
 #[inline(always)]
