@@ -999,29 +999,32 @@ where
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        // TODO: handle the non-overwrite case
-        match self.counter.backward() {
-            _ => {
-                let rhs_value = self.rhs.value();
-                let lhs_value = self.lhs.value();
+        let beta = match self.counter.backward() {
+            BackwardAction::Set => 0.0,
+            BackwardAction::Increment => 1.0,
+        };
 
-                let mut lhs_gradient = self.lhs_gradient.borrow_mut();
-                let mut rhs_gradient = self.rhs_gradient.borrow_mut();
+        {
+            let rhs_value = self.rhs.value();
+            let lhs_value = self.lhs.value();
 
-                numerics::mat_mul(1.0, gradient, &rhs_value.t(), 0.0, &mut lhs_gradient);
-                numerics::mat_mul(
-                    1.0,
-                    &lhs_value.t(),
-                    gradient.deref(),
-                    0.0,
-                    &mut rhs_gradient,
-                );
-            }
+            let mut lhs_gradient = self.lhs_gradient.borrow_mut();
+            let mut rhs_gradient = self.rhs_gradient.borrow_mut();
+
+            numerics::mat_mul(1.0, gradient, &rhs_value.t(), beta, &mut lhs_gradient);
+            numerics::mat_mul(
+                1.0,
+                &lhs_value.t(),
+                gradient.deref(),
+                beta,
+                &mut rhs_gradient,
+            );
         }
 
-        // Always recurse because we haven't actually handled accumulation yet
-        self.lhs.backward(&self.lhs_gradient.borrow());
-        self.rhs.backward(&self.rhs_gradient.borrow());
+        if self.counter.recurse_backward() {
+            self.lhs.backward(&self.lhs_gradient.borrow());
+            self.rhs.backward(&self.rhs_gradient.borrow());
+        }
     }
 
     fn value(&self) -> Bor<Self::Value> {
@@ -1532,9 +1535,9 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
-            1.0 / (1.0 + numerics::exp(-x))
-        });
+        numerics::map_assign(dest.deref_mut(),
+                             self.operand.value().deref(),
+                             |x| numerics::sigmoid(x));
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {

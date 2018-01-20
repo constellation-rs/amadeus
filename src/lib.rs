@@ -669,7 +669,7 @@ mod tests {
 
     use super::*;
 
-    const TOLERANCE: f32 = 0.1;
+    const TOLERANCE: f32 = 0.2;
 
     fn random_matrix(rows: usize, cols: usize) -> Arr {
         Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
@@ -730,6 +730,19 @@ mod tests {
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn dot_accumulation_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut y = ParameterNode::new(random_matrix(5, 10));
+        let z = x.clone().dot(&y);
+        let mut v = z.clone() * z.clone();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut v);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut v);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn square_finite_difference() {
