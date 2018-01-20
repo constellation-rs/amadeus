@@ -38,6 +38,11 @@ pub fn tanh(x: f32) -> f32 {
     }
 }
 
+#[inline(always)]
+pub fn sigmoid(x: f32) -> f32 {
+    1.0 / (1.0 + exp(-x))
+}
+
 pub fn softmax_exp_sum(xs: &[f32], max: f32) -> f32 {
     let mut xs = xs;
     let mut s = 0.;
