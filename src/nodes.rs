@@ -1,6 +1,6 @@
 use std;
 use std::fmt;
-use std::ops::{AddAssign, Deref, DerefMut, DivAssign, MulAssign, SubAssign};
+use std::ops::{AddAssign, Deref, DerefMut};
 use std::cell::{Cell, Ref, RefCell};
 use std::sync::Arc;
 use std::rc::Rc;
@@ -193,12 +193,7 @@ where
 
         let mut self_value = self.value.borrow_mut();
 
-        numerics::map_assign_binary(
-            self_value.deref_mut(),
-            lhs_value.deref(),
-            rhs_value.deref(),
-            |x, y| x + y,
-        );
+        numerics::add(lhs_value.deref(), rhs_value.deref(), self_value.deref_mut());
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         self.lhs.backward(gradient);
@@ -657,8 +652,11 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        dest.assign(self.lhs.value().deref());
-        dest.sub_assign(self.rhs.value().deref());
+        numerics::sub(
+            self.lhs.value().deref(),
+            self.rhs.value().deref(),
+            dest.deref_mut(),
+        );
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -666,8 +664,11 @@ where
             BackwardAction::Set => {
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-                rhs_gradient.assign(gradient);
-                rhs_gradient.mul_assign(-1.0);
+                numerics::simd_scaled_assign(
+                    rhs_gradient.as_slice_mut().unwrap(),
+                    gradient.as_slice().unwrap(),
+                    -1.0,
+                );
             }
             BackwardAction::Increment => {
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
@@ -748,36 +749,44 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        dest.assign(self.lhs.value().deref());
-        dest.mul_assign(self.rhs.value().deref());
+        numerics::mul(
+            self.lhs.value().deref(),
+            self.rhs.value().deref(),
+            dest.deref_mut(),
+        );
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
             BackwardAction::Set => {
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
-                lhs_gradient.assign(self.rhs.value().deref());
-                lhs_gradient.mul_assign(gradient.deref());
+
+                numerics::mul(
+                    self.rhs.value().deref(),
+                    gradient.deref(),
+                    lhs_gradient.deref_mut(),
+                );
 
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-                rhs_gradient.assign(self.lhs.value().deref());
-                rhs_gradient.mul_assign(gradient.deref());
+                numerics::mul(
+                    self.lhs.value().deref(),
+                    gradient.deref(),
+                    rhs_gradient.deref_mut(),
+                );
             }
             BackwardAction::Increment => {
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-                numerics::map_inplace_assign_binary(
-                    lhs_gradient.deref_mut(),
+                numerics::increment_mul(
                     self.rhs.value().deref(),
                     gradient.deref(),
-                    |out, rhs, grad| *out += rhs * grad,
+                    lhs_gradient.deref_mut(),
                 );
-                numerics::map_inplace_assign_binary(
-                    rhs_gradient.deref_mut(),
+                numerics::increment_mul(
                     self.lhs.value().deref(),
                     gradient.deref(),
-                    |out, rhs, grad| *out += rhs * grad,
+                    rhs_gradient.deref_mut(),
                 );
             }
         }
@@ -854,8 +863,11 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        dest.assign(self.lhs.value().deref());
-        dest.div_assign(self.rhs.value().deref());
+        numerics::div(
+            self.lhs.value().deref(),
+            self.rhs.value().deref(),
+            dest.deref_mut(),
+        );
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
@@ -863,8 +875,11 @@ where
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
                 let rhs_value = self.rhs.value();
 
-                izip!(lhs_gradient.iter_mut(), rhs_value.iter(), gradient.iter())
-                    .for_each(|(dest, rhs_val, grad_val)| *dest = grad_val / rhs_val);
+                numerics::div(
+                    gradient.deref(),
+                    rhs_value.deref(),
+                    lhs_gradient.deref_mut(),
+                );
 
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
@@ -881,8 +896,11 @@ where
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
                 let rhs_value = self.rhs.value();
 
-                izip!(lhs_gradient.iter_mut(), rhs_value.iter(), gradient.iter())
-                    .for_each(|(dest, rhs_val, grad_val)| *dest += grad_val / rhs_val);
+                numerics::increment_div(
+                    gradient.deref(),
+                    rhs_value.deref(),
+                    lhs_gradient.deref_mut(),
+                );
 
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
@@ -1424,9 +1442,9 @@ where
         self.operand.forward();
 
         let mut dest = self.value.borrow_mut();
-
-        dest.assign(self.operand.value().deref());
-        dest.map_inplace(|x| *x = numerics::tanh(*x));
+        numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
+            numerics::tanh(x)
+        });
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -1941,12 +1959,11 @@ where
             let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
 
             let denominator = max
-                + numerics::ln(
-                    operand_slice
-                        .iter()
-                        .map(|&x| numerics::exp(x - max))
-                        .sum::<f32>(),
-                );
+                + operand_slice
+                    .iter()
+                    .map(|&x| numerics::exp(x - max))
+                    .sum::<f32>()
+                    .ln();
 
             operand_value.deref() - denominator
         };
@@ -1983,13 +2000,7 @@ where
         let operand_slice = operand_value.deref().as_slice().unwrap();
         let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
 
-        let denominator = max
-            + numerics::ln(
-                operand_slice
-                    .iter()
-                    .map(|&x| numerics::exp(x - max))
-                    .sum::<f32>(),
-            );
+        let denominator = max + numerics::softmax_exp_sum(operand_slice, max).ln();
 
         dest.as_slice_mut()
             .unwrap()

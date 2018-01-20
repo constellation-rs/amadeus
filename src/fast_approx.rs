@@ -71,3 +71,35 @@ pub fn fastlog2(x: f32) -> f32 {
 pub fn fastlog(x: f32) -> f32 {
     0.69314718 * fastlog2(x)
 }
+
+#[inline(always)]
+pub fn tanhf_fast(x: f32) -> f32 {
+    if x < -3.0 {
+        -1.0
+    } else if x > 3.0 {
+        1.0
+    } else {
+        x * (27.0 + x.powi(2)) / (27.0 + 9.0 * x.powi(2))
+    }
+}
+
+#[inline(always)]
+pub fn fastpow2(x: f32) -> f32 {
+    let offset = if x < 0.0 { 1.0 } else { 0.0 };
+    let clip = if x < -126.0 { -126.0 } else { x };
+    let w = clip as i32;
+    let z = clip - w as f32 + offset;
+
+    let v = UintFloat {
+        i: ((1 << 23) as f32
+            * (clip + 121.2740575 + 27.7280233 / (4.84252568 - z) - 1.49012907 * z))
+            as u32,
+    };
+
+    unsafe { v.f }
+}
+
+#[inline(always)]
+pub fn fastexp(x: f32) -> f32 {
+    fastpow2(1.442695040 * x)
+}

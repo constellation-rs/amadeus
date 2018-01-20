@@ -1,26 +1,18 @@
 use std::cmp;
-use std::mem;
 use stdsimd;
 
 use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
 
-use fast_approx::fastlog;
+use fast_approx::{fastexp, fastlog, tanhf_fast};
 
 use super::Arr;
-
-#[inline(always)]
-fn expf_fast(x: f32) -> f32 {
-    let u = (12102203.0 * x + 1064866805.0) as i32;
-
-    unsafe { mem::transmute::<i32, f32>(u) }
-}
 
 /// Uses approximate e^x when the fast-math feature is enabled.
 #[inline(always)]
 pub fn exp(x: f32) -> f32 {
     if cfg!(feature = "fast-math") {
-        expf_fast(x)
+        fastexp(x)
     } else {
         x.exp()
     }
@@ -36,16 +28,6 @@ pub fn ln(x: f32) -> f32 {
     }
 }
 
-fn tanhf_fast(x: f32) -> f32 {
-    if x < -3.0 {
-        -1.0
-    } else if x > 3.0 {
-        1.0
-    } else {
-        x * (27.0 + x.powi(2)) / (27.0 + 9.0 * x.powi(2))
-    }
-}
-
 /// Uses approximate ln(x) when the fast-math feature is enabled.
 #[inline(always)]
 pub fn tanh(x: f32) -> f32 {
@@ -54,6 +36,37 @@ pub fn tanh(x: f32) -> f32 {
     } else {
         x.tanh()
     }
+}
+
+pub fn softmax_exp_sum(xs: &[f32], max: f32) -> f32 {
+    let mut xs = xs;
+    let mut s = 0.;
+
+    let (mut p0, mut p1, mut p2, mut p3, mut p4, mut p5, mut p6, mut p7) =
+        (0., 0., 0., 0., 0., 0., 0., 0.);
+
+    while xs.len() >= 8 {
+        p0 += exp(xs[0] - max);
+        p1 += exp(xs[1] - max);
+        p2 += exp(xs[2] - max);
+        p3 += exp(xs[3] - max);
+        p4 += exp(xs[4] - max);
+        p5 += exp(xs[5] - max);
+        p6 += exp(xs[6] - max);
+        p7 += exp(xs[7] - max);
+
+        xs = &xs[8..];
+    }
+    s += p0 + p4;
+    s += p1 + p5;
+    s += p2 + p6;
+    s += p3 + p7;
+
+    for i in 0..xs.len() {
+        s += exp(xs[i] - max)
+    }
+
+    s
 }
 
 fn vec_mat_mul<S1, S2, S3>(
@@ -268,6 +281,85 @@ pub fn simd_scaled_add(xs: &mut [f32], ys: &[f32], alpha: f32) {
     }
 }
 
+macro_rules! simd_binary_op {
+    ( $name:ident, $simd_name:ident,
+      $increment_name:ident,$simd_increment_name:ident, $op:tt ) => {
+        pub fn $name(xs: &Arr, ys: &Arr, out: &mut Arr) {
+            $simd_name(xs.as_slice().unwrap(),
+                       ys.as_slice().unwrap(),
+                       out.as_slice_mut().unwrap());
+        }
+
+        fn $simd_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
+            let stride = 8;
+
+            let split_idx = xs.len() / stride * stride;
+            let (simd_xs, scalar_xs) = xs.split_at(split_idx);
+            let (simd_ys, scalar_ys) = ys.split_at(split_idx);
+            let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
+
+            for (x, y, out) in izip!(
+                simd_xs.chunks(stride),
+                simd_ys.chunks(stride),
+                simd_outs.chunks_mut(stride)
+            ) {
+                unsafe {
+                    let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
+                        $op stdsimd::simd::f32x8::load_unchecked(y, 0);
+                    elem.store_unchecked(out, 0);
+                }
+            }
+
+            for (&x_scalar, &y_scalar, out_scalar) in
+                izip!(scalar_xs.iter(), scalar_ys.iter(), scalar_outs.iter_mut())
+            {
+                *out_scalar = x_scalar $op y_scalar;
+            }
+        }
+
+        #[allow(dead_code)]
+        pub fn $increment_name(xs: &Arr, ys: &Arr, out: &mut Arr) {
+            $simd_increment_name(xs.as_slice().unwrap(),
+                                 ys.as_slice().unwrap(),
+                                 out.as_slice_mut().unwrap());
+        }
+
+        #[allow(dead_code)]
+        fn $simd_increment_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
+            let stride = 8;
+
+            let split_idx = xs.len() / stride * stride;
+            let (simd_xs, scalar_xs) = xs.split_at(split_idx);
+            let (simd_ys, scalar_ys) = ys.split_at(split_idx);
+            let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
+
+            for (x, y, out) in izip!(
+                simd_xs.chunks(stride),
+                simd_ys.chunks(stride),
+                simd_outs.chunks_mut(stride)
+            ) {
+                unsafe {
+                    let elem = stdsimd::simd::f32x8::load_unchecked(out, 0) +
+                        (stdsimd::simd::f32x8::load_unchecked(x, 0)
+                         $op stdsimd::simd::f32x8::load_unchecked(y, 0));
+                    elem.store_unchecked(out, 0);
+                }
+            }
+
+            for (&x_scalar, &y_scalar, out_scalar) in
+                izip!(scalar_xs.iter(), scalar_ys.iter(), scalar_outs.iter_mut())
+            {
+                *out_scalar += x_scalar $op y_scalar;
+            }
+        }
+    }
+}
+
+simd_binary_op!(add, simd_add, increment_add, increment_simd_add, +);
+simd_binary_op!(sub, simd_sub, increment_sub, increment_simd_sub, -);
+simd_binary_op!(mul, simd_mul, increment_mul, increment_simd_mul, *);
+simd_binary_op!(div, simd_div, increment_div, increment_simd_div, /);
+
 pub fn slice_assign(xs: &mut [f32], ys: &[f32]) {
     for (x, &y) in xs.iter_mut().zip(ys.iter()) {
         *x = y;
@@ -349,6 +441,8 @@ mod tests {
     use rand::Rng;
     use test::Bencher;
 
+    use numerics;
+
     fn random_matrix(rows: usize, cols: usize) -> Arr {
         Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
     }
@@ -426,10 +520,10 @@ mod tests {
     }
 
     #[test]
-    fn test_expf() {
+    fn test_fastexp() {
         let values: Vec<f32> = vec![-0.5, -0.1, 0.0, 0.1, 0.5];
         for &x in &values {
-            println!("Input: {}, stdlib: {}, fast: {}", x, x.exp(), expf_fast(x));
+            println!("Input: {}, stdlib: {}, fast: {}", x, x.exp(), fastexp(x));
         }
     }
 
@@ -545,6 +639,22 @@ mod tests {
     }
 
     #[bench]
+    fn bench_sofmax_exp_sum(b: &mut Bencher) {
+        let x = vec![1.0; 32];
+        let max = 1.0;
+
+        b.iter(|| x.iter().map(|&x| numerics::exp(x - max)).sum::<f32>().ln())
+    }
+
+    #[bench]
+    fn bench_sofmax_exp_sum_unrolled(b: &mut Bencher) {
+        let x = vec![1.0; 32];
+        let max = 1.0;
+
+        b.iter(|| softmax_exp_sum(&x, max).ln())
+    }
+
+    #[bench]
     fn bench_exp(b: &mut Bencher) {
         let x: Vec<f32> = vec![1.0; 32];
 
@@ -554,12 +664,12 @@ mod tests {
     }
 
     #[bench]
-    fn bench_exp_fast(b: &mut Bencher) {
+    fn bench_fastexp(b: &mut Bencher) {
         let x: Vec<f32> = vec![1.0; 32];
 
         let mut v = 0.0;
 
-        b.iter(|| x.iter().for_each(|&y| v += expf_fast(y)));
+        b.iter(|| x.iter().for_each(|&y| v += fastexp(y)));
     }
 
     #[bench]
