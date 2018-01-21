@@ -1,6 +1,6 @@
 [package]
 name = "wyrm"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Maciej Kula"]
 license = "MIT"
 description = "A low-overhead, define-by-run autodifferentiation library."
