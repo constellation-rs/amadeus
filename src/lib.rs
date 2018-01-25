@@ -569,8 +569,7 @@ impl SGD {
         let learning_rate = self.learning_rate;
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value =
-                unsafe { &mut *(parameter.node.value.deref().value.as_ptr()) };
+            let mut param_value = unsafe { parameter.node.value.value_mut() };
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
@@ -587,6 +586,65 @@ impl SGD {
                             grad_row.into_slice().unwrap(),
                             |x| -learning_rate * clamp(x, -10.0, 10.0),
                         );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Adagrad optimizer, scaled the learning rate by the inverse of previously
+/// accumulated gradients.
+pub struct Adagrad {
+    learning_rate: f32,
+    parameters: Vec<Variable<ParameterNode>>,
+}
+
+impl Adagrad {
+    /// Create a new optimizer instance with a given set of parameters.
+    pub fn new(learning_rate: f32, parameters: Vec<Variable<ParameterNode>>) -> Self {
+        Adagrad {
+            learning_rate: learning_rate,
+            parameters: parameters,
+        }
+    }
+
+    /// Perform a single SGD step.
+    pub fn step(&mut self) {
+        let learning_rate = self.learning_rate;
+
+        for parameter in &self.parameters {
+            let mut sink = parameter.node.gradient.borrow_mut();
+            let mut param_value = unsafe { parameter.node.value.value_mut() };
+            let mut squared_gradient =
+                unsafe { parameter.node.value.squared_gradient_mut() };
+
+            if sink.has_dense {
+                for (value, gradient, squared_gradient) in izip!(
+                    param_value.as_slice_mut().unwrap(),
+                    sink.dense_gradient().as_slice().unwrap(),
+                    squared_gradient.as_slice_mut().unwrap()
+                ) {
+                    *value -= learning_rate * gradient / squared_gradient.sqrt();
+                    *squared_gradient += gradient.powi(2);
+                }
+            }
+
+            if sink.has_sparse {
+                for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
+                    for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
+                        let grad_row = grad.subview(Axis(0), grad_idx);
+                        let mut param_row = param_value.subview_mut(Axis(0), param_idx);
+                        let mut squared_row = squared_gradient.subview_mut(Axis(0), param_idx);
+
+                        for (value, gradient, squared_gradient) in izip!(
+                            param_row.as_slice_mut().unwrap(),
+                            grad_row.into_slice().unwrap(),
+                            squared_row.as_slice_mut().unwrap()
+                        ) {
+                            *value -= learning_rate * gradient / squared_gradient.sqrt();
+                            *squared_gradient += gradient.powi(2);
+                        }
                     }
                 }
             }
@@ -997,7 +1055,7 @@ mod tests {
         let mut loss = (output.clone() - y_hat.clone()).square();
 
         let num_epochs = 100;
-        let mut optimizer = SGD::new(0.1, loss.parameters());
+        let mut optimizer = Adagrad::new(0.1, loss.parameters());
 
         let mut loss_val = 0.0;
 
