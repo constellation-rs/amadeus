@@ -523,14 +523,34 @@ unsafe impl Sync for HogwildParameter {}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HogwildParameter {
     pub value: RefCell<Arr>,
+    pub squared_gradients: RefCell<Arr>,
 }
 
 impl HogwildParameter {
     /// Create a new parameter object.
     pub fn new(value: Arr) -> Self {
+        let squared_gradients = &value * 0.0 + 1.0;
+
         HogwildParameter {
             value: RefCell::new(value),
+            squared_gradients: RefCell::new(squared_gradients),
         }
+    }
+
+    pub fn value(&self) -> Ref<Arr> {
+        self.value.borrow()
+    }
+
+    pub fn squared_gradients(&self) -> Ref<Arr> {
+        self.squared_gradients.borrow()
+    }
+
+    pub(crate) unsafe fn value_mut(&self) -> &mut Arr {
+        &mut *(self.value.as_ptr())
+    }
+
+    pub(crate) unsafe fn squared_gradient_mut(&self) -> &mut Arr {
+        &mut *(self.squared_gradients.as_ptr())
     }
 }
 
@@ -1535,9 +1555,9 @@ where
 
         let mut dest = self.value.borrow_mut();
 
-        numerics::map_assign(dest.deref_mut(),
-                             self.operand.value().deref(),
-                             |x| numerics::sigmoid(x));
+        numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
+            numerics::sigmoid(x)
+        });
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
