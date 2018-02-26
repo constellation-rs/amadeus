@@ -40,16 +40,12 @@ pub fn tanh(x: f32) -> f32 {
 
 #[inline(always)]
 pub fn sigmoid(x: f32) -> f32 {
-    1.0 / (1.0 + exp(-x))
+    1.0 / (1.0 + (-x).exp())
 }
 
 #[inline(always)]
 pub fn pow2(x: f32) -> f32 {
-    if cfg!(feature = "fast-math") {
-        fastpow2(x)
-    } else {
-        x.powi(2)
-    }
+    x.powi(2)
 }
 
 pub fn softmax_exp_sum(xs: &[f32], max: f32) -> f32 {
