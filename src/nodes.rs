@@ -537,12 +537,12 @@ impl HogwildParameter {
         }
     }
 
-    pub fn value(&self) -> Ref<Arr> {
-        self.value.borrow()
+    pub fn value(&self) -> &Arr {
+        unsafe { & *(self.value.as_ptr()) }
     }
 
-    pub fn squared_gradients(&self) -> Ref<Arr> {
-        self.squared_gradients.borrow()
+    pub fn squared_gradients(&self) -> &Arr {
+        unsafe { & *(self.squared_gradients.as_ptr()) }
     }
 
     pub(crate) unsafe fn value_mut(&self) -> &mut Arr {
