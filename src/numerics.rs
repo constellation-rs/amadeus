@@ -4,7 +4,7 @@ use stdsimd;
 use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
 
-use fast_approx::{fastexp, fastlog, tanhf_fast, fastpow2};
+use fast_approx::{fastexp, fastlog, tanhf_fast};
 
 use super::Arr;
 
