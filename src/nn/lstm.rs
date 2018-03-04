@@ -58,6 +58,7 @@ use {Arr, DataInput, Variable};
 ///
 /// Construct this first, then use the `build` method to instantiate
 /// LSTM cell nodes.
+#[derive(Debug)]
 pub struct Parameters {
     input_dim: usize,
     hidden_dim: usize,
@@ -73,6 +74,31 @@ pub struct Parameters {
 
     output_gate_weights: Arc<nodes::HogwildParameter>,
     output_gate_biases: Arc<nodes::HogwildParameter>,
+}
+
+impl Clone for Parameters {
+    /// Clones the parameter values.
+    ///
+    /// (This is in contrast to creating a shared reference to
+    /// the same paratmer object.)
+    fn clone(&self) -> Self {
+        Parameters {
+            input_dim: self.input_dim,
+            hidden_dim: self.hidden_dim,
+
+            forget_weights: Arc::new(self.forget_weights.as_ref().clone()),
+            forget_biases: Arc::new(self.forget_biases.as_ref().clone()),
+
+            update_gate_weights: Arc::new(self.update_gate_weights.as_ref().clone()),
+            update_gate_biases: Arc::new(self.update_gate_biases.as_ref().clone()),
+
+            update_value_weights: Arc::new(self.update_gate_weights.as_ref().clone()),
+            update_value_biases: Arc::new(self.update_value_biases.as_ref().clone()),
+
+            output_gate_weights: Arc::new(self.output_gate_weights.as_ref().clone()),
+            output_gate_biases: Arc::new(self.output_gate_biases.as_ref().clone()),
+        }
+    }
 }
 
 impl Parameters {

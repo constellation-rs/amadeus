@@ -267,6 +267,8 @@ where
     }
 }
 
+pub type BoxedNode = Rc<Node<Value = Arr, InputGradient = Arr>>;
+
 impl<T> Variable<T>
 where
     T: Node<Value = Arr, InputGradient = Arr>,

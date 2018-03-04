@@ -520,7 +520,7 @@ unsafe impl Sync for HogwildParameter {}
 
 /// Struct used to hold parameters that need to be shared among
 /// multiple `ParameterNode`s for asynchronous, parallel optimization.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HogwildParameter {
     pub value: RefCell<Arr>,
     pub squared_gradients: RefCell<Arr>,
@@ -538,11 +538,11 @@ impl HogwildParameter {
     }
 
     pub fn value(&self) -> &Arr {
-        unsafe { & *(self.value.as_ptr()) }
+        unsafe { &*(self.value.as_ptr()) }
     }
 
     pub fn squared_gradients(&self) -> &Arr {
-        unsafe { & *(self.squared_gradients.as_ptr()) }
+        unsafe { &*(self.squared_gradients.as_ptr()) }
     }
 
     pub(crate) unsafe fn value_mut(&self) -> &mut Arr {
