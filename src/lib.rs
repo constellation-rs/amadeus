@@ -1,4 +1,3 @@
-#![feature(test)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
 //! # Features
@@ -151,7 +150,6 @@ extern crate ndarray;
 extern crate rand;
 extern crate rayon;
 extern crate smallvec;
-extern crate test;
 
 #[macro_use]
 extern crate itertools;
@@ -1157,47 +1155,5 @@ mod tests {
         let sum_loss: f32 = losses.iter().sum();
 
         assert!(sum_loss / (losses.len() as f32) < 1e-3);
-    }
-
-    use test::Bencher;
-
-    #[bench]
-    fn bench_node_reuse(b: &mut Bencher) {
-        let dim = 128;
-
-        let x = ParameterNode::new(random_matrix(1, dim));
-        let y = ParameterNode::new(random_matrix(dim, 10));
-        let v = x.dot(&y);
-        let z = v.clone() + v.clone() + v.clone() + v.clone();
-
-        b.iter(|| {
-            z.forward();
-            z.zero_gradient();
-        });
-    }
-
-    #[bench]
-    fn bench_matrix_multiply(b: &mut Bencher) {
-        let dim = 64;
-        let num_epochs = 20;
-
-        let x_data = Arc::new(HogwildParameter::new(random_matrix(1, dim)));
-        let y_data = Arc::new(HogwildParameter::new(random_matrix(dim, 10)));
-
-        b.iter(|| {
-            (0..rayon::current_num_threads())
-                .into_par_iter()
-                .for_each(|_| {
-                    let x = ParameterNode::shared(x_data.clone());
-                    let y = ParameterNode::shared(y_data.clone());
-
-                    let v = x.dot(&y);
-
-                    for _ in 0..num_epochs {
-                        v.forward();
-                        v.zero_gradient();
-                    }
-                });
-        });
     }
 }
