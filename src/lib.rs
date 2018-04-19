@@ -151,7 +151,6 @@ extern crate ndarray;
 extern crate rand;
 extern crate rayon;
 extern crate smallvec;
-extern crate stdsimd;
 extern crate test;
 
 #[macro_use]
@@ -163,19 +162,19 @@ use ndarray::Axis;
 pub type Arr = ndarray::Array2<f32>;
 
 use std::cell::RefCell;
+use std::clone::Clone;
 use std::ops::{Add, Deref, Div, Mul, Neg, Sub};
 use std::rc::Rc;
-use std::clone::Clone;
 
-mod nodes;
-mod numerics;
 mod fast_approx;
 pub mod nn;
+mod nodes;
+mod numerics;
 
 use nodes::*;
 
-pub use numerics::simd_dot;
 pub use nodes::{Bor, HogwildParameter, IndexInputNode, InputNode, Node, ParameterNode};
+pub use numerics::simd_dot;
 
 fn clamp(x: f32, min: f32, max: f32) -> f32 {
     if x > max {
@@ -598,6 +597,7 @@ impl SGD {
 /// accumulated gradients.
 pub struct Adagrad {
     learning_rate: f32,
+    l2: f32,
     parameters: Vec<Variable<ParameterNode>>,
 }
 
@@ -606,8 +606,15 @@ impl Adagrad {
     pub fn new(learning_rate: f32, parameters: Vec<Variable<ParameterNode>>) -> Self {
         Adagrad {
             learning_rate: learning_rate,
+            l2: 0.0,
             parameters: parameters,
         }
+    }
+
+    /// Set the L2 penalty.
+    pub fn l2_penalty(mut self, l2_penalty: f32) -> Self {
+        self.l2 = l2_penalty;
+        self
     }
 
     /// Perform a single SGD step.
@@ -625,7 +632,7 @@ impl Adagrad {
                     sink.dense_gradient().as_slice().unwrap(),
                     squared_gradient.as_slice_mut().unwrap()
                 ) {
-                    *value -= learning_rate * gradient / squared_gradient.sqrt();
+                    *value -= learning_rate * gradient / squared_gradient.sqrt() + *value * self.l2;
                     *squared_gradient += numerics::pow2(gradient);
                 }
             }
@@ -642,7 +649,8 @@ impl Adagrad {
                             grad_row.into_slice().unwrap(),
                             squared_row.as_slice_mut().unwrap()
                         ) {
-                            *value -= learning_rate * gradient / squared_gradient.sqrt();
+                            *value -= learning_rate * gradient / squared_gradient.sqrt()
+                                + *value * self.l2;
                             *squared_gradient += numerics::pow2(gradient);
                         }
                     }
@@ -721,9 +729,9 @@ fn assert_close(x: &Arr, y: &Arr, tol: f32) {
 #[cfg(test)]
 mod tests {
 
-    use std::sync::Arc;
     use ndarray::arr2;
     use rayon::prelude::*;
+    use std::sync::Arc;
 
     use super::*;
 
@@ -998,13 +1006,11 @@ mod tests {
         let mut optimizer = SGD::new(0.1, loss.parameters());
 
         for _ in 0..num_epochs {
-            let _x = arr2(&[
-                [
-                    rand::random::<f32>(),
-                    rand::random::<f32>(),
-                    rand::random::<f32>(),
-                ],
-            ]);
+            let _x = arr2(&[[
+                rand::random::<f32>(),
+                rand::random::<f32>(),
+                rand::random::<f32>(),
+            ]]);
             let _y = &_x.dot(&coefficients) + 5.0;
 
             x.set_value(&_x);

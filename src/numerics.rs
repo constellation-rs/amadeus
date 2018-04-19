@@ -1,8 +1,7 @@
-use std::cmp;
-use stdsimd;
+use std;
 
-use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
+use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 
 use fast_approx::{fastexp, fastlog, tanhf_fast};
 
@@ -115,23 +114,7 @@ fn vec_mat_mul<S1, S2, S3>(
 }
 
 fn saxpy(alpha: f32, xs: &[f32], beta: f32, outs: &mut [f32]) {
-    let stride = 8;
-    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
-    let simd_beta = stdsimd::simd::f32x8::splat(beta);
-
-    let split_idx = xs.len() / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-    let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
-
-    for (x, out) in izip!(simd_xs.chunks(stride), simd_outs.chunks_mut(stride)) {
-        unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0) * simd_alpha
-                + stdsimd::simd::f32x8::load_unchecked(out, 0) * simd_beta;
-            elem.store_unchecked(out, 0);
-        }
-    }
-
-    for (&x, out) in izip!(scalar_xs.iter(), scalar_outs.iter_mut()) {
+    for (&x, out) in izip!(xs.iter(), outs.iter_mut()) {
         *out = x * alpha + *out * beta;
     }
 }
@@ -202,126 +185,95 @@ pub fn mat_mul<S1, S2, S3>(
 
 /// SIMD-enabled vector-vector dot product.
 pub fn simd_dot(xs: &[f32], ys: &[f32]) -> f32 {
-    let mut simd_result = stdsimd::simd::f32x8::splat(0.0);
-    let mut scalar_result = 0.0;
-    let stride = 8;
+    let len = std::cmp::min(xs.len(), ys.len());
+    let mut xs = &xs[..len];
+    let mut ys = &ys[..len];
 
-    let split_idx = cmp::min(xs.len(), ys.len()) / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-    let (simd_ys, scalar_ys) = ys.split_at(split_idx);
+    let mut s = 0.;
+    let (mut p0, mut p1, mut p2, mut p3, mut p4, mut p5, mut p6, mut p7) =
+        (0., 0., 0., 0., 0., 0., 0., 0.);
 
-    for (x, y) in simd_xs.chunks(stride).zip(simd_ys.chunks(stride)) {
-        unsafe {
-            simd_result = simd_result
-                + stdsimd::simd::f32x8::load_unchecked(x, 0)
-                    * stdsimd::simd::f32x8::load_unchecked(y, 0);
-        }
+    while xs.len() >= 8 {
+        p0 += xs[0] * ys[0];
+        p1 += xs[1] * ys[1];
+        p2 += xs[2] * ys[2];
+        p3 += xs[3] * ys[3];
+        p4 += xs[4] * ys[4];
+        p5 += xs[5] * ys[5];
+        p6 += xs[6] * ys[6];
+        p7 += xs[7] * ys[7];
+
+        xs = &xs[8..];
+        ys = &ys[8..];
+    }
+    s += p0 + p4;
+    s += p1 + p5;
+    s += p2 + p6;
+    s += p3 + p7;
+
+    for i in 0..xs.len() {
+        s += xs[i] * ys[i];
     }
 
-    for (x_scalar, y_scalar) in scalar_xs.iter().zip(scalar_ys.iter()) {
-        scalar_result += x_scalar * y_scalar;
-    }
-
-    scalar_result
-        + (0..stride as u32)
-            .map(|idx| simd_result.extract(idx))
-            .sum::<f32>()
+    s
 }
 
 pub fn simd_sum(xs: &[f32]) -> f32 {
-    let mut simd_result = stdsimd::simd::f32x8::splat(0.0);
-    let mut scalar_result = 0.0;
-    let stride = 8;
+    let mut xs = xs;
 
-    let split_idx = (xs.len() / stride) * stride;
-    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
+    let mut s = 0.;
+    let (mut p0, mut p1, mut p2, mut p3, mut p4, mut p5, mut p6, mut p7) =
+        (0., 0., 0., 0., 0., 0., 0., 0.);
 
-    for x in simd_xs.chunks(stride) {
-        unsafe { simd_result = simd_result + stdsimd::simd::f32x8::load_unchecked(x, 0) }
+    while xs.len() >= 8 {
+        p0 += xs[0];
+        p1 += xs[1];
+        p2 += xs[2];
+        p3 += xs[3];
+        p4 += xs[4];
+        p5 += xs[5];
+        p6 += xs[6];
+        p7 += xs[7];
+
+        xs = &xs[8..];
     }
 
-    for x_scalar in scalar_xs.iter() {
-        scalar_result += x_scalar;
+    s += p0 + p4;
+    s += p1 + p5;
+    s += p2 + p6;
+    s += p3 + p7;
+
+    for i in 0..xs.len() {
+        s += xs[i];
     }
 
-    scalar_result
-        + (0..stride as u32)
-            .map(|idx| simd_result.extract(idx))
-            .sum::<f32>()
+    s
 }
 
 pub fn simd_scaled_assign(xs: &mut [f32], ys: &[f32], alpha: f32) {
-    let stride = 8;
-    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
-
-    let split_idx = xs.len() / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at_mut(split_idx);
-    let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-
-    for (x, y) in simd_xs.chunks_mut(stride).zip(simd_ys.chunks(stride)) {
-        unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(y, 0) * simd_alpha;
-            elem.store_unchecked(x, 0);
-        }
-    }
-
-    for (x_scalar, y_scalar) in scalar_xs.iter_mut().zip(scalar_ys.iter()) {
-        *x_scalar = y_scalar * alpha;
+    for (x, y) in xs.iter_mut().zip(ys.iter()) {
+        *x = y * alpha;
     }
 }
 
 pub fn simd_scaled_add(xs: &mut [f32], ys: &[f32], alpha: f32) {
-    let stride = 8;
-    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
-
-    let split_idx = xs.len() / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at_mut(split_idx);
-    let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-
-    for (x, y) in simd_xs.chunks_mut(stride).zip(simd_ys.chunks(stride)) {
-        unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
-                + stdsimd::simd::f32x8::load_unchecked(y, 0) * simd_alpha;
-            elem.store_unchecked(x, 0);
-        }
-    }
-
-    for (x_scalar, y_scalar) in scalar_xs.iter_mut().zip(scalar_ys.iter()) {
-        *x_scalar += y_scalar * alpha;
+    for (x, y) in xs.iter_mut().zip(ys.iter()) {
+        *x += y * alpha;
     }
 }
 
-macro_rules! simd_binary_op {
-    ( $name:ident, $simd_name:ident,
-      $increment_name:ident,$simd_increment_name:ident, $op:tt ) => {
+macro_rules! slice_binary_op {
+    ( $name:ident, $slice_name:ident,
+      $increment_name:ident,$slice_increment_name:ident, $op:tt ) => {
         pub fn $name(xs: &Arr, ys: &Arr, out: &mut Arr) {
-            $simd_name(xs.as_slice().unwrap(),
+            $slice_name(xs.as_slice().unwrap(),
                        ys.as_slice().unwrap(),
                        out.as_slice_mut().unwrap());
         }
 
-        fn $simd_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
-            let stride = 8;
-
-            let split_idx = xs.len() / stride * stride;
-            let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-            let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-            let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
-
-            for (x, y, out) in izip!(
-                simd_xs.chunks(stride),
-                simd_ys.chunks(stride),
-                simd_outs.chunks_mut(stride)
-            ) {
-                unsafe {
-                    let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
-                        $op stdsimd::simd::f32x8::load_unchecked(y, 0);
-                    elem.store_unchecked(out, 0);
-                }
-            }
-
+        fn $slice_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
             for (&x_scalar, &y_scalar, out_scalar) in
-                izip!(scalar_xs.iter(), scalar_ys.iter(), scalar_outs.iter_mut())
+                izip!(xs.iter(), ys.iter(), outs.iter_mut())
             {
                 *out_scalar = x_scalar $op y_scalar;
             }
@@ -329,35 +281,15 @@ macro_rules! simd_binary_op {
 
         #[allow(dead_code)]
         pub fn $increment_name(xs: &Arr, ys: &Arr, out: &mut Arr) {
-            $simd_increment_name(xs.as_slice().unwrap(),
+            $slice_increment_name(xs.as_slice().unwrap(),
                                  ys.as_slice().unwrap(),
                                  out.as_slice_mut().unwrap());
         }
 
         #[allow(dead_code)]
-        fn $simd_increment_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
-            let stride = 8;
-
-            let split_idx = xs.len() / stride * stride;
-            let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-            let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-            let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
-
-            for (x, y, out) in izip!(
-                simd_xs.chunks(stride),
-                simd_ys.chunks(stride),
-                simd_outs.chunks_mut(stride)
-            ) {
-                unsafe {
-                    let elem = stdsimd::simd::f32x8::load_unchecked(out, 0) +
-                        (stdsimd::simd::f32x8::load_unchecked(x, 0)
-                         $op stdsimd::simd::f32x8::load_unchecked(y, 0));
-                    elem.store_unchecked(out, 0);
-                }
-            }
-
+        fn $slice_increment_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
             for (&x_scalar, &y_scalar, out_scalar) in
-                izip!(scalar_xs.iter(), scalar_ys.iter(), scalar_outs.iter_mut())
+                izip!(xs.iter(), ys.iter(), outs.iter_mut())
             {
                 *out_scalar += x_scalar $op y_scalar;
             }
@@ -365,10 +297,10 @@ macro_rules! simd_binary_op {
     }
 }
 
-simd_binary_op!(add, simd_add, increment_add, increment_simd_add, +);
-simd_binary_op!(sub, simd_sub, increment_sub, increment_simd_sub, -);
-simd_binary_op!(mul, simd_mul, increment_mul, increment_simd_mul, *);
-simd_binary_op!(div, simd_div, increment_div, increment_simd_div, /);
+slice_binary_op!(add, slice_add, increment_add, increment_slice_add, +);
+slice_binary_op!(sub, slice_sub, increment_sub, increment_slice_sub, -);
+slice_binary_op!(mul, slice_mul, increment_mul, increment_slice_mul, *);
+slice_binary_op!(div, slice_div, increment_div, increment_slice_div, /);
 
 pub fn slice_assign(xs: &mut [f32], ys: &[f32]) {
     for (x, &y) in xs.iter_mut().zip(ys.iter()) {
