@@ -1,34 +1,42 @@
+use std::sync::Arc;
+
 #[macro_use]
 extern crate criterion;
+extern crate rayon;
+extern crate wyrm;
+
+use rayon::prelude::*;
 
 use criterion::Criterion;
 
+use wyrm::nn::lstm;
+use wyrm::nn::xavier_normal;
+use wyrm::{DataInput, HogwildParameter, ParameterNode, SGD};
+
 fn bench_node_reuse(c: &mut Criterion) {
-    let dim = 128;
+    c.bench_function("node_reuse", |b| {
+        let dim = 128;
 
-    let x = ParameterNode::new(random_matrix(1, dim));
-    let y = ParameterNode::new(random_matrix(dim, 10));
-    let v = x.dot(&y);
-    let z = v.clone() + v.clone() + v.clone() + v.clone();
+        let x = ParameterNode::new(xavier_normal(1, dim));
+        let y = ParameterNode::new(xavier_normal(dim, 10));
+        let v = x.dot(&y);
+        let z = v.clone() + v.clone() + v.clone() + v.clone();
 
-    c.bench_function(
-        "node_reuse",
         b.iter(|| {
             z.forward();
             z.zero_gradient();
-        }),
-    );
+        })
+    });
 }
 
-fn bench_matrix_multiply(b: &mut Criterion) {
-    let dim = 64;
-    let num_epochs = 20;
+fn bench_matrix_multiply(c: &mut Criterion) {
+    c.bench_function("bench_matrix_multiply", |b| {
+        let dim = 64;
+        let num_epochs = 20;
 
-    let x_data = Arc::new(HogwildParameter::new(random_matrix(1, dim)));
-    let y_data = Arc::new(HogwildParameter::new(random_matrix(dim, 10)));
+        let x_data = Arc::new(HogwildParameter::new(xavier_normal(1, dim)));
+        let y_data = Arc::new(HogwildParameter::new(xavier_normal(dim, 10)));
 
-    b.bench_function(
-        "bench_matrix_multiply",
         b.iter(|| {
             (0..rayon::current_num_threads())
                 .into_par_iter()
@@ -43,15 +51,17 @@ fn bench_matrix_multiply(b: &mut Criterion) {
                         v.zero_gradient();
                     }
                 });
-        }),
-    );
+        })
+    });
 }
 
 // fn bench_sofmax_exp_sum(b: &mut Criterion) {
-//     let x = vec![1.0; 32];
-//     let max = 1.0;
+//     c.bench_function("bench_softmax_exp_sum", |b| {
+//         let x = vec![1.0; 32];
+//         let max = 1.0;
 
-//     b.iter(|| x.iter().map(|&x| numerics::exp(x - max)).sum::<f32>().ln())
+//         b.iter(|| x.iter().map(|&x| wyrm::exp(x - max)).sum::<f32>().ln())
+//     })
 // }
 
 // #[bench]
@@ -167,58 +177,70 @@ fn bench_matrix_multiply(b: &mut Criterion) {
 //     b.iter(|| general_mat_mul(1.0, &x, &y, 0.0, &mut z));
 // }
 
-// fn bench_lstm(b: &mut Criterion) {
-//     let sequence_length = 4;
-//     let num_digits = 10;
-//     let input_dim = 16;
-//     let hidden_dim = 32;
+fn pi_digits(num: usize) -> Vec<usize> {
+    let pi_str = include_str!("../src/nn/pi.txt");
+    pi_str
+        .chars()
+        .filter_map(|x| x.to_digit(10))
+        .map(|x| x as usize)
+        .take(num)
+        .collect()
+}
 
-//     let lstm_params = Parameters::new(input_dim, hidden_dim);
-//     let lstm = lstm_params.build();
+fn bench_lstm(c: &mut Criterion) {
+    c.bench_function("bench_lstm", |b| {
+        let sequence_length = 4;
+        let num_digits = 10;
+        let input_dim = 16;
+        let hidden_dim = 32;
 
-//     let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));
-//     let embeddings = ParameterNode::new(xavier_normal(num_digits, input_dim));
-//     let y = nodes::IndexInputNode::new(&vec![0]);
+        let lstm_params = lstm::Parameters::new(input_dim, hidden_dim);
+        let lstm = lstm_params.build();
 
-//     let inputs: Vec<_> = (0..sequence_length)
-//         .map(|_| nodes::IndexInputNode::new(&vec![0]))
-//         .collect();
-//     let embeddings: Vec<_> = inputs
-//         .iter()
-//         .map(|input| embeddings.index(&input))
-//         .collect();
+        let final_layer = wyrm::ParameterNode::new(xavier_normal(hidden_dim, num_digits));
+        let embeddings = wyrm::ParameterNode::new(xavier_normal(num_digits, input_dim));
+        let y = wyrm::IndexInputNode::new(&vec![0]);
 
-//     let hidden_states = lstm.forward(&embeddings);
-//     let hidden = hidden_states.last().unwrap();
+        let inputs: Vec<_> = (0..sequence_length)
+            .map(|_| wyrm::IndexInputNode::new(&vec![0]))
+            .collect();
+        let embeddings: Vec<_> = inputs
+            .iter()
+            .map(|input| embeddings.index(&input))
+            .collect();
 
-//     let prediction = hidden.dot(&final_layer);
-//     let mut loss = sparse_categorical_crossentropy(&prediction, &y);
-//     let mut optimizer = SGD::new(0.05, loss.parameters());
+        let hidden_states = lstm.forward(&embeddings);
+        let hidden = hidden_states.last().unwrap();
 
-//     let digits = pi_digits(100);
+        let prediction = hidden.dot(&final_layer);
+        let mut loss = wyrm::nn::losses::sparse_categorical_crossentropy(&prediction, &y);
+        let mut optimizer = SGD::new(0.05, loss.parameters());
 
-//     b.iter(|| {
-//         for i in 0..(digits.len() - sequence_length - 1) {
-//             let digit_chunk = &digits[i..(i + sequence_length + 1)];
-//             if digit_chunk.len() < sequence_length + 1 {
-//                 break;
-//             }
+        let digits = pi_digits(100);
 
-//             for (&digit, input) in digit_chunk[..digit_chunk.len() - 1].iter().zip(&inputs) {
-//                 input.set_value(digit);
-//             }
+        b.iter(|| {
+            for i in 0..(digits.len() - sequence_length - 1) {
+                let digit_chunk = &digits[i..(i + sequence_length + 1)];
+                if digit_chunk.len() < sequence_length + 1 {
+                    break;
+                }
 
-//             let target_digit = *digit_chunk.last().unwrap();
-//             y.set_value(target_digit);
+                for (&digit, input) in digit_chunk[..digit_chunk.len() - 1].iter().zip(&inputs) {
+                    input.set_value(digit);
+                }
 
-//             loss.forward();
-//             loss.backward(1.0);
+                let target_digit = *digit_chunk.last().unwrap();
+                y.set_value(target_digit);
 
-//             optimizer.step();
-//             loss.zero_gradient();
-//         }
-//     });
-// }
+                loss.forward();
+                loss.backward(1.0);
 
-criterion_group!(benches, bench_node_reuse, bench_matrix_multiply);
+                optimizer.step();
+                loss.zero_gradient();
+            }
+        })
+    });
+}
+
+criterion_group!(benches, bench_node_reuse, bench_matrix_multiply, bench_lstm);
 criterion_main!(benches);

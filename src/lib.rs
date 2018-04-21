@@ -364,6 +364,14 @@ where
         )
     }
 
+    /// Compute the ReLU of this variable.
+    pub fn relu(&self) -> Variable<ReluNode<T>> {
+        Variable::new(
+            Rc::new(ReluNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
+    }
+
     /// Compute the row-wise vector dot product of LHS and RHS.
     pub fn vector_dot<S>(&self, other: &Variable<S>) -> Variable<VectorDotNode<T, S>>
     where
@@ -481,61 +489,64 @@ impl DataInput<usize> for Variable<IndexInputNode> {
     }
 }
 
-impl<LHS, RHS> Add<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<AddNode<LHS, RHS>>;
-    fn add(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(AddNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
+macro_rules! impl_arithmetic_op {
+    ($trait:ident, $fn:ident, $node:ident) => {
+        impl<LHS, RHS> $trait<Variable<RHS>> for Variable<LHS>
+        where
+            RHS: Node<Value = Arr, InputGradient = Arr>,
+            LHS: Node<Value = Arr, InputGradient = Arr>,
+        {
+            type Output = Variable<$node<LHS, RHS>>;
+            fn $fn(self, other: Variable<RHS>) -> Self::Output {
+                Variable::new(
+                    Rc::new($node::new(self.node, other.node)),
+                    merge_parameters(&self.parameters, &other.parameters),
+                )
+            }
+        }
+
+        /// The constant will be broadcast to have the same shape
+        /// as the LHS.
+        impl<LHS> $trait<f32> for Variable<LHS>
+        where
+            LHS: Node<Value = Arr, InputGradient = Arr>,
+        {
+            type Output = Variable<$node<LHS, InputNode>>;
+            fn $fn(self, other: f32) -> Self::Output {
+                let constant = InputNode::new(self.value().deref() * 0.0);
+                constant.set_value(other);
+
+                Variable::new(
+                    Rc::new($node::new(self.node, constant.node)),
+                    merge_parameters(&self.parameters, &constant.parameters),
+                )
+            }
+        }
+
+        /// The constant will be broadcast to have the same shape
+        /// as the RHS.
+        impl<RHS> $trait<Variable<RHS>> for f32
+        where
+            RHS: Node<Value = Arr, InputGradient = Arr>,
+        {
+            type Output = Variable<$node<InputNode, RHS>>;
+            fn $fn(self, other: Variable<RHS>) -> Self::Output {
+                let constant = InputNode::new(other.value().deref() * 0.0);
+                constant.set_value(self);
+
+                Variable::new(
+                    Rc::new($node::new(constant.node, other.node)),
+                    merge_parameters(&constant.parameters, &other.parameters),
+                )
+            }
+        }
+    };
 }
 
-impl<LHS, RHS> Sub<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<SubNode<LHS, RHS>>;
-    fn sub(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(SubNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
-}
-
-impl<LHS, RHS> Mul<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<MulNode<LHS, RHS>>;
-    fn mul(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(MulNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
-}
-
-impl<LHS, RHS> Div<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<DivNode<LHS, RHS>>;
-    fn div(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(DivNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
-}
+impl_arithmetic_op!(Add, add, AddNode);
+impl_arithmetic_op!(Sub, sub, SubNode);
+impl_arithmetic_op!(Mul, mul, MulNode);
+impl_arithmetic_op!(Div, div, DivNode);
 
 impl<T> Neg for Variable<T>
 where
@@ -869,6 +880,14 @@ mod tests {
     fn sigmoid_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut z = (x.clone() + x.clone()).sigmoid();
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn relu_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut z = (x.clone() + x.clone()).relu();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
