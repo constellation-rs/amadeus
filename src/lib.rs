@@ -562,6 +562,7 @@ where
 pub struct SGD {
     learning_rate: f32,
     parameters: Vec<Variable<ParameterNode>>,
+    clamp: Option<(f32, f32)>,
 }
 
 impl SGD {
@@ -570,7 +571,14 @@ impl SGD {
         SGD {
             learning_rate: learning_rate,
             parameters: parameters,
+            clamp: None,
         }
+    }
+
+    /// Set the clamp bounds.
+    pub fn clamp(mut self, min: f32, max: f32) -> Self {
+        self.clamp = Some((min, max));
+        self
     }
 
     /// Perform a single SGD step.
@@ -579,6 +587,10 @@ impl SGD {
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
             let mut param_value = unsafe { parameter.node.value.value_mut() };
+
+            if let Some((min, max)) = self.clamp {
+                sink.clamp(min, max);
+            }
 
             if sink.has_dense {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
@@ -593,7 +605,7 @@ impl SGD {
                         numerics::map_add_assign_slice(
                             param_row.into_slice().unwrap(),
                             grad_row.into_slice().unwrap(),
-                            |x| -learning_rate * clamp(x, -10.0, 10.0),
+                            |x| -learning_rate * x,
                         );
                     }
                 }
@@ -608,6 +620,7 @@ pub struct Adagrad {
     learning_rate: f32,
     l2: f32,
     parameters: Vec<Variable<ParameterNode>>,
+    clamp: Option<(f32, f32)>,
 }
 
 impl Adagrad {
@@ -617,7 +630,14 @@ impl Adagrad {
             learning_rate: learning_rate,
             l2: 0.0,
             parameters: parameters,
+            clamp: None,
         }
+    }
+
+    /// Set the clamp bounds.
+    pub fn clamp(mut self, min: f32, max: f32) -> Self {
+        self.clamp = Some((min, max));
+        self
     }
 
     /// Set the L2 penalty.
@@ -632,6 +652,11 @@ impl Adagrad {
 
         for parameter in &self.parameters {
             let mut sink = parameter.node.gradient.borrow_mut();
+
+            if let Some((min, max)) = self.clamp {
+                sink.clamp(min, max);
+            }
+
             let mut param_value = unsafe { parameter.node.value.value_mut() };
             let mut squared_gradient = unsafe { parameter.node.value.squared_gradient_mut() };
 

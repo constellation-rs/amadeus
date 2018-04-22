@@ -39,7 +39,15 @@ pub fn tanh(x: f32) -> f32 {
 
 #[inline(always)]
 pub fn sigmoid(x: f32) -> f32 {
-    1.0 / (1.0 + (-x).exp())
+    let critical_value = 10.0;
+
+    if x > critical_value {
+        1.0
+    } else if x < -critical_value {
+        0.0
+    } else {
+        1.0 / (1.0 + exp(-x))
+    }
 }
 
 #[inline(always)]

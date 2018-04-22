@@ -12,7 +12,7 @@ use smallvec::SmallVec;
 
 use numerics;
 
-use super::{Arr, Variable};
+use super::{clamp, Arr, Variable};
 
 #[derive(Debug, PartialEq)]
 pub enum ForwardAction {
@@ -482,6 +482,22 @@ impl GradientAccumulator {
 
         self.has_dense = false;
         self.has_sparse = false;
+    }
+
+    pub fn clamp(&mut self, min: f32, max: f32) {
+        self.dense_gradient()
+            .as_slice_mut()
+            .unwrap()
+            .iter_mut()
+            .for_each(|x| *x = clamp(*x, min, max));
+        self.sparse_gradient
+            .iter_mut()
+            .for_each(|(_, ref mut grad)| {
+                grad.as_slice_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .for_each(|x| *x = clamp(*x, min, max))
+            });
     }
 }
 
@@ -1523,10 +1539,7 @@ where
     T: Node<Value = Arr>,
 {
     pub fn new(operand: Rc<T>) -> Self {
-        let value = operand
-            .value()
-            .deref()
-            .map(|x| 1.0 / (1.0 + numerics::exp(-x)));
+        let value = operand.value().deref().map(|&x| numerics::sigmoid(x));
         let gradient = &value * 0.0;
         let needs_gradient = operand.needs_gradient();
 
