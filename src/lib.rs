@@ -621,6 +621,7 @@ pub struct Adagrad {
     l2: f32,
     parameters: Vec<Variable<ParameterNode>>,
     clamp: Option<(f32, f32)>,
+    eps: f32,
 }
 
 impl Adagrad {
@@ -631,6 +632,7 @@ impl Adagrad {
             l2: 0.0,
             parameters: parameters,
             clamp: None,
+            eps: 1e-6,
         }
     }
 
@@ -666,8 +668,9 @@ impl Adagrad {
                     sink.dense_gradient().as_slice().unwrap(),
                     squared_gradient.as_slice_mut().unwrap()
                 ) {
-                    *value -= learning_rate * gradient / squared_gradient.sqrt() + *value * self.l2;
                     *squared_gradient += numerics::pow2(gradient);
+                    *value -= learning_rate * gradient / (self.eps + squared_gradient.sqrt())
+                        + *value * self.l2;
                 }
             }
 
@@ -683,9 +686,10 @@ impl Adagrad {
                             grad_row.into_slice().unwrap(),
                             squared_row.as_slice_mut().unwrap()
                         ) {
-                            *value -= learning_rate * gradient / squared_gradient.sqrt()
-                                + *value * self.l2;
                             *squared_gradient += numerics::pow2(gradient);
+                            *value -= learning_rate * gradient
+                                / (self.eps + squared_gradient.sqrt())
+                                + *value * self.l2;
                         }
                     }
                 }

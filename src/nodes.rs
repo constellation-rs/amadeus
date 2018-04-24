@@ -545,7 +545,7 @@ pub struct HogwildParameter {
 impl HogwildParameter {
     /// Create a new parameter object.
     pub fn new(value: Arr) -> Self {
-        let squared_gradients = &value * 0.0 + 1.0;
+        let squared_gradients = &value * 0.0;
 
         HogwildParameter {
             value: RefCell::new(value),
