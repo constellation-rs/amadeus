@@ -648,6 +648,19 @@ impl Adagrad {
         self
     }
 
+    /// Decay weights.
+    pub fn decay_weights(&mut self, penalty: f32) {
+        for parameter in &self.parameters {
+            let mut param_value = unsafe { parameter.node.value.value_mut() };
+
+            param_value
+                .as_slice_mut()
+                .unwrap()
+                .iter_mut()
+                .for_each(|x| *x -= x.signum() * penalty * numerics::pow2(*x));
+        }
+    }
+
     /// Perform a single SGD step.
     pub fn step(&mut self) {
         let learning_rate = self.learning_rate;
@@ -670,7 +683,7 @@ impl Adagrad {
                 ) {
                     *squared_gradient += numerics::pow2(gradient);
                     *value -= learning_rate * gradient / (self.eps + squared_gradient.sqrt())
-                        + *value * self.l2;
+                        + value.signum() * numerics::pow2(*value) * self.l2;
                 }
             }
 
@@ -689,7 +702,7 @@ impl Adagrad {
                             *squared_gradient += numerics::pow2(gradient);
                             *value -= learning_rate * gradient
                                 / (self.eps + squared_gradient.sqrt())
-                                + *value * self.l2;
+                                + value.signum() * numerics::pow2(*value) * self.l2
                         }
                     }
                 }
