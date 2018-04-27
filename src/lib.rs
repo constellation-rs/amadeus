@@ -513,8 +513,7 @@ macro_rules! impl_arithmetic_op {
         {
             type Output = Variable<$node<LHS, InputNode>>;
             fn $fn(self, other: f32) -> Self::Output {
-                let constant = InputNode::new(self.value().deref() * 0.0);
-                constant.set_value(other);
+                let constant = InputNode::new(self.value().deref() * 0.0 + other);
 
                 Variable::new(
                     Rc::new($node::new(self.node, constant.node)),
@@ -531,8 +530,7 @@ macro_rules! impl_arithmetic_op {
         {
             type Output = Variable<$node<InputNode, RHS>>;
             fn $fn(self, other: Variable<RHS>) -> Self::Output {
-                let constant = InputNode::new(other.value().deref() * 0.0);
-                constant.set_value(self);
+                let constant = InputNode::new(other.value().deref() * 0.0 + self);
 
                 Variable::new(
                     Rc::new($node::new(constant.node, other.node)),
@@ -790,6 +788,17 @@ mod tests {
 
     fn random_matrix(rows: usize, cols: usize) -> Arr {
         Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
+    }
+
+    #[test]
+    fn test_constant_sub() {
+        let x = ParameterNode::new(Arr::zeros((10, 10)) + 1.0);
+        let y = 1.0 - x;
+
+        assert_eq!(y.value().scalar_sum(), 0.0);
+        y.zero_gradient();
+        y.forward();
+        assert_eq!(y.value().scalar_sum(), 0.0);
     }
 
     #[test]

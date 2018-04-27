@@ -656,7 +656,7 @@ where
 {
     pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
         let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
-        let value = lhs.value().deref() + rhs.value().deref();
+        let value = lhs.value().deref() - rhs.value().deref();
 
         let rhs_gradient = rhs.value().deref() * 0.0;
 
