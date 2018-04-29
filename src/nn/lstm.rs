@@ -50,7 +50,7 @@ use ndarray;
 use nodes;
 use nodes::{HogwildParameter, Node, ParameterNode};
 
-use nn::xavier_normal;
+use nn::{uniform, xavier_normal};
 
 use {Arr, DataInput, Variable};
 
@@ -104,33 +104,44 @@ impl Clone for Parameters {
 impl Parameters {
     /// Create a new LSTM parameters object.
     pub fn new(input_dim: usize, hidden_dim: usize) -> Self {
+        let min = -1.0 / (hidden_dim as f32).sqrt();
+        let max = 1.0 / (hidden_dim as f32).sqrt();
+
         Self {
             input_dim: input_dim,
             hidden_dim: hidden_dim,
 
-            forget_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            forget_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
             ))),
-            forget_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            forget_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
 
-            update_gate_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            update_gate_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
             ))),
-            update_gate_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            update_gate_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
 
-            update_value_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            update_value_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
             ))),
-            update_value_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            update_value_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
 
-            output_gate_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            output_gate_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
             ))),
-            output_gate_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            output_gate_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
         }
     }
 
@@ -284,8 +295,8 @@ mod tests {
     use super::*;
     use nn::losses::sparse_categorical_crossentropy;
     use nodes::InputNode;
+    use Adagrad;
     use DataInput;
-    use SGD;
 
     fn pi_digits(num: usize) -> Vec<usize> {
         let pi_str = include_str!("pi.txt");
@@ -368,7 +379,7 @@ mod tests {
 
         let prediction = hidden.dot(&final_layer);
         let mut loss = sparse_categorical_crossentropy(&prediction, &y);
-        let mut optimizer = SGD::new(0.05, loss.parameters());
+        let mut optimizer = Adagrad::new(0.05, loss.parameters()).l2_penalty(1e-3);
 
         let digits = pi_digits(100);
 
@@ -398,6 +409,8 @@ mod tests {
                 loss.backward(1.0);
 
                 loss_val += loss.value().scalar_sum();
+
+                // println!("Hiddent {:#?}", hidden.value());
 
                 optimizer.step();
                 loss.zero_gradient();
