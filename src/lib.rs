@@ -679,9 +679,9 @@ impl Adagrad {
                     sink.dense_gradient().as_slice().unwrap(),
                     squared_gradient.as_slice_mut().unwrap()
                 ) {
+                    let gradient = gradient + *value * self.l2;
                     *squared_gradient += numerics::pow2(gradient);
-                    *value -= learning_rate * gradient / (self.eps + squared_gradient.sqrt())
-                        + value.signum() * numerics::pow2(*value) * self.l2;
+                    *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
                 }
             }
 
@@ -697,10 +697,10 @@ impl Adagrad {
                             grad_row.into_slice().unwrap(),
                             squared_row.as_slice_mut().unwrap()
                         ) {
+                            let gradient = gradient + *value * self.l2;
                             *squared_gradient += numerics::pow2(gradient);
-                            *value -= learning_rate * gradient
-                                / (self.eps + squared_gradient.sqrt())
-                                + value.signum() * numerics::pow2(*value) * self.l2
+                            *value -=
+                                learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
                         }
                     }
                 }
