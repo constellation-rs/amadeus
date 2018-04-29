@@ -1489,16 +1489,16 @@ where
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
             BackwardAction::Set => for (dest, value, grad_val) in izip!(
-                self.operand_gradient.borrow_mut().iter_mut(),
-                self.value().iter(),
-                gradient.iter()
+                self.operand_gradient.borrow_mut().as_slice_mut().unwrap(),
+                self.value().as_slice().unwrap(),
+                gradient.as_slice().unwrap()
             ) {
                 *dest = grad_val * (1.0 - value.powi(2));
             },
             BackwardAction::Increment => for (dest, value, grad_val) in izip!(
-                self.operand_gradient.borrow_mut().iter_mut(),
-                self.value().iter(),
-                gradient.iter()
+                self.operand_gradient.borrow_mut().as_slice_mut().unwrap(),
+                self.value().as_slice().unwrap(),
+                gradient.as_slice().unwrap()
             ) {
                 *dest += grad_val * (1.0 - value.powi(2));
             },
