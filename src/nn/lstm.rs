@@ -104,8 +104,8 @@ impl Clone for Parameters {
 impl Parameters {
     /// Create a new LSTM parameters object.
     pub fn new(input_dim: usize, hidden_dim: usize) -> Self {
-        let min = -1.0 / (hidden_dim as f32).sqrt();
         let max = 1.0 / (hidden_dim as f32).sqrt();
+        let min = -max;
 
         Self {
             input_dim: input_dim,

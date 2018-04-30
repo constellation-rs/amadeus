@@ -163,7 +163,9 @@ use std::cell::RefCell;
 use std::clone::Clone;
 use std::ops::{Add, Deref, Div, Mul, Neg, Sub};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
+mod barrier;
 mod fast_approx;
 pub mod nn;
 mod nodes;
@@ -612,6 +614,73 @@ impl SGD {
     }
 }
 
+pub struct SynchronizationBarrier {
+    core: Arc<SynchronizationBarrierCore>,
+}
+
+impl SynchronizationBarrier {
+    pub fn new() -> Self {
+        SynchronizationBarrier {
+            core: Arc::new(SynchronizationBarrierCore::new()),
+        }
+    }
+
+    fn register_thread(&self) -> SynchronizationBarrierGuard {
+        self.core.register_thread();
+        SynchronizationBarrierGuard {
+            barrier: Arc::clone(&self.core),
+        }
+    }
+}
+
+struct SynchronizationBarrierCore {
+    barrier: barrier::Barrier,
+    parameter_lock: Mutex<()>,
+}
+
+impl SynchronizationBarrierCore {
+    fn new() -> Self {
+        Self {
+            barrier: barrier::Barrier::new(0),
+            parameter_lock: Mutex::default(),
+        }
+    }
+
+    fn register_thread(&self) {
+        self.barrier.increment_num_threads();
+    }
+
+    fn deregister_thread(&self) {
+        self.barrier.decrement_num_threads();
+        // println!("Deregistered");
+    }
+
+    fn wait(&self) {
+        self.barrier.wait();
+    }
+}
+
+pub struct SynchronizationBarrierGuard {
+    barrier: Arc<SynchronizationBarrierCore>,
+}
+
+impl SynchronizationBarrierGuard {
+    fn wait(&self) {
+        self.barrier.wait();
+    }
+
+    fn lock(&self) -> MutexGuard<()> {
+        self.barrier.parameter_lock.lock().unwrap()
+    }
+}
+
+impl Drop for SynchronizationBarrierGuard {
+    fn drop(&mut self) {
+        // println!("Deregistering");
+        self.barrier.deregister_thread();
+    }
+}
+
 /// Adagrad optimizer, scaled the learning rate by the inverse of previously
 /// accumulated gradients.
 pub struct Adagrad {
@@ -620,6 +689,7 @@ pub struct Adagrad {
     parameters: Vec<Variable<ParameterNode>>,
     clamp: Option<(f32, f32)>,
     eps: f32,
+    sync_barrier: Option<SynchronizationBarrierGuard>,
 }
 
 impl Adagrad {
@@ -631,7 +701,13 @@ impl Adagrad {
             parameters: parameters,
             clamp: None,
             eps: 1e-6,
+            sync_barrier: None,
         }
+    }
+
+    pub fn synchronized(mut self, barrier: &SynchronizationBarrier) -> Self {
+        self.sync_barrier = Some(barrier.register_thread());
+        self
     }
 
     /// Set the clamp bounds.
@@ -660,7 +736,7 @@ impl Adagrad {
     }
 
     /// Perform a single SGD step.
-    pub fn step(&mut self) {
+    pub fn step(&self) {
         let learning_rate = self.learning_rate;
 
         for parameter in &self.parameters {
@@ -705,6 +781,20 @@ impl Adagrad {
                     }
                 }
             }
+        }
+    }
+
+    pub fn synchronized_step(&self) {
+        if let Some(ref barrier) = self.sync_barrier {
+            {
+                // println!("Locking params");
+                let _ = barrier.lock();
+                self.step();
+            }
+
+            // println!("Acquiring end barrier.");
+            barrier.wait();
+            // println!("Done.");
         }
     }
 }
