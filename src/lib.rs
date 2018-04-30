@@ -735,66 +735,67 @@ impl Adagrad {
         }
     }
 
-    /// Perform a single SGD step.
-    pub fn step(&self) {
+    fn do_step(&self, parameter: &Variable<ParameterNode>) {
         let learning_rate = self.learning_rate;
 
-        for parameter in &self.parameters {
-            let mut sink = parameter.node.gradient.borrow_mut();
+        let mut sink = parameter.node.gradient.borrow_mut();
 
-            if let Some((min, max)) = self.clamp {
-                sink.clamp(min, max);
+        if let Some((min, max)) = self.clamp {
+            sink.clamp(min, max);
+        }
+
+        let param_value = unsafe { parameter.node.value.value_mut() };
+        let squared_gradient = unsafe { parameter.node.value.squared_gradient_mut() };
+
+        if sink.has_dense {
+            for (value, &gradient, squared_gradient) in izip!(
+                param_value.as_slice_mut().unwrap(),
+                sink.dense_gradient().as_slice().unwrap(),
+                squared_gradient.as_slice_mut().unwrap()
+            ) {
+                let gradient = gradient + *value * self.l2;
+                *squared_gradient += numerics::pow2(gradient);
+                *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
             }
+        }
 
-            let mut param_value = unsafe { parameter.node.value.value_mut() };
-            let mut squared_gradient = unsafe { parameter.node.value.squared_gradient_mut() };
+        if sink.has_sparse {
+            for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
+                for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
+                    let grad_row = grad.subview(Axis(0), grad_idx);
+                    let mut param_row = param_value.subview_mut(Axis(0), param_idx);
+                    let mut squared_row = squared_gradient.subview_mut(Axis(0), param_idx);
 
-            if sink.has_dense {
-                for (value, &gradient, squared_gradient) in izip!(
-                    param_value.as_slice_mut().unwrap(),
-                    sink.dense_gradient().as_slice().unwrap(),
-                    squared_gradient.as_slice_mut().unwrap()
-                ) {
-                    let gradient = gradient + *value * self.l2;
-                    *squared_gradient += numerics::pow2(gradient);
-                    *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
-                }
-            }
-
-            if sink.has_sparse {
-                for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
-                    for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                        let grad_row = grad.subview(Axis(0), grad_idx);
-                        let mut param_row = param_value.subview_mut(Axis(0), param_idx);
-                        let mut squared_row = squared_gradient.subview_mut(Axis(0), param_idx);
-
-                        for (value, &gradient, squared_gradient) in izip!(
-                            param_row.as_slice_mut().unwrap(),
-                            grad_row.into_slice().unwrap(),
-                            squared_row.as_slice_mut().unwrap()
-                        ) {
-                            let gradient = gradient + *value * self.l2;
-                            *squared_gradient += numerics::pow2(gradient);
-                            *value -=
-                                learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
-                        }
+                    for (value, &gradient, squared_gradient) in izip!(
+                        param_row.as_slice_mut().unwrap(),
+                        grad_row.into_slice().unwrap(),
+                        squared_row.as_slice_mut().unwrap()
+                    ) {
+                        let gradient = gradient + *value * self.l2;
+                        *squared_gradient += numerics::pow2(gradient);
+                        *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
                     }
                 }
             }
         }
     }
 
-    pub fn synchronized_step(&self) {
+    /// Perform a single SGD step.
+    pub fn step(&self) {
         if let Some(ref barrier) = self.sync_barrier {
             {
-                // println!("Locking params");
                 let _ = barrier.lock();
-                self.step();
+
+                for parameter in &self.parameters {
+                    self.do_step(parameter);
+                }
             }
 
-            // println!("Acquiring end barrier.");
             barrier.wait();
-            // println!("Done.");
+        } else {
+            for parameter in &self.parameters {
+                self.do_step(parameter);
+            }
         }
     }
 }
