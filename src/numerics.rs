@@ -390,8 +390,6 @@ mod tests {
     use rand;
     use rand::Rng;
 
-    use numerics;
-
     fn random_matrix(rows: usize, cols: usize) -> Arr {
         Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
     }
@@ -413,25 +411,6 @@ mod tests {
 
     fn dot(lhs: &[f32], rhs: &[f32]) -> f32 {
         lhs.iter().zip(rhs.iter()).map(|(x, y)| x * y).sum()
-    }
-
-    fn array_assign(xs: &mut Arr, ys: &Arr) {
-        xs.assign(ys);
-    }
-
-    fn assign(xs: &mut Arr, ys: &Arr) {
-        assert_eq!(
-            xs.shape(),
-            ys.shape(),
-            "Operands do not have the same shape."
-        );
-
-        let xs = xs.as_slice_mut().expect("Unable to convert LHS to slice.");
-        let ys = ys.as_slice().expect("Unable to convert RHS to slice.");
-
-        for (x, &y) in xs.iter_mut().zip(ys.iter()) {
-            *x = y;
-        }
     }
 
     fn unrolled_dot(xs: &[f32], ys: &[f32]) -> f32 {

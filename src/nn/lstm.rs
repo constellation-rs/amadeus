@@ -50,7 +50,7 @@ use ndarray;
 use nodes;
 use nodes::{HogwildParameter, Node, ParameterNode};
 
-use nn::{uniform, xavier_normal};
+use nn::uniform;
 
 use {Arr, DataInput, Variable};
 
@@ -58,7 +58,7 @@ use {Arr, DataInput, Variable};
 ///
 /// Construct this first, then use the `build` method to instantiate
 /// LSTM cell nodes.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Parameters {
     input_dim: usize,
     hidden_dim: usize,
@@ -293,10 +293,24 @@ mod tests {
     use std::ops::Deref;
 
     use super::*;
+    use finite_difference;
     use nn::losses::sparse_categorical_crossentropy;
+    use nn::xavier_normal;
     use nodes::InputNode;
-    use Adagrad;
+    use optim::Adam;
     use DataInput;
+
+    const TOLERANCE: f32 = 0.2;
+
+    fn assert_close(x: &Arr, y: &Arr, tol: f32) {
+        assert!(
+            x.all_close(y, tol),
+            "{:#?} not within {} of {:#?}",
+            x,
+            tol,
+            y
+        );
+    }
 
     fn pi_digits(num: usize) -> Vec<usize> {
         let pi_str = include_str!("pi.txt");
@@ -306,6 +320,32 @@ mod tests {
             .map(|x| x as usize)
             .take(num)
             .collect()
+    }
+
+    #[test]
+    fn lstm_finite_difference() {
+        let num_steps = 10;
+        let dim = 10;
+
+        let mut xs: Vec<_> = (0..num_steps)
+            .map(|_| ParameterNode::new(xavier_normal(1, dim)))
+            .collect();
+
+        let lstm_params = Parameters::new(dim, dim);
+        let lstm = lstm_params.build();
+
+        let mut hidden_states = lstm.forward(&xs);
+        let mut hidden = hidden_states.last_mut().unwrap();
+
+        for x in &mut xs {
+            let (difference, gradient) = finite_difference(x, &mut hidden);
+            assert_close(&difference, &gradient, TOLERANCE);
+        }
+
+        for x in hidden.parameters().iter_mut() {
+            let (difference, gradient) = finite_difference(x, &mut hidden);
+            assert_close(&difference, &gradient, TOLERANCE);
+        }
     }
 
     #[test]
@@ -379,7 +419,7 @@ mod tests {
 
         let prediction = hidden.dot(&final_layer);
         let mut loss = sparse_categorical_crossentropy(&prediction, &y);
-        let mut optimizer = Adagrad::new(0.05, loss.parameters()).l2_penalty(1e-3);
+        let optimizer = Adam::new(loss.parameters()).learning_rate(0.01);
 
         let digits = pi_digits(100);
 

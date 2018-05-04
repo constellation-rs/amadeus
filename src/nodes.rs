@@ -38,11 +38,15 @@ impl PassCounter {
         self.backward_count.set(0);
     }
     pub fn is_zero(&self) -> bool {
+        debug_assert!(self.recurse_backward(), "Not fully backpropagated.");
+
         self.forward_count.get() == 0
     }
     pub fn recurse_backward(&self) -> bool {
         let backward_count = self.backward_count.get();
         let forward_count = self.forward_count.get();
+
+        assert!(backward_count <= forward_count);
 
         backward_count == forward_count
     }
@@ -137,6 +141,7 @@ impl Node for Rc<Node<Value = Arr, InputGradient = Arr>> {
 #[derive(Debug)]
 pub struct AddNode<LHS, RHS> {
     value: RefCell<Arr>,
+    gradient: RefCell<Arr>,
     lhs: Rc<LHS>,
     rhs: Rc<RHS>,
     needs_gradient: bool,
@@ -151,9 +156,11 @@ where
     pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
         let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
         let value = lhs.value().deref() + rhs.value().deref();
+        let gradient = rhs.value().deref() * 0.0;
 
         AddNode {
             value: RefCell::new(value),
+            gradient: RefCell::new(gradient),
             lhs: lhs,
             rhs: rhs,
             needs_gradient: needs_gradient,
@@ -196,8 +203,27 @@ where
         numerics::add(lhs_value.deref(), rhs_value.deref(), self_value.deref_mut());
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        self.lhs.backward(gradient);
-        self.rhs.backward(gradient);
+        match self.counter.backward() {
+            BackwardAction::Set => {
+                let mut operand_gradient = self.gradient.borrow_mut();
+
+                numerics::slice_assign(
+                    operand_gradient.as_slice_mut().unwrap(),
+                    gradient.as_slice().unwrap(),
+                );
+            }
+            BackwardAction::Increment => {
+                let mut operand_gradient = self.gradient.borrow_mut();
+
+                operand_gradient.scaled_add(1.0, gradient);
+            }
+        }
+
+        if self.counter.recurse_backward() {
+            let gradient = self.gradient.borrow();
+            self.lhs.backward(&gradient);
+            self.rhs.backward(&gradient);
+        }
     }
     fn value(&self) -> Bor<Self::Value> {
         Bor::RefGuard(self.value.borrow())
@@ -524,6 +550,9 @@ impl<'a> GradientSink<(&'a [usize], &'a Arr)> for GradientAccumulator {
                 index_vec.extend_from_slice(&index[..]);
                 grad.assign(value);
                 return;
+            } else if &index_vec[..] == index {
+                grad.add_assign(value);
+                return;
             }
         }
 
@@ -540,16 +569,22 @@ unsafe impl Sync for HogwildParameter {}
 pub struct HogwildParameter {
     pub value: RefCell<Arr>,
     pub squared_gradients: RefCell<Arr>,
+    pub moments: RefCell<Arr>,
+    num_updates: RefCell<Arr>,
 }
 
 impl HogwildParameter {
     /// Create a new parameter object.
     pub fn new(value: Arr) -> Self {
         let squared_gradients = &value * 0.0;
+        let moments = &value * 0.0;
+        let num_updates = &value * 0.0;
 
         HogwildParameter {
             value: RefCell::new(value),
             squared_gradients: RefCell::new(squared_gradients),
+            moments: RefCell::new(moments),
+            num_updates: RefCell::new(num_updates),
         }
     }
 
@@ -567,6 +602,14 @@ impl HogwildParameter {
 
     pub(crate) unsafe fn squared_gradient_mut(&self) -> &mut Arr {
         &mut *(self.squared_gradients.as_ptr())
+    }
+
+    pub(crate) unsafe fn moments_mut(&self) -> &mut Arr {
+        &mut *(self.moments.as_ptr())
+    }
+
+    pub(crate) unsafe fn num_updates_mut(&self) -> &mut Arr {
+        &mut *(self.num_updates.as_ptr())
     }
 }
 
@@ -642,6 +685,7 @@ where
     RHS: Node<Value = Arr, InputGradient = Arr>,
 {
     value: RefCell<Arr>,
+    lhs_gradient: RefCell<Arr>,
     rhs_gradient: RefCell<Arr>,
     lhs: Rc<LHS>,
     rhs: Rc<RHS>,
@@ -659,10 +703,12 @@ where
         let value = lhs.value().deref() - rhs.value().deref();
 
         let rhs_gradient = rhs.value().deref() * 0.0;
+        let lhs_gradient = lhs.value().deref() * 0.0;
 
         SubNode {
             value: RefCell::new(value),
             rhs_gradient: RefCell::new(rhs_gradient),
+            lhs_gradient: RefCell::new(lhs_gradient),
             lhs: lhs,
             rhs: rhs,
             needs_gradient: needs_gradient,
@@ -705,16 +751,26 @@ where
                     gradient.as_slice().unwrap(),
                     -1.0,
                 );
+
+                let mut lhs_gradient = self.lhs_gradient.borrow_mut();
+
+                numerics::simd_scaled_assign(
+                    lhs_gradient.as_slice_mut().unwrap(),
+                    gradient.as_slice().unwrap(),
+                    1.0,
+                );
             }
             BackwardAction::Increment => {
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
-
                 rhs_gradient.scaled_add(-1.0, gradient);
+
+                let mut lhs_gradient = self.lhs_gradient.borrow_mut();
+                lhs_gradient.scaled_add(1.0, gradient);
             }
         }
 
         if self.counter.recurse_backward() {
-            self.lhs.backward(gradient);
+            self.lhs.backward(&self.lhs_gradient.borrow());
             self.rhs.backward(&self.rhs_gradient.borrow());
         }
     }
@@ -1566,11 +1622,13 @@ where
 
         self.operand.forward();
 
-        let mut dest = self.value.borrow_mut();
+        {
+            let mut dest = self.value.borrow_mut();
 
-        numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
-            numerics::sigmoid(x)
-        });
+            numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
+                numerics::sigmoid(x)
+            });
+        }
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -2359,6 +2417,7 @@ impl Node for IndexNode<ParameterNode> {
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        self.counter.backward();
         self.operand
             .gradient
             .borrow_mut()

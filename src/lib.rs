@@ -170,6 +170,7 @@ mod fast_approx;
 pub mod nn;
 mod nodes;
 mod numerics;
+pub mod optim;
 
 use nodes::*;
 
@@ -822,6 +823,7 @@ where
             changed_input[idx] += 0.5 * delta_x;
             input.set_value(&changed_input);
             output.forward();
+            output.backward(1.0);
             output.value().clone()
         };
 
@@ -831,6 +833,7 @@ where
             changed_input[idx] -= 0.5 * delta_x;
             input.set_value(&changed_input);
             output.forward();
+            output.backward(1.0);
             output.value().clone()
         };
 
@@ -883,13 +886,17 @@ mod tests {
 
     #[test]
     fn test_constant_sub() {
-        let x = ParameterNode::new(Arr::zeros((10, 10)) + 1.0);
-        let y = 1.0 - x;
+        let mut x = ParameterNode::new(Arr::zeros((10, 10)) + 1.0);
+        let mut y = (1.0 - x.clone()) * 2.0;
 
         assert_eq!(y.value().scalar_sum(), 0.0);
         y.zero_gradient();
         y.forward();
+        y.backward(1.0);
         assert_eq!(y.value().scalar_sum(), 0.0);
+
+        let (difference, gradient) = finite_difference(&mut x, &mut y);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
 
     #[test]
@@ -906,20 +913,37 @@ mod tests {
     #[test]
     fn add_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(1, 1));
-        let y = ParameterNode::new(random_matrix(1, 1));
-        let mut z = x.clone() + y.clone();
+        let mut y = ParameterNode::new(random_matrix(1, 1));
+        let mut z = x.clone() + y.clone() + x.clone() + x.clone();
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn sub_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(1, 1));
+        let mut y = ParameterNode::new(random_matrix(1, 1));
+        let z = x.clone() - (y.clone() - x.clone());
+        let mut z = z.clone() * 2.0 + z.clone().sigmoid();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn mul_finite_difference() {
-        let mut x = ParameterNode::new(random_matrix(1, 1));
-        let y = ParameterNode::new(random_matrix(1, 1));
-        let mut z = x.clone() * y.clone();
+        let mut x = ParameterNode::new(random_matrix(10, 10));
+        let mut y = ParameterNode::new(random_matrix(10, 10));
+        let z = x.clone() * y.clone();
+        let mut z = z.clone() + z.clone();
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn div_finite_difference() {
@@ -933,20 +957,27 @@ mod tests {
     #[test]
     fn vector_dot_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
-        let y = ParameterNode::new(random_matrix(10, 5));
-        let mut z = x.vector_dot(&y);
+        let mut y = ParameterNode::new(random_matrix(10, 5));
+        let z = x.vector_dot(&y);
+        let mut z = z.clone() + z.clone();
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn dot_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
-        let y = ParameterNode::new(random_matrix(5, 10));
+        let mut y = ParameterNode::new(random_matrix(5, 10));
         let mut z = (x.clone() + x.clone()).dot(&y);
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn dot_accumulation_finite_difference() {
@@ -994,6 +1025,14 @@ mod tests {
         assert_close(&finite_difference, &gradient, TOLERANCE);
     }
     #[test]
+    fn squared_sum_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut z = x.square().scalar_sum();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
     fn transpose_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut z = (x.clone() + x.clone()).t();
@@ -1021,7 +1060,8 @@ mod tests {
     #[test]
     fn sigmoid_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
-        let mut z = (x.clone() + x.clone()).sigmoid();
+        let z = (x.clone() + x.clone()).sigmoid();
+        let mut z = z.clone() + z.clone();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -1029,7 +1069,8 @@ mod tests {
     #[test]
     fn relu_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
-        let mut z = (x.clone() + x.clone()).relu();
+        let z = (x.clone() + x.clone()).relu();
+        let mut z = z * 3.0;
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -1077,7 +1118,8 @@ mod tests {
         let mut y = ParameterNode::new(random_matrix(10, 5));
         let v = x.clone() + y.clone();
 
-        let mut z = v.stack(&v, ndarray::Axis(0)).sigmoid();
+        let z = v.stack(&v, ndarray::Axis(0));
+        let mut z = z.clone().sigmoid() * z.clone().relu();
 
         assert_eq!(z.value().rows(), 20);
         assert_eq!(z.value().cols(), 5);
@@ -1119,7 +1161,7 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let mut optimizer = Adagrad::new(0.5, loss.parameters());
+        let optimizer = Adagrad::new(0.5, loss.parameters());
 
         for _ in 0..num_epochs {
             let _x = arr2(&[[rand::random::<f32>()]]);
@@ -1220,7 +1262,7 @@ mod tests {
         let mut loss = (output.clone() - y_hat.clone()).square();
 
         let num_epochs = 200;
-        let mut optimizer = Adagrad::new(0.1, loss.parameters());
+        let optimizer = Adagrad::new(0.1, loss.parameters());
 
         let mut loss_val = 0.0;
 
