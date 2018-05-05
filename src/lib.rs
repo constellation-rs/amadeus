@@ -894,7 +894,7 @@ mod tests {
 
     use super::*;
 
-    const TOLERANCE: f32 = 0.2;
+    const TOLERANCE: f32 = 0.05;
 
     fn random_matrix(rows: usize, cols: usize) -> Arr {
         Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
@@ -1042,7 +1042,7 @@ mod tests {
         let mut z = (x.clone() + x.clone()).scalar_sum();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        assert_close(&finite_difference, &gradient, TOLERANCE * 2.0);
     }
     #[test]
     fn squared_sum_finite_difference() {
