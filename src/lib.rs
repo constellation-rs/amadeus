@@ -151,6 +151,8 @@ extern crate rand;
 extern crate rayon;
 extern crate smallvec;
 
+use smallvec::SmallVec;
+
 #[macro_use]
 extern crate itertools;
 
@@ -425,9 +427,14 @@ impl Variable<ParameterNode> {
     /// Return the (dense) gradient value of this node.
     pub fn dense_gradient(&self) -> Option<Arr> {
         match self.node.gradient.borrow().dense_gradient {
-            Some(ref arr) => Some(arr.clone()),
+            Some(ref gradients) => Some(gradients.clone()),
             None => None,
         }
+    }
+
+    /// Return the (dense) gradient value of this node.
+    fn sparse_gradient(&self) -> SmallVec<[(SmallVec<[usize; 4]>, Arr); 4]> {
+        self.node.gradient.borrow().sparse_gradient.clone()
     }
 
     /// Row-wise indexing of this parameter node. Primiarily used
@@ -848,9 +855,17 @@ where
         output.forward();
         output.backward(1.0);
 
-        input
-            .dense_gradient()
-            .expect("Expecting a gradient but gradient not present.")
+        let mut gradient = input.dense_gradient().unwrap_or(initial_input * 0.0);
+
+        for (indices, grad) in input.sparse_gradient().iter() {
+            for &row_idx in indices.iter() {
+                for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
+                    *dest += orig;
+                }
+            }
+        }
+
+        gradient
     };
 
     output.zero_gradient();
@@ -858,8 +873,8 @@ where
     (central_difference, gradient)
 }
 
-#[allow(dead_code)]
-fn assert_close(x: &Arr, y: &Arr, tol: f32) {
+/// Assert two arrays are within `tol` of each other.
+pub fn assert_close(x: &Arr, y: &Arr, tol: f32) {
     assert!(
         x.all_close(y, tol),
         "{:#?} not within {} of {:#?}",
@@ -873,6 +888,7 @@ fn assert_close(x: &Arr, y: &Arr, tol: f32) {
 mod tests {
 
     use ndarray::arr2;
+    use rand::distributions::{IndependentSample, Range};
     use rayon::prelude::*;
     use std::sync::Arc;
 
@@ -882,6 +898,10 @@ mod tests {
 
     fn random_matrix(rows: usize, cols: usize) -> Arr {
         Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
+    }
+
+    fn random_index(rows: usize) -> usize {
+        Range::new(0, rows).ind_sample(&mut rand::thread_rng())
     }
 
     #[test]
@@ -1116,9 +1136,9 @@ mod tests {
     fn rowwise_stack_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut y = ParameterNode::new(random_matrix(10, 5));
-        let v = x.clone() + y.clone();
+        //let v = x.clone() + y.clone();
 
-        let z = v.stack(&v, ndarray::Axis(0));
+        let z = x.stack(&y, ndarray::Axis(0));
         let mut z = z.clone().sigmoid() * z.clone().relu();
 
         assert_eq!(z.value().rows(), 20);
@@ -1134,9 +1154,9 @@ mod tests {
     fn columnwise_stack_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut y = ParameterNode::new(random_matrix(10, 5));
-        let v = x.clone() + y.clone();
+        //let v = x.clone() + y.clone();
 
-        let mut z = v.stack(&v, ndarray::Axis(1)).sigmoid();
+        let mut z = x.stack(&y, ndarray::Axis(1)).sigmoid();
 
         assert_eq!(z.value().rows(), 10);
         assert_eq!(z.value().cols(), 10);
@@ -1145,6 +1165,17 @@ mod tests {
         assert_close(&difference, &gradient, TOLERANCE);
 
         let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn sparse_index_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let idx_0 = IndexInputNode::new(&[random_index(10)]);
+        let idx_1 = IndexInputNode::new(&[random_index(10)]);
+
+        let mut z = (x.index(&idx_0).tanh() * x.index(&idx_1)).square();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
