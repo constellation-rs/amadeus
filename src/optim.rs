@@ -3,6 +3,10 @@ use super::{numerics, Arr, ParameterNode, SynchronizationBarrier, Synchronizatio
 
 use ndarray::Axis;
 
+pub trait Optimizer {
+    fn step(&self);
+}
+
 struct AdamParameters<'params> {
     value: &'params mut Arr,
     m: &'params mut Arr,
@@ -129,9 +133,11 @@ impl Adam {
             }
         }
     }
+}
 
+impl Optimizer for Adam {
     /// Perform a single SGD step.
-    pub fn step(&self) {
+    fn step(&self) {
         if let Some(ref barrier) = self.sync_barrier {
             {
                 let _ = barrier.lock();

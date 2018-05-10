@@ -708,7 +708,7 @@ impl Adagrad {
             l2: 0.0,
             parameters: parameters,
             clamp: None,
-            eps: 1e-6,
+            eps: 1e-10,
             sync_barrier: None,
         }
     }
@@ -787,9 +787,11 @@ impl Adagrad {
             }
         }
     }
+}
 
+impl optim::Optimizer for Adagrad {
     /// Perform a single SGD step.
-    pub fn step(&self) {
+    fn step(&self) {
         if let Some(ref barrier) = self.sync_barrier {
             {
                 let _ = barrier.lock();
