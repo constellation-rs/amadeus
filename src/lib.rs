@@ -175,6 +175,7 @@ mod numerics;
 pub mod optim;
 
 use nodes::*;
+use optim::Optimizer;
 
 pub use nodes::{Bor, HogwildParameter, IndexInputNode, InputNode, Node, ParameterNode};
 pub use numerics::simd_dot;
@@ -288,13 +289,31 @@ where
     /// The weight parameter scales the gradients.
     pub fn backward(&mut self, weight: f32) {
         self.grad
-            .get_or_insert(RefCell::new(self.node.value().map(|_| weight)));
+            .get_or_insert(RefCell::new(self.node.value().map(|_| weight)))
+            .borrow_mut()
+            .as_slice_mut()
+            .unwrap()
+            .iter_mut()
+            .for_each(|x| *x = weight);
+
         if let Some(ref grad) = self.grad {
-            {
-                grad.borrow_mut().map_inplace(|x| *x = weight);
-            }
             self.node.backward(&grad.borrow());
         }
+    }
+
+    /// Clip the value. Useful for clipping losses.
+    pub fn clip(&self, min: f32, max: f32) {
+        let bor_value = self.node.value();
+        let value: &Arr = bor_value.deref();
+        let value = unsafe { &mut *(value as *const Arr as *mut Arr) };
+
+        value
+            .as_slice_mut()
+            .unwrap()
+            .iter_mut()
+            .for_each(|x| *x = 100.0 * clamp(*x, min, max));
+
+        println!("value {:#?}", value);
     }
 
     /// Square this variable.

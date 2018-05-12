@@ -297,7 +297,7 @@ mod tests {
     use nn::losses::sparse_categorical_crossentropy;
     use nn::xavier_normal;
     use nodes::InputNode;
-    use optim::Adam;
+    use optim::{Adam, Optimizer};
     use DataInput;
 
     const TOLERANCE: f32 = 0.2;

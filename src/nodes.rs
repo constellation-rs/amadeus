@@ -570,7 +570,7 @@ pub struct HogwildParameter {
     pub value: RefCell<Arr>,
     pub squared_gradients: RefCell<Arr>,
     pub moments: RefCell<Arr>,
-    num_updates: RefCell<Arr>,
+    num_updates: Cell<i32>,
 }
 
 impl HogwildParameter {
@@ -578,13 +578,12 @@ impl HogwildParameter {
     pub fn new(value: Arr) -> Self {
         let squared_gradients = &value * 0.0;
         let moments = &value * 0.0;
-        let num_updates = &value * 0.0;
 
         HogwildParameter {
             value: RefCell::new(value),
             squared_gradients: RefCell::new(squared_gradients),
             moments: RefCell::new(moments),
-            num_updates: RefCell::new(num_updates),
+            num_updates: Cell::new(0),
         }
     }
 
@@ -608,7 +607,7 @@ impl HogwildParameter {
         &mut *(self.moments.as_ptr())
     }
 
-    pub(crate) unsafe fn num_updates_mut(&self) -> &mut Arr {
+    pub(crate) unsafe fn num_updates_mut(&self) -> &mut i32 {
         &mut *(self.num_updates.as_ptr())
     }
 }
@@ -1740,7 +1739,7 @@ where
                     &mut operand_gradient,
                     self.value.borrow().deref(),
                     gradient,
-                    |x, grad| if x < 0.0 { 0.0 } else { grad },
+                    |x, grad| if x <= 0.0 { 0.0 } else { grad },
                 );
             }
             BackwardAction::Increment => {
@@ -1750,12 +1749,13 @@ where
                     &mut operand_gradient,
                     self.value.borrow().deref(),
                     gradient,
-                    |dest, x, grad| *dest += if x < 0.0 { 0.0 } else { grad },
+                    |dest, x, grad| *dest += if x <= 0.0 { 0.0 } else { grad },
                 );
             }
         }
 
         if self.counter.recurse_backward() {
+            // println!("bacwarding with {:#?}", self.operand_gradient.borrow());
             self.operand.backward(&self.operand_gradient.borrow())
         }
     }
@@ -1956,7 +1956,9 @@ where
 {
     pub fn new(operand: Rc<OP>) -> Self {
         let needs_gradient = operand.needs_gradient();
-        let value = RefCell::new(&operand.value().t() * 1.0);
+        let mut value = Arr::zeros((operand.value().cols(), operand.value().rows()));
+        value.assign(&operand.value().t());
+        let value = RefCell::new(value);
         let gradient = RefCell::new(operand.value().deref() * 0.0);
 
         TransposeNode {

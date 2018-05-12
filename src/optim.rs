@@ -11,7 +11,7 @@ struct AdamParameters<'params> {
     value: &'params mut Arr,
     m: &'params mut Arr,
     v: &'params mut Arr,
-    t: &'params mut Arr,
+    t: &'params mut i32,
 }
 
 pub struct Adam {
@@ -73,19 +73,16 @@ impl Adam {
     }
 
     #[inline(always)]
-    fn update(&self, value: &mut f32, gradient: f32, m: &mut f32, v: &mut f32, t: &mut f32) {
+    fn update(&self, value: &mut f32, gradient: f32, m: &mut f32, v: &mut f32, t: &i32) {
         // Apply L2 to gradient.
         let gradient = gradient + *value * self.l2;
-
-        // Update t. I _think_ this overflows to saturate at std::f32::MAX;
-        *t += 1.0;
 
         // Update m and v.
         *m = self.beta_m * *m + (1.0 - self.beta_m) * gradient;
         *v = self.beta_v * *v + (1.0 - self.beta_v) * numerics::pow2(gradient);
 
-        let m_hat = *m / (1.0 - self.beta_m.powf(*t));
-        let v_hat = *v / (1.0 - self.beta_v.powf(*t));
+        let m_hat = *m / (1.0 - self.beta_m.powi(*t));
+        let v_hat = *v / (1.0 - self.beta_v.powi(*t));
 
         *value -= self.learning_rate / (v_hat.sqrt() + self.eps) * m_hat;
     }
@@ -99,15 +96,17 @@ impl Adam {
 
         let param = self.param_fields(parameter);
 
+        // Increment number of updates
+        *param.t = param.t.saturating_add(1);
+
         if sink.has_dense {
-            for (value, &gradient, m, v, t) in izip!(
+            for (value, &gradient, m, v) in izip!(
                 param.value.as_slice_mut().unwrap(),
                 sink.dense_gradient().as_slice().unwrap(),
                 param.m.as_slice_mut().unwrap(),
                 param.v.as_slice_mut().unwrap(),
-                param.t.as_slice_mut().unwrap(),
             ) {
-                self.update(value, gradient, m, v, t);
+                self.update(value, gradient, m, v, param.t);
             }
         }
 
@@ -118,16 +117,14 @@ impl Adam {
                     let grad_row = grad.subview(Axis(0), grad_idx);
                     let mut m_row = param.m.subview_mut(Axis(0), param_idx);
                     let mut v_row = param.v.subview_mut(Axis(0), param_idx);
-                    let mut t_row = param.t.subview_mut(Axis(0), param_idx);
 
-                    for (value, &gradient, m, v, t) in izip!(
+                    for (value, &gradient, m, v) in izip!(
                         value_row.as_slice_mut().unwrap(),
                         grad_row.into_slice().unwrap(),
                         m_row.as_slice_mut().unwrap(),
                         v_row.as_slice_mut().unwrap(),
-                        t_row.as_slice_mut().unwrap(),
                     ) {
-                        self.update(value, gradient, m, v, t);
+                        self.update(value, gradient, m, v, param.t);
                     }
                 }
             }
