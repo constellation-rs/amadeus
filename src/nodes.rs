@@ -11,6 +11,7 @@ use ndarray::Axis;
 use smallvec::SmallVec;
 
 use numerics;
+use numerics::ArraySliceOps;
 
 use super::{clamp, Arr, Variable};
 
@@ -533,7 +534,7 @@ pub trait GradientSink<T> {
 
 impl<'a, 'b> GradientSink<&'a Ref<'b, Arr>> for GradientAccumulator {
     fn accumulate_gradient(&mut self, gradient: &Ref<Arr>) {
-        self.dense_gradient().add_assign(gradient.deref());
+        self.dense_gradient().slice_add_assign(gradient.deref());
         self.has_dense = true;
     }
 }
@@ -548,10 +549,10 @@ impl<'a> GradientSink<(&'a [usize], &'a Arr)> for GradientAccumulator {
         for &mut (ref mut index_vec, ref mut grad) in gradients.iter_mut() {
             if index_vec.is_empty() {
                 index_vec.extend_from_slice(&index[..]);
-                grad.assign(value);
+                grad.slice_assign(value);
                 return;
             } else if &index_vec[..] == index {
-                grad.add_assign(value);
+                grad.slice_add_assign(value);
                 return;
             }
         }
@@ -1991,7 +1992,7 @@ where
                 self.gradient.borrow_mut().assign(&gradient.t());
             }
             BackwardAction::Increment => {
-                self.gradient.borrow_mut().add_assign(&gradient.t());
+                self.gradient.borrow_mut().slice_add_assign(&gradient.t());
             }
         }
 
@@ -2300,7 +2301,7 @@ where
             BackwardAction::Increment => {
                 self.operand_gradient
                     .borrow_mut()
-                    .add_assign(gradient[(0, 0)]);
+                    .slice_add_assign(gradient[(0, 0)]);
             }
         }
 

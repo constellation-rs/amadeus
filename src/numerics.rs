@@ -7,6 +7,46 @@ use fast_approx::{fastexp, fastlog, tanhf_fast};
 
 use super::Arr;
 
+pub trait ArraySliceOps<RHS> {
+    fn slice_assign(&mut self, RHS);
+    fn slice_add_assign(&mut self, RHS);
+}
+
+impl<'a, T> ArraySliceOps<&'a ArrayBase<T, Ix2>> for Arr
+where
+    T: Data<Elem = f32>,
+{
+    fn slice_assign(&mut self, other: &ArrayBase<T, Ix2>) {
+        for (lhs, &rhs) in izip!(
+            self.as_slice_mut().unwrap().iter_mut(),
+            other.as_slice().unwrap().iter()
+        ) {
+            *lhs = rhs;
+        }
+    }
+    fn slice_add_assign(&mut self, other: &ArrayBase<T, Ix2>) {
+        for (lhs, &rhs) in izip!(
+            self.as_slice_mut().unwrap().iter_mut(),
+            other.as_slice().unwrap().iter()
+        ) {
+            *lhs += rhs;
+        }
+    }
+}
+
+impl ArraySliceOps<f32> for Arr {
+    fn slice_assign(&mut self, rhs: f32) {
+        for lhs in self.as_slice_mut().unwrap().iter_mut() {
+            *lhs = rhs;
+        }
+    }
+    fn slice_add_assign(&mut self, rhs: f32) {
+        for lhs in self.as_slice_mut().unwrap().iter_mut() {
+            *lhs += rhs;
+        }
+    }
+}
+
 /// Uses approximate e^x when the fast-math feature is enabled.
 #[inline(always)]
 pub fn exp(x: f32) -> f32 {
