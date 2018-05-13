@@ -2443,17 +2443,13 @@ impl Node for IndexNode<ParameterNode> {
 
 #[cfg(test)]
 mod tests {
-    use rand;
+    use nn;
 
     use super::*;
 
-    fn random_matrix(rows: usize, cols: usize) -> Arr {
-        Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
-    }
-
     #[test]
     fn test_sub_counter() {
-        let x = ParameterNode::new(random_matrix(1, 1));
+        let x = ParameterNode::new(nn::xavier_normal(1, 1));
         let y = x.clone() - x.clone();
 
         let mut z = y.clone() + y.clone() + y.clone();

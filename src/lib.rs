@@ -909,7 +909,9 @@ pub fn assert_close(x: &Arr, y: &Arr, tol: f32) {
 mod tests {
 
     use ndarray::arr2;
-    use rand::distributions::{IndependentSample, Range};
+
+    use rand::distributions::{Distribution, Uniform};
+    use rand::Rng;
     use rayon::prelude::*;
     use std::sync::Arc;
 
@@ -918,11 +920,11 @@ mod tests {
     const TOLERANCE: f32 = 0.05;
 
     fn random_matrix(rows: usize, cols: usize) -> Arr {
-        Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
+        nn::xavier_normal(rows, cols)
     }
 
     fn random_index(rows: usize) -> usize {
-        Range::new(0, rows).ind_sample(&mut rand::thread_rng())
+        Uniform::new(0, rows).sample(&mut rand::thread_rng())
     }
 
     #[test]
@@ -1044,7 +1046,7 @@ mod tests {
     #[test]
     fn ln_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(2, 2));
-        let mut z = (x.clone() + x.clone()).ln();
+        let mut z = (x.clone() + x.clone()).exp().ln();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -1216,7 +1218,7 @@ mod tests {
         let optimizer = Adagrad::new(0.5, loss.parameters());
 
         for _ in 0..num_epochs {
-            let _x = arr2(&[[rand::random::<f32>()]]);
+            let _x = arr2(&[[rand::thread_rng().gen()]]);
             let _y = 0.5 * &_x + 0.2;
 
             x.set_value(&_x);
@@ -1260,9 +1262,9 @@ mod tests {
 
         for _ in 0..num_epochs {
             let _x = arr2(&[[
-                rand::random::<f32>(),
-                rand::random::<f32>(),
-                rand::random::<f32>(),
+                rand::thread_rng().gen(),
+                rand::thread_rng().gen(),
+                rand::thread_rng().gen(),
             ]]);
             let _y = &_x.dot(&coefficients) + 5.0;
 

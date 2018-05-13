@@ -21,7 +21,7 @@
 //! let hidden_dim = 5;
 //!
 //! // Initialize the parameters.
-//! let parameters = lstm::Parameters::new(input_dim, hidden_dim);
+//! let parameters = lstm::Parameters::new(input_dim, hidden_dim, &mut rand::thread_rng());
 //! let lstm = parameters.build();
 //!
 //! // Construct the input nodes.
@@ -46,6 +46,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ndarray;
+use rand;
 
 use nodes;
 use nodes::{HogwildParameter, Node, ParameterNode};
@@ -103,7 +104,7 @@ impl Clone for Parameters {
 
 impl Parameters {
     /// Create a new LSTM parameters object.
-    pub fn new(input_dim: usize, hidden_dim: usize) -> Self {
+    pub fn new<R: rand::Rng>(input_dim: usize, hidden_dim: usize, rng: &mut R) -> Self {
         let max = 1.0 / (hidden_dim as f32).sqrt();
         let min = -max;
 
@@ -116,32 +117,42 @@ impl Parameters {
                 hidden_dim,
                 min,
                 max,
+                rng,
             ))),
-            forget_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
+            forget_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max, rng))),
 
             update_gate_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
                 min,
                 max,
+                rng,
             ))),
-            update_gate_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
+            update_gate_biases: Arc::new(HogwildParameter::new(uniform(
+                1, hidden_dim, min, max, rng,
+            ))),
 
             update_value_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
                 min,
                 max,
+                rng,
             ))),
-            update_value_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
+            update_value_biases: Arc::new(HogwildParameter::new(uniform(
+                1, hidden_dim, min, max, rng,
+            ))),
 
             output_gate_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
                 min,
                 max,
+                rng,
             ))),
-            output_gate_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max))),
+            output_gate_biases: Arc::new(HogwildParameter::new(uniform(
+                1, hidden_dim, min, max, rng,
+            ))),
         }
     }
 
@@ -331,7 +342,7 @@ mod tests {
             .map(|_| ParameterNode::new(xavier_normal(1, dim)))
             .collect();
 
-        let lstm_params = Parameters::new(dim, dim);
+        let lstm_params = Parameters::new(dim, dim, &mut rand::thread_rng());
         let lstm = lstm_params.build();
 
         let mut hidden_states = lstm.forward(&xs);
@@ -354,7 +365,7 @@ mod tests {
         let hidden_dim = 5;
 
         // Initialize the parameters.
-        let lstm_params = Parameters::new(input_dim, hidden_dim);
+        let lstm_params = Parameters::new(input_dim, hidden_dim, &mut rand::thread_rng());
         let lstm = lstm_params.build_cell();
 
         // Initialize the cell state and hidden state.
@@ -399,7 +410,7 @@ mod tests {
         let input_dim = 16;
         let hidden_dim = 32;
 
-        let lstm_params = Parameters::new(input_dim, hidden_dim);
+        let lstm_params = Parameters::new(input_dim, hidden_dim, &mut rand::thread_rng());
         let lstm = lstm_params.build();
 
         let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));

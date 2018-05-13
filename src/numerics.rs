@@ -390,8 +390,10 @@ mod tests {
     use rand;
     use rand::Rng;
 
+    use nn;
+
     fn random_matrix(rows: usize, cols: usize) -> Arr {
-        Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
+        nn::xavier_normal(rows, cols)
     }
 
     fn array_scaled_assign(xs: &mut Arr, ys: &Arr, alpha: f32) {
