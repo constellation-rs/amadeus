@@ -110,22 +110,20 @@ impl Adam {
             }
         }
 
-        if sink.has_sparse {
-            for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
-                for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                    let mut value_row = param.value.subview_mut(Axis(0), param_idx);
-                    let grad_row = grad.subview(Axis(0), grad_idx);
-                    let mut m_row = param.m.subview_mut(Axis(0), param_idx);
-                    let mut v_row = param.v.subview_mut(Axis(0), param_idx);
+        for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
+            for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
+                let mut value_row = param.value.subview_mut(Axis(0), param_idx);
+                let grad_row = grad.subview(Axis(0), grad_idx);
+                let mut m_row = param.m.subview_mut(Axis(0), param_idx);
+                let mut v_row = param.v.subview_mut(Axis(0), param_idx);
 
-                    for (value, &gradient, m, v) in izip!(
-                        value_row.as_slice_mut().unwrap(),
-                        grad_row.into_slice().unwrap(),
-                        m_row.as_slice_mut().unwrap(),
-                        v_row.as_slice_mut().unwrap(),
-                    ) {
-                        self.update(value, gradient, m, v, param.t);
-                    }
+                for (value, &gradient, m, v) in izip!(
+                    value_row.as_slice_mut().unwrap(),
+                    grad_row.into_slice().unwrap(),
+                    m_row.as_slice_mut().unwrap(),
+                    v_row.as_slice_mut().unwrap(),
+                ) {
+                    self.update(value, gradient, m, v, param.t);
                 }
             }
         }

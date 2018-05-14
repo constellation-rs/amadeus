@@ -1,7 +1,7 @@
 use std;
 use std::cell::{Cell, Ref, RefCell};
 use std::fmt;
-use std::ops::{AddAssign, Deref, DerefMut};
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -472,13 +472,57 @@ impl Node for InputNode {
     fn zero_gradient(&self) {}
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct SparseGradientStore {
+    len: usize,
+    data: Vec<(Vec<usize>, Arr)>,
+}
+
+impl SparseGradientStore {
+    pub fn new() -> Self {
+        SparseGradientStore {
+            len: 0,
+            data: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, gradient: (&[usize], &Arr)) {
+        let (index, value) = gradient;
+
+        if self.len < self.data.len() {
+            let (index_vec, grad) = &mut self.data[self.len];
+            index_vec.clear();
+            index_vec.extend_from_slice(&index[..]);
+            grad.slice_assign(value);
+            self.len += 1;
+        } else {
+            self.data.push((Vec::from(&index[..]), value.clone()));
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(Vec<usize>, Arr)> {
+        self.data.iter().take(self.len)
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (Vec<usize>, Arr)> {
+        self.data.iter_mut().take(self.len)
+    }
+
+    pub fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 #[derive(Debug)]
-pub struct GradientAccumulator {
+pub(crate) struct GradientAccumulator {
     pub dense_shape: (usize, usize),
     pub dense_gradient: Option<Arr>,
-    pub sparse_gradient: SmallVec<[(SmallVec<[usize; 4]>, Arr); 4]>,
+    pub sparse_gradient: SparseGradientStore,
     pub has_dense: bool,
-    pub has_sparse: bool,
 }
 
 impl GradientAccumulator {
@@ -486,9 +530,8 @@ impl GradientAccumulator {
         GradientAccumulator {
             dense_shape: dense_shape,
             dense_gradient: None,
-            sparse_gradient: SmallVec::new(),
+            sparse_gradient: SparseGradientStore::new(),
             has_dense: false,
-            has_sparse: false,
         }
     }
     pub fn dense_gradient(&mut self) -> &mut Arr {
@@ -500,15 +543,8 @@ impl GradientAccumulator {
             self.dense_gradient().fill(0.0);
         }
 
-        if self.has_sparse {
-            for &mut (ref mut index_vec, ref mut grad) in self.sparse_gradient.iter_mut() {
-                index_vec.clear();
-                grad.fill(0.0)
-            }
-        }
-
+        self.sparse_gradient.clear();
         self.has_dense = false;
-        self.has_sparse = false;
     }
 
     pub fn clamp(&mut self, min: f32, max: f32) {
@@ -541,24 +577,7 @@ impl<'a, 'b> GradientSink<&'a Ref<'b, Arr>> for GradientAccumulator {
 
 impl<'a> GradientSink<(&'a [usize], &'a Arr)> for GradientAccumulator {
     fn accumulate_gradient(&mut self, gradient: (&'a [usize], &'a Arr)) {
-        let (index, value) = gradient;
-        self.has_sparse = true;
-        let gradients = &mut self.sparse_gradient;
-
-        // Check if we can reuse one of the gradient accumulators
-        for &mut (ref mut index_vec, ref mut grad) in gradients.iter_mut() {
-            if index_vec.is_empty() {
-                index_vec.extend_from_slice(&index[..]);
-                grad.slice_assign(value);
-                return;
-            } else if &index_vec[..] == index {
-                grad.slice_add_assign(value);
-                return;
-            }
-        }
-
-        // Otherwise create one
-        gradients.push((SmallVec::from(&index[..]), value.clone()));
+        self.sparse_gradient.push(gradient);
     }
 }
 

@@ -151,6 +151,7 @@ extern crate rand;
 extern crate rayon;
 extern crate smallvec;
 
+use rayon::prelude::*;
 use smallvec::SmallVec;
 
 #[macro_use]
@@ -452,7 +453,7 @@ impl Variable<ParameterNode> {
     }
 
     /// Return the (dense) gradient value of this node.
-    fn sparse_gradient(&self) -> SmallVec<[(SmallVec<[usize; 4]>, Arr); 4]> {
+    fn sparse_gradient(&self) -> SparseGradientStore {
         self.node.gradient.borrow().sparse_gradient.clone()
     }
 
@@ -623,18 +624,16 @@ impl SGD {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
             }
 
-            if sink.has_sparse {
-                for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
-                    for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                        let grad_row = grad.subview(Axis(0), grad_idx);
-                        let mut param_row = param_value.subview_mut(Axis(0), param_idx);
+            for (ref index_vec, ref grad) in sink.sparse_gradient.iter() {
+                for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
+                    let grad_row = grad.subview(Axis(0), grad_idx);
+                    let mut param_row = param_value.subview_mut(Axis(0), param_idx);
 
-                        numerics::map_add_assign_slice(
-                            param_row.into_slice().unwrap(),
-                            grad_row.into_slice().unwrap(),
-                            |x| -learning_rate * x,
-                        );
-                    }
+                    numerics::map_add_assign_slice(
+                        param_row.into_slice().unwrap(),
+                        grad_row.into_slice().unwrap(),
+                        |x| -learning_rate * x,
+                    );
                 }
             }
         }
@@ -786,8 +785,9 @@ impl Adagrad {
             }
         }
 
-        if sink.has_sparse {
-            for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
+        sink.sparse_gradient
+            .iter()
+            .for_each(|(ref index_vec, ref grad)| {
                 for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
                     let grad_row = grad.subview(Axis(0), grad_idx);
                     let mut param_row = param_value.subview_mut(Axis(0), param_idx);
@@ -803,8 +803,7 @@ impl Adagrad {
                         *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
                     }
                 }
-            }
-        }
+            });
     }
 }
 
@@ -878,7 +877,9 @@ where
 
         let mut gradient = input.dense_gradient().unwrap_or(initial_input * 0.0);
 
-        for (indices, grad) in input.sparse_gradient().iter() {
+        let sparse_gradient = input.sparse_gradient();
+
+        for (indices, grad) in sparse_gradient.iter() {
             for &row_idx in indices.iter() {
                 for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
                     *dest += orig;
