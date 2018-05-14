@@ -1,7 +1,7 @@
 use std;
 
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
-use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
+use ndarray::{ArrayBase, Axis, Data, DataMut, Ix2};
 
 use fast_approx::{fastexp, fastlog, tanhf_fast};
 
@@ -126,59 +126,6 @@ pub fn softmax_exp_sum(xs: &[f32], max: f32) -> f32 {
     s
 }
 
-fn vec_mat_mul<S1, S2, S3>(
-    alpha: f32,
-    lhs: &ArrayBase<S1, Ix1>,
-    rhs: &ArrayBase<S2, Ix2>,
-    beta: f32,
-    out: &mut ArrayBase<S3, Ix1>,
-) where
-    S1: Data<Elem = f32>,
-    S2: Data<Elem = f32>,
-    S3: DataMut<Elem = f32>,
-{
-    if lhs.len() != rhs.rows() || rhs.cols() != out.len() {
-        panic!(
-            "Shapes are incompatible for a vec-mat mul: LHS: {} vs RHS ({} x {}) vs out {}",
-            lhs.len(),
-            rhs.rows(),
-            rhs.cols(),
-            out.len()
-        )
-    }
-
-    let out_slice = out.as_slice_mut().expect("Vec-mat result not contiguous.");
-    let lhs_slice = lhs.as_slice().expect("LHS not contiguous");
-
-    for (row_idx, (&x, row)) in lhs_slice.iter().zip(rhs.genrows()).enumerate() {
-        let row_slice = row.as_slice().expect("RHS row not C-contiguous.");
-
-        if row_idx == 0 {
-            saxpy(x * alpha, row_slice, beta, out_slice);
-        } else {
-            saxpy(x * alpha, row_slice, 1.0, out_slice);
-        }
-    }
-}
-
-fn saxpy(alpha: f32, xs: &[f32], beta: f32, outs: &mut [f32]) {
-    for (&x, out) in izip!(xs.iter(), outs.iter_mut()) {
-        *out = x * alpha + *out * beta;
-    }
-}
-
-enum MatrixLayout {
-    RowMajor,
-    ColumnMajor,
-}
-
-fn layout<S: Data<Elem = f32>>(matrix: &ArrayBase<S, Ix2>) -> MatrixLayout {
-    match matrix.strides()[0] {
-        1 => MatrixLayout::ColumnMajor,
-        _ => MatrixLayout::RowMajor,
-    }
-}
-
 pub fn mat_mul<S1, S2, S3>(
     alpha: f32,
     lhs: &ArrayBase<S1, Ix2>,
@@ -201,29 +148,13 @@ pub fn mat_mul<S1, S2, S3>(
             );
         }
         (1, _) => {
-            // general_mat_vec_mul(
-            //     alpha,
-            //     &rhs,
-            //     &lhs.subview(Axis(0), 0),
-            //     beta,
-            //     &mut out.subview_mut(Axis(0), 0),
-            // );
-            match layout(rhs) {
-                MatrixLayout::RowMajor => vec_mat_mul(
-                    alpha,
-                    &lhs.subview(Axis(0), 0),
-                    rhs,
-                    beta,
-                    &mut out.subview_mut(Axis(0), 0),
-                ),
-                MatrixLayout::ColumnMajor => general_mat_vec_mul(
-                    alpha,
-                    &rhs.t(),
-                    &lhs.subview(Axis(0), 0),
-                    beta,
-                    &mut out.subview_mut(Axis(0), 0),
-                ),
-            }
+            general_mat_vec_mul(
+                alpha,
+                &rhs.t(),
+                &lhs.subview(Axis(0), 0),
+                beta,
+                &mut out.subview_mut(Axis(0), 0),
+            );
         }
         _ => {
             general_mat_mul(alpha, lhs, rhs, beta, out);
