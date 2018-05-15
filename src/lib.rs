@@ -151,9 +151,6 @@ extern crate rand;
 extern crate rayon;
 extern crate smallvec;
 
-use rayon::prelude::*;
-use smallvec::SmallVec;
-
 #[macro_use]
 extern crate itertools;
 
@@ -180,6 +177,7 @@ use optim::Optimizer;
 
 pub use nodes::{Bor, HogwildParameter, IndexInputNode, InputNode, Node, ParameterNode};
 pub use numerics::simd_dot;
+use numerics::{ArraySlice, ArraySliceMut};
 
 fn clamp(x: f32, min: f32, max: f32) -> f32 {
     if x > max {
@@ -777,9 +775,9 @@ impl Adagrad {
 
         if sink.has_dense {
             for (value, &gradient, squared_gradient) in izip!(
-                param_value.as_slice_mut().unwrap(),
-                sink.dense_gradient().as_slice().unwrap(),
-                squared_gradient.as_slice_mut().unwrap()
+                param_value.fast_slice_mut(),
+                sink.dense_gradient().fast_slice(),
+                squared_gradient.fast_slice_mut()
             ) {
                 let gradient = gradient + *value * self.l2;
                 *squared_gradient += numerics::pow2(gradient);
@@ -797,9 +795,9 @@ impl Adagrad {
                     let mut squared_row = squared_gradient.subview_mut(Axis(0), param_idx);
 
                     for (value, &gradient, squared_gradient) in izip!(
-                        param_row.as_slice_mut().unwrap(),
+                        param_row.fast_slice_mut(),
                         grad_row.into_slice().unwrap(),
-                        squared_row.as_slice_mut().unwrap()
+                        squared_row.fast_slice_mut()
                     ) {
                         let gradient = gradient + *value * self.l2;
                         *squared_gradient += numerics::pow2(gradient);

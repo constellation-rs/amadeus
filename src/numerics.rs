@@ -7,6 +7,46 @@ use fast_approx::{fastexp, fastlog, tanhf_fast};
 
 use super::Arr;
 
+pub trait ArraySlice {
+    fn fast_slice(&self) -> &[f32];
+}
+
+pub trait ArraySliceMut {
+    fn fast_slice_mut(&mut self) -> &mut [f32];
+}
+
+macro_rules! fast_slice {
+    ($x:ty) => {
+        impl<T> ArraySlice for $x
+        where
+            T: Data<Elem = f32>,
+        {
+            fn fast_slice(&self) -> &[f32] {
+                if cfg!(debug_assertions) {
+                    self.as_slice().unwrap()
+                } else {
+                    self.as_slice_memory_order().unwrap()
+                }
+            }
+        }
+        impl<T> ArraySliceMut for $x
+        where
+            T: DataMut<Elem = f32>,
+        {
+            fn fast_slice_mut(&mut self) -> &mut [f32] {
+                if cfg!(debug_assertions) {
+                    self.as_slice_mut().unwrap()
+                } else {
+                    self.as_slice_memory_order_mut().unwrap()
+                }
+            }
+        }
+    };
+}
+
+fast_slice!(ArrayBase<T, Ix1>);
+fast_slice!(ArrayBase<T, Ix2>);
+
 pub trait ArraySliceOps<RHS> {
     fn slice_assign(&mut self, RHS);
     fn slice_add_assign(&mut self, RHS);
@@ -21,22 +61,22 @@ macro_rules! slice_op {
             T: Data<Elem = f32>,
         {
             fn slice_assign(&mut self, other: &$rhs) {
-                let lhs_slice = self.as_slice_mut().unwrap();
-                let rhs_slice = other.as_slice().unwrap();
+                let lhs_slice = self.fast_slice_mut();
+                let rhs_slice = other.fast_slice();
 
                 lhs_slice.copy_from_slice(rhs_slice);
             }
             fn slice_add_assign(&mut self, other: &$rhs) {
-                let lhs_slice = self.as_slice_mut().unwrap();
-                let rhs_slice = other.as_slice().unwrap();
+                let lhs_slice = self.fast_slice_mut();
+                let rhs_slice = other.fast_slice();
 
                 for (lhs, &rhs) in lhs_slice.iter_mut().zip(rhs_slice.iter()) {
                     *lhs += rhs;
                 }
             }
             fn slice_sub_assign(&mut self, other: &$rhs) {
-                let lhs_slice = self.as_slice_mut().unwrap();
-                let rhs_slice = other.as_slice().unwrap();
+                let lhs_slice = self.fast_slice_mut();
+                let rhs_slice = other.fast_slice();
 
                 for (lhs, &rhs) in lhs_slice.iter_mut().zip(rhs_slice.iter()) {
                     *lhs -= rhs;
@@ -52,17 +92,17 @@ slice_op!(ArrayViewMut<'b, f32, Ix1>, ArrayBase<T, Ix1>);
 
 impl ArraySliceOps<f32> for Arr {
     fn slice_assign(&mut self, rhs: f32) {
-        for lhs in self.as_slice_mut().unwrap().iter_mut() {
+        for lhs in self.fast_slice_mut().iter_mut() {
             *lhs = rhs;
         }
     }
     fn slice_add_assign(&mut self, rhs: f32) {
-        for lhs in self.as_slice_mut().unwrap().iter_mut() {
+        for lhs in self.fast_slice_mut().iter_mut() {
             *lhs += rhs;
         }
     }
     fn slice_sub_assign(&mut self, rhs: f32) {
-        for lhs in self.as_slice_mut().unwrap().iter_mut() {
+        for lhs in self.fast_slice_mut().iter_mut() {
             *lhs -= rhs;
         }
     }
@@ -266,9 +306,9 @@ macro_rules! slice_binary_op {
     ( $name:ident, $slice_name:ident,
       $increment_name:ident,$slice_increment_name:ident, $op:tt ) => {
         pub fn $name(xs: &Arr, ys: &Arr, out: &mut Arr) {
-            $slice_name(xs.as_slice().unwrap(),
-                       ys.as_slice().unwrap(),
-                       out.as_slice_mut().unwrap());
+            $slice_name(xs.fast_slice(),
+                       ys.fast_slice(),
+                       out.fast_slice_mut());
         }
 
         fn $slice_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
@@ -281,9 +321,9 @@ macro_rules! slice_binary_op {
 
         #[allow(dead_code)]
         pub fn $increment_name(xs: &Arr, ys: &Arr, out: &mut Arr) {
-            $slice_increment_name(xs.as_slice().unwrap(),
-                                 ys.as_slice().unwrap(),
-                                 out.as_slice_mut().unwrap());
+            $slice_increment_name(xs.fast_slice(),
+                                 ys.fast_slice(),
+                                 out.fast_slice_mut());
         }
 
         #[allow(dead_code)]
@@ -312,8 +352,8 @@ pub fn map_assign<F>(xs: &mut Arr, ys: &Arr, func: F)
 where
     F: Fn(f32) -> f32,
 {
-    let xs = xs.as_slice_mut().expect("Unable to convert LHS to slice.");
-    let ys = ys.as_slice().expect("Unable to convert RHS to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
 
     for (x, &y) in xs.iter_mut().zip(ys.iter()) {
         *x = func(y);
@@ -333,10 +373,9 @@ pub fn map_assign_binary<F>(xs: &mut Arr, ys: &Arr, zs: &Arr, func: F)
 where
     F: Fn(f32, f32) -> f32,
 {
-    let xs = xs.as_slice_mut()
-        .expect("Unable to convert operand to slice.");
-    let ys = ys.as_slice().expect("Unable to convert operand to slice.");
-    let zs = zs.as_slice().expect("Unable to convert operand to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
+    let zs = zs.fast_slice();
 
     for (x, &y, &z) in izip!(xs.iter_mut(), ys.iter(), zs.iter()) {
         *x = func(y, z);
@@ -348,9 +387,8 @@ pub fn map_inplace_assign<F>(xs: &mut Arr, ys: &Arr, func: F)
 where
     F: Fn(&mut f32, f32),
 {
-    let xs = xs.as_slice_mut()
-        .expect("Unable to convert operand to slice.");
-    let ys = ys.as_slice().expect("Unable to convert operand to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
 
     for (x, &y) in izip!(xs.iter_mut(), ys.iter()) {
         func(x, y);
@@ -362,10 +400,9 @@ pub fn map_inplace_assign_binary<F>(xs: &mut Arr, ys: &Arr, zs: &Arr, func: F)
 where
     F: Fn(&mut f32, f32, f32),
 {
-    let xs = xs.as_slice_mut()
-        .expect("Unable to convert operand to slice.");
-    let ys = ys.as_slice().expect("Unable to convert operand to slice.");
-    let zs = zs.as_slice().expect("Unable to convert operand to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
+    let zs = zs.fast_slice();
 
     for (x, &y, &z) in izip!(xs.iter_mut(), ys.iter(), zs.iter()) {
         func(x, y, z);

@@ -38,6 +38,7 @@ impl PassCounter {
         self.forward_count.set(0);
         self.backward_count.set(0);
     }
+    #[inline(always)]
     pub fn is_zero(&self) -> bool {
         debug_assert!(self.recurse_backward(), "Not fully backpropagated.");
 
@@ -51,6 +52,7 @@ impl PassCounter {
 
         backward_count == forward_count
     }
+    #[inline(always)]
     pub fn forward(&self) -> ForwardAction {
         let count = self.forward_count.get();
         self.forward_count.set(count + 1);
@@ -60,6 +62,7 @@ impl PassCounter {
             _ => ForwardAction::Cached,
         }
     }
+    #[inline(always)]
     pub fn backward(&self) -> BackwardAction {
         let backward_count = self.backward_count.get();
 
@@ -510,10 +513,6 @@ impl SparseGradientStore {
 
     pub fn clear(&mut self) {
         self.len = 0;
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
     }
 }
 
