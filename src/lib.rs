@@ -289,8 +289,10 @@ where
     /// Run the backward pass through the subgraph terminating at this node.
     /// The weight parameter scales the gradients.
     pub fn backward(&mut self, weight: f32) {
+        let val = self.node.value();
+
         self.grad
-            .get_or_insert(RefCell::new(self.node.value().map(|_| weight)))
+            .get_or_insert_with(|| RefCell::new(val.map(|_| weight)))
             .borrow_mut()
             .as_slice_mut()
             .unwrap()
@@ -624,7 +626,7 @@ impl SGD {
                 param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
             }
 
-            for (ref index_vec, ref grad) in sink.sparse_gradient.iter() {
+            for (ref index_vec, ref grad) in sink.sparse_gradient.as_slice() {
                 for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
                     let grad_row = grad.subview(Axis(0), grad_idx);
                     let mut param_row = param_value.subview_mut(Axis(0), param_idx);
@@ -786,6 +788,7 @@ impl Adagrad {
         }
 
         sink.sparse_gradient
+            .as_slice()
             .iter()
             .for_each(|(ref index_vec, ref grad)| {
                 for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
@@ -879,7 +882,7 @@ where
 
         let sparse_gradient = input.sparse_gradient();
 
-        for (indices, grad) in sparse_gradient.iter() {
+        for (indices, grad) in sparse_gradient.as_slice() {
             for &row_idx in indices.iter() {
                 for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
                     *dest += orig;

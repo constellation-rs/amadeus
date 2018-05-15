@@ -1,7 +1,7 @@
 use std;
 
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
-use ndarray::{ArrayBase, Axis, Data, DataMut, Ix2};
+use ndarray::{ArrayBase, ArrayViewMut, Axis, Data, DataMut, Ix1, Ix2};
 
 use fast_approx::{fastexp, fastlog, tanhf_fast};
 
@@ -10,29 +10,45 @@ use super::Arr;
 pub trait ArraySliceOps<RHS> {
     fn slice_assign(&mut self, RHS);
     fn slice_add_assign(&mut self, RHS);
+    fn slice_sub_assign(&mut self, RHS);
 }
 
-impl<'a, T> ArraySliceOps<&'a ArrayBase<T, Ix2>> for Arr
-where
-    T: Data<Elem = f32>,
-{
-    fn slice_assign(&mut self, other: &ArrayBase<T, Ix2>) {
-        for (lhs, &rhs) in izip!(
-            self.as_slice_mut().unwrap().iter_mut(),
-            other.as_slice().unwrap().iter()
-        ) {
-            *lhs = rhs;
+macro_rules! slice_op {
+    ($lhs:ty, $($rhs:ty),*) => {
+        $(
+        impl<'a, 'b, T> ArraySliceOps<&'a $rhs> for $lhs
+        where
+            T: Data<Elem = f32>,
+        {
+            fn slice_assign(&mut self, other: &$rhs) {
+                let lhs_slice = self.as_slice_mut().unwrap();
+                let rhs_slice = other.as_slice().unwrap();
+
+                lhs_slice.copy_from_slice(rhs_slice);
+            }
+            fn slice_add_assign(&mut self, other: &$rhs) {
+                let lhs_slice = self.as_slice_mut().unwrap();
+                let rhs_slice = other.as_slice().unwrap();
+
+                for (lhs, &rhs) in lhs_slice.iter_mut().zip(rhs_slice.iter()) {
+                    *lhs += rhs;
+                }
+            }
+            fn slice_sub_assign(&mut self, other: &$rhs) {
+                let lhs_slice = self.as_slice_mut().unwrap();
+                let rhs_slice = other.as_slice().unwrap();
+
+                for (lhs, &rhs) in lhs_slice.iter_mut().zip(rhs_slice.iter()) {
+                    *lhs -= rhs;
+                }
+            }
         }
-    }
-    fn slice_add_assign(&mut self, other: &ArrayBase<T, Ix2>) {
-        for (lhs, &rhs) in izip!(
-            self.as_slice_mut().unwrap().iter_mut(),
-            other.as_slice().unwrap().iter()
-        ) {
-            *lhs += rhs;
-        }
+        )*
     }
 }
+
+slice_op!(Arr, ArrayBase<T, Ix2>);
+slice_op!(ArrayViewMut<'b, f32, Ix1>, ArrayBase<T, Ix1>);
 
 impl ArraySliceOps<f32> for Arr {
     fn slice_assign(&mut self, rhs: f32) {
@@ -43,6 +59,11 @@ impl ArraySliceOps<f32> for Arr {
     fn slice_add_assign(&mut self, rhs: f32) {
         for lhs in self.as_slice_mut().unwrap().iter_mut() {
             *lhs += rhs;
+        }
+    }
+    fn slice_sub_assign(&mut self, rhs: f32) {
+        for lhs in self.as_slice_mut().unwrap().iter_mut() {
+            *lhs -= rhs;
         }
     }
 }

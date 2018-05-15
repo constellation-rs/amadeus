@@ -110,7 +110,7 @@ impl Adam {
             }
         }
 
-        for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
+        for &(ref index_vec, ref grad) in sink.sparse_gradient.as_slice() {
             for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
                 let mut value_row = param.value.subview_mut(Axis(0), param_idx);
                 let grad_row = grad.subview(Axis(0), grad_idx);

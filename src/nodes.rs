@@ -216,7 +216,7 @@ where
             BackwardAction::Increment => {
                 let mut operand_gradient = self.gradient.borrow_mut();
 
-                operand_gradient.scaled_add(1.0, gradient);
+                operand_gradient.slice_add_assign(gradient.deref());
             }
         }
 
@@ -500,12 +500,12 @@ impl SparseGradientStore {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(Vec<usize>, Arr)> {
-        self.data.iter().take(self.len)
+    pub fn as_slice(&self) -> &[(Vec<usize>, Arr)] {
+        &self.data[..self.len]
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (Vec<usize>, Arr)> {
-        self.data.iter_mut().take(self.len)
+    pub fn as_slice_mut(&mut self) -> &mut [(Vec<usize>, Arr)] {
+        &mut self.data[..self.len]
     }
 
     pub fn clear(&mut self) {
@@ -535,8 +535,9 @@ impl GradientAccumulator {
         }
     }
     pub fn dense_gradient(&mut self) -> &mut Arr {
-        self.dense_gradient
-            .get_or_insert(Arr::zeros(self.dense_shape))
+        let shape = self.dense_shape;
+
+        self.dense_gradient.get_or_insert_with(|| Arr::zeros(shape))
     }
     fn zero_gradient(&mut self) {
         if self.has_dense {
@@ -554,6 +555,7 @@ impl GradientAccumulator {
             .iter_mut()
             .for_each(|x| *x = clamp(*x, min, max));
         self.sparse_gradient
+            .as_slice_mut()
             .iter_mut()
             .for_each(|(_, ref mut grad)| {
                 grad.as_slice_mut()
@@ -781,10 +783,10 @@ where
             }
             BackwardAction::Increment => {
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
-                rhs_gradient.scaled_add(-1.0, gradient);
+                rhs_gradient.slice_sub_assign(gradient.deref());
 
                 let mut lhs_gradient = self.lhs_gradient.borrow_mut();
-                lhs_gradient.scaled_add(1.0, gradient);
+                lhs_gradient.slice_add_assign(gradient.deref());
             }
         }
 
@@ -2434,7 +2436,7 @@ impl Node for IndexNode<ParameterNode> {
         for (&idx, mut row) in idx_value.iter().zip(arr_value.genrows_mut()) {
             let new_val = operand_value.subview(Axis(0), idx);
 
-            numerics::slice_assign(row.into_slice().unwrap(), new_val.as_slice().unwrap())
+            row.slice_assign(&new_val);
         }
     }
 
