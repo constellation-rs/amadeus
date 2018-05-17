@@ -11,7 +11,7 @@ use ndarray::Axis;
 use smallvec::SmallVec;
 
 use numerics;
-use numerics::ArraySliceOps;
+use numerics::{ArraySlice, ArraySliceMut, ArraySliceOps};
 
 use super::{clamp, Arr, Variable};
 
@@ -204,21 +204,22 @@ where
 
         let mut self_value = self.value.borrow_mut();
 
-        numerics::add(lhs_value.deref(), rhs_value.deref(), self_value.deref_mut());
+        for (v, &lhs, &rhs) in izip!(
+            self_value.fast_slice_mut(),
+            lhs_value.fast_slice(),
+            rhs_value.fast_slice()
+        ) {
+            *v = lhs + rhs;
+        }
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
             BackwardAction::Set => {
                 let mut operand_gradient = self.gradient.borrow_mut();
-
-                numerics::slice_assign(
-                    operand_gradient.as_slice_mut().unwrap(),
-                    gradient.as_slice().unwrap(),
-                );
+                operand_gradient.slice_assign(gradient.deref());
             }
             BackwardAction::Increment => {
                 let mut operand_gradient = self.gradient.borrow_mut();
-
                 operand_gradient.slice_add_assign(gradient.deref());
             }
         }
@@ -245,7 +246,8 @@ where
 }
 
 fn row_wise_stack(dest: &mut Arr, lhs: &Arr, rhs: &Arr) {
-    for (mut dest_row, source_row) in dest.genrows_mut()
+    for (mut dest_row, source_row) in dest
+        .genrows_mut()
         .into_iter()
         .zip(lhs.genrows().into_iter().chain(rhs.genrows()))
     {
@@ -278,9 +280,9 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
         lhs.genrows_mut().into_iter(),
         rhs.genrows_mut().into_iter()
     ) {
-        let grad_row = grad_row.as_slice().unwrap();
-        let lhs_row = lhs_row.as_slice_mut().unwrap();
-        let rhs_row = rhs_row.as_slice_mut().unwrap();
+        let grad_row = grad_row.fast_slice();
+        let lhs_row = lhs_row.fast_slice_mut();
+        let rhs_row = rhs_row.fast_slice_mut();
 
         let (left, right) = grad_row.split_at(lhs_row.len());
 
@@ -294,12 +296,8 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
                 }
             }
             BackwardAction::Set => {
-                for (x, &y) in lhs_row.iter_mut().zip(left.iter()) {
-                    *x = y;
-                }
-                for (x, &y) in rhs_row.iter_mut().zip(right.iter()) {
-                    *x = y;
-                }
+                lhs_row.copy_from_slice(left);
+                rhs_row.copy_from_slice(right);
             }
         }
     }
@@ -1776,7 +1774,6 @@ where
         }
 
         if self.counter.recurse_backward() {
-            // println!("bacwarding with {:#?}", self.operand_gradient.borrow());
             self.operand.backward(&self.operand_gradient.borrow())
         }
     }
@@ -2096,7 +2093,8 @@ where
         let mut dest = self.value.borrow_mut();
         dest.assign(self.operand.value().deref());
 
-        let max = self.operand
+        let max = self
+            .operand
             .value()
             .deref()
             .iter()
@@ -2116,7 +2114,8 @@ where
             .zip(value.iter())
             .enumerate()
         {
-            for (col_idx, (grad, col_val)) in row.as_slice_mut()
+            for (col_idx, (grad, col_val)) in row
+                .as_slice_mut()
                 .unwrap()
                 .iter_mut()
                 .zip(value.as_slice().unwrap())

@@ -134,6 +134,7 @@ impl Optimizer for Adam {
     /// Perform a single SGD step.
     fn step(&self) {
         if let Some(ref barrier) = self.sync_barrier {
+            barrier.start_wait();
             {
                 let _ = barrier.lock();
 
@@ -142,7 +143,7 @@ impl Optimizer for Adam {
                 }
             }
 
-            barrier.wait();
+            barrier.end_wait();
         } else {
             for parameter in &self.parameters {
                 self.do_step(parameter);

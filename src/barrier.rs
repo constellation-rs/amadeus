@@ -47,13 +47,11 @@ impl Barrier {
     pub fn increment_num_threads(&self) {
         let mut lock = self.lock.lock().unwrap();
         lock.num_threads += 1;
-        // println!("INC Now thread count {}", lock.num_threads);
     }
 
     pub fn decrement_num_threads(&self) {
         let mut lock = self.lock.lock().unwrap();
         lock.num_threads = lock.num_threads.saturating_sub(1);
-        // println!("DEC Now thread count {}", lock.num_threads);
 
         // Notify if deregistering makes the barrier conditions met.
         if lock.count >= lock.num_threads {

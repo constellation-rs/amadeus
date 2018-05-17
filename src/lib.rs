@@ -660,29 +660,36 @@ impl SynchronizationBarrier {
 }
 
 struct SynchronizationBarrierCore {
-    barrier: barrier::Barrier,
+    start_barrier: barrier::Barrier,
+    end_barrier: barrier::Barrier,
     parameter_lock: Mutex<()>,
 }
 
 impl SynchronizationBarrierCore {
     fn new() -> Self {
         Self {
-            barrier: barrier::Barrier::new(0),
+            start_barrier: barrier::Barrier::new(0),
+            end_barrier: barrier::Barrier::new(0),
             parameter_lock: Mutex::default(),
         }
     }
 
     fn register_thread(&self) {
-        self.barrier.increment_num_threads();
+        self.start_barrier.increment_num_threads();
+        self.end_barrier.increment_num_threads();
     }
 
     fn deregister_thread(&self) {
-        self.barrier.decrement_num_threads();
-        // println!("Deregistered");
+        self.start_barrier.decrement_num_threads();
+        self.end_barrier.decrement_num_threads();
     }
 
-    fn wait(&self) {
-        self.barrier.wait();
+    fn start_wait(&self) {
+        self.start_barrier.wait();
+    }
+
+    fn end_wait(&self) {
+        self.end_barrier.wait();
     }
 }
 
@@ -691,8 +698,12 @@ pub struct SynchronizationBarrierGuard {
 }
 
 impl SynchronizationBarrierGuard {
-    fn wait(&self) {
-        self.barrier.wait();
+    fn start_wait(&self) {
+        self.barrier.start_wait();
+    }
+
+    fn end_wait(&self) {
+        self.barrier.end_wait();
     }
 
     fn lock(&self) -> MutexGuard<()> {
@@ -702,7 +713,6 @@ impl SynchronizationBarrierGuard {
 
 impl Drop for SynchronizationBarrierGuard {
     fn drop(&mut self) {
-        // println!("Deregistering");
         self.barrier.deregister_thread();
     }
 }
@@ -812,6 +822,7 @@ impl optim::Optimizer for Adagrad {
     /// Perform a single SGD step.
     fn step(&self) {
         if let Some(ref barrier) = self.sync_barrier {
+            barrier.start_wait();
             {
                 let _ = barrier.lock();
 
@@ -820,7 +831,7 @@ impl optim::Optimizer for Adagrad {
                 }
             }
 
-            barrier.wait();
+            barrier.end_wait();
         } else {
             for parameter in &self.parameters {
                 self.do_step(parameter);

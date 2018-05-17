@@ -461,8 +461,6 @@ mod tests {
 
                 loss_val += loss.value().scalar_sum();
 
-                // println!("Hiddent {:#?}", hidden.value());
-
                 optimizer.step();
                 loss.zero_gradient();
 
