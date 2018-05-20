@@ -21,7 +21,7 @@
 //! let hidden_dim = 5;
 //!
 //! // Initialize the parameters.
-//! let parameters = lstm::Parameters::new(input_dim, hidden_dim);
+//! let parameters = lstm::Parameters::new(input_dim, hidden_dim, &mut rand::thread_rng());
 //! let lstm = parameters.build();
 //!
 //! // Construct the input nodes.
@@ -42,15 +42,16 @@
 //! lstm.reset_state();
 //! # }
 //! ```
-use std::sync::Arc;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ndarray;
+use rand;
 
 use nodes;
 use nodes::{HogwildParameter, Node, ParameterNode};
 
-use nn::xavier_normal;
+use nn::uniform;
 
 use {Arr, DataInput, Variable};
 
@@ -58,7 +59,7 @@ use {Arr, DataInput, Variable};
 ///
 /// Construct this first, then use the `build` method to instantiate
 /// LSTM cell nodes.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Parameters {
     input_dim: usize,
     hidden_dim: usize,
@@ -103,34 +104,55 @@ impl Clone for Parameters {
 
 impl Parameters {
     /// Create a new LSTM parameters object.
-    pub fn new(input_dim: usize, hidden_dim: usize) -> Self {
+    pub fn new<R: rand::Rng>(input_dim: usize, hidden_dim: usize, rng: &mut R) -> Self {
+        let max = 1.0 / (hidden_dim as f32).sqrt();
+        let min = -max;
+
         Self {
             input_dim: input_dim,
             hidden_dim: hidden_dim,
 
-            forget_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            forget_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
+                rng,
             ))),
-            forget_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            forget_biases: Arc::new(HogwildParameter::new(uniform(1, hidden_dim, min, max, rng))),
 
-            update_gate_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            update_gate_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
+                rng,
             ))),
-            update_gate_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            update_gate_biases: Arc::new(HogwildParameter::new(uniform(
+                1, hidden_dim, min, max, rng,
+            ))),
 
-            update_value_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            update_value_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
+                rng,
             ))),
-            update_value_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            update_value_biases: Arc::new(HogwildParameter::new(uniform(
+                1, hidden_dim, min, max, rng,
+            ))),
 
-            output_gate_weights: Arc::new(HogwildParameter::new(xavier_normal(
+            output_gate_weights: Arc::new(HogwildParameter::new(uniform(
                 input_dim + hidden_dim,
                 hidden_dim,
+                min,
+                max,
+                rng,
             ))),
-            output_gate_biases: Arc::new(HogwildParameter::new(Arr::zeros((1, hidden_dim)))),
+            output_gate_biases: Arc::new(HogwildParameter::new(uniform(
+                1, hidden_dim, min, max, rng,
+            ))),
         }
     }
 
@@ -280,13 +302,26 @@ impl Layer {
 mod tests {
 
     use std::ops::Deref;
-    use test::Bencher;
 
     use super::*;
-    use DataInput;
-    use SGD;
-    use nodes::InputNode;
+    use finite_difference;
     use nn::losses::sparse_categorical_crossentropy;
+    use nn::xavier_normal;
+    use nodes::InputNode;
+    use optim::{Adam, Optimizer};
+    use DataInput;
+
+    const TOLERANCE: f32 = 0.2;
+
+    fn assert_close(x: &Arr, y: &Arr, tol: f32) {
+        assert!(
+            x.all_close(y, tol),
+            "{:#?} not within {} of {:#?}",
+            x,
+            tol,
+            y
+        );
+    }
 
     fn pi_digits(num: usize) -> Vec<usize> {
         let pi_str = include_str!("pi.txt");
@@ -299,12 +334,38 @@ mod tests {
     }
 
     #[test]
+    fn lstm_finite_difference() {
+        let num_steps = 10;
+        let dim = 10;
+
+        let mut xs: Vec<_> = (0..num_steps)
+            .map(|_| ParameterNode::new(xavier_normal(1, dim)))
+            .collect();
+
+        let lstm_params = Parameters::new(dim, dim, &mut rand::thread_rng());
+        let lstm = lstm_params.build();
+
+        let mut hidden_states = lstm.forward(&xs);
+        let mut hidden = hidden_states.last_mut().unwrap();
+
+        for x in &mut xs {
+            let (difference, gradient) = finite_difference(x, &mut hidden);
+            assert_close(&difference, &gradient, TOLERANCE);
+        }
+
+        for x in hidden.parameters().iter_mut() {
+            let (difference, gradient) = finite_difference(x, &mut hidden);
+            assert_close(&difference, &gradient, TOLERANCE);
+        }
+    }
+
+    #[test]
     fn test_basic_lstm() {
         let input_dim = 10;
         let hidden_dim = 5;
 
         // Initialize the parameters.
-        let lstm_params = Parameters::new(input_dim, hidden_dim);
+        let lstm_params = Parameters::new(input_dim, hidden_dim, &mut rand::thread_rng());
         let lstm = lstm_params.build_cell();
 
         // Initialize the cell state and hidden state.
@@ -349,7 +410,7 @@ mod tests {
         let input_dim = 16;
         let hidden_dim = 32;
 
-        let lstm_params = Parameters::new(input_dim, hidden_dim);
+        let lstm_params = Parameters::new(input_dim, hidden_dim, &mut rand::thread_rng());
         let lstm = lstm_params.build();
 
         let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));
@@ -369,7 +430,7 @@ mod tests {
 
         let prediction = hidden.dot(&final_layer);
         let mut loss = sparse_categorical_crossentropy(&prediction, &y);
-        let mut optimizer = SGD::new(0.05, loss.parameters());
+        let optimizer = Adam::new(loss.parameters()).learning_rate(0.01);
 
         let digits = pi_digits(100);
 
@@ -418,59 +479,5 @@ mod tests {
         }
 
         assert!((correct as f32 / total as f32) > 0.75);
-    }
-
-    #[bench]
-    fn bench_lstm(b: &mut Bencher) {
-        let sequence_length = 4;
-        let num_digits = 10;
-        let input_dim = 16;
-        let hidden_dim = 32;
-
-        let lstm_params = Parameters::new(input_dim, hidden_dim);
-        let lstm = lstm_params.build();
-
-        let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));
-        let embeddings = ParameterNode::new(xavier_normal(num_digits, input_dim));
-        let y = nodes::IndexInputNode::new(&vec![0]);
-
-        let inputs: Vec<_> = (0..sequence_length)
-            .map(|_| nodes::IndexInputNode::new(&vec![0]))
-            .collect();
-        let embeddings: Vec<_> = inputs
-            .iter()
-            .map(|input| embeddings.index(&input))
-            .collect();
-
-        let hidden_states = lstm.forward(&embeddings);
-        let hidden = hidden_states.last().unwrap();
-
-        let prediction = hidden.dot(&final_layer);
-        let mut loss = sparse_categorical_crossentropy(&prediction, &y);
-        let mut optimizer = SGD::new(0.05, loss.parameters());
-
-        let digits = pi_digits(100);
-
-        b.iter(|| {
-            for i in 0..(digits.len() - sequence_length - 1) {
-                let digit_chunk = &digits[i..(i + sequence_length + 1)];
-                if digit_chunk.len() < sequence_length + 1 {
-                    break;
-                }
-
-                for (&digit, input) in digit_chunk[..digit_chunk.len() - 1].iter().zip(&inputs) {
-                    input.set_value(digit);
-                }
-
-                let target_digit = *digit_chunk.last().unwrap();
-                y.set_value(target_digit);
-
-                loss.forward();
-                loss.backward(1.0);
-
-                optimizer.step();
-                loss.zero_gradient();
-            }
-        });
     }
 }

@@ -1,9 +1,9 @@
 use std;
-use std::fmt;
-use std::ops::{AddAssign, Deref, DerefMut};
 use std::cell::{Cell, Ref, RefCell};
-use std::sync::Arc;
+use std::fmt;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use ndarray;
 use ndarray::Axis;
@@ -11,8 +11,9 @@ use ndarray::Axis;
 use smallvec::SmallVec;
 
 use numerics;
+use numerics::{ArraySlice, ArraySliceMut, ArraySliceOps};
 
-use super::{Arr, Variable};
+use super::{clamp, Arr, Variable};
 
 #[derive(Debug, PartialEq)]
 pub enum ForwardAction {
@@ -37,15 +38,21 @@ impl PassCounter {
         self.forward_count.set(0);
         self.backward_count.set(0);
     }
+    #[inline(always)]
     pub fn is_zero(&self) -> bool {
+        debug_assert!(self.recurse_backward(), "Not fully backpropagated.");
+
         self.forward_count.get() == 0
     }
     pub fn recurse_backward(&self) -> bool {
         let backward_count = self.backward_count.get();
         let forward_count = self.forward_count.get();
 
+        assert!(backward_count <= forward_count);
+
         backward_count == forward_count
     }
+    #[inline(always)]
     pub fn forward(&self) -> ForwardAction {
         let count = self.forward_count.get();
         self.forward_count.set(count + 1);
@@ -55,6 +62,7 @@ impl PassCounter {
             _ => ForwardAction::Cached,
         }
     }
+    #[inline(always)]
     pub fn backward(&self) -> BackwardAction {
         let backward_count = self.backward_count.get();
 
@@ -137,6 +145,7 @@ impl Node for Rc<Node<Value = Arr, InputGradient = Arr>> {
 #[derive(Debug)]
 pub struct AddNode<LHS, RHS> {
     value: RefCell<Arr>,
+    gradient: RefCell<Arr>,
     lhs: Rc<LHS>,
     rhs: Rc<RHS>,
     needs_gradient: bool,
@@ -151,9 +160,11 @@ where
     pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
         let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
         let value = lhs.value().deref() + rhs.value().deref();
+        let gradient = rhs.value().deref() * 0.0;
 
         AddNode {
             value: RefCell::new(value),
+            gradient: RefCell::new(gradient),
             lhs: lhs,
             rhs: rhs,
             needs_gradient: needs_gradient,
@@ -193,11 +204,31 @@ where
 
         let mut self_value = self.value.borrow_mut();
 
-        numerics::add(lhs_value.deref(), rhs_value.deref(), self_value.deref_mut());
+        for (v, &lhs, &rhs) in izip!(
+            self_value.fast_slice_mut(),
+            lhs_value.fast_slice(),
+            rhs_value.fast_slice()
+        ) {
+            *v = lhs + rhs;
+        }
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        self.lhs.backward(gradient);
-        self.rhs.backward(gradient);
+        match self.counter.backward() {
+            BackwardAction::Set => {
+                let mut operand_gradient = self.gradient.borrow_mut();
+                operand_gradient.slice_assign(gradient.deref());
+            }
+            BackwardAction::Increment => {
+                let mut operand_gradient = self.gradient.borrow_mut();
+                operand_gradient.slice_add_assign(gradient.deref());
+            }
+        }
+
+        if self.counter.recurse_backward() {
+            let gradient = self.gradient.borrow();
+            self.lhs.backward(&gradient);
+            self.rhs.backward(&gradient);
+        }
     }
     fn value(&self) -> Bor<Self::Value> {
         Bor::RefGuard(self.value.borrow())
@@ -215,7 +246,8 @@ where
 }
 
 fn row_wise_stack(dest: &mut Arr, lhs: &Arr, rhs: &Arr) {
-    for (mut dest_row, source_row) in dest.genrows_mut()
+    for (mut dest_row, source_row) in dest
+        .genrows_mut()
         .into_iter()
         .zip(lhs.genrows().into_iter().chain(rhs.genrows()))
     {
@@ -248,9 +280,9 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
         lhs.genrows_mut().into_iter(),
         rhs.genrows_mut().into_iter()
     ) {
-        let grad_row = grad_row.as_slice().unwrap();
-        let lhs_row = lhs_row.as_slice_mut().unwrap();
-        let rhs_row = rhs_row.as_slice_mut().unwrap();
+        let grad_row = grad_row.fast_slice();
+        let lhs_row = lhs_row.fast_slice_mut();
+        let rhs_row = rhs_row.fast_slice_mut();
 
         let (left, right) = grad_row.split_at(lhs_row.len());
 
@@ -264,12 +296,8 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
                 }
             }
             BackwardAction::Set => {
-                for (x, &y) in lhs_row.iter_mut().zip(left.iter()) {
-                    *x = y;
-                }
-                for (x, &y) in rhs_row.iter_mut().zip(right.iter()) {
-                    *x = y;
-                }
+                lhs_row.copy_from_slice(left);
+                rhs_row.copy_from_slice(right);
             }
         }
     }
@@ -445,13 +473,53 @@ impl Node for InputNode {
     fn zero_gradient(&self) {}
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct SparseGradientStore {
+    len: usize,
+    data: Vec<(Vec<usize>, Arr)>,
+}
+
+impl SparseGradientStore {
+    pub fn new() -> Self {
+        SparseGradientStore {
+            len: 0,
+            data: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, gradient: (&[usize], &Arr)) {
+        let (index, value) = gradient;
+
+        if self.len < self.data.len() {
+            let (index_vec, grad) = &mut self.data[self.len];
+            index_vec.clear();
+            index_vec.extend_from_slice(&index[..]);
+            grad.slice_assign(value);
+            self.len += 1;
+        } else {
+            self.data.push((Vec::from(&index[..]), value.clone()));
+        }
+    }
+
+    pub fn as_slice(&self) -> &[(Vec<usize>, Arr)] {
+        &self.data[..self.len]
+    }
+
+    pub fn as_slice_mut(&mut self) -> &mut [(Vec<usize>, Arr)] {
+        &mut self.data[..self.len]
+    }
+
+    pub fn clear(&mut self) {
+        self.len = 0;
+    }
+}
+
 #[derive(Debug)]
-pub struct GradientAccumulator {
+pub(crate) struct GradientAccumulator {
     pub dense_shape: (usize, usize),
     pub dense_gradient: Option<Arr>,
-    pub sparse_gradient: SmallVec<[(SmallVec<[usize; 4]>, Arr); 4]>,
+    pub sparse_gradient: SparseGradientStore,
     pub has_dense: bool,
-    pub has_sparse: bool,
 }
 
 impl GradientAccumulator {
@@ -459,29 +527,39 @@ impl GradientAccumulator {
         GradientAccumulator {
             dense_shape: dense_shape,
             dense_gradient: None,
-            sparse_gradient: SmallVec::new(),
+            sparse_gradient: SparseGradientStore::new(),
             has_dense: false,
-            has_sparse: false,
         }
     }
     pub fn dense_gradient(&mut self) -> &mut Arr {
-        self.dense_gradient
-            .get_or_insert(Arr::zeros(self.dense_shape))
+        let shape = self.dense_shape;
+
+        self.dense_gradient.get_or_insert_with(|| Arr::zeros(shape))
     }
     fn zero_gradient(&mut self) {
         if self.has_dense {
             self.dense_gradient().fill(0.0);
         }
 
-        if self.has_sparse {
-            for &mut (ref mut index_vec, ref mut grad) in self.sparse_gradient.iter_mut() {
-                index_vec.clear();
-                grad.fill(0.0)
-            }
-        }
-
+        self.sparse_gradient.clear();
         self.has_dense = false;
-        self.has_sparse = false;
+    }
+
+    pub fn clamp(&mut self, min: f32, max: f32) {
+        self.dense_gradient()
+            .as_slice_mut()
+            .unwrap()
+            .iter_mut()
+            .for_each(|x| *x = clamp(*x, min, max));
+        self.sparse_gradient
+            .as_slice_mut()
+            .iter_mut()
+            .for_each(|(_, ref mut grad)| {
+                grad.as_slice_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .for_each(|x| *x = clamp(*x, min, max))
+            });
     }
 }
 
@@ -491,28 +569,14 @@ pub trait GradientSink<T> {
 
 impl<'a, 'b> GradientSink<&'a Ref<'b, Arr>> for GradientAccumulator {
     fn accumulate_gradient(&mut self, gradient: &Ref<Arr>) {
-        self.dense_gradient().add_assign(gradient.deref());
+        self.dense_gradient().slice_add_assign(gradient.deref());
         self.has_dense = true;
     }
 }
 
 impl<'a> GradientSink<(&'a [usize], &'a Arr)> for GradientAccumulator {
     fn accumulate_gradient(&mut self, gradient: (&'a [usize], &'a Arr)) {
-        let (index, value) = gradient;
-        self.has_sparse = true;
-        let gradients = &mut self.sparse_gradient;
-
-        // Check if we can reuse one of the gradient accumulators
-        for &mut (ref mut index_vec, ref mut grad) in gradients.iter_mut() {
-            if index_vec.is_empty() {
-                index_vec.extend_from_slice(&index[..]);
-                grad.assign(value);
-                return;
-            }
-        }
-
-        // Otherwise create one
-        gradients.push((SmallVec::from(&index[..]), value.clone()));
+        self.sparse_gradient.push(gradient);
     }
 }
 
@@ -524,16 +588,21 @@ unsafe impl Sync for HogwildParameter {}
 pub struct HogwildParameter {
     pub value: RefCell<Arr>,
     pub squared_gradients: RefCell<Arr>,
+    pub moments: RefCell<Arr>,
+    num_updates: Cell<i32>,
 }
 
 impl HogwildParameter {
     /// Create a new parameter object.
     pub fn new(value: Arr) -> Self {
-        let squared_gradients = &value * 0.0 + 1.0;
+        let squared_gradients = &value * 0.0;
+        let moments = &value * 0.0;
 
         HogwildParameter {
             value: RefCell::new(value),
             squared_gradients: RefCell::new(squared_gradients),
+            moments: RefCell::new(moments),
+            num_updates: Cell::new(0),
         }
     }
 
@@ -551,6 +620,14 @@ impl HogwildParameter {
 
     pub(crate) unsafe fn squared_gradient_mut(&self) -> &mut Arr {
         &mut *(self.squared_gradients.as_ptr())
+    }
+
+    pub(crate) unsafe fn moments_mut(&self) -> &mut Arr {
+        &mut *(self.moments.as_ptr())
+    }
+
+    pub(crate) unsafe fn num_updates_mut(&self) -> &mut i32 {
+        &mut *(self.num_updates.as_ptr())
     }
 }
 
@@ -626,6 +703,7 @@ where
     RHS: Node<Value = Arr, InputGradient = Arr>,
 {
     value: RefCell<Arr>,
+    lhs_gradient: RefCell<Arr>,
     rhs_gradient: RefCell<Arr>,
     lhs: Rc<LHS>,
     rhs: Rc<RHS>,
@@ -640,13 +718,15 @@ where
 {
     pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
         let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
-        let value = lhs.value().deref() + rhs.value().deref();
+        let value = lhs.value().deref() - rhs.value().deref();
 
         let rhs_gradient = rhs.value().deref() * 0.0;
+        let lhs_gradient = lhs.value().deref() * 0.0;
 
         SubNode {
             value: RefCell::new(value),
             rhs_gradient: RefCell::new(rhs_gradient),
+            lhs_gradient: RefCell::new(lhs_gradient),
             lhs: lhs,
             rhs: rhs,
             needs_gradient: needs_gradient,
@@ -689,16 +769,26 @@ where
                     gradient.as_slice().unwrap(),
                     -1.0,
                 );
+
+                let mut lhs_gradient = self.lhs_gradient.borrow_mut();
+
+                numerics::simd_scaled_assign(
+                    lhs_gradient.as_slice_mut().unwrap(),
+                    gradient.as_slice().unwrap(),
+                    1.0,
+                );
             }
             BackwardAction::Increment => {
                 let mut rhs_gradient = self.rhs_gradient.borrow_mut();
+                rhs_gradient.slice_sub_assign(gradient.deref());
 
-                rhs_gradient.scaled_add(-1.0, gradient);
+                let mut lhs_gradient = self.lhs_gradient.borrow_mut();
+                lhs_gradient.slice_add_assign(gradient.deref());
             }
         }
 
         if self.counter.recurse_backward() {
-            self.lhs.backward(gradient);
+            self.lhs.backward(&self.lhs_gradient.borrow());
             self.rhs.backward(&self.rhs_gradient.borrow());
         }
     }
@@ -1473,16 +1563,16 @@ where
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
         match self.counter.backward() {
             BackwardAction::Set => for (dest, value, grad_val) in izip!(
-                self.operand_gradient.borrow_mut().iter_mut(),
-                self.value().iter(),
-                gradient.iter()
+                self.operand_gradient.borrow_mut().as_slice_mut().unwrap(),
+                self.value().as_slice().unwrap(),
+                gradient.as_slice().unwrap()
             ) {
                 *dest = grad_val * (1.0 - value.powi(2));
             },
             BackwardAction::Increment => for (dest, value, grad_val) in izip!(
-                self.operand_gradient.borrow_mut().iter_mut(),
-                self.value().iter(),
-                gradient.iter()
+                self.operand_gradient.borrow_mut().as_slice_mut().unwrap(),
+                self.value().as_slice().unwrap(),
+                gradient.as_slice().unwrap()
             ) {
                 *dest += grad_val * (1.0 - value.powi(2));
             },
@@ -1523,10 +1613,7 @@ where
     T: Node<Value = Arr>,
 {
     pub fn new(operand: Rc<T>) -> Self {
-        let value = operand
-            .value()
-            .deref()
-            .map(|x| 1.0 / (1.0 + numerics::exp(-x)));
+        let value = operand.value().deref().map(|&x| numerics::sigmoid(x));
         let gradient = &value * 0.0;
         let needs_gradient = operand.needs_gradient();
 
@@ -1553,11 +1640,13 @@ where
 
         self.operand.forward();
 
-        let mut dest = self.value.borrow_mut();
+        {
+            let mut dest = self.value.borrow_mut();
 
-        numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
-            numerics::sigmoid(x)
-        });
+            numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
+                numerics::sigmoid(x)
+            });
+        }
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -1580,6 +1669,106 @@ where
                     self.value.borrow().deref(),
                     gradient,
                     |dest, sigmoid, grad| *dest += grad * sigmoid * (1.0 - sigmoid),
+                );
+            }
+        }
+
+        if self.counter.recurse_backward() {
+            self.operand.backward(&self.operand_gradient.borrow())
+        }
+    }
+
+    fn value(&self) -> Bor<Self::Value> {
+        Bor::RefGuard(self.value.borrow())
+    }
+
+    fn needs_gradient(&self) -> bool {
+        self.needs_gradient
+    }
+
+    fn zero_gradient(&self) {
+        if !self.counter.is_zero() {
+            self.operand.zero_gradient();
+            self.counter.clear();
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ReluNode<T> {
+    value: RefCell<Arr>,
+    operand_gradient: RefCell<Arr>,
+    operand: Rc<T>,
+    needs_gradient: bool,
+    counter: PassCounter,
+}
+
+impl<T> ReluNode<T>
+where
+    T: Node<Value = Arr>,
+{
+    pub fn new(operand: Rc<T>) -> Self {
+        let value = operand
+            .value()
+            .deref()
+            .map(|&x| if x < 0.0 { 0.0 } else { x });
+        let gradient = &value * 0.0;
+        let needs_gradient = operand.needs_gradient();
+
+        ReluNode {
+            value: RefCell::new(value),
+            operand_gradient: RefCell::new(gradient),
+            operand: operand,
+            needs_gradient: needs_gradient,
+            counter: PassCounter::default(),
+        }
+    }
+}
+
+impl<T> Node for ReluNode<T>
+where
+    T: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    fn forward(&self) {
+        if self.counter.forward() == ForwardAction::Cached {
+            return;
+        }
+
+        self.operand.forward();
+
+        let mut dest = self.value.borrow_mut();
+
+        numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
+            if x < 0.0 {
+                0.0
+            } else {
+                x
+            }
+        });
+    }
+
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        match self.counter.backward() {
+            BackwardAction::Set => {
+                let mut operand_gradient = self.operand_gradient.borrow_mut();
+
+                numerics::map_assign_binary(
+                    &mut operand_gradient,
+                    self.value.borrow().deref(),
+                    gradient,
+                    |x, grad| if x <= 0.0 { 0.0 } else { grad },
+                );
+            }
+            BackwardAction::Increment => {
+                let mut operand_gradient = self.operand_gradient.borrow_mut();
+
+                numerics::map_inplace_assign_binary(
+                    &mut operand_gradient,
+                    self.value.borrow().deref(),
+                    gradient,
+                    |dest, x, grad| *dest += if x <= 0.0 { 0.0 } else { grad },
                 );
             }
         }
@@ -1785,7 +1974,9 @@ where
 {
     pub fn new(operand: Rc<OP>) -> Self {
         let needs_gradient = operand.needs_gradient();
-        let value = RefCell::new(&operand.value().t() * 1.0);
+        let mut value = Arr::zeros((operand.value().cols(), operand.value().rows()));
+        value.assign(&operand.value().t());
+        let value = RefCell::new(value);
         let gradient = RefCell::new(operand.value().deref() * 0.0);
 
         TransposeNode {
@@ -1818,7 +2009,7 @@ where
                 self.gradient.borrow_mut().assign(&gradient.t());
             }
             BackwardAction::Increment => {
-                self.gradient.borrow_mut().add_assign(&gradient.t());
+                self.gradient.borrow_mut().slice_add_assign(&gradient.t());
             }
         }
 
@@ -1900,11 +2091,12 @@ where
 
         self.operand.forward();
         let mut dest = self.value.borrow_mut();
-        dest.assign(self.operand.value().deref());
+        dest.slice_assign(self.operand.value().deref());
 
-        let max = self.operand
+        let max = self
+            .operand
             .value()
-            .deref()
+            .fast_slice()
             .iter()
             .fold(std::f32::MIN, |x, y| x.max(*y));
         dest.map_inplace(|x| *x = numerics::exp(*x - max));
@@ -1916,13 +2108,19 @@ where
         let value = self.value.borrow();
         let mut jacobian = self.jacobian.borrow_mut();
 
+        let beta = match self.counter.backward() {
+            BackwardAction::Set => 0.0,
+            BackwardAction::Increment => 1.0,
+        };
+
         for (row_idx, (mut row, row_val)) in jacobian
             .genrows_mut()
             .into_iter()
             .zip(value.iter())
             .enumerate()
         {
-            for (col_idx, (grad, col_val)) in row.as_slice_mut()
+            for (col_idx, (grad, col_val)) in row
+                .as_slice_mut()
                 .unwrap()
                 .iter_mut()
                 .zip(value.as_slice().unwrap())
@@ -1941,12 +2139,14 @@ where
                 1.0,
                 gradient,
                 jacobian.deref_mut(),
-                0.0,
+                beta,
                 self.operand_gradient.borrow_mut().deref_mut(),
             );
         }
 
-        self.operand.backward(&self.operand_gradient.borrow());
+        if self.counter.recurse_backward() {
+            self.operand.backward(&self.operand_gradient.borrow());
+        }
     }
     fn value(&self) -> Bor<Self::Value> {
         Bor::RefGuard(self.value.borrow())
@@ -1981,12 +2181,11 @@ where
             let operand_slice = operand_value.deref().as_slice().unwrap();
             let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
 
-            let denominator = max
-                + operand_slice
-                    .iter()
-                    .map(|&x| numerics::exp(x - max))
-                    .sum::<f32>()
-                    .ln();
+            let denominator = max + operand_slice
+                .iter()
+                .map(|&x| numerics::exp(x - max))
+                .sum::<f32>()
+                .ln();
 
             operand_value.deref() - denominator
         };
@@ -2001,6 +2200,13 @@ where
             needs_gradient: needs_gradient,
             counter: PassCounter::default(),
         }
+    }
+
+    /// An additional method for zeroing the counter for use in the
+    /// log-softmax loss, where the actuall log-softmax layer is skipped
+    /// when backpropagating.
+    pub fn zero_counter(&self) {
+        self.counter.clear();
     }
 }
 
@@ -2031,7 +2237,11 @@ where
             .for_each(|x| *x -= denominator);
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        // TODO: accumulate gradients
+        let beta = match self.counter.backward() {
+            BackwardAction::Set => 0.0,
+            BackwardAction::Increment => 1.0,
+        };
+
         {
             let value = self.value.borrow();
             let value_slice = value.as_slice().expect("Can't get value slice.");
@@ -2049,11 +2259,13 @@ where
             for (out_grad, in_grad, &val) in
                 izip!(downstream_gradient_slice, gradient_slice, value_slice)
             {
-                *out_grad = in_grad - numerics::exp(val) * gradient_sum;
+                *out_grad = beta * *out_grad + in_grad - numerics::exp(val) * gradient_sum;
             }
         }
 
-        self.operand.backward(&self.operand_gradient.borrow());
+        if self.counter.recurse_backward() {
+            self.operand.backward(&self.operand_gradient.borrow());
+        }
     }
     fn value(&self) -> Bor<Self::Value> {
         Bor::RefGuard(self.value.borrow())
@@ -2128,7 +2340,7 @@ where
             BackwardAction::Increment => {
                 self.operand_gradient
                     .borrow_mut()
-                    .add_assign(gradient[(0, 0)]);
+                    .slice_add_assign(gradient[(0, 0)]);
             }
         }
 
@@ -2242,11 +2454,12 @@ impl Node for IndexNode<ParameterNode> {
         for (&idx, mut row) in idx_value.iter().zip(arr_value.genrows_mut()) {
             let new_val = operand_value.subview(Axis(0), idx);
 
-            numerics::slice_assign(row.into_slice().unwrap(), new_val.as_slice().unwrap())
+            row.slice_assign(&new_val);
         }
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        self.counter.backward();
         self.operand
             .gradient
             .borrow_mut()
@@ -2270,17 +2483,13 @@ impl Node for IndexNode<ParameterNode> {
 
 #[cfg(test)]
 mod tests {
-    use rand;
+    use nn;
 
     use super::*;
 
-    fn random_matrix(rows: usize, cols: usize) -> Arr {
-        Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
-    }
-
     #[test]
     fn test_sub_counter() {
-        let x = ParameterNode::new(random_matrix(1, 1));
+        let x = ParameterNode::new(nn::xavier_normal(1, 1));
         let y = x.clone() - x.clone();
 
         let mut z = y.clone() + y.clone() + y.clone();

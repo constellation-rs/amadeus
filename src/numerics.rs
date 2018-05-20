@@ -1,12 +1,112 @@
-use std::cmp;
-use stdsimd;
+use std;
 
-use ndarray::{ArrayBase, Axis, Data, DataMut, Ix1, Ix2};
 use ndarray::linalg::{general_mat_mul, general_mat_vec_mul};
+use ndarray::{ArrayBase, ArrayViewMut, Axis, Data, DataMut, Ix1, Ix2};
 
 use fast_approx::{fastexp, fastlog, tanhf_fast};
 
 use super::Arr;
+
+pub trait ArraySlice {
+    fn fast_slice(&self) -> &[f32];
+}
+
+pub trait ArraySliceMut {
+    fn fast_slice_mut(&mut self) -> &mut [f32];
+}
+
+macro_rules! fast_slice {
+    ($x:ty) => {
+        impl<T> ArraySlice for $x
+        where
+            T: Data<Elem = f32>,
+        {
+            fn fast_slice(&self) -> &[f32] {
+                if cfg!(debug_assertions) {
+                    self.as_slice().unwrap()
+                } else {
+                    self.as_slice_memory_order().unwrap()
+                }
+            }
+        }
+        impl<T> ArraySliceMut for $x
+        where
+            T: DataMut<Elem = f32>,
+        {
+            fn fast_slice_mut(&mut self) -> &mut [f32] {
+                if cfg!(debug_assertions) {
+                    self.as_slice_mut().unwrap()
+                } else {
+                    self.as_slice_memory_order_mut().unwrap()
+                }
+            }
+        }
+    };
+}
+
+fast_slice!(ArrayBase<T, Ix1>);
+fast_slice!(ArrayBase<T, Ix2>);
+
+pub trait ArraySliceOps<RHS> {
+    fn slice_assign(&mut self, RHS);
+    fn slice_add_assign(&mut self, RHS);
+    fn slice_sub_assign(&mut self, RHS);
+}
+
+macro_rules! slice_op {
+    ($lhs:ty, $($rhs:ty),*) => {
+        $(
+        impl<'a, 'b, T> ArraySliceOps<&'a $rhs> for $lhs
+        where
+            T: Data<Elem = f32>,
+        {
+            fn slice_assign(&mut self, other: &$rhs) {
+                let lhs_slice = self.fast_slice_mut();
+                let rhs_slice = other.fast_slice();
+
+                lhs_slice.copy_from_slice(rhs_slice);
+            }
+            fn slice_add_assign(&mut self, other: &$rhs) {
+                let lhs_slice = self.fast_slice_mut();
+                let rhs_slice = other.fast_slice();
+
+                for (lhs, &rhs) in lhs_slice.iter_mut().zip(rhs_slice.iter()) {
+                    *lhs += rhs;
+                }
+            }
+            fn slice_sub_assign(&mut self, other: &$rhs) {
+                let lhs_slice = self.fast_slice_mut();
+                let rhs_slice = other.fast_slice();
+
+                for (lhs, &rhs) in lhs_slice.iter_mut().zip(rhs_slice.iter()) {
+                    *lhs -= rhs;
+                }
+            }
+        }
+        )*
+    }
+}
+
+slice_op!(Arr, ArrayBase<T, Ix2>);
+slice_op!(ArrayViewMut<'b, f32, Ix1>, ArrayBase<T, Ix1>);
+
+impl ArraySliceOps<f32> for Arr {
+    fn slice_assign(&mut self, rhs: f32) {
+        for lhs in self.fast_slice_mut().iter_mut() {
+            *lhs = rhs;
+        }
+    }
+    fn slice_add_assign(&mut self, rhs: f32) {
+        for lhs in self.fast_slice_mut().iter_mut() {
+            *lhs += rhs;
+        }
+    }
+    fn slice_sub_assign(&mut self, rhs: f32) {
+        for lhs in self.fast_slice_mut().iter_mut() {
+            *lhs -= rhs;
+        }
+    }
+}
 
 /// Uses approximate e^x when the fast-math feature is enabled.
 #[inline(always)]
@@ -40,7 +140,15 @@ pub fn tanh(x: f32) -> f32 {
 
 #[inline(always)]
 pub fn sigmoid(x: f32) -> f32 {
-    1.0 / (1.0 + (-x).exp())
+    let critical_value = 10.0;
+
+    if x > critical_value {
+        1.0
+    } else if x < -critical_value {
+        0.0
+    } else {
+        1.0 / (1.0 + exp(-x))
+    }
 }
 
 #[inline(always)]
@@ -79,75 +187,6 @@ pub fn softmax_exp_sum(xs: &[f32], max: f32) -> f32 {
     s
 }
 
-fn vec_mat_mul<S1, S2, S3>(
-    alpha: f32,
-    lhs: &ArrayBase<S1, Ix1>,
-    rhs: &ArrayBase<S2, Ix2>,
-    beta: f32,
-    out: &mut ArrayBase<S3, Ix1>,
-) where
-    S1: Data<Elem = f32>,
-    S2: Data<Elem = f32>,
-    S3: DataMut<Elem = f32>,
-{
-    if lhs.len() != rhs.rows() || rhs.cols() != out.len() {
-        panic!(
-            "Shapes are incompatible for a vec-mat mul: LHS: {} vs RHS ({} x {}) vs out {}",
-            lhs.len(),
-            rhs.rows(),
-            rhs.cols(),
-            out.len()
-        )
-    }
-
-    let out_slice = out.as_slice_mut().expect("Vec-mat result not contiguous.");
-    let lhs_slice = lhs.as_slice().expect("LHS not contiguous");
-
-    for (row_idx, (&x, row)) in lhs_slice.iter().zip(rhs.genrows()).enumerate() {
-        let row_slice = row.as_slice().expect("RHS row not C-contiguous.");
-
-        if row_idx == 0 {
-            saxpy(x * alpha, row_slice, beta, out_slice);
-        } else {
-            saxpy(x * alpha, row_slice, 1.0, out_slice);
-        }
-    }
-}
-
-fn saxpy(alpha: f32, xs: &[f32], beta: f32, outs: &mut [f32]) {
-    let stride = 8;
-    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
-    let simd_beta = stdsimd::simd::f32x8::splat(beta);
-
-    let split_idx = xs.len() / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-    let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
-
-    for (x, out) in izip!(simd_xs.chunks(stride), simd_outs.chunks_mut(stride)) {
-        unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0) * simd_alpha
-                + stdsimd::simd::f32x8::load_unchecked(out, 0) * simd_beta;
-            elem.store_unchecked(out, 0);
-        }
-    }
-
-    for (&x, out) in izip!(scalar_xs.iter(), scalar_outs.iter_mut()) {
-        *out = x * alpha + *out * beta;
-    }
-}
-
-enum MatrixLayout {
-    RowMajor,
-    ColumnMajor,
-}
-
-fn layout<S: Data<Elem = f32>>(matrix: &ArrayBase<S, Ix2>) -> MatrixLayout {
-    match matrix.strides()[0] {
-        1 => MatrixLayout::ColumnMajor,
-        _ => MatrixLayout::RowMajor,
-    }
-}
-
 pub fn mat_mul<S1, S2, S3>(
     alpha: f32,
     lhs: &ArrayBase<S1, Ix2>,
@@ -170,29 +209,13 @@ pub fn mat_mul<S1, S2, S3>(
             );
         }
         (1, _) => {
-            // general_mat_vec_mul(
-            //     alpha,
-            //     &rhs,
-            //     &lhs.subview(Axis(0), 0),
-            //     beta,
-            //     &mut out.subview_mut(Axis(0), 0),
-            // );
-            match layout(rhs) {
-                MatrixLayout::RowMajor => vec_mat_mul(
-                    alpha,
-                    &lhs.subview(Axis(0), 0),
-                    rhs,
-                    beta,
-                    &mut out.subview_mut(Axis(0), 0),
-                ),
-                MatrixLayout::ColumnMajor => general_mat_vec_mul(
-                    alpha,
-                    &rhs.t(),
-                    &lhs.subview(Axis(0), 0),
-                    beta,
-                    &mut out.subview_mut(Axis(0), 0),
-                ),
-            }
+            general_mat_vec_mul(
+                alpha,
+                &rhs.t(),
+                &lhs.subview(Axis(0), 0),
+                beta,
+                &mut out.subview_mut(Axis(0), 0),
+            );
         }
         _ => {
             general_mat_mul(alpha, lhs, rhs, beta, out);
@@ -202,126 +225,95 @@ pub fn mat_mul<S1, S2, S3>(
 
 /// SIMD-enabled vector-vector dot product.
 pub fn simd_dot(xs: &[f32], ys: &[f32]) -> f32 {
-    let mut simd_result = stdsimd::simd::f32x8::splat(0.0);
-    let mut scalar_result = 0.0;
-    let stride = 8;
+    let len = std::cmp::min(xs.len(), ys.len());
+    let mut xs = &xs[..len];
+    let mut ys = &ys[..len];
 
-    let split_idx = cmp::min(xs.len(), ys.len()) / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-    let (simd_ys, scalar_ys) = ys.split_at(split_idx);
+    let mut s = 0.;
+    let (mut p0, mut p1, mut p2, mut p3, mut p4, mut p5, mut p6, mut p7) =
+        (0., 0., 0., 0., 0., 0., 0., 0.);
 
-    for (x, y) in simd_xs.chunks(stride).zip(simd_ys.chunks(stride)) {
-        unsafe {
-            simd_result = simd_result
-                + stdsimd::simd::f32x8::load_unchecked(x, 0)
-                    * stdsimd::simd::f32x8::load_unchecked(y, 0);
-        }
+    while xs.len() >= 8 {
+        p0 += xs[0] * ys[0];
+        p1 += xs[1] * ys[1];
+        p2 += xs[2] * ys[2];
+        p3 += xs[3] * ys[3];
+        p4 += xs[4] * ys[4];
+        p5 += xs[5] * ys[5];
+        p6 += xs[6] * ys[6];
+        p7 += xs[7] * ys[7];
+
+        xs = &xs[8..];
+        ys = &ys[8..];
+    }
+    s += p0 + p4;
+    s += p1 + p5;
+    s += p2 + p6;
+    s += p3 + p7;
+
+    for i in 0..xs.len() {
+        s += xs[i] * ys[i];
     }
 
-    for (x_scalar, y_scalar) in scalar_xs.iter().zip(scalar_ys.iter()) {
-        scalar_result += x_scalar * y_scalar;
-    }
-
-    scalar_result
-        + (0..stride as u32)
-            .map(|idx| simd_result.extract(idx))
-            .sum::<f32>()
+    s
 }
 
 pub fn simd_sum(xs: &[f32]) -> f32 {
-    let mut simd_result = stdsimd::simd::f32x8::splat(0.0);
-    let mut scalar_result = 0.0;
-    let stride = 8;
+    let mut xs = xs;
 
-    let split_idx = (xs.len() / stride) * stride;
-    let (simd_xs, scalar_xs) = xs.split_at(split_idx);
+    let mut s = 0.;
+    let (mut p0, mut p1, mut p2, mut p3, mut p4, mut p5, mut p6, mut p7) =
+        (0., 0., 0., 0., 0., 0., 0., 0.);
 
-    for x in simd_xs.chunks(stride) {
-        unsafe { simd_result = simd_result + stdsimd::simd::f32x8::load_unchecked(x, 0) }
+    while xs.len() >= 8 {
+        p0 += xs[0];
+        p1 += xs[1];
+        p2 += xs[2];
+        p3 += xs[3];
+        p4 += xs[4];
+        p5 += xs[5];
+        p6 += xs[6];
+        p7 += xs[7];
+
+        xs = &xs[8..];
     }
 
-    for x_scalar in scalar_xs.iter() {
-        scalar_result += x_scalar;
+    s += p0 + p4;
+    s += p1 + p5;
+    s += p2 + p6;
+    s += p3 + p7;
+
+    for i in 0..xs.len() {
+        s += xs[i];
     }
 
-    scalar_result
-        + (0..stride as u32)
-            .map(|idx| simd_result.extract(idx))
-            .sum::<f32>()
+    s
 }
 
 pub fn simd_scaled_assign(xs: &mut [f32], ys: &[f32], alpha: f32) {
-    let stride = 8;
-    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
-
-    let split_idx = xs.len() / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at_mut(split_idx);
-    let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-
-    for (x, y) in simd_xs.chunks_mut(stride).zip(simd_ys.chunks(stride)) {
-        unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(y, 0) * simd_alpha;
-            elem.store_unchecked(x, 0);
-        }
-    }
-
-    for (x_scalar, y_scalar) in scalar_xs.iter_mut().zip(scalar_ys.iter()) {
-        *x_scalar = y_scalar * alpha;
+    for (x, y) in xs.iter_mut().zip(ys.iter()) {
+        *x = y * alpha;
     }
 }
 
 pub fn simd_scaled_add(xs: &mut [f32], ys: &[f32], alpha: f32) {
-    let stride = 8;
-    let simd_alpha = stdsimd::simd::f32x8::splat(alpha);
-
-    let split_idx = xs.len() / stride * stride;
-    let (simd_xs, scalar_xs) = xs.split_at_mut(split_idx);
-    let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-
-    for (x, y) in simd_xs.chunks_mut(stride).zip(simd_ys.chunks(stride)) {
-        unsafe {
-            let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
-                + stdsimd::simd::f32x8::load_unchecked(y, 0) * simd_alpha;
-            elem.store_unchecked(x, 0);
-        }
-    }
-
-    for (x_scalar, y_scalar) in scalar_xs.iter_mut().zip(scalar_ys.iter()) {
-        *x_scalar += y_scalar * alpha;
+    for (x, y) in xs.iter_mut().zip(ys.iter()) {
+        *x += y * alpha;
     }
 }
 
-macro_rules! simd_binary_op {
-    ( $name:ident, $simd_name:ident,
-      $increment_name:ident,$simd_increment_name:ident, $op:tt ) => {
+macro_rules! slice_binary_op {
+    ( $name:ident, $slice_name:ident,
+      $increment_name:ident,$slice_increment_name:ident, $op:tt ) => {
         pub fn $name(xs: &Arr, ys: &Arr, out: &mut Arr) {
-            $simd_name(xs.as_slice().unwrap(),
-                       ys.as_slice().unwrap(),
-                       out.as_slice_mut().unwrap());
+            $slice_name(xs.fast_slice(),
+                       ys.fast_slice(),
+                       out.fast_slice_mut());
         }
 
-        fn $simd_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
-            let stride = 8;
-
-            let split_idx = xs.len() / stride * stride;
-            let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-            let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-            let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
-
-            for (x, y, out) in izip!(
-                simd_xs.chunks(stride),
-                simd_ys.chunks(stride),
-                simd_outs.chunks_mut(stride)
-            ) {
-                unsafe {
-                    let elem = stdsimd::simd::f32x8::load_unchecked(x, 0)
-                        $op stdsimd::simd::f32x8::load_unchecked(y, 0);
-                    elem.store_unchecked(out, 0);
-                }
-            }
-
+        fn $slice_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
             for (&x_scalar, &y_scalar, out_scalar) in
-                izip!(scalar_xs.iter(), scalar_ys.iter(), scalar_outs.iter_mut())
+                izip!(xs.iter(), ys.iter(), outs.iter_mut())
             {
                 *out_scalar = x_scalar $op y_scalar;
             }
@@ -329,35 +321,15 @@ macro_rules! simd_binary_op {
 
         #[allow(dead_code)]
         pub fn $increment_name(xs: &Arr, ys: &Arr, out: &mut Arr) {
-            $simd_increment_name(xs.as_slice().unwrap(),
-                                 ys.as_slice().unwrap(),
-                                 out.as_slice_mut().unwrap());
+            $slice_increment_name(xs.fast_slice(),
+                                 ys.fast_slice(),
+                                 out.fast_slice_mut());
         }
 
         #[allow(dead_code)]
-        fn $simd_increment_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
-            let stride = 8;
-
-            let split_idx = xs.len() / stride * stride;
-            let (simd_xs, scalar_xs) = xs.split_at(split_idx);
-            let (simd_ys, scalar_ys) = ys.split_at(split_idx);
-            let (simd_outs, scalar_outs) = outs.split_at_mut(split_idx);
-
-            for (x, y, out) in izip!(
-                simd_xs.chunks(stride),
-                simd_ys.chunks(stride),
-                simd_outs.chunks_mut(stride)
-            ) {
-                unsafe {
-                    let elem = stdsimd::simd::f32x8::load_unchecked(out, 0) +
-                        (stdsimd::simd::f32x8::load_unchecked(x, 0)
-                         $op stdsimd::simd::f32x8::load_unchecked(y, 0));
-                    elem.store_unchecked(out, 0);
-                }
-            }
-
+        fn $slice_increment_name(xs: &[f32], ys: &[f32], outs: &mut [f32]) {
             for (&x_scalar, &y_scalar, out_scalar) in
-                izip!(scalar_xs.iter(), scalar_ys.iter(), scalar_outs.iter_mut())
+                izip!(xs.iter(), ys.iter(), outs.iter_mut())
             {
                 *out_scalar += x_scalar $op y_scalar;
             }
@@ -365,10 +337,9 @@ macro_rules! simd_binary_op {
     }
 }
 
-simd_binary_op!(add, simd_add, increment_add, increment_simd_add, +);
-simd_binary_op!(sub, simd_sub, increment_sub, increment_simd_sub, -);
-simd_binary_op!(mul, simd_mul, increment_mul, increment_simd_mul, *);
-simd_binary_op!(div, simd_div, increment_div, increment_simd_div, /);
+slice_binary_op!(sub, slice_sub, increment_sub, increment_slice_sub, -);
+slice_binary_op!(mul, slice_mul, increment_mul, increment_slice_mul, *);
+slice_binary_op!(div, slice_div, increment_div, increment_slice_div, /);
 
 pub fn slice_assign(xs: &mut [f32], ys: &[f32]) {
     for (x, &y) in xs.iter_mut().zip(ys.iter()) {
@@ -380,8 +351,8 @@ pub fn map_assign<F>(xs: &mut Arr, ys: &Arr, func: F)
 where
     F: Fn(f32) -> f32,
 {
-    let xs = xs.as_slice_mut().expect("Unable to convert LHS to slice.");
-    let ys = ys.as_slice().expect("Unable to convert RHS to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
 
     for (x, &y) in xs.iter_mut().zip(ys.iter()) {
         *x = func(y);
@@ -401,10 +372,9 @@ pub fn map_assign_binary<F>(xs: &mut Arr, ys: &Arr, zs: &Arr, func: F)
 where
     F: Fn(f32, f32) -> f32,
 {
-    let xs = xs.as_slice_mut()
-        .expect("Unable to convert operand to slice.");
-    let ys = ys.as_slice().expect("Unable to convert operand to slice.");
-    let zs = zs.as_slice().expect("Unable to convert operand to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
+    let zs = zs.fast_slice();
 
     for (x, &y, &z) in izip!(xs.iter_mut(), ys.iter(), zs.iter()) {
         *x = func(y, z);
@@ -416,9 +386,8 @@ pub fn map_inplace_assign<F>(xs: &mut Arr, ys: &Arr, func: F)
 where
     F: Fn(&mut f32, f32),
 {
-    let xs = xs.as_slice_mut()
-        .expect("Unable to convert operand to slice.");
-    let ys = ys.as_slice().expect("Unable to convert operand to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
 
     for (x, &y) in izip!(xs.iter_mut(), ys.iter()) {
         func(x, y);
@@ -430,10 +399,9 @@ pub fn map_inplace_assign_binary<F>(xs: &mut Arr, ys: &Arr, zs: &Arr, func: F)
 where
     F: Fn(&mut f32, f32, f32),
 {
-    let xs = xs.as_slice_mut()
-        .expect("Unable to convert operand to slice.");
-    let ys = ys.as_slice().expect("Unable to convert operand to slice.");
-    let zs = zs.as_slice().expect("Unable to convert operand to slice.");
+    let xs = xs.fast_slice_mut();
+    let ys = ys.fast_slice();
+    let zs = zs.fast_slice();
 
     for (x, &y, &z) in izip!(xs.iter_mut(), ys.iter(), zs.iter()) {
         func(x, y, z);
@@ -449,12 +417,11 @@ mod tests {
 
     use rand;
     use rand::Rng;
-    use test::Bencher;
 
-    use numerics;
+    use nn;
 
     fn random_matrix(rows: usize, cols: usize) -> Arr {
-        Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
+        nn::xavier_normal(rows, cols)
     }
 
     fn array_scaled_assign(xs: &mut Arr, ys: &Arr, alpha: f32) {
@@ -474,25 +441,6 @@ mod tests {
 
     fn dot(lhs: &[f32], rhs: &[f32]) -> f32 {
         lhs.iter().zip(rhs.iter()).map(|(x, y)| x * y).sum()
-    }
-
-    fn array_assign(xs: &mut Arr, ys: &Arr) {
-        xs.assign(ys);
-    }
-
-    fn assign(xs: &mut Arr, ys: &Arr) {
-        assert_eq!(
-            xs.shape(),
-            ys.shape(),
-            "Operands do not have the same shape."
-        );
-
-        let xs = xs.as_slice_mut().expect("Unable to convert LHS to slice.");
-        let ys = ys.as_slice().expect("Unable to convert RHS to slice.");
-
-        for (x, &y) in xs.iter_mut().zip(ys.iter()) {
-            *x = y;
-        }
     }
 
     fn unrolled_dot(xs: &[f32], ys: &[f32]) -> f32 {
@@ -646,140 +594,5 @@ mod tests {
         general_mat_mul(1.0, &x, &y, 0.0, &mut expected);
 
         assert_close(&result, &expected, 0.001);
-    }
-
-    #[bench]
-    fn bench_sofmax_exp_sum(b: &mut Bencher) {
-        let x = vec![1.0; 32];
-        let max = 1.0;
-
-        b.iter(|| x.iter().map(|&x| numerics::exp(x - max)).sum::<f32>().ln())
-    }
-
-    #[bench]
-    fn bench_sofmax_exp_sum_unrolled(b: &mut Bencher) {
-        let x = vec![1.0; 32];
-        let max = 1.0;
-
-        b.iter(|| softmax_exp_sum(&x, max).ln())
-    }
-
-    #[bench]
-    fn bench_exp(b: &mut Bencher) {
-        let x: Vec<f32> = vec![1.0; 32];
-
-        let mut v = 0.0;
-
-        b.iter(|| x.iter().for_each(|&y| v += y.exp()));
-    }
-
-    #[bench]
-    fn bench_fastexp(b: &mut Bencher) {
-        let x: Vec<f32> = vec![1.0; 32];
-
-        let mut v = 0.0;
-
-        b.iter(|| x.iter().for_each(|&y| v += fastexp(y)));
-    }
-
-    #[bench]
-    fn bench_dot(b: &mut Bencher) {
-        let xs = vec![0.0; 256];
-        let ys = vec![0.0; 256];
-
-        b.iter(|| dot(&xs[..], &ys[..]));
-    }
-
-    #[bench]
-    fn bench_unrolled_dot(b: &mut Bencher) {
-        let xs = vec![0.0; 256];
-        let ys = vec![0.0; 256];
-
-        b.iter(|| unrolled_dot(&xs[..], &ys[..]));
-    }
-
-    #[bench]
-    fn bench_simd_dot(b: &mut Bencher) {
-        let xs = vec![0.0; 256];
-        let ys = vec![0.0; 256];
-
-        b.iter(|| simd_dot(&xs[..], &ys[..]));
-    }
-
-    #[bench]
-    fn bench_array_scaled_assign(b: &mut Bencher) {
-        let mut xs = random_matrix(256, 1);
-        let ys = random_matrix(256, 1);
-
-        b.iter(|| array_scaled_assign(&mut xs, &ys, 3.5));
-    }
-
-    #[bench]
-    fn bench_slice_scaled_assign(b: &mut Bencher) {
-        let mut xs = random_matrix(256, 1);
-        let ys = random_matrix(256, 1);
-
-        b.iter(|| scaled_assign(&mut xs, &ys, 3.5));
-    }
-
-    #[bench]
-    fn bench_array_assign(b: &mut Bencher) {
-        let mut xs = random_matrix(256, 1);
-        let ys = random_matrix(256, 1);
-
-        b.iter(|| array_assign(&mut xs, &ys));
-    }
-
-    #[bench]
-    fn bench_slice_assign(b: &mut Bencher) {
-        let mut xs = random_matrix(256, 1);
-        let ys = random_matrix(256, 1);
-
-        b.iter(|| assign(&mut xs, &ys));
-    }
-
-    #[bench]
-    fn dot_node_specializations_mm(b: &mut Bencher) {
-        let x = random_matrix(64, 64);
-        let y = random_matrix(64, 64);
-        let mut z = random_matrix(64, 64);
-
-        b.iter(|| mat_mul(1.0, &x, &y, 0.0, &mut z));
-    }
-
-    #[bench]
-    fn dot_node_general_vm(b: &mut Bencher) {
-        let x = random_matrix(1, 64);
-        let y = random_matrix(64, 64);
-        let mut z = random_matrix(1, 64);
-
-        b.iter(|| general_mat_mul(1.0, &x, &y, 0.0, &mut z));
-    }
-
-    #[bench]
-    fn dot_node_specializations_vm(b: &mut Bencher) {
-        let x = random_matrix(1, 64);
-        let y = random_matrix(64, 64);
-        let mut z = random_matrix(1, 64);
-
-        b.iter(|| mat_mul(1.0, &x, &y, 0.0, &mut z));
-    }
-
-    #[bench]
-    fn dot_node_specializations_mv(b: &mut Bencher) {
-        let x = random_matrix(64, 64);
-        let y = random_matrix(64, 1);
-        let mut z = random_matrix(64, 1);
-
-        b.iter(|| mat_mul(1.0, &x, &y, 0.0, &mut z));
-    }
-
-    #[bench]
-    fn dot_node_general_mv(b: &mut Bencher) {
-        let x = random_matrix(64, 64);
-        let y = random_matrix(64, 1);
-        let mut z = random_matrix(64, 1);
-
-        b.iter(|| general_mat_mul(1.0, &x, &y, 0.0, &mut z));
     }
 }

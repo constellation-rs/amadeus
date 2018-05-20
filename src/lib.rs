@@ -1,4 +1,3 @@
-#![feature(test)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
 //! # Features
@@ -12,8 +11,6 @@
 //! 2. Built-in support for sparse gradients.
 //! 3. Define-by-run.
 //! 4. Trivial Hogwild-style parallelisation, scaling linearly with the number of CPU cores available.
-//!
-//! Requires the nightly compiler due to use of SIMD intrinsics.
 //!
 //! # Quickstart
 //!
@@ -46,6 +43,7 @@
 //! # extern crate rand;
 //! # extern crate wyrm;
 //! # use wyrm::*;
+//! # use wyrm::optim::*;
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
@@ -57,7 +55,7 @@
 //! # let y_hat = slope.clone() * x.clone() + intercept.clone();
 //! # let mut loss = (y.clone() - y_hat).square();
 //! # let num_epochs = 10;
-//! let mut optimizer = SGD::new(0.1, loss.parameters());
+//! let mut optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
 //!
 //! for _ in 0..num_epochs {
 //!     let x_value: f32 = rand::random();
@@ -87,6 +85,7 @@
 //! # use std::sync::Arc;
 //! # use rayon::prelude::*;
 //! # use wyrm::*;
+//! # use wyrm::optim::*;
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
@@ -105,7 +104,7 @@
 //!            let y_hat = slope.clone() * x.clone() + intercept.clone();
 //!            let mut loss = (y.clone() - y_hat).square();
 //!
-//!            let mut optimizer = SGD::new(0.1, loss.parameters());
+//!            let optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
 //!
 //!            for _ in 0..num_epochs {
 //!                let x_value: f32 = rand::random();
@@ -139,9 +138,6 @@
 //! Enable the `fast-math` option to use fast approximations to transcendental functions.
 //! This should give substantial speed gains in networks that are `exp`, `ln`, or `tanh`-heavy.
 
-// TODO: pass through of parent values in .value(),
-// optimizations in forward
-// check for needs gradient
 #[macro_use]
 extern crate serde_derive;
 
@@ -151,31 +147,28 @@ extern crate ndarray;
 extern crate rand;
 extern crate rayon;
 extern crate smallvec;
-extern crate stdsimd;
-extern crate test;
 
 #[macro_use]
 extern crate itertools;
-
-use ndarray::Axis;
 
 /// Alias for a `f32` `ndarray` matrix.
 pub type Arr = ndarray::Array2<f32>;
 
 use std::cell::RefCell;
+use std::clone::Clone;
 use std::ops::{Add, Deref, Div, Mul, Neg, Sub};
 use std::rc::Rc;
-use std::clone::Clone;
 
-mod nodes;
-mod numerics;
 mod fast_approx;
 pub mod nn;
+mod nodes;
+mod numerics;
+pub mod optim;
 
 use nodes::*;
 
-pub use numerics::simd_dot;
 pub use nodes::{Bor, HogwildParameter, IndexInputNode, InputNode, Node, ParameterNode};
+pub use numerics::simd_dot;
 
 fn clamp(x: f32, min: f32, max: f32) -> f32 {
     if x > max {
@@ -285,14 +278,32 @@ where
     /// Run the backward pass through the subgraph terminating at this node.
     /// The weight parameter scales the gradients.
     pub fn backward(&mut self, weight: f32) {
+        let val = self.node.value();
+
         self.grad
-            .get_or_insert(RefCell::new(self.node.value().map(|_| weight)));
+            .get_or_insert_with(|| RefCell::new(val.map(|_| weight)))
+            .borrow_mut()
+            .as_slice_mut()
+            .unwrap()
+            .iter_mut()
+            .for_each(|x| *x = weight);
+
         if let Some(ref grad) = self.grad {
-            {
-                grad.borrow_mut().map_inplace(|x| *x = weight);
-            }
             self.node.backward(&grad.borrow());
         }
+    }
+
+    /// Clip the value. Useful for clipping losses.
+    pub fn clip(&self, min: f32, max: f32) {
+        let bor_value = self.node.value();
+        let value: &Arr = bor_value.deref();
+        let value = unsafe { &mut *(value as *const Arr as *mut Arr) };
+
+        value
+            .as_slice_mut()
+            .unwrap()
+            .iter_mut()
+            .for_each(|x| *x = 100.0 * clamp(*x, min, max));
     }
 
     /// Square this variable.
@@ -367,6 +378,14 @@ where
         )
     }
 
+    /// Compute the ReLU of this variable.
+    pub fn relu(&self) -> Variable<ReluNode<T>> {
+        Variable::new(
+            Rc::new(ReluNode::new(Rc::clone(&self.node))),
+            self.parameters.clone(),
+        )
+    }
+
     /// Compute the row-wise vector dot product of LHS and RHS.
     pub fn vector_dot<S>(&self, other: &Variable<S>) -> Variable<VectorDotNode<T, S>>
     where
@@ -417,9 +436,14 @@ impl Variable<ParameterNode> {
     /// Return the (dense) gradient value of this node.
     pub fn dense_gradient(&self) -> Option<Arr> {
         match self.node.gradient.borrow().dense_gradient {
-            Some(ref arr) => Some(arr.clone()),
+            Some(ref gradients) => Some(gradients.clone()),
             None => None,
         }
+    }
+
+    /// Return the (dense) gradient value of this node.
+    fn sparse_gradient(&self) -> SparseGradientStore {
+        self.node.gradient.borrow().sparse_gradient.clone()
     }
 
     /// Row-wise indexing of this parameter node. Primiarily used
@@ -484,61 +508,62 @@ impl DataInput<usize> for Variable<IndexInputNode> {
     }
 }
 
-impl<LHS, RHS> Add<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<AddNode<LHS, RHS>>;
-    fn add(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(AddNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
+macro_rules! impl_arithmetic_op {
+    ($trait:ident, $fn:ident, $node:ident) => {
+        impl<LHS, RHS> $trait<Variable<RHS>> for Variable<LHS>
+        where
+            RHS: Node<Value = Arr, InputGradient = Arr>,
+            LHS: Node<Value = Arr, InputGradient = Arr>,
+        {
+            type Output = Variable<$node<LHS, RHS>>;
+            fn $fn(self, other: Variable<RHS>) -> Self::Output {
+                Variable::new(
+                    Rc::new($node::new(self.node, other.node)),
+                    merge_parameters(&self.parameters, &other.parameters),
+                )
+            }
+        }
+
+        /// The constant will be broadcast to have the same shape
+        /// as the LHS.
+        impl<LHS> $trait<f32> for Variable<LHS>
+        where
+            LHS: Node<Value = Arr, InputGradient = Arr>,
+        {
+            type Output = Variable<$node<LHS, InputNode>>;
+            fn $fn(self, other: f32) -> Self::Output {
+                let constant = InputNode::new(self.value().deref() * 0.0 + other);
+
+                Variable::new(
+                    Rc::new($node::new(self.node, constant.node)),
+                    merge_parameters(&self.parameters, &constant.parameters),
+                )
+            }
+        }
+
+        /// The constant will be broadcast to have the same shape
+        /// as the RHS.
+        impl<RHS> $trait<Variable<RHS>> for f32
+        where
+            RHS: Node<Value = Arr, InputGradient = Arr>,
+        {
+            type Output = Variable<$node<InputNode, RHS>>;
+            fn $fn(self, other: Variable<RHS>) -> Self::Output {
+                let constant = InputNode::new(other.value().deref() * 0.0 + self);
+
+                Variable::new(
+                    Rc::new($node::new(constant.node, other.node)),
+                    merge_parameters(&constant.parameters, &other.parameters),
+                )
+            }
+        }
+    };
 }
 
-impl<LHS, RHS> Sub<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<SubNode<LHS, RHS>>;
-    fn sub(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(SubNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
-}
-
-impl<LHS, RHS> Mul<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<MulNode<LHS, RHS>>;
-    fn mul(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(MulNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
-}
-
-impl<LHS, RHS> Div<Variable<RHS>> for Variable<LHS>
-where
-    RHS: Node<Value = Arr, InputGradient = Arr>,
-    LHS: Node<Value = Arr, InputGradient = Arr>,
-{
-    type Output = Variable<DivNode<LHS, RHS>>;
-    fn div(self, other: Variable<RHS>) -> Self::Output {
-        Variable::new(
-            Rc::new(DivNode::new(self.node, other.node)),
-            merge_parameters(&self.parameters, &other.parameters),
-        )
-    }
-}
+impl_arithmetic_op!(Add, add, AddNode);
+impl_arithmetic_op!(Sub, sub, SubNode);
+impl_arithmetic_op!(Mul, mul, MulNode);
+impl_arithmetic_op!(Div, div, DivNode);
 
 impl<T> Neg for Variable<T>
 where
@@ -547,108 +572,6 @@ where
     type Output = Variable<NegNode<T>>;
     fn neg(self) -> Self::Output {
         Variable::new(Rc::new(NegNode::new(self.node)), self.parameters.clone())
-    }
-}
-
-/// Standard stochastic gradient descent optimizer with a fixed learning rate.
-pub struct SGD {
-    learning_rate: f32,
-    parameters: Vec<Variable<ParameterNode>>,
-}
-
-impl SGD {
-    /// Create a new optimizer instance with a given set of parameters.
-    pub fn new(learning_rate: f32, parameters: Vec<Variable<ParameterNode>>) -> Self {
-        SGD {
-            learning_rate: learning_rate,
-            parameters: parameters,
-        }
-    }
-
-    /// Perform a single SGD step.
-    pub fn step(&mut self) {
-        let learning_rate = self.learning_rate;
-        for parameter in &self.parameters {
-            let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe { parameter.node.value.value_mut() };
-
-            if sink.has_dense {
-                param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
-            }
-
-            if sink.has_sparse {
-                for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
-                    for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                        let grad_row = grad.subview(Axis(0), grad_idx);
-                        let mut param_row = param_value.subview_mut(Axis(0), param_idx);
-
-                        numerics::map_add_assign_slice(
-                            param_row.into_slice().unwrap(),
-                            grad_row.into_slice().unwrap(),
-                            |x| -learning_rate * clamp(x, -10.0, 10.0),
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Adagrad optimizer, scaled the learning rate by the inverse of previously
-/// accumulated gradients.
-pub struct Adagrad {
-    learning_rate: f32,
-    parameters: Vec<Variable<ParameterNode>>,
-}
-
-impl Adagrad {
-    /// Create a new optimizer instance with a given set of parameters.
-    pub fn new(learning_rate: f32, parameters: Vec<Variable<ParameterNode>>) -> Self {
-        Adagrad {
-            learning_rate: learning_rate,
-            parameters: parameters,
-        }
-    }
-
-    /// Perform a single SGD step.
-    pub fn step(&mut self) {
-        let learning_rate = self.learning_rate;
-
-        for parameter in &self.parameters {
-            let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe { parameter.node.value.value_mut() };
-            let mut squared_gradient = unsafe { parameter.node.value.squared_gradient_mut() };
-
-            if sink.has_dense {
-                for (value, &gradient, squared_gradient) in izip!(
-                    param_value.as_slice_mut().unwrap(),
-                    sink.dense_gradient().as_slice().unwrap(),
-                    squared_gradient.as_slice_mut().unwrap()
-                ) {
-                    *value -= learning_rate * gradient / squared_gradient.sqrt();
-                    *squared_gradient += numerics::pow2(gradient);
-                }
-            }
-
-            if sink.has_sparse {
-                for &(ref index_vec, ref grad) in sink.sparse_gradient.iter() {
-                    for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                        let grad_row = grad.subview(Axis(0), grad_idx);
-                        let mut param_row = param_value.subview_mut(Axis(0), param_idx);
-                        let mut squared_row = squared_gradient.subview_mut(Axis(0), param_idx);
-
-                        for (value, &gradient, squared_gradient) in izip!(
-                            param_row.as_slice_mut().unwrap(),
-                            grad_row.into_slice().unwrap(),
-                            squared_row.as_slice_mut().unwrap()
-                        ) {
-                            *value -= learning_rate * gradient / squared_gradient.sqrt();
-                            *squared_gradient += numerics::pow2(gradient);
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -674,6 +597,7 @@ where
             changed_input[idx] += 0.5 * delta_x;
             input.set_value(&changed_input);
             output.forward();
+            output.backward(1.0);
             output.value().clone()
         };
 
@@ -683,6 +607,7 @@ where
             changed_input[idx] -= 0.5 * delta_x;
             input.set_value(&changed_input);
             output.forward();
+            output.backward(1.0);
             output.value().clone()
         };
 
@@ -697,9 +622,19 @@ where
         output.forward();
         output.backward(1.0);
 
-        input
-            .dense_gradient()
-            .expect("Expecting a gradient but gradient not present.")
+        let mut gradient = input.dense_gradient().unwrap_or(initial_input * 0.0);
+
+        let sparse_gradient = input.sparse_gradient();
+
+        for (indices, grad) in sparse_gradient.as_slice() {
+            for &row_idx in indices.iter() {
+                for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
+                    *dest += orig;
+                }
+            }
+        }
+
+        gradient
     };
 
     output.zero_gradient();
@@ -707,8 +642,8 @@ where
     (central_difference, gradient)
 }
 
-#[allow(dead_code)]
-fn assert_close(x: &Arr, y: &Arr, tol: f32) {
+/// Assert two arrays are within `tol` of each other.
+pub fn assert_close(x: &Arr, y: &Arr, tol: f32) {
     assert!(
         x.all_close(y, tol),
         "{:#?} not within {} of {:#?}",
@@ -721,16 +656,39 @@ fn assert_close(x: &Arr, y: &Arr, tol: f32) {
 #[cfg(test)]
 mod tests {
 
-    use std::sync::Arc;
     use ndarray::arr2;
+
+    use optim::{Adagrad, Optimizer, SGD};
+    use rand::distributions::{Distribution, Uniform};
+    use rand::Rng;
     use rayon::prelude::*;
+    use std::sync::Arc;
 
     use super::*;
 
-    const TOLERANCE: f32 = 0.2;
+    const TOLERANCE: f32 = 0.05;
 
     fn random_matrix(rows: usize, cols: usize) -> Arr {
-        Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
+        nn::xavier_normal(rows, cols)
+    }
+
+    fn random_index(rows: usize) -> usize {
+        Uniform::new(0, rows).sample(&mut rand::thread_rng())
+    }
+
+    #[test]
+    fn test_constant_sub() {
+        let mut x = ParameterNode::new(Arr::zeros((10, 10)) + 1.0);
+        let mut y = (1.0 - x.clone()) * 2.0;
+
+        assert_eq!(y.value().scalar_sum(), 0.0);
+        y.zero_gradient();
+        y.forward();
+        y.backward(1.0);
+        assert_eq!(y.value().scalar_sum(), 0.0);
+
+        let (difference, gradient) = finite_difference(&mut x, &mut y);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
 
     #[test]
@@ -747,20 +705,37 @@ mod tests {
     #[test]
     fn add_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(1, 1));
-        let y = ParameterNode::new(random_matrix(1, 1));
-        let mut z = x.clone() + y.clone();
+        let mut y = ParameterNode::new(random_matrix(1, 1));
+        let mut z = x.clone() + y.clone() + x.clone() + x.clone();
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn sub_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(1, 1));
+        let mut y = ParameterNode::new(random_matrix(1, 1));
+        let z = x.clone() - (y.clone() - x.clone());
+        let mut z = z.clone() * 2.0 + z.clone().sigmoid();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn mul_finite_difference() {
-        let mut x = ParameterNode::new(random_matrix(1, 1));
-        let y = ParameterNode::new(random_matrix(1, 1));
-        let mut z = x.clone() * y.clone();
+        let mut x = ParameterNode::new(random_matrix(10, 10));
+        let mut y = ParameterNode::new(random_matrix(10, 10));
+        let z = x.clone() * y.clone();
+        let mut z = z.clone() + z.clone();
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn div_finite_difference() {
@@ -774,20 +749,27 @@ mod tests {
     #[test]
     fn vector_dot_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
-        let y = ParameterNode::new(random_matrix(10, 5));
-        let mut z = x.vector_dot(&y);
+        let mut y = ParameterNode::new(random_matrix(10, 5));
+        let z = x.vector_dot(&y);
+        let mut z = z.clone() + z.clone();
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn dot_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
-        let y = ParameterNode::new(random_matrix(5, 10));
+        let mut y = ParameterNode::new(random_matrix(5, 10));
         let mut z = (x.clone() + x.clone()).dot(&y);
 
-        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+
+        let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn dot_accumulation_finite_difference() {
@@ -813,7 +795,7 @@ mod tests {
     #[test]
     fn ln_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(2, 2));
-        let mut z = (x.clone() + x.clone()).ln();
+        let mut z = (x.clone() + x.clone()).exp().ln();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -832,7 +814,15 @@ mod tests {
         let mut z = (x.clone() + x.clone()).scalar_sum();
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&finite_difference, &gradient, TOLERANCE);
+        assert_close(&finite_difference, &gradient, TOLERANCE * 2.0);
+    }
+    #[test]
+    fn squared_sum_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let mut z = x.square().scalar_sum();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
     fn transpose_finite_difference() {
@@ -862,7 +852,17 @@ mod tests {
     #[test]
     fn sigmoid_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
-        let mut z = (x.clone() + x.clone()).sigmoid();
+        let z = (x.clone() + x.clone()).sigmoid();
+        let mut z = z.clone() + z.clone();
+
+        let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
+        assert_close(&finite_difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn relu_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let z = (x.clone() + x.clone()).relu();
+        let mut z = z * 3.0;
 
         let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -908,9 +908,10 @@ mod tests {
     fn rowwise_stack_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut y = ParameterNode::new(random_matrix(10, 5));
-        let v = x.clone() + y.clone();
+        //let v = x.clone() + y.clone();
 
-        let mut z = v.stack(&v, ndarray::Axis(0)).sigmoid();
+        let z = x.stack(&y, ndarray::Axis(0));
+        let mut z = z.clone().sigmoid() * z.clone().relu();
 
         assert_eq!(z.value().rows(), 20);
         assert_eq!(z.value().cols(), 5);
@@ -925,9 +926,9 @@ mod tests {
     fn columnwise_stack_finite_difference() {
         let mut x = ParameterNode::new(random_matrix(10, 5));
         let mut y = ParameterNode::new(random_matrix(10, 5));
-        let v = x.clone() + y.clone();
+        //let v = x.clone() + y.clone();
 
-        let mut z = v.stack(&v, ndarray::Axis(1)).sigmoid();
+        let mut z = x.stack(&y, ndarray::Axis(1)).sigmoid();
 
         assert_eq!(z.value().rows(), 10);
         assert_eq!(z.value().cols(), 10);
@@ -936,6 +937,17 @@ mod tests {
         assert_close(&difference, &gradient, TOLERANCE);
 
         let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn sparse_index_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 5));
+        let idx_0 = IndexInputNode::new(&[random_index(10)]);
+        let idx_1 = IndexInputNode::new(&[random_index(10)]);
+
+        let mut z = (x.index(&idx_0).tanh() * x.index(&idx_1)).square();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]
@@ -952,10 +964,10 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let mut optimizer = Adagrad::new(0.5, loss.parameters());
+        let optimizer = Adagrad::new(loss.parameters()).learning_rate(0.5);
 
         for _ in 0..num_epochs {
-            let _x = arr2(&[[rand::random::<f32>()]]);
+            let _x = arr2(&[[rand::thread_rng().gen()]]);
             let _y = 0.5 * &_x + 0.2;
 
             x.set_value(&_x);
@@ -995,16 +1007,14 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let mut optimizer = SGD::new(0.1, loss.parameters());
+        let optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
 
         for _ in 0..num_epochs {
-            let _x = arr2(&[
-                [
-                    rand::random::<f32>(),
-                    rand::random::<f32>(),
-                    rand::random::<f32>(),
-                ],
-            ]);
+            let _x = arr2(&[[
+                rand::thread_rng().gen(),
+                rand::thread_rng().gen(),
+                rand::thread_rng().gen(),
+            ]]);
             let _y = &_x.dot(&coefficients) + 5.0;
 
             x.set_value(&_x);
@@ -1055,7 +1065,7 @@ mod tests {
         let mut loss = (output.clone() - y_hat.clone()).square();
 
         let num_epochs = 200;
-        let mut optimizer = Adagrad::new(0.1, loss.parameters());
+        let optimizer = Adagrad::new(loss.parameters()).learning_rate(0.1);
 
         let mut loss_val = 0.0;
 
@@ -1117,7 +1127,7 @@ mod tests {
 
                 let num_epochs = 100;
 
-                let mut optimizer = SGD::new(0.1, loss.parameters());
+                let optimizer = SGD::new(loss.parameters());
 
                 let mut loss_val = 0.0;
 
@@ -1151,47 +1161,5 @@ mod tests {
         let sum_loss: f32 = losses.iter().sum();
 
         assert!(sum_loss / (losses.len() as f32) < 1e-3);
-    }
-
-    use test::Bencher;
-
-    #[bench]
-    fn bench_node_reuse(b: &mut Bencher) {
-        let dim = 128;
-
-        let x = ParameterNode::new(random_matrix(1, dim));
-        let y = ParameterNode::new(random_matrix(dim, 10));
-        let v = x.dot(&y);
-        let z = v.clone() + v.clone() + v.clone() + v.clone();
-
-        b.iter(|| {
-            z.forward();
-            z.zero_gradient();
-        });
-    }
-
-    #[bench]
-    fn bench_matrix_multiply(b: &mut Bencher) {
-        let dim = 64;
-        let num_epochs = 20;
-
-        let x_data = Arc::new(HogwildParameter::new(random_matrix(1, dim)));
-        let y_data = Arc::new(HogwildParameter::new(random_matrix(dim, 10)));
-
-        b.iter(|| {
-            (0..rayon::current_num_threads())
-                .into_par_iter()
-                .for_each(|_| {
-                    let x = ParameterNode::shared(x_data.clone());
-                    let y = ParameterNode::shared(y_data.clone());
-
-                    let v = x.dot(&y);
-
-                    for _ in 0..num_epochs {
-                        v.forward();
-                        v.zero_gradient();
-                    }
-                });
-        });
     }
 }

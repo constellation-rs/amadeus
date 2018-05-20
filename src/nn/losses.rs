@@ -1,12 +1,11 @@
 //! Loss functions.
-
-use std::rc::Rc;
 use std::cell::{Ref, RefCell};
 use std::ops::Deref;
+use std::rc::Rc;
 
-use {Arr, Node, Variable};
-use nodes::{Bor, ForwardAction, IndexInputNode, LogSoftmaxNode, PassCounter};
+use nodes::{BackwardAction, Bor, ForwardAction, IndexInputNode, LogSoftmaxNode, PassCounter};
 use numerics;
+use {Arr, Node, Variable};
 
 /// Sparse categorical cross entropy loss.
 ///
@@ -111,8 +110,16 @@ where
 
         self.loss_value.borrow_mut().fill(loss_value);
     }
+    /// The backpropagation mechanics for this node are a little strange,
+    /// because it uses the log-softmax node for the forward pass but not
+    /// for the backward pass.
     fn backward(&self, _: &Ref<Self::InputGradient>) {
         // TODO: actually use the input gradient
+        let beta = match self.counter.backward() {
+            BackwardAction::Set => 0.0,
+            BackwardAction::Increment => 1.0,
+        };
+
         {
             let mut gradient = self.gradient.borrow_mut();
             let gradient_slice = gradient.as_slice_mut().unwrap();
@@ -121,7 +128,7 @@ where
             let value_slice = value.as_slice().unwrap();
 
             for (grad, &val) in izip!(gradient_slice.iter_mut(), value_slice.iter()) {
-                *grad = numerics::exp(val);
+                *grad = beta * *grad + numerics::exp(val);
             }
 
             for &idx in self.y.value().iter() {
@@ -129,7 +136,9 @@ where
             }
         }
 
-        self.operand.backward(&self.gradient.borrow());
+        if self.counter.recurse_backward() {
+            self.operand.backward(&self.gradient.borrow());
+        }
     }
     fn value(&self) -> Bor<Self::Value> {
         Bor::RefGuard(self.loss_value.borrow())
@@ -139,7 +148,9 @@ where
     }
     fn zero_gradient(&self) {
         if !self.counter.is_zero() {
-            self.log_softmax.zero_gradient();
+            self.operand.zero_gradient();
+            self.log_softmax.zero_counter();
+            self.y.zero_gradient();
             self.counter.clear();
         }
     }
