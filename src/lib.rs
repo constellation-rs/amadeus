@@ -12,8 +12,6 @@
 //! 3. Define-by-run.
 //! 4. Trivial Hogwild-style parallelisation, scaling linearly with the number of CPU cores available.
 //!
-//! Requires the nightly compiler due to use of SIMD intrinsics.
-//!
 //! # Quickstart
 //!
 //! The following defines a univariate linear regression model, then
