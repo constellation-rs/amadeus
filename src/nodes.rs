@@ -2091,12 +2091,12 @@ where
 
         self.operand.forward();
         let mut dest = self.value.borrow_mut();
-        dest.assign(self.operand.value().deref());
+        dest.slice_assign(self.operand.value().deref());
 
         let max = self
             .operand
             .value()
-            .deref()
+            .fast_slice()
             .iter()
             .fold(std::f32::MIN, |x, y| x.max(*y));
         dest.map_inplace(|x| *x = numerics::exp(*x - max));
@@ -2107,6 +2107,11 @@ where
         // TODO: accumulate gradients
         let value = self.value.borrow();
         let mut jacobian = self.jacobian.borrow_mut();
+
+        let beta = match self.counter.backward() {
+            BackwardAction::Set => 0.0,
+            BackwardAction::Increment => 1.0,
+        };
 
         for (row_idx, (mut row, row_val)) in jacobian
             .genrows_mut()
@@ -2134,12 +2139,14 @@ where
                 1.0,
                 gradient,
                 jacobian.deref_mut(),
-                0.0,
+                beta,
                 self.operand_gradient.borrow_mut().deref_mut(),
             );
         }
 
-        self.operand.backward(&self.operand_gradient.borrow());
+        if self.counter.recurse_backward() {
+            self.operand.backward(&self.operand_gradient.borrow());
+        }
     }
     fn value(&self) -> Bor<Self::Value> {
         Bor::RefGuard(self.value.borrow())
@@ -2194,6 +2201,13 @@ where
             counter: PassCounter::default(),
         }
     }
+
+    /// An additional method for zeroing the counter for use in the
+    /// log-softmax loss, where the actuall log-softmax layer is skipped
+    /// when backpropagating.
+    pub fn zero_counter(&self) {
+        self.counter.clear();
+    }
 }
 
 impl<OP> Node for LogSoftmaxNode<OP>
@@ -2223,7 +2237,11 @@ where
             .for_each(|x| *x -= denominator);
     }
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        // TODO: accumulate gradients
+        let beta = match self.counter.backward() {
+            BackwardAction::Set => 0.0,
+            BackwardAction::Increment => 1.0,
+        };
+
         {
             let value = self.value.borrow();
             let value_slice = value.as_slice().expect("Can't get value slice.");
@@ -2241,11 +2259,13 @@ where
             for (out_grad, in_grad, &val) in
                 izip!(downstream_gradient_slice, gradient_slice, value_slice)
             {
-                *out_grad = in_grad - numerics::exp(val) * gradient_sum;
+                *out_grad = beta * *out_grad + in_grad - numerics::exp(val) * gradient_sum;
             }
         }
 
-        self.operand.backward(&self.operand_gradient.borrow());
+        if self.counter.recurse_backward() {
+            self.operand.backward(&self.operand_gradient.borrow());
+        }
     }
     fn value(&self) -> Bor<Self::Value> {
         Bor::RefGuard(self.value.borrow())
