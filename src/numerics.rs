@@ -337,7 +337,6 @@ macro_rules! slice_binary_op {
     }
 }
 
-slice_binary_op!(add, slice_add, increment_add, increment_slice_add, +);
 slice_binary_op!(sub, slice_sub, increment_sub, increment_slice_sub, -);
 slice_binary_op!(mul, slice_mul, increment_mul, increment_slice_mul, *);
 slice_binary_op!(div, slice_div, increment_div, increment_slice_div, /);

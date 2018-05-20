@@ -45,6 +45,7 @@
 //! # extern crate rand;
 //! # extern crate wyrm;
 //! # use wyrm::*;
+//! # use wyrm::optim::*;
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
@@ -56,7 +57,7 @@
 //! # let y_hat = slope.clone() * x.clone() + intercept.clone();
 //! # let mut loss = (y.clone() - y_hat).square();
 //! # let num_epochs = 10;
-//! let mut optimizer = SGD::new(0.1, loss.parameters());
+//! let mut optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
 //!
 //! for _ in 0..num_epochs {
 //!     let x_value: f32 = rand::random();
@@ -86,6 +87,7 @@
 //! # use std::sync::Arc;
 //! # use rayon::prelude::*;
 //! # use wyrm::*;
+//! # use wyrm::optim::*;
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
@@ -104,7 +106,7 @@
 //!            let y_hat = slope.clone() * x.clone() + intercept.clone();
 //!            let mut loss = (y.clone() - y_hat).square();
 //!
-//!            let mut optimizer = SGD::new(0.1, loss.parameters());
+//!            let optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
 //!
 //!            for _ in 0..num_epochs {
 //!                let x_value: f32 = rand::random();
@@ -138,9 +140,6 @@
 //! Enable the `fast-math` option to use fast approximations to transcendental functions.
 //! This should give substantial speed gains in networks that are `exp`, `ln`, or `tanh`-heavy.
 
-// TODO: pass through of parent values in .value(),
-// optimizations in forward
-// check for needs gradient
 #[macro_use]
 extern crate serde_derive;
 
@@ -154,8 +153,6 @@ extern crate smallvec;
 #[macro_use]
 extern crate itertools;
 
-use ndarray::Axis;
-
 /// Alias for a `f32` `ndarray` matrix.
 pub type Arr = ndarray::Array2<f32>;
 
@@ -163,9 +160,7 @@ use std::cell::RefCell;
 use std::clone::Clone;
 use std::ops::{Add, Deref, Div, Mul, Neg, Sub};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex, MutexGuard};
 
-mod barrier;
 mod fast_approx;
 pub mod nn;
 mod nodes;
@@ -173,11 +168,9 @@ mod numerics;
 pub mod optim;
 
 use nodes::*;
-use optim::Optimizer;
 
 pub use nodes::{Bor, HogwildParameter, IndexInputNode, InputNode, Node, ParameterNode};
 pub use numerics::simd_dot;
-use numerics::{ArraySlice, ArraySliceMut};
 
 fn clamp(x: f32, min: f32, max: f32) -> f32 {
     if x > max {
@@ -313,8 +306,6 @@ where
             .unwrap()
             .iter_mut()
             .for_each(|x| *x = 100.0 * clamp(*x, min, max));
-
-        println!("value {:#?}", value);
     }
 
     /// Square this variable.
@@ -586,260 +577,6 @@ where
     }
 }
 
-/// Standard stochastic gradient descent optimizer with a fixed learning rate.
-pub struct SGD {
-    learning_rate: f32,
-    parameters: Vec<Variable<ParameterNode>>,
-    clamp: Option<(f32, f32)>,
-}
-
-impl SGD {
-    /// Create a new optimizer instance with a given set of parameters.
-    pub fn new(learning_rate: f32, parameters: Vec<Variable<ParameterNode>>) -> Self {
-        SGD {
-            learning_rate: learning_rate,
-            parameters: parameters,
-            clamp: None,
-        }
-    }
-
-    /// Set the clamp bounds.
-    pub fn clamp(mut self, min: f32, max: f32) -> Self {
-        self.clamp = Some((min, max));
-        self
-    }
-
-    /// Perform a single SGD step.
-    pub fn step(&mut self) {
-        let learning_rate = self.learning_rate;
-        for parameter in &self.parameters {
-            let mut sink = parameter.node.gradient.borrow_mut();
-            let mut param_value = unsafe { parameter.node.value.value_mut() };
-
-            if let Some((min, max)) = self.clamp {
-                sink.clamp(min, max);
-            }
-
-            if sink.has_dense {
-                param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
-            }
-
-            for (ref index_vec, ref grad) in sink.sparse_gradient.as_slice() {
-                for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                    let grad_row = grad.subview(Axis(0), grad_idx);
-                    let mut param_row = param_value.subview_mut(Axis(0), param_idx);
-
-                    numerics::map_add_assign_slice(
-                        param_row.into_slice().unwrap(),
-                        grad_row.into_slice().unwrap(),
-                        |x| -learning_rate * x,
-                    );
-                }
-            }
-        }
-    }
-}
-
-pub struct SynchronizationBarrier {
-    core: Arc<SynchronizationBarrierCore>,
-}
-
-impl SynchronizationBarrier {
-    pub fn new() -> Self {
-        SynchronizationBarrier {
-            core: Arc::new(SynchronizationBarrierCore::new()),
-        }
-    }
-
-    fn register_thread(&self) -> SynchronizationBarrierGuard {
-        self.core.register_thread();
-        SynchronizationBarrierGuard {
-            barrier: Arc::clone(&self.core),
-        }
-    }
-}
-
-struct SynchronizationBarrierCore {
-    start_barrier: barrier::Barrier,
-    end_barrier: barrier::Barrier,
-    parameter_lock: Mutex<()>,
-}
-
-impl SynchronizationBarrierCore {
-    fn new() -> Self {
-        Self {
-            start_barrier: barrier::Barrier::new(0),
-            end_barrier: barrier::Barrier::new(0),
-            parameter_lock: Mutex::default(),
-        }
-    }
-
-    fn register_thread(&self) {
-        self.start_barrier.increment_num_threads();
-        self.end_barrier.increment_num_threads();
-    }
-
-    fn deregister_thread(&self) {
-        self.start_barrier.decrement_num_threads();
-        self.end_barrier.decrement_num_threads();
-    }
-
-    fn start_wait(&self) {
-        self.start_barrier.wait();
-    }
-
-    fn end_wait(&self) {
-        self.end_barrier.wait();
-    }
-}
-
-pub struct SynchronizationBarrierGuard {
-    barrier: Arc<SynchronizationBarrierCore>,
-}
-
-impl SynchronizationBarrierGuard {
-    fn start_wait(&self) {
-        self.barrier.start_wait();
-    }
-
-    fn end_wait(&self) {
-        self.barrier.end_wait();
-    }
-
-    fn lock(&self) -> MutexGuard<()> {
-        self.barrier.parameter_lock.lock().unwrap()
-    }
-}
-
-impl Drop for SynchronizationBarrierGuard {
-    fn drop(&mut self) {
-        self.barrier.deregister_thread();
-    }
-}
-
-/// Adagrad optimizer, scaled the learning rate by the inverse of previously
-/// accumulated gradients.
-pub struct Adagrad {
-    learning_rate: f32,
-    l2: f32,
-    parameters: Vec<Variable<ParameterNode>>,
-    clamp: Option<(f32, f32)>,
-    eps: f32,
-    sync_barrier: Option<SynchronizationBarrierGuard>,
-}
-
-impl Adagrad {
-    /// Create a new optimizer instance with a given set of parameters.
-    pub fn new(learning_rate: f32, parameters: Vec<Variable<ParameterNode>>) -> Self {
-        Adagrad {
-            learning_rate: learning_rate,
-            l2: 0.0,
-            parameters: parameters,
-            clamp: None,
-            eps: 1e-10,
-            sync_barrier: None,
-        }
-    }
-
-    pub fn synchronized(mut self, barrier: &SynchronizationBarrier) -> Self {
-        self.sync_barrier = Some(barrier.register_thread());
-        self
-    }
-
-    /// Set the clamp bounds.
-    pub fn clamp(mut self, min: f32, max: f32) -> Self {
-        self.clamp = Some((min, max));
-        self
-    }
-
-    /// Set the L2 penalty.
-    pub fn l2_penalty(mut self, l2_penalty: f32) -> Self {
-        self.l2 = l2_penalty;
-        self
-    }
-
-    /// Decay weights.
-    pub fn decay_weights(&mut self, penalty: f32) {
-        for parameter in &self.parameters {
-            let mut param_value = unsafe { parameter.node.value.value_mut() };
-
-            param_value
-                .as_slice_mut()
-                .unwrap()
-                .iter_mut()
-                .for_each(|x| *x -= x.signum() * penalty * numerics::pow2(*x));
-        }
-    }
-
-    fn do_step(&self, parameter: &Variable<ParameterNode>) {
-        let learning_rate = self.learning_rate;
-
-        let mut sink = parameter.node.gradient.borrow_mut();
-
-        if let Some((min, max)) = self.clamp {
-            sink.clamp(min, max);
-        }
-
-        let param_value = unsafe { parameter.node.value.value_mut() };
-        let squared_gradient = unsafe { parameter.node.value.squared_gradient_mut() };
-
-        if sink.has_dense {
-            for (value, &gradient, squared_gradient) in izip!(
-                param_value.fast_slice_mut(),
-                sink.dense_gradient().fast_slice(),
-                squared_gradient.fast_slice_mut()
-            ) {
-                let gradient = gradient + *value * self.l2;
-                *squared_gradient += numerics::pow2(gradient);
-                *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
-            }
-        }
-
-        sink.sparse_gradient
-            .as_slice()
-            .iter()
-            .for_each(|(ref index_vec, ref grad)| {
-                for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                    let grad_row = grad.subview(Axis(0), grad_idx);
-                    let mut param_row = param_value.subview_mut(Axis(0), param_idx);
-                    let mut squared_row = squared_gradient.subview_mut(Axis(0), param_idx);
-
-                    for (value, &gradient, squared_gradient) in izip!(
-                        param_row.fast_slice_mut(),
-                        grad_row.into_slice().unwrap(),
-                        squared_row.fast_slice_mut()
-                    ) {
-                        let gradient = gradient + *value * self.l2;
-                        *squared_gradient += numerics::pow2(gradient);
-                        *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
-                    }
-                }
-            });
-    }
-}
-
-impl optim::Optimizer for Adagrad {
-    /// Perform a single SGD step.
-    fn step(&self) {
-        if let Some(ref barrier) = self.sync_barrier {
-            barrier.start_wait();
-            {
-                let _ = barrier.lock();
-
-                for parameter in &self.parameters {
-                    self.do_step(parameter);
-                }
-            }
-
-            barrier.end_wait();
-        } else {
-            for parameter in &self.parameters {
-                self.do_step(parameter);
-            }
-        }
-    }
-}
-
 /// Compute finite difference gradient estimates of the output variable
 /// with respect to the input. Use to verify correctness of gradient
 /// computations.
@@ -923,6 +660,7 @@ mod tests {
 
     use ndarray::arr2;
 
+    use optim::{Adagrad, Optimizer, SGD};
     use rand::distributions::{Distribution, Uniform};
     use rand::Rng;
     use rayon::prelude::*;
@@ -1228,7 +966,7 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let optimizer = Adagrad::new(0.5, loss.parameters());
+        let optimizer = Adagrad::new(loss.parameters()).learning_rate(0.5);
 
         for _ in 0..num_epochs {
             let _x = arr2(&[[rand::thread_rng().gen()]]);
@@ -1271,7 +1009,7 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let mut optimizer = SGD::new(0.1, loss.parameters());
+        let optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
 
         for _ in 0..num_epochs {
             let _x = arr2(&[[
@@ -1329,7 +1067,7 @@ mod tests {
         let mut loss = (output.clone() - y_hat.clone()).square();
 
         let num_epochs = 200;
-        let optimizer = Adagrad::new(0.1, loss.parameters());
+        let optimizer = Adagrad::new(loss.parameters()).learning_rate(0.1);
 
         let mut loss_val = 0.0;
 
@@ -1391,7 +1129,7 @@ mod tests {
 
                 let num_epochs = 100;
 
-                let mut optimizer = SGD::new(0.1, loss.parameters());
+                let optimizer = SGD::new(loss.parameters());
 
                 let mut loss_val = 0.0;
 

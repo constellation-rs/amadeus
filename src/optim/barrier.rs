@@ -11,7 +11,7 @@
 // except according to those terms.
 
 use std::fmt;
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 pub struct Barrier {
     lock: Mutex<BarrierState>,
@@ -92,5 +92,82 @@ impl fmt::Debug for BarrierWaitResult {
 impl BarrierWaitResult {
     pub fn is_leader(&self) -> bool {
         self.0
+    }
+}
+
+pub struct SynchronizationBarrier {
+    core: Arc<SynchronizationBarrierCore>,
+}
+
+impl SynchronizationBarrier {
+    pub fn new() -> Self {
+        SynchronizationBarrier {
+            core: Arc::new(SynchronizationBarrierCore::new()),
+        }
+    }
+
+    pub(crate) fn register_thread(&self) -> SynchronizationBarrierGuard {
+        self.core.register_thread();
+        SynchronizationBarrierGuard {
+            barrier: Arc::clone(&self.core),
+        }
+    }
+}
+
+struct SynchronizationBarrierCore {
+    start_barrier: Barrier,
+    end_barrier: Barrier,
+    parameter_lock: Mutex<()>,
+}
+
+impl SynchronizationBarrierCore {
+    fn new() -> Self {
+        Self {
+            start_barrier: Barrier::new(0),
+            end_barrier: Barrier::new(0),
+            parameter_lock: Mutex::default(),
+        }
+    }
+
+    fn register_thread(&self) {
+        self.start_barrier.increment_num_threads();
+        self.end_barrier.increment_num_threads();
+    }
+
+    fn deregister_thread(&self) {
+        self.start_barrier.decrement_num_threads();
+        self.end_barrier.decrement_num_threads();
+    }
+
+    pub(crate) fn start_wait(&self) {
+        self.start_barrier.wait();
+    }
+
+    pub(crate) fn end_wait(&self) {
+        self.end_barrier.wait();
+    }
+}
+
+pub struct SynchronizationBarrierGuard {
+    barrier: Arc<SynchronizationBarrierCore>,
+}
+
+impl SynchronizationBarrierGuard {
+    pub fn start_wait(&self) {
+        self.barrier.start_wait();
+    }
+
+    pub fn end_wait(&self) {
+        self.barrier.end_wait();
+    }
+
+    pub fn lock(&self) -> MutexGuard<()> {
+        self.barrier.parameter_lock.lock().unwrap()
+    }
+}
+
+impl Drop for SynchronizationBarrierGuard {
+    fn drop(&mut self) {
+        self.barrier.deregister_thread();
     }
 }

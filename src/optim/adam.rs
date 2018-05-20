@@ -1,11 +1,8 @@
-use super::{numerics, Arr, ParameterNode, SynchronizationBarrier, SynchronizationBarrierGuard,
-            Variable};
+use super::barrier::{SynchronizationBarrier, SynchronizationBarrierGuard};
+use super::Optimizer;
+use {numerics, Arr, ParameterNode, Variable};
 
 use ndarray::Axis;
-
-pub trait Optimizer {
-    fn step(&self);
-}
 
 struct AdamParameters<'params> {
     value: &'params mut Arr,
@@ -14,6 +11,7 @@ struct AdamParameters<'params> {
     t: &'params mut i32,
 }
 
+/// ADAM optimizer.
 pub struct Adam {
     learning_rate: f32,
     l2: f32,
@@ -26,6 +24,7 @@ pub struct Adam {
 }
 
 impl Adam {
+    /// Build new optimizer object.
     pub fn new(parameters: Vec<Variable<ParameterNode>>) -> Self {
         Self {
             learning_rate: 0.05,
