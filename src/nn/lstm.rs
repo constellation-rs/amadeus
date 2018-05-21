@@ -206,6 +206,7 @@ impl Cell {
     ///
     /// If this is the first cell, initialize the cell state and the hidden state;
     /// otherwise pass the cell and hidden states from previous iterations.
+    #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value, type_complexity))]
     pub fn forward<C, H, I>(
         &self,
         state: (Variable<C>, Variable<H>),

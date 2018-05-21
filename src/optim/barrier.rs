@@ -99,6 +99,12 @@ pub struct SynchronizationBarrier {
     core: Arc<SynchronizationBarrierCore>,
 }
 
+impl Default for SynchronizationBarrier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SynchronizationBarrier {
     pub fn new() -> Self {
         SynchronizationBarrier {

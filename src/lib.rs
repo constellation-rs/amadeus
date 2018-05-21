@@ -137,7 +137,7 @@
 //!
 //! Enable the `fast-math` option to use fast approximations to transcendental functions.
 //! This should give substantial speed gains in networks that are `exp`, `ln`, or `tanh`-heavy.
-
+#![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal, redundant_field_names))]
 #[macro_use]
 extern crate serde_derive;
 

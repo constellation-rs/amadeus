@@ -274,7 +274,7 @@ fn column_wise_stack(dest: &mut Arr, lhs: &Arr, rhs: &Arr) {
     }
 }
 
-fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: BackwardAction) {
+fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: &BackwardAction) {
     for (grad_row, mut lhs_row, mut rhs_row) in izip!(
         gradient.genrows().into_iter(),
         lhs.genrows_mut().into_iter(),
@@ -303,7 +303,7 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
     }
 }
 
-fn row_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: BackwardAction) {
+fn row_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: &BackwardAction) {
     for (grad_row, mut dest_row) in gradient
         .genrows()
         .into_iter()
@@ -407,13 +407,13 @@ where
                     gradient,
                     lhs_grad.deref_mut(),
                     rhs_grad.deref_mut(),
-                    self.counter.backward(),
+                    &self.counter.backward(),
                 ),
                 ndarray::Axis(1) => column_wise_stack_gradient(
                     gradient,
                     lhs_grad.deref_mut(),
                     rhs_grad.deref_mut(),
-                    self.counter.backward(),
+                    &self.counter.backward(),
                 ),
                 _ => panic!("Stacking tensors not allowed."),
             }
@@ -592,6 +592,7 @@ pub struct HogwildParameter {
     num_updates: Cell<i32>,
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(mut_from_ref))]
 impl HogwildParameter {
     /// Create a new parameter object.
     pub fn new(value: Arr) -> Self {
