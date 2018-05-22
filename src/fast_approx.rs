@@ -41,6 +41,8 @@
  * Contact: Paul Mineiro <paul@mineiro.com>                            *
  *=====================================================================*/
 
+use std::f32;
+
 #[repr(C)]
 union FloatUint {
     f: f32,
@@ -61,15 +63,15 @@ pub fn fastlog2(x: f32) -> f32 {
             i: (vx.i & 0x007FFFFF) | 0x3f000000,
         };
         let mut y = vx.i as f32;
-        y *= 1.1920928955078125e-7;
+        y *= 1.192_092_9e-7;
 
-        y - 124.22551499 - 1.498030302 * mx.f - 1.72587999 / (0.3520887068 + mx.f)
+        y - 124.225_52 - 1.498_030_3 * mx.f - 1.725_88 / (0.352_088_72 + mx.f)
     }
 }
 
 #[inline(always)]
 pub fn fastlog(x: f32) -> f32 {
-    0.69314718 * fastlog2(x)
+    f32::consts::LN_2 * fastlog2(x)
 }
 
 #[inline(always)]
@@ -92,7 +94,7 @@ pub fn fastpow2(x: f32) -> f32 {
 
     let v = UintFloat {
         i: ((1 << 23) as f32
-            * (clip + 121.2740575 + 27.7280233 / (4.84252568 - z) - 1.49012907 * z))
+            * (clip + 121.274_055 + 27.728_024 / (4.842_525_5 - z) - 1.490_129_1 * z))
             as u32,
     };
 
@@ -101,5 +103,5 @@ pub fn fastpow2(x: f32) -> f32 {
 
 #[inline(always)]
 pub fn fastexp(x: f32) -> f32 {
-    fastpow2(1.442695040 * x)
+    fastpow2(f32::consts::LOG2_E * x)
 }

@@ -156,6 +156,7 @@ pub fn pow2(x: f32) -> f32 {
     x.powi(2)
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 pub fn softmax_exp_sum(xs: &[f32], max: f32) -> f32 {
     let mut xs = xs;
     let mut s = 0.;
@@ -258,6 +259,7 @@ pub fn simd_dot(xs: &[f32], ys: &[f32]) -> f32 {
     s
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 pub fn simd_sum(xs: &[f32]) -> f32 {
     let mut xs = xs;
 
