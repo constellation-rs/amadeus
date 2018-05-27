@@ -638,7 +638,7 @@ where
 
         let sparse_gradient = input.sparse_gradient();
 
-        for (indices, grad) in sparse_gradient.as_slice() {
+        for &(ref indices, ref grad) in sparse_gradient.as_slice() {
             for &row_idx in indices.iter() {
                 for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
                     *dest += orig;

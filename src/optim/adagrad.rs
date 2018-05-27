@@ -93,7 +93,7 @@ impl Adagrad {
         sink.sparse_gradient
             .as_slice()
             .iter()
-            .for_each(|(ref index_vec, ref grad)| {
+            .for_each(|&(ref index_vec, ref grad)| {
                 for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
                     let grad_row = grad.subview(Axis(0), grad_idx);
                     let mut param_row = param_value.subview_mut(Axis(0), param_idx);

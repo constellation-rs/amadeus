@@ -287,7 +287,7 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
         let (left, right) = grad_row.split_at(lhs_row.len());
 
         match op {
-            BackwardAction::Increment => {
+            &BackwardAction::Increment => {
                 for (x, y) in lhs_row.iter_mut().zip(left.iter()) {
                     *x += y;
                 }
@@ -295,7 +295,7 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
                     *x += y;
                 }
             }
-            BackwardAction::Set => {
+            &BackwardAction::Set => {
                 lhs_row.copy_from_slice(left);
                 rhs_row.copy_from_slice(right);
             }
@@ -313,10 +313,10 @@ fn row_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: &Ba
         let dest_row = dest_row.as_slice_mut().unwrap();
 
         match op {
-            BackwardAction::Increment => for (x, y) in dest_row.iter_mut().zip(grad_row.iter()) {
+            &BackwardAction::Increment => for (x, y) in dest_row.iter_mut().zip(grad_row.iter()) {
                 *x += y;
             },
-            BackwardAction::Set => for (x, &y) in dest_row.iter_mut().zip(grad_row.iter()) {
+            &BackwardAction::Set => for (x, &y) in dest_row.iter_mut().zip(grad_row.iter()) {
                 *x = y;
             },
         }
@@ -585,7 +585,7 @@ impl SparseGradientStore {
         let (index, value) = gradient;
 
         if self.len < self.data.len() {
-            let (index_vec, grad) = &mut self.data[self.len];
+            let &mut (ref mut index_vec, ref mut grad) = &mut self.data[self.len];
             index_vec.clear();
             index_vec.extend_from_slice(&index[..]);
             grad.slice_assign(value);
@@ -648,7 +648,7 @@ impl GradientAccumulator {
         self.sparse_gradient
             .as_slice_mut()
             .iter_mut()
-            .for_each(|(_, ref mut grad)| {
+            .for_each(|&mut (_, ref mut grad)| {
                 grad.as_slice_mut()
                     .unwrap()
                     .iter_mut()
