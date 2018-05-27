@@ -143,6 +143,7 @@ extern crate serde_derive;
 
 extern crate serde;
 
+#[macro_use]
 extern crate ndarray;
 extern crate rand;
 extern crate rayon;
@@ -430,6 +431,17 @@ where
             merge_parameters(&self.parameters, &other.parameters),
         )
     }
+
+    /// Slice the node according to the `ndarray` slice syntax.
+    pub fn slice(
+        &self,
+        slice: &ndarray::SliceInfo<[ndarray::SliceOrIndex; 2], ndarray::Ix2>,
+    ) -> Variable<SliceNode<T>> {
+        Variable::new(
+            Rc::new(SliceNode::new(Rc::clone(&self.node), slice)),
+            self.parameters.clone(),
+        )
+    }
 }
 
 impl Variable<ParameterNode> {
@@ -626,7 +638,7 @@ where
 
         let sparse_gradient = input.sparse_gradient();
 
-        for (indices, grad) in sparse_gradient.as_slice() {
+        for &(ref indices, ref grad) in sparse_gradient.as_slice() {
             for &row_idx in indices.iter() {
                 for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
                     *dest += orig;
@@ -937,6 +949,26 @@ mod tests {
         assert_close(&difference, &gradient, TOLERANCE);
 
         let (difference, gradient) = finite_difference(&mut y, &mut z);
+        assert_close(&difference, &gradient, TOLERANCE);
+    }
+    #[test]
+    fn columnwise_view_finite_difference() {
+        let mut x = ParameterNode::new(random_matrix(10, 30));
+
+        let x_0 = x.slice(s![.., 0..10]);
+        let x_1 = x.slice(s![.., 10..20]);
+        let x_2 = x.slice(s![.., 20..30]);
+
+        assert_eq!(x_0.value().rows(), 10);
+        assert_eq!(x_0.value().cols(), 10);
+        assert_eq!(x_1.value().rows(), 10);
+        assert_eq!(x_1.value().cols(), 10);
+        assert_eq!(x_2.value().rows(), 10);
+        assert_eq!(x_2.value().cols(), 10);
+
+        let mut z = (x_0 + x_1 + x_2).sigmoid();
+
+        let (difference, gradient) = finite_difference(&mut x, &mut z);
         assert_close(&difference, &gradient, TOLERANCE);
     }
     #[test]

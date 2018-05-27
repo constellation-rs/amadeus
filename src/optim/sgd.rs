@@ -55,7 +55,7 @@ impl SGD {
             param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
         }
 
-        for (ref index_vec, ref grad) in sink.sparse_gradient.as_slice() {
+        for &(ref index_vec, ref grad) in sink.sparse_gradient.as_slice() {
             for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
                 let grad_row = grad.subview(Axis(0), grad_idx);
                 let mut param_row = param_value.subview_mut(Axis(0), param_idx);

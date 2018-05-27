@@ -1,7 +1,7 @@
 use std;
 use std::cell::{Cell, Ref, RefCell};
 use std::fmt;
-use std::ops::{Deref, DerefMut};
+use std::ops::{AddAssign, Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -287,7 +287,7 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
         let (left, right) = grad_row.split_at(lhs_row.len());
 
         match op {
-            BackwardAction::Increment => {
+            &BackwardAction::Increment => {
                 for (x, y) in lhs_row.iter_mut().zip(left.iter()) {
                     *x += y;
                 }
@@ -295,7 +295,7 @@ fn column_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: 
                     *x += y;
                 }
             }
-            BackwardAction::Set => {
+            &BackwardAction::Set => {
                 lhs_row.copy_from_slice(left);
                 rhs_row.copy_from_slice(right);
             }
@@ -313,10 +313,10 @@ fn row_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: &Ba
         let dest_row = dest_row.as_slice_mut().unwrap();
 
         match op {
-            BackwardAction::Increment => for (x, y) in dest_row.iter_mut().zip(grad_row.iter()) {
+            &BackwardAction::Increment => for (x, y) in dest_row.iter_mut().zip(grad_row.iter()) {
                 *x += y;
             },
-            BackwardAction::Set => for (x, &y) in dest_row.iter_mut().zip(grad_row.iter()) {
+            &BackwardAction::Set => for (x, &y) in dest_row.iter_mut().zip(grad_row.iter()) {
                 *x = y;
             },
         }
@@ -440,6 +440,100 @@ where
     }
 }
 
+#[derive(Debug)]
+pub struct SliceNode<LHS> {
+    slice: ndarray::SliceInfo<[ndarray::SliceOrIndex; 2], ndarray::Ix2>,
+    value: RefCell<Arr>,
+    lhs_gradient: RefCell<Arr>,
+    lhs: Rc<LHS>,
+    needs_gradient: bool,
+    counter: PassCounter,
+}
+
+impl<LHS> SliceNode<LHS>
+where
+    LHS: Node<Value = Arr>,
+{
+    pub fn new(
+        lhs: Rc<LHS>,
+        slice: &ndarray::SliceInfo<[ndarray::SliceOrIndex; 2], ndarray::Ix2>,
+    ) -> Self {
+        let needs_gradient = lhs.needs_gradient();
+
+        let value = {
+            let val = lhs.value();
+            let sliced = val.slice(slice);
+            let mut value = Arr::zeros((sliced.rows(), sliced.cols()));
+            value.assign(&sliced);
+
+            value
+        };
+
+        let lhs_gradient = lhs.value().deref() * 0.0;
+
+        SliceNode {
+            slice: *slice,
+            value: RefCell::new(value),
+            lhs_gradient: RefCell::new(lhs_gradient),
+            lhs: lhs,
+            needs_gradient: needs_gradient,
+            counter: PassCounter::default(),
+        }
+    }
+}
+
+impl<LHS> Node for SliceNode<LHS>
+where
+    LHS: Node<Value = Arr, InputGradient = Arr>,
+{
+    type Value = Arr;
+    type InputGradient = Arr;
+    fn forward(&self) {
+        if self.counter.forward() == ForwardAction::Cached {
+            return;
+        }
+
+        self.lhs.forward();
+
+        let lhs_value = self.lhs.value();
+        let mut self_value = self.value.borrow_mut();
+        self_value.assign(&lhs_value.slice(&self.slice));
+    }
+    fn backward(&self, gradient: &Ref<Self::InputGradient>) {
+        match self.counter.backward() {
+            BackwardAction::Set => {
+                self.lhs_gradient
+                    .borrow_mut()
+                    .slice_mut(&self.slice)
+                    .assign(gradient.deref());
+            }
+            BackwardAction::Increment => {
+                self.lhs_gradient
+                    .borrow_mut()
+                    .slice_mut(&self.slice)
+                    .add_assign(gradient.deref());
+            }
+        }
+
+        if self.counter.recurse_backward() {
+            self.lhs.backward(&self.lhs_gradient.borrow());
+        }
+    }
+
+    fn value(&self) -> Bor<Self::Value> {
+        Bor::RefGuard(self.value.borrow())
+    }
+    fn needs_gradient(&self) -> bool {
+        self.needs_gradient
+    }
+    fn zero_gradient(&self) {
+        if !self.counter.is_zero() {
+            self.lhs.zero_gradient();
+            self.counter.clear();
+        }
+    }
+}
+
 /// Input node for the graph.
 #[derive(Debug)]
 pub struct InputNode {
@@ -491,7 +585,7 @@ impl SparseGradientStore {
         let (index, value) = gradient;
 
         if self.len < self.data.len() {
-            let (index_vec, grad) = &mut self.data[self.len];
+            let &mut (ref mut index_vec, ref mut grad) = &mut self.data[self.len];
             index_vec.clear();
             index_vec.extend_from_slice(&index[..]);
             grad.slice_assign(value);
@@ -554,7 +648,7 @@ impl GradientAccumulator {
         self.sparse_gradient
             .as_slice_mut()
             .iter_mut()
-            .for_each(|(_, ref mut grad)| {
+            .for_each(|&mut (_, ref mut grad)| {
                 grad.as_slice_mut()
                     .unwrap()
                     .iter_mut()
