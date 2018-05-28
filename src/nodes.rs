@@ -584,15 +584,26 @@ impl SparseGradientStore {
     pub fn push(&mut self, gradient: (&[usize], &Arr)) {
         let (index, value) = gradient;
 
-        if self.len < self.data.len() {
-            let &mut (ref mut index_vec, ref mut grad) = &mut self.data[self.len];
+        // Increment gradients when indices match.
+        for &mut (ref mut index_vec, ref mut grad) in self.data[..self.len].iter_mut() {
+            if &index_vec[..] == index {
+                grad.slice_add_assign(value);
+                return;
+            }
+        }
+
+        // Set gradients on existing objects for new indices.
+        for &mut (ref mut index_vec, ref mut grad) in self.data[self.len..].iter_mut() {
             index_vec.clear();
-            index_vec.extend_from_slice(&index[..]);
+            index_vec.extend_from_slice(index);
             grad.slice_assign(value);
             self.len += 1;
-        } else {
-            self.data.push((Vec::from(&index[..]), value.clone()));
+            return;
         }
+
+        // Increase index capacity.
+        self.data.push((Vec::from(&index[..]), value.clone()));
+        self.len += 1;
     }
 
     pub fn as_slice(&self) -> &[(Vec<usize>, Arr)] {
