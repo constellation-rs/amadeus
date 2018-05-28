@@ -354,8 +354,10 @@ mod tests {
             assert_close(&difference, &gradient, TOLERANCE);
         }
 
-        for x in hidden.parameters().iter_mut() {
-            let (difference, gradient) = finite_difference(x, &mut hidden);
+        let mut params = hidden.parameters().to_owned();
+
+        for x in params.iter_mut() {
+            let (difference, gradient) = finite_difference(x, hidden);
             assert_close(&difference, &gradient, TOLERANCE);
         }
     }
@@ -431,7 +433,7 @@ mod tests {
 
         let prediction = hidden.dot(&final_layer);
         let mut loss = sparse_categorical_crossentropy(&prediction, &y);
-        let optimizer = Adam::new(loss.parameters()).learning_rate(0.01);
+        let optimizer = Adam::new().learning_rate(0.01);
 
         let digits = pi_digits(100);
 
@@ -462,7 +464,7 @@ mod tests {
 
                 loss_val += loss.value().scalar_sum();
 
-                optimizer.step();
+                optimizer.step(loss.parameters());
                 loss.zero_gradient();
 
                 if target_digit == predicted_label(prediction.value().deref()) {

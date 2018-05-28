@@ -1,7 +1,9 @@
-use super::barrier::{SynchronizationBarrier, SynchronizationBarrierGuard};
-use super::Optimizer;
+use super::barrier::SynchronizationBarrier;
+use super::{InnerOptimizer, Optimizer, SynchronizedOptimizer};
 use numerics::{ArraySlice, ArraySliceMut};
-use {numerics, ParameterNode, Variable};
+use std::ops::DerefMut;
+use std::sync::Arc;
+use {numerics, HogwildParameter, ParameterNode, Variable};
 
 use ndarray::Axis;
 
@@ -10,34 +12,26 @@ use ndarray::Axis;
 pub struct Adagrad {
     learning_rate: f32,
     l2: f32,
-    parameters: Vec<Variable<ParameterNode>>,
     clamp: Option<(f32, f32)>,
     eps: f32,
-    sync_barrier: Option<SynchronizationBarrierGuard>,
+    sync_barrier: SynchronizationBarrier,
 }
 
 impl Adagrad {
     /// Create a new optimizer instance with a given set of parameters.
-    pub fn new(parameters: Vec<Variable<ParameterNode>>) -> Self {
+    pub fn new() -> Self {
         Adagrad {
             learning_rate: 0.05,
             l2: 0.0,
-            parameters: parameters,
             clamp: None,
             eps: 1e-10,
-            sync_barrier: None,
+            sync_barrier: SynchronizationBarrier::default(),
         }
     }
 
     /// Set the learning rate.
     pub fn learning_rate(mut self, learning_rate: f32) -> Self {
         self.learning_rate = learning_rate;
-        self
-    }
-
-    /// Use the optimizer in synchrnous mode.
-    pub fn synchronized(mut self, barrier: &SynchronizationBarrier) -> Self {
-        self.sync_barrier = Some(barrier.register_thread());
         self
     }
 
@@ -53,30 +47,26 @@ impl Adagrad {
         self
     }
 
-    /// Decay weights.
-    pub fn decay_weights(&mut self, penalty: f32) {
-        for parameter in &self.parameters {
-            let mut param_value = unsafe { parameter.node.value.value_mut() };
-
-            param_value
-                .as_slice_mut()
-                .unwrap()
-                .iter_mut()
-                .for_each(|x| *x -= x.signum() * penalty * numerics::pow2(*x));
-        }
+    /// Return a synchoronised wrapper for this optimizer.
+    pub fn synchronized(&self) -> SynchronizedOptimizer<Self> {
+        SynchronizedOptimizer::new(self, self.sync_barrier.register_thread())
     }
+}
 
-    fn do_step(&self, parameter: &Variable<ParameterNode>) {
+impl InnerOptimizer for Adagrad {
+    fn inner_step<T: DerefMut<Target = ::nodes::GradientAccumulator>>(
+        &self,
+        param: &Arc<HogwildParameter>,
+        mut sink: T,
+    ) {
         let learning_rate = self.learning_rate;
-
-        let mut sink = parameter.node.gradient.borrow_mut();
 
         if let Some((min, max)) = self.clamp {
             sink.clamp(min, max);
         }
 
-        let param_value = unsafe { parameter.node.value.value_mut() };
-        let squared_gradient = unsafe { parameter.node.value.squared_gradient_mut() };
+        let param_value = unsafe { param.value_mut() };
+        let squared_gradient = unsafe { param.squared_gradient_mut() };
 
         if sink.has_dense {
             for (value, &gradient, squared_gradient) in izip!(
@@ -115,22 +105,9 @@ impl Adagrad {
 
 impl Optimizer for Adagrad {
     /// Perform a single SGD step.
-    fn step(&self) {
-        if let Some(ref barrier) = self.sync_barrier {
-            barrier.start_wait();
-            {
-                let _ = barrier.lock();
-
-                for parameter in &self.parameters {
-                    self.do_step(parameter);
-                }
-            }
-
-            barrier.end_wait();
-        } else {
-            for parameter in &self.parameters {
-                self.do_step(parameter);
-            }
+    fn step(&self, parameters: &[Variable<ParameterNode>]) {
+        for parameter in parameters {
+            self.inner_step(&parameter.node.value, parameter.node.gradient.borrow_mut())
         }
     }
 }

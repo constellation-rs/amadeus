@@ -46,6 +46,10 @@ impl Barrier {
 
     pub fn increment_num_threads(&self) {
         let mut lock = self.lock.lock().unwrap();
+        if lock.generation_id != 0 {
+            panic!("Can't register more threads after the first generation.");
+        }
+
         lock.num_threads += 1;
     }
 

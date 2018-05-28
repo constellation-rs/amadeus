@@ -1,6 +1,8 @@
-use super::barrier::{SynchronizationBarrier, SynchronizationBarrierGuard};
-use super::Optimizer;
-use {numerics, Arr, ParameterNode, Variable};
+use super::barrier::SynchronizationBarrier;
+use super::{InnerOptimizer, Optimizer, SynchronizedOptimizer};
+use std::ops::DerefMut;
+use std::sync::Arc;
+use {numerics, Arr, HogwildParameter, ParameterNode, Variable};
 
 use ndarray::Axis;
 
@@ -18,35 +20,32 @@ pub struct Adam {
     beta_m: f32,
     beta_v: f32,
     eps: f32,
-    parameters: Vec<Variable<ParameterNode>>,
     clamp: Option<(f32, f32)>,
-    sync_barrier: Option<SynchronizationBarrierGuard>,
+    sync_barrier: SynchronizationBarrier,
 }
 
 impl Adam {
     /// Build new optimizer object.
-    pub fn new(parameters: Vec<Variable<ParameterNode>>) -> Self {
+    pub fn new() -> Self {
         Self {
             learning_rate: 0.05,
             l2: 0.0,
             beta_m: 0.9,
             beta_v: 0.999,
             eps: 1.0e-8,
-            parameters: parameters,
             clamp: None,
-            sync_barrier: None,
+            sync_barrier: SynchronizationBarrier::default(),
         }
+    }
+
+    /// Return a synchoronised wrapper for this optimizer.
+    pub fn synchronized(&self) -> SynchronizedOptimizer<Self> {
+        SynchronizedOptimizer::new(self, self.sync_barrier.register_thread())
     }
 
     /// Set the learning rate.
     pub fn learning_rate(mut self, learning_rate: f32) -> Self {
         self.learning_rate = learning_rate;
-        self
-    }
-
-    /// Use synchronous parallel training.
-    pub fn synchronized(mut self, barrier: &SynchronizationBarrier) -> Self {
-        self.sync_barrier = Some(barrier.register_thread());
         self
     }
 
@@ -62,12 +61,12 @@ impl Adam {
         self
     }
 
-    fn param_fields<'par>(&self, parameter: &'par Variable<ParameterNode>) -> AdamParameters<'par> {
+    fn param_fields<'par>(&self, value: &'par Arc<HogwildParameter>) -> AdamParameters<'par> {
         AdamParameters {
-            value: unsafe { parameter.node.value.value_mut() },
-            m: unsafe { parameter.node.value.squared_gradient_mut() },
-            v: unsafe { parameter.node.value.moments_mut() },
-            t: unsafe { parameter.node.value.num_updates_mut() },
+            value: unsafe { value.value_mut() },
+            m: unsafe { value.squared_gradient_mut() },
+            v: unsafe { value.moments_mut() },
+            t: unsafe { value.num_updates_mut() },
         }
     }
 
@@ -85,15 +84,19 @@ impl Adam {
 
         *value -= self.learning_rate / (v_hat.sqrt() + self.eps) * m_hat;
     }
+}
 
-    fn do_step(&self, parameter: &Variable<ParameterNode>) {
-        let mut sink = parameter.node.gradient.borrow_mut();
-
+impl InnerOptimizer for Adam {
+    fn inner_step<T: DerefMut<Target = ::nodes::GradientAccumulator>>(
+        &self,
+        param: &Arc<HogwildParameter>,
+        mut sink: T,
+    ) {
         if let Some((min, max)) = self.clamp {
             sink.clamp(min, max);
         }
 
-        let param = self.param_fields(parameter);
+        let param = self.param_fields(param);
 
         // Increment number of updates
         *param.t = param.t.saturating_add(1);
@@ -131,22 +134,9 @@ impl Adam {
 
 impl Optimizer for Adam {
     /// Perform a single SGD step.
-    fn step(&self) {
-        if let Some(ref barrier) = self.sync_barrier {
-            barrier.start_wait();
-            {
-                let _ = barrier.lock();
-
-                for parameter in &self.parameters {
-                    self.do_step(parameter);
-                }
-            }
-
-            barrier.end_wait();
-        } else {
-            for parameter in &self.parameters {
-                self.do_step(parameter);
-            }
+    fn step(&self, parameters: &[Variable<ParameterNode>]) {
+        for parameter in parameters {
+            self.inner_step(&parameter.node.value, parameter.node.gradient.borrow_mut())
         }
     }
 }

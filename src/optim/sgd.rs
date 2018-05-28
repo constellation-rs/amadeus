@@ -1,25 +1,25 @@
-use super::barrier::{SynchronizationBarrier, SynchronizationBarrierGuard};
-use super::Optimizer;
-use {numerics, ParameterNode, Variable};
+use super::barrier::SynchronizationBarrier;
+use super::{InnerOptimizer, Optimizer, SynchronizedOptimizer};
+use std::ops::DerefMut;
+use std::sync::Arc;
+use {numerics, HogwildParameter, ParameterNode, Variable};
 
 use ndarray::Axis;
 
 /// Standard stochastic gradient descent optimizer with a fixed learning rate.
 pub struct SGD {
     learning_rate: f32,
-    parameters: Vec<Variable<ParameterNode>>,
     clamp: Option<(f32, f32)>,
-    sync_barrier: Option<SynchronizationBarrierGuard>,
+    sync_barrier: SynchronizationBarrier,
 }
 
 impl SGD {
     /// Create a new optimizer instance with a given set of parameters.
-    pub fn new(parameters: Vec<Variable<ParameterNode>>) -> Self {
+    pub fn new() -> Self {
         SGD {
             learning_rate: 0.05,
-            parameters: parameters,
             clamp: None,
-            sync_barrier: None,
+            sync_barrier: SynchronizationBarrier::default(),
         }
     }
 
@@ -29,23 +29,27 @@ impl SGD {
         self
     }
 
-    /// Use the optimizer in synchrnous mode.
-    pub fn synchronized(mut self, barrier: &SynchronizationBarrier) -> Self {
-        self.sync_barrier = Some(barrier.register_thread());
-        self
-    }
-
     /// Set the clamp bounds.
     pub fn clamp(mut self, min: f32, max: f32) -> Self {
         self.clamp = Some((min, max));
         self
     }
 
-    /// Perform a single SGD step.
-    fn do_step(&self, parameter: &Variable<ParameterNode>) {
+    /// Return a synchoronised wrapper for this optimizer.
+    pub fn synchronized(&self) -> SynchronizedOptimizer<Self> {
+        SynchronizedOptimizer::new(self, self.sync_barrier.register_thread())
+    }
+}
+
+impl InnerOptimizer for SGD {
+    fn inner_step<T: DerefMut<Target = ::nodes::GradientAccumulator>>(
+        &self,
+        param: &Arc<HogwildParameter>,
+        mut sink: T,
+    ) {
+        let param_value = unsafe { param.value_mut() };
         let learning_rate = self.learning_rate;
-        let mut sink = parameter.node.gradient.borrow_mut();
-        let param_value = unsafe { parameter.node.value.value_mut() };
+        let sink = sink.deref_mut();
 
         if let Some((min, max)) = self.clamp {
             sink.clamp(min, max);
@@ -71,22 +75,9 @@ impl SGD {
 }
 
 impl Optimizer for SGD {
-    fn step(&self) {
-        if let Some(ref barrier) = self.sync_barrier {
-            barrier.start_wait();
-            {
-                let _ = barrier.lock();
-
-                for parameter in &self.parameters {
-                    self.do_step(parameter);
-                }
-            }
-
-            barrier.end_wait();
-        } else {
-            for parameter in &self.parameters {
-                self.do_step(parameter);
-            }
+    fn step(&self, parameters: &[Variable<ParameterNode>]) {
+        for parameter in parameters {
+            self.inner_step(&parameter.node.value, parameter.node.gradient.borrow_mut())
         }
     }
 }

@@ -3,7 +3,7 @@ use std::cell::{Cell, Ref, RefCell};
 use std::fmt;
 use std::ops::{AddAssign, Deref, DerefMut};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, TryLockResult};
 
 use ndarray;
 use ndarray::Axis;
@@ -567,7 +567,7 @@ impl Node for InputNode {
     fn zero_gradient(&self) {}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SparseGradientStore {
     len: usize,
     data: Vec<(Vec<usize>, Arr)>,
@@ -619,7 +619,7 @@ impl SparseGradientStore {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct GradientAccumulator {
     pub dense_shape: (usize, usize),
     pub dense_gradient: Option<Arr>,
@@ -641,7 +641,7 @@ impl GradientAccumulator {
 
         self.dense_gradient.get_or_insert_with(|| Arr::zeros(shape))
     }
-    fn zero_gradient(&mut self) {
+    pub(crate) fn zero_gradient(&mut self) {
         if self.has_dense {
             self.dense_gradient().fill(0.0);
         }
@@ -679,6 +679,20 @@ impl<'a, 'b> GradientSink<&'a Ref<'b, Arr>> for GradientAccumulator {
     }
 }
 
+impl<'a> GradientSink<&'a Arr> for GradientAccumulator {
+    fn accumulate_gradient(&mut self, gradient: &'a Arr) {
+        self.dense_gradient().slice_add_assign(gradient.deref());
+        self.has_dense = true;
+    }
+}
+
+impl<'a> GradientSink<&'a mut Arr> for GradientAccumulator {
+    fn accumulate_gradient(&mut self, gradient: &'a mut Arr) {
+        self.dense_gradient().slice_add_assign(gradient.deref());
+        self.has_dense = true;
+    }
+}
+
 impl<'a> GradientSink<(&'a [usize], &'a Arr)> for GradientAccumulator {
     fn accumulate_gradient(&mut self, gradient: (&'a [usize], &'a Arr)) {
         self.sparse_gradient.push(gradient);
@@ -689,12 +703,28 @@ unsafe impl Sync for HogwildParameter {}
 
 /// Struct used to hold parameters that need to be shared among
 /// multiple `ParameterNode`s for asynchronous, parallel optimization.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HogwildParameter {
+    shape: (usize, usize),
     pub value: RefCell<Arr>,
     pub squared_gradients: RefCell<Arr>,
     pub moments: RefCell<Arr>,
     num_updates: Cell<i32>,
+    #[serde(skip)]
+    gradient: Mutex<Option<GradientAccumulator>>,
+}
+
+impl Clone for HogwildParameter {
+    fn clone(&self) -> HogwildParameter {
+        HogwildParameter {
+            shape: self.shape.clone(),
+            value: self.value.clone(),
+            squared_gradients: self.squared_gradients.clone(),
+            moments: self.moments.clone(),
+            num_updates: self.num_updates.clone(),
+            gradient: Mutex::new(None),
+        }
+    }
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(mut_from_ref))]
@@ -703,13 +733,33 @@ impl HogwildParameter {
     pub fn new(value: Arr) -> Self {
         let squared_gradients = &value * 0.0;
         let moments = &value * 0.0;
+        let shape = (value.rows(), value.cols());
 
         HogwildParameter {
+            shape: shape,
             value: RefCell::new(value),
             squared_gradients: RefCell::new(squared_gradients),
             moments: RefCell::new(moments),
             num_updates: Cell::new(0),
+            gradient: Mutex::new(None),
         }
+    }
+
+    pub(crate) fn gradient_accumulator(&self) -> MutexGuard<Option<GradientAccumulator>> {
+        let mut accumulator = self
+            .gradient
+            .lock()
+            .expect("Unable to lock gradients for gradient push-down.");
+
+        accumulator.get_or_insert_with(|| GradientAccumulator::new(self.shape));
+
+        accumulator
+    }
+
+    pub(crate) fn try_gradient_accumulator(
+        &self,
+    ) -> TryLockResult<MutexGuard<Option<GradientAccumulator>>> {
+        self.gradient.try_lock()
     }
 
     pub fn value(&self) -> &Arr {
@@ -761,7 +811,7 @@ impl ParameterNode {
             value: value,
             gradient: RefCell::new(GradientAccumulator::new(shape)),
         });
-        let params = vec![Rc::clone(&node)];
+        let params = vec![Variable::new(Rc::clone(&node), Vec::new())];
 
         Variable::new(node, params)
     }
@@ -774,14 +824,26 @@ impl ParameterNode {
             value: Arc::new(HogwildParameter::new(value)),
             gradient: RefCell::new(GradientAccumulator::new(shape)),
         });
-        let params = vec![Rc::clone(&node)];
+        let params = vec![Variable::new(Rc::clone(&node), Vec::new())];
 
         Variable::new(node, params)
     }
-    // /// Zero the accumulated gradients of this node.
-    // pub fn zero_gradient(&self) {
-    //     //self.gradient.borrow_mut().zero_gradient();
-    // }
+
+    pub(crate) fn gradient_push_down(&self) {
+        self.value
+            .gradient_accumulator()
+            .iter_mut()
+            .for_each(|accum| {
+                let mut self_accum = self.gradient.borrow_mut();
+                if self_accum.has_dense {
+                    accum.accumulate_gradient(self_accum.dense_gradient());
+                }
+
+                for &(ref index_vec, ref grad) in self_accum.sparse_gradient.as_slice() {
+                    accum.accumulate_gradient((&index_vec[..], grad));
+                }
+            });
+    }
 }
 
 impl Node for ParameterNode {
