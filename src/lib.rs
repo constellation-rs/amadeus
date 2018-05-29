@@ -152,6 +152,9 @@ extern crate smallvec;
 #[macro_use]
 extern crate itertools;
 
+extern crate fnv;
+extern crate indexmap;
+
 /// Alias for a `f32` `ndarray` matrix.
 pub type Arr = ndarray::Array2<f32>;
 
@@ -647,11 +650,9 @@ where
 
         let sparse_gradient = input.sparse_gradient();
 
-        for &(ref indices, ref grad) in sparse_gradient.as_slice() {
-            for &row_idx in indices.iter() {
-                for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
-                    *dest += orig;
-                }
+        for (row_idx, grad) in sparse_gradient.iter() {
+            for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
+                *dest += orig;
             }
         }
 

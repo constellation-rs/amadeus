@@ -80,26 +80,20 @@ impl InnerOptimizer for Adagrad {
             }
         }
 
-        sink.sparse_gradient
-            .as_slice()
-            .iter()
-            .for_each(|&(ref index_vec, ref grad)| {
-                for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                    let grad_row = grad.subview(Axis(0), grad_idx);
-                    let mut param_row = param_value.subview_mut(Axis(0), param_idx);
-                    let mut squared_row = squared_gradient.subview_mut(Axis(0), param_idx);
+        for (row_idx, grad) in sink.sparse_gradient.iter() {
+            let mut param_row = param_value.subview_mut(Axis(0), row_idx);
+            let mut squared_row = squared_gradient.subview_mut(Axis(0), row_idx);
 
-                    for (value, &gradient, squared_gradient) in izip!(
-                        param_row.fast_slice_mut(),
-                        grad_row.into_slice().unwrap(),
-                        squared_row.fast_slice_mut()
-                    ) {
-                        let gradient = gradient + *value * self.l2;
-                        *squared_gradient += numerics::pow2(gradient);
-                        *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
-                    }
-                }
-            });
+            for (value, &gradient, squared_gradient) in izip!(
+                param_row.fast_slice_mut(),
+                grad.iter(),
+                squared_row.fast_slice_mut()
+            ) {
+                let gradient = gradient + *value * self.l2;
+                *squared_gradient += numerics::pow2(gradient);
+                *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
+            }
+        }
     }
 }
 

@@ -59,17 +59,12 @@ impl InnerOptimizer for SGD {
             param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
         }
 
-        for &(ref index_vec, ref grad) in sink.sparse_gradient.as_slice() {
-            for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                let grad_row = grad.subview(Axis(0), grad_idx);
-                let mut param_row = param_value.subview_mut(Axis(0), param_idx);
+        for (row_idx, grad) in sink.sparse_gradient.iter() {
+            let mut param_row = param_value.subview_mut(Axis(0), row_idx);
 
-                numerics::map_add_assign_slice(
-                    param_row.into_slice().unwrap(),
-                    grad_row.into_slice().unwrap(),
-                    |x| -learning_rate * x,
-                );
-            }
+            numerics::map_add_assign_slice(param_row.into_slice().unwrap(), grad, |x| {
+                -learning_rate * x
+            });
         }
     }
 }

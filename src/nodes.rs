@@ -10,6 +10,10 @@ use ndarray::Axis;
 
 use smallvec::SmallVec;
 
+use fnv::FnvBuildHasher;
+use indexmap::map::Entry;
+use indexmap::IndexMap;
+
 use numerics;
 use numerics::{ArraySlice, ArraySliceMut, ArraySliceOps};
 
@@ -568,54 +572,111 @@ impl Node for InputNode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct SparseGradientStore {
+struct Slab {
+    cols: usize,
     len: usize,
-    data: Vec<(Vec<usize>, Arr)>,
+    data: Vec<f32>,
 }
 
-impl SparseGradientStore {
-    pub fn new() -> Self {
-        SparseGradientStore {
+impl Slab {
+    fn new(cols: usize) -> Self {
+        Slab {
+            cols: cols,
             len: 0,
             data: Vec::new(),
         }
     }
 
-    pub fn push(&mut self, gradient: (&[usize], &Arr)) {
-        let (index, value) = gradient;
+    fn get(&self, idx: usize) -> &[f32] {
+        let start = idx * self.cols;
+        let stop = start + self.cols;
+        &self.data[start..stop]
+    }
 
-        // Increment gradients when indices match.
-        for &mut (ref mut index_vec, ref mut grad) in self.data[..self.len].iter_mut() {
-            if &index_vec[..] == index {
-                grad.slice_add_assign(value);
-                return;
+    fn get_mut(&mut self, idx: usize) -> &mut [f32] {
+        if idx >= self.len {
+            for _ in 0..self.cols {
+                self.data.push(0.0);
+            }
+            self.len += 1;
+        }
+
+        let start = idx * self.cols;
+        let stop = start + self.cols;
+        &mut self.data[start..stop]
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn clear(&mut self) {
+        self.len = 0;
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct SparseGradientStore {
+    slab: Slab,
+    map: IndexMap<usize, usize, FnvBuildHasher>,
+}
+
+impl SparseGradientStore {
+    pub fn new(cols: usize) -> Self {
+        SparseGradientStore {
+            slab: Slab::new(cols),
+            map: IndexMap::default(),
+        }
+    }
+
+    pub fn push(&mut self, gradient: (&[usize], &Arr)) {
+        let (indices, value) = gradient;
+
+        for (&idx, row) in izip!(indices.iter(), value.genrows().into_iter()) {
+            self.scalar_push(idx, row.as_slice().unwrap());
+        }
+    }
+
+    fn scalar_push(&mut self, idx: usize, row: &[f32]) {
+        match self.map.entry(idx) {
+            Entry::Occupied(entry) => {
+                let slab_idx = entry.get();
+                let slab_value = self.slab.get_mut(*slab_idx);
+
+                for (slab_val, row_val) in izip!(slab_value.iter_mut(), row.iter()) {
+                    *slab_val += row_val;
+                }
+            }
+            Entry::Vacant(entry) => {
+                let slab_idx = self.slab.len();
+                entry.insert(slab_idx);
+
+                let slab_value = self.slab.get_mut(slab_idx);
+
+                for (slab_val, &row_val) in izip!(slab_value.iter_mut(), row.iter()) {
+                    *slab_val = row_val;
+                }
             }
         }
-
-        // Set gradients on existing objects for new indices.
-        for &mut (ref mut index_vec, ref mut grad) in self.data[self.len..].iter_mut() {
-            index_vec.clear();
-            index_vec.extend_from_slice(&index[..]);
-            grad.slice_assign(value);
-            self.len += 1;
-            return;
-        }
-
-        // Increase index capacity.
-        self.data.push((Vec::from(&index[..]), value.clone()));
-        self.len += 1;
     }
 
-    pub fn as_slice(&self) -> &[(Vec<usize>, Arr)] {
-        &self.data[..self.len]
+    pub fn iter(&self) -> impl Iterator<Item = (usize, &[f32])> {
+        self.map
+            .keys()
+            .cloned()
+            .zip(self.slab.data.chunks(self.slab.cols))
     }
 
-    pub fn as_slice_mut(&mut self) -> &mut [(Vec<usize>, Arr)] {
-        &mut self.data[..self.len]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut [f32])> {
+        self.map
+            .keys()
+            .cloned()
+            .zip(self.slab.data.chunks_mut(self.slab.cols))
     }
 
     pub fn clear(&mut self) {
-        self.len = 0;
+        self.slab.clear();
+        self.map.clear();
     }
 }
 
@@ -629,10 +690,12 @@ pub(crate) struct GradientAccumulator {
 
 impl GradientAccumulator {
     fn new(dense_shape: (usize, usize)) -> Self {
+        let cols = dense_shape.1;
+
         GradientAccumulator {
             dense_shape: dense_shape,
             dense_gradient: None,
-            sparse_gradient: SparseGradientStore::new(),
+            sparse_gradient: SparseGradientStore::new(cols),
             has_dense: false,
         }
     }
@@ -657,14 +720,8 @@ impl GradientAccumulator {
             .iter_mut()
             .for_each(|x| *x = clamp(*x, min, max));
         self.sparse_gradient
-            .as_slice_mut()
             .iter_mut()
-            .for_each(|&mut (_, ref mut grad)| {
-                grad.as_slice_mut()
-                    .unwrap()
-                    .iter_mut()
-                    .for_each(|x| *x = clamp(*x, min, max))
-            });
+            .for_each(|(_, grad)| grad.iter_mut().for_each(|x| *x = clamp(*x, min, max)));
     }
 }
 
@@ -696,6 +753,13 @@ impl<'a> GradientSink<&'a mut Arr> for GradientAccumulator {
 impl<'a> GradientSink<(&'a [usize], &'a Arr)> for GradientAccumulator {
     fn accumulate_gradient(&mut self, gradient: (&'a [usize], &'a Arr)) {
         self.sparse_gradient.push(gradient);
+    }
+}
+
+impl<'a> GradientSink<(usize, &'a [f32])> for GradientAccumulator {
+    fn accumulate_gradient(&mut self, gradient: (usize, &'a [f32])) {
+        let (idx, grad) = gradient;
+        self.sparse_gradient.scalar_push(idx, grad);
     }
 }
 
@@ -839,8 +903,8 @@ impl ParameterNode {
                     accum.accumulate_gradient(self_accum.dense_gradient());
                 }
 
-                for &(ref index_vec, ref grad) in self_accum.sparse_gradient.as_slice() {
-                    accum.accumulate_gradient((&index_vec[..], grad));
+                for (row_idx, grad) in self_accum.sparse_gradient.iter() {
+                    accum.accumulate_gradient((row_idx, grad));
                 }
             });
     }
