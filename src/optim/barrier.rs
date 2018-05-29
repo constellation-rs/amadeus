@@ -11,7 +11,7 @@
 // except according to those terms.
 
 use std::fmt;
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, TryLockResult};
 
 pub struct Barrier {
     lock: Mutex<BarrierState>,
@@ -173,6 +173,10 @@ impl SynchronizationBarrierGuard {
 
     pub fn lock(&self) -> MutexGuard<()> {
         self.barrier.parameter_lock.lock().unwrap()
+    }
+
+    pub fn try_lock(&self) -> TryLockResult<MutexGuard<()>> {
+        self.barrier.parameter_lock.try_lock()
     }
 }
 

@@ -595,7 +595,7 @@ impl SparseGradientStore {
         // Set gradients on existing objects for new indices.
         for &mut (ref mut index_vec, ref mut grad) in self.data[self.len..].iter_mut() {
             index_vec.clear();
-            index_vec.extend_from_slice(index);
+            index_vec.extend_from_slice(&index[..]);
             grad.slice_assign(value);
             self.len += 1;
             return;

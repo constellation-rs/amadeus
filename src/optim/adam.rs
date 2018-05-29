@@ -21,7 +21,7 @@ pub struct Adam {
     beta_v: f32,
     eps: f32,
     clamp: Option<(f32, f32)>,
-    sync_barrier: SynchronizationBarrier,
+    pub(in optim) sync_barrier: SynchronizationBarrier,
 }
 
 impl Adam {

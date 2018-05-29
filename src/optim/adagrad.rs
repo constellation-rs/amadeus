@@ -14,7 +14,7 @@ pub struct Adagrad {
     l2: f32,
     clamp: Option<(f32, f32)>,
     eps: f32,
-    sync_barrier: SynchronizationBarrier,
+    pub(in optim) sync_barrier: SynchronizationBarrier,
 }
 
 impl Adagrad {

@@ -20,6 +20,12 @@ pub trait Optimizer {
     fn step(&self, parameters: &[Variable<ParameterNode>]);
 }
 
+pub trait Synchronizable {
+    fn synchronized(&self) -> SynchronizedOptimizer<Self>
+    where
+        Self: Sized;
+}
+
 pub(crate) trait InnerOptimizer {
     fn inner_step<T: DerefMut<Target = ::nodes::GradientAccumulator>>(
         &self,
@@ -79,6 +85,12 @@ macro_rules! impl_sync_optimizer {
                 self.barrier_guard.end_wait();
             }
         }
+
+        impl Synchronizable for $type {
+            fn synchronized(&self) -> SynchronizedOptimizer<Self> {
+                self.synchronized()
+            }
+        }
     };
 }
 
@@ -86,3 +98,25 @@ macro_rules! impl_sync_optimizer {
 impl_sync_optimizer!(SGD);
 impl_sync_optimizer!(Adagrad);
 impl_sync_optimizer!(Adam);
+
+macro_rules! impl_optimizer_enum {
+    ($(($tag:ident, $type:ty)),*) => {
+        pub enum Optimizers {
+        $(
+            $tag($type),
+        )*
+        }
+
+        impl Optimizer for Optimizers {
+            fn step(&self, parameters: &[Variable<ParameterNode>]) {
+                match self {
+                    $(
+                        Optimizers::$tag(val) => val.step(parameters),
+                        )*
+                }
+            }
+        }
+    }
+}
+
+impl_optimizer_enum!((SGD, SGD), (Adagrad, Adagrad), (Adam, Adam));

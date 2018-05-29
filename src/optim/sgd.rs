@@ -10,7 +10,7 @@ use ndarray::Axis;
 pub struct SGD {
     learning_rate: f32,
     clamp: Option<(f32, f32)>,
-    sync_barrier: SynchronizationBarrier,
+    pub(in optim) sync_barrier: SynchronizationBarrier,
 }
 
 impl SGD {
