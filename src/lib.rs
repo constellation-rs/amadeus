@@ -152,9 +152,7 @@ extern crate smallvec;
 #[macro_use]
 extern crate itertools;
 
-extern crate fnv;
 extern crate hibitset;
-extern crate indexmap;
 
 /// Alias for a `f32` `ndarray` matrix.
 pub type Arr = ndarray::Array2<f32>;
@@ -451,16 +449,8 @@ where
 
 impl Variable<ParameterNode> {
     /// Return the (dense) gradient value of this node.
-    pub fn dense_gradient(&self) -> Option<Arr> {
-        match self.node.gradient.borrow().dense_gradient {
-            Some(ref gradients) => Some(gradients.clone()),
-            None => None,
-        }
-    }
-
-    /// Return the (dense) gradient value of this node.
-    fn sparse_gradient(&self) -> SparseGradientStore {
-        self.node.gradient.borrow().sparse_gradient.clone()
+    pub fn gradient(&self) -> Arr {
+        self.node.gradient.borrow().materialized_gradient()
     }
 
     fn as_ptr(&self) -> *const ParameterNode {
@@ -647,17 +637,7 @@ where
         output.forward();
         output.backward(1.0);
 
-        let mut gradient = input.dense_gradient().unwrap_or(initial_input * 0.0);
-
-        let sparse_gradient = input.sparse_gradient();
-
-        for (row_idx, grad) in sparse_gradient.iter() {
-            for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
-                *dest += orig;
-            }
-        }
-
-        gradient
+        input.gradient()
     };
 
     output.zero_gradient();
@@ -984,14 +964,17 @@ mod tests {
     }
     #[test]
     fn sparse_index_finite_difference() {
-        let mut x = ParameterNode::new(random_matrix(10, 5));
-        let idx_0 = IndexInputNode::new(&[random_index(10)]);
-        let idx_1 = IndexInputNode::new(&[random_index(10)]);
+        let mut x = ParameterNode::new(random_matrix(100, 5));
 
-        let mut z = (x.index(&idx_0).tanh() * x.index(&idx_1)).square();
+        for _ in 0..10 {
+            let idx_0 = IndexInputNode::new(&[random_index(10)]);
+            let idx_1 = IndexInputNode::new(&[random_index(10)]);
 
-        let (difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&difference, &gradient, TOLERANCE);
+            let mut z = (x.index(&idx_0).tanh() * x.index(&idx_1)).square();
+
+            let (difference, gradient) = finite_difference(&mut x, &mut z);
+            assert_close(&difference, &gradient, TOLERANCE);
+        }
     }
     #[test]
     fn univariate_regression() {

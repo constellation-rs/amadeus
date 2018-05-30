@@ -22,8 +22,6 @@ itertools = "0.7.3"
 rayon = "1.0.0"
 serde = { version = "1.0.0", features = ["rc"] }
 serde_derive = "1.0.0"
-indexmap = { version = "1.0.1", features = ["serde-1"] }
-fnv = "1.0.6"
 hibitset = "0.5.0"
 
 [dev-dependencies]

@@ -101,29 +101,29 @@ impl InnerOptimizer for Adam {
         // Increment number of updates
         *param.t = param.t.saturating_add(1);
 
-        if sink.has_dense {
+        if sink.has_dense() {
             for (value, &gradient, m, v) in izip!(
                 param.value.as_slice_mut().unwrap(),
-                sink.dense_gradient().as_slice().unwrap(),
+                sink.gradient().as_slice().unwrap(),
                 param.m.as_slice_mut().unwrap(),
                 param.v.as_slice_mut().unwrap(),
             ) {
                 self.update(value, gradient, m, v, param.t);
             }
-        }
+        } else {
+            for (row_idx, ref grad) in sink.sparse_iter() {
+                let mut value_row = param.value.subview_mut(Axis(0), row_idx);
+                let mut m_row = param.m.subview_mut(Axis(0), row_idx);
+                let mut v_row = param.v.subview_mut(Axis(0), row_idx);
 
-        for (row_idx, ref grad) in sink.sparse_gradient.iter() {
-            let mut value_row = param.value.subview_mut(Axis(0), row_idx);
-            let mut m_row = param.m.subview_mut(Axis(0), row_idx);
-            let mut v_row = param.v.subview_mut(Axis(0), row_idx);
-
-            for (value, &gradient, m, v) in izip!(
-                value_row.as_slice_mut().unwrap(),
-                grad.iter(),
-                m_row.as_slice_mut().unwrap(),
-                v_row.as_slice_mut().unwrap(),
-            ) {
-                self.update(value, gradient, m, v, param.t);
+                for (value, &gradient, m, v) in izip!(
+                    value_row.as_slice_mut().unwrap(),
+                    grad.iter(),
+                    m_row.as_slice_mut().unwrap(),
+                    v_row.as_slice_mut().unwrap(),
+                ) {
+                    self.update(value, gradient, m, v, param.t);
+                }
             }
         }
     }

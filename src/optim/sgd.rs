@@ -1,5 +1,6 @@
 use super::barrier::SynchronizationBarrier;
 use super::{InnerOptimizer, Optimizer, SynchronizedOptimizer};
+use numerics::ArraySlice;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use {numerics, HogwildParameter, ParameterNode, Variable};
@@ -55,16 +56,18 @@ impl InnerOptimizer for SGD {
             sink.clamp(min, max);
         }
 
-        if sink.has_dense {
-            param_value.scaled_add(-self.learning_rate, sink.dense_gradient());
-        }
+        if sink.has_dense() {
+            param_value.scaled_add(-self.learning_rate, sink.gradient());
+        } else {
+            for (row_idx, grad) in sink.sparse_iter() {
+                let mut param_row = param_value.subview_mut(Axis(0), row_idx);
 
-        for (row_idx, grad) in sink.sparse_gradient.iter() {
-            let mut param_row = param_value.subview_mut(Axis(0), row_idx);
-
-            numerics::map_add_assign_slice(param_row.into_slice().unwrap(), grad, |x| {
-                -learning_rate * x
-            });
+                numerics::map_add_assign_slice(
+                    param_row.into_slice().unwrap(),
+                    grad.fast_slice(),
+                    |x| -learning_rate * x,
+                );
+            }
         }
     }
 }

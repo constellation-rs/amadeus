@@ -68,30 +68,30 @@ impl InnerOptimizer for Adagrad {
         let param_value = unsafe { param.value_mut() };
         let squared_gradient = unsafe { param.squared_gradient_mut() };
 
-        if sink.has_dense {
+        if sink.has_dense() {
             for (value, &gradient, squared_gradient) in izip!(
                 param_value.fast_slice_mut(),
-                sink.dense_gradient().fast_slice(),
+                sink.gradient().fast_slice(),
                 squared_gradient.fast_slice_mut()
             ) {
                 let gradient = gradient + *value * self.l2;
                 *squared_gradient += numerics::pow2(gradient);
                 *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
             }
-        }
+        } else {
+            for (row_idx, grad) in sink.sparse_iter() {
+                let mut param_row = param_value.subview_mut(Axis(0), row_idx);
+                let mut squared_row = squared_gradient.subview_mut(Axis(0), row_idx);
 
-        for (row_idx, grad) in sink.sparse_gradient.iter() {
-            let mut param_row = param_value.subview_mut(Axis(0), row_idx);
-            let mut squared_row = squared_gradient.subview_mut(Axis(0), row_idx);
-
-            for (value, &gradient, squared_gradient) in izip!(
-                param_row.fast_slice_mut(),
-                grad.iter(),
-                squared_row.fast_slice_mut()
-            ) {
-                let gradient = gradient + *value * self.l2;
-                *squared_gradient += numerics::pow2(gradient);
-                *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
+                for (value, &gradient, squared_gradient) in izip!(
+                    param_row.fast_slice_mut(),
+                    grad.iter(),
+                    squared_row.fast_slice_mut()
+                ) {
+                    let gradient = gradient + *value * self.l2;
+                    *squared_gradient += numerics::pow2(gradient);
+                    *value -= learning_rate / (self.eps + squared_gradient.sqrt()) * gradient;
+                }
             }
         }
     }
