@@ -153,6 +153,7 @@ extern crate smallvec;
 extern crate itertools;
 
 extern crate fnv;
+extern crate hibitset;
 extern crate indexmap;
 
 /// Alias for a `f32` `ndarray` matrix.

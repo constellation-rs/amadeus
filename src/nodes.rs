@@ -11,6 +11,7 @@ use ndarray::Axis;
 use smallvec::SmallVec;
 
 use fnv::FnvBuildHasher;
+use hibitset::BitSet;
 use indexmap::map::Entry;
 use indexmap::IndexMap;
 
@@ -677,6 +678,73 @@ impl SparseGradientStore {
     pub fn clear(&mut self) {
         self.slab.clear();
         self.map.clear();
+    }
+}
+
+struct GradientAccumulatorV2 {
+    gradient: Arr,
+    sparse_index: BitSet,
+    dense: bool,
+    sparse: bool,
+}
+
+impl GradientAccumulatorV2 {
+    pub fn new(shape: (usize, usize)) -> Self {
+        Self {
+            gradient: Arr::zeros(shape),
+            sparse_index: BitSet::with_capacity(100),
+            dense: false,
+            sparse: false,
+        }
+    }
+
+    pub fn add_dense(&mut self, grad: &Arr) {
+        if !self.dense {
+            self.gradient.slice_assign(grad);
+        } else {
+            self.gradient.slice_add_assign(grad);
+        }
+
+        self.dense = true;
+    }
+
+    pub fn add_sparse(&mut self, indices: &[usize], grad: &Arr) {
+        for (&idx, row) in izip!(indices.iter(), grad.genrows().into_iter()) {
+            self.add_sparse_row(idx, &row);
+        }
+    }
+
+    pub fn add_sparse_row(&mut self, idx: usize, grad: &ndarray::ArrayView<f32, ndarray::Ix1>) {
+        if self.sparse_index.add(idx as u32) {
+            self.gradient
+                .subview_mut(Axis(0), idx)
+                .slice_add_assign(grad);
+        } else {
+            self.gradient.subview_mut(Axis(0), idx).slice_assign(grad);
+        }
+
+        self.sparse = true;
+    }
+
+    pub fn sparse_iter(
+        &self,
+    ) -> impl Iterator<Item = (usize, ndarray::ArrayView<f32, ndarray::Ix1>)> {
+        let idx = &self.sparse_index;
+        let grad = &self.gradient;
+
+        idx.into_iter().map(move |idx| {
+            let idx = idx as usize;
+            (idx, grad.subview(Axis(0), idx))
+        })
+    }
+
+    pub fn clear(&mut self) {
+        if self.sparse {
+            self.sparse_index.clear()
+        }
+
+        self.dense = false;
+        self.sparse = false;
     }
 }
 
