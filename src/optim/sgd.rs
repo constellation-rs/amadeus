@@ -37,8 +37,10 @@ impl SGD {
     }
 
     /// Return a synchoronised wrapper for this optimizer.
-    pub fn synchronized(&self) -> SynchronizedOptimizer<Self> {
-        SynchronizedOptimizer::new(self, self.sync_barrier.register_thread())
+    pub fn synchronized(&self, num_threads: usize) -> Vec<SynchronizedOptimizer<Self>> {
+        (0..num_threads)
+            .map(|_| SynchronizedOptimizer::new(self, self.sync_barrier.register_thread()))
+            .collect()
     }
 }
 

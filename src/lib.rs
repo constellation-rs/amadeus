@@ -249,9 +249,17 @@ where
     pub fn forward(&self) {
         self.node.forward()
     }
-    /// Zero the gradients. Must be called after a backward step or whenever inputs change.
+    /// Clear the graph caches. Must be called whenever inputs change and [backward] is not
+    /// called.
+    pub fn clear(&self) {
+        self.node.clear();
+    }
+
+    /// Zero the accumulated gradients for the parameter nodes in this graph.
     pub fn zero_gradient(&self) {
-        self.node.zero_gradient();
+        for param in self.parameters() {
+            param.node.zero_gradient();
+        }
     }
 
     pub fn needs_gradient(&self) -> bool {
@@ -1210,17 +1218,16 @@ mod tests {
 
         let optimizer = SGD::new();
 
-        let losses: Vec<f32> = (0..rayon::current_num_threads())
+        let losses: Vec<f32> = optimizer
+            .synchronized(rayon::current_num_threads())
             .into_par_iter()
-            .map(|_| {
+            .map(|optimizer| {
                 let u_embedding = ParameterNode::shared(u_parameters.clone());
                 let v_embedding = ParameterNode::shared(v_parameters.clone());
 
                 let u_index = IndexInputNode::new(&u_input);
                 let v_index = IndexInputNode::new(&v_input);
                 let output = InputNode::new(random_matrix(1, 1));
-
-                let optimizer = optimizer.synchronized();
 
                 let u_vec = u_embedding.index(&u_index);
                 let v_vec = v_embedding.index(&v_index);
@@ -1263,4 +1270,5 @@ mod tests {
 
         assert!(sum_loss / (losses.len() as f32) < 1e-3);
     }
+
 }

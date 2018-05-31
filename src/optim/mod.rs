@@ -21,7 +21,7 @@ pub trait Optimizer {
 }
 
 pub trait Synchronizable {
-    fn synchronized(&self) -> SynchronizedOptimizer<Self>
+    fn synchronized(&self, num_threads: usize) -> Vec<SynchronizedOptimizer<Self>>
     where
         Self: Sized;
 }
@@ -87,8 +87,8 @@ macro_rules! impl_sync_optimizer {
         }
 
         impl Synchronizable for $type {
-            fn synchronized(&self) -> SynchronizedOptimizer<Self> {
-                self.synchronized()
+            fn synchronized(&self, num_threads: usize) -> Vec<SynchronizedOptimizer<Self>> {
+                self.synchronized(num_threads)
             }
         }
     };

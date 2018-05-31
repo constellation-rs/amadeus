@@ -52,7 +52,13 @@ impl PassCounter {
 
         assert!(backward_count <= forward_count);
 
-        backward_count == forward_count
+        if backward_count == forward_count {
+            self.clear();
+
+            true
+        } else {
+            false
+        }
     }
     #[inline(always)]
     pub fn forward(&self) -> ForwardAction {
@@ -121,7 +127,7 @@ pub trait Node: fmt::Debug + 'static {
     fn value(&self) -> Bor<Self::Value>;
     /// If the node needs to be used in the backward step.
     fn needs_gradient(&self) -> bool;
-    fn zero_gradient(&self);
+    fn clear(&self);
 }
 
 impl Node for Rc<Node<Value = Arr, InputGradient = Arr>> {
@@ -139,8 +145,8 @@ impl Node for Rc<Node<Value = Arr, InputGradient = Arr>> {
     fn needs_gradient(&self) -> bool {
         self.deref().needs_gradient()
     }
-    fn zero_gradient(&self) {
-        self.deref().zero_gradient()
+    fn clear(&self) {
+        self.deref().clear()
     }
 }
 
@@ -238,10 +244,10 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
-            self.rhs.zero_gradient();
+            self.lhs.clear();
+            self.rhs.clear();
             self.counter.clear();
         }
     }
@@ -433,10 +439,10 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
-            self.rhs.zero_gradient();
+            self.lhs.clear();
+            self.rhs.clear();
             self.counter.clear();
         }
     }
@@ -528,9 +534,9 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
+            self.lhs.clear();
             self.counter.clear();
         }
     }
@@ -566,7 +572,7 @@ impl Node for InputNode {
     fn needs_gradient(&self) -> bool {
         false
     }
-    fn zero_gradient(&self) {}
+    fn clear(&self) {}
 }
 
 #[derive(Debug)]
@@ -849,6 +855,10 @@ impl ParameterNode {
         Variable::new(node, params)
     }
 
+    pub(crate) fn zero_gradient(&self) {
+        self.gradient.borrow_mut().zero_gradient();
+    }
+
     pub(crate) fn gradient_push_down(&self) {
         self.value
             .gradient_accumulator()
@@ -879,9 +889,7 @@ impl Node for ParameterNode {
     fn needs_gradient(&self) -> bool {
         true
     }
-    fn zero_gradient(&self) {
-        self.gradient.borrow_mut().zero_gradient();
-    }
+    fn clear(&self) {}
 }
 
 #[derive(Debug)]
@@ -986,10 +994,10 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
-            self.rhs.zero_gradient();
+            self.lhs.clear();
+            self.rhs.clear();
             self.counter.clear();
         }
     }
@@ -1100,10 +1108,10 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
-            self.rhs.zero_gradient();
+            self.lhs.clear();
+            self.rhs.clear();
             self.counter.clear();
         }
     }
@@ -1227,10 +1235,10 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
-            self.rhs.zero_gradient();
+            self.lhs.clear();
+            self.rhs.clear();
             self.counter.clear();
         }
     }
@@ -1332,10 +1340,10 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
-            self.rhs.zero_gradient();
+            self.lhs.clear();
+            self.rhs.clear();
             self.counter.clear();
         }
     }
@@ -1521,10 +1529,10 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.lhs.zero_gradient();
-            self.rhs.zero_gradient();
+            self.lhs.clear();
+            self.rhs.clear();
             self.counter.clear();
         }
     }
@@ -1607,9 +1615,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -1693,9 +1701,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -1779,9 +1787,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -1874,9 +1882,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -1974,9 +1982,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2058,9 +2066,9 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2139,9 +2147,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2214,9 +2222,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2342,9 +2350,9 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2461,9 +2469,9 @@ where
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2543,9 +2551,9 @@ where
         self.needs_gradient
     }
 
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2581,7 +2589,7 @@ impl Node for IndexInputNode {
     fn needs_gradient(&self) -> bool {
         false
     }
-    fn zero_gradient(&self) {}
+    fn clear(&self) {}
 }
 
 #[derive(Debug)]
@@ -2652,6 +2660,7 @@ impl Node for IndexNode<ParameterNode> {
             .gradient
             .borrow_mut()
             .accumulate_gradient((&self.index_value.borrow()[..], gradient.deref()));
+        self.counter.recurse_backward();
     }
 
     fn value(&self) -> Bor<Self::Value> {
@@ -2661,9 +2670,9 @@ impl Node for IndexNode<ParameterNode> {
     fn needs_gradient(&self) -> bool {
         self.needs_gradient
     }
-    fn zero_gradient(&self) {
+    fn clear(&self) {
         if !self.counter.is_zero() {
-            self.operand.zero_gradient();
+            self.operand.clear();
             self.counter.clear();
         }
     }
@@ -2685,6 +2694,7 @@ mod tests {
         z.forward();
         assert_eq!(y.node.counter.forward_count.get(), 3);
         z.backward(1.0);
-        assert_eq!(y.node.counter.backward_count.get(), 3);
+        assert_eq!(y.node.counter.backward_count.get(), 0);
+        assert_eq!(y.node.counter.forward_count.get(), 0);
     }
 }
