@@ -3,7 +3,7 @@ use std::cell::{Cell, Ref, RefCell};
 use std::fmt;
 use std::ops::{AddAssign, Deref, DerefMut};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex, MutexGuard, TryLockResult};
+use std::sync::Arc;
 
 use ndarray;
 use ndarray::Axis;
@@ -736,8 +736,6 @@ pub struct HogwildParameter {
     pub squared_gradients: RefCell<Arr>,
     pub moments: RefCell<Arr>,
     num_updates: Cell<i32>,
-    #[serde(skip)]
-    gradient: Mutex<Option<GradientAccumulator>>,
 }
 
 impl Clone for HogwildParameter {
@@ -748,7 +746,6 @@ impl Clone for HogwildParameter {
             squared_gradients: self.squared_gradients.clone(),
             moments: self.moments.clone(),
             num_updates: self.num_updates.clone(),
-            gradient: Mutex::new(None),
         }
     }
 }
@@ -767,25 +764,7 @@ impl HogwildParameter {
             squared_gradients: RefCell::new(squared_gradients),
             moments: RefCell::new(moments),
             num_updates: Cell::new(0),
-            gradient: Mutex::new(None),
         }
-    }
-
-    pub(crate) fn gradient_accumulator(&self) -> MutexGuard<Option<GradientAccumulator>> {
-        let mut accumulator = self
-            .gradient
-            .lock()
-            .expect("Unable to lock gradients for gradient push-down.");
-
-        accumulator.get_or_insert_with(|| GradientAccumulator::new(self.shape));
-
-        accumulator
-    }
-
-    pub(crate) fn try_gradient_accumulator(
-        &self,
-    ) -> TryLockResult<MutexGuard<Option<GradientAccumulator>>> {
-        self.gradient.try_lock()
     }
 
     pub fn value(&self) -> &Arr {
@@ -857,22 +836,6 @@ impl ParameterNode {
 
     pub(crate) fn zero_gradient(&self) {
         self.gradient.borrow_mut().zero_gradient();
-    }
-
-    pub(crate) fn gradient_push_down(&self) {
-        self.value
-            .gradient_accumulator()
-            .iter_mut()
-            .for_each(|accum| {
-                let self_accum = self.gradient.borrow();
-                if self_accum.has_dense() {
-                    accum.accumulate_gradient(self_accum.gradient());
-                } else {
-                    for (row_idx, grad) in self_accum.sparse_iter() {
-                        accum.accumulate_gradient((row_idx, &grad));
-                    }
-                }
-            });
     }
 }
 

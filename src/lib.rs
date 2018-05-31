@@ -479,10 +479,6 @@ impl Variable<ParameterNode> {
             merge_parameters(&self.parameters, &index.parameters),
         )
     }
-
-    pub(crate) fn gradient_push_down(&self) {
-        self.node.gradient_push_down();
-    }
 }
 
 impl<T> Variable<nn::losses::SparseCategoricalCrossentropyNode<T>>

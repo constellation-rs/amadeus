@@ -1,6 +1,7 @@
 //! Optimization module.
 //!
 //! Contains a number of optimizers.
+use std::cell::Cell;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use {HogwildParameter, ParameterNode, Variable};
@@ -35,14 +36,15 @@ pub(crate) trait InnerOptimizer {
 }
 
 pub struct SynchronizedOptimizer<'a, T: 'a> {
+    num_updates: Cell<usize>,
     optimizer: &'a T,
     barrier_guard: barrier::SynchronizationBarrierGuard,
 }
 
 impl<'a, T: 'a> SynchronizedOptimizer<'a, T> {
     pub fn new(optimizer: &'a T, barrier_guard: barrier::SynchronizationBarrierGuard) -> Self {
-        ::std::thread::sleep_ms(5);
         SynchronizedOptimizer {
+            num_updates: Cell::new(0),
             optimizer: optimizer,
             barrier_guard: barrier_guard,
         }
@@ -53,43 +55,14 @@ macro_rules! impl_sync_optimizer {
     ($type:ty) => {
         impl<'a> Optimizer for SynchronizedOptimizer<'a, $type> {
             fn step(&self, parameters: &[Variable<ParameterNode>]) {
-                // Push down this thread's gradients to the shared
-                // accumulators.
-                for parameter in parameters {
-                    parameter.gradient_push_down();
-                    parameter.node.zero_gradient();
+                self.num_updates.set(self.num_updates.get() + 1);
+
+                if self.num_updates.get() == 8 {
+                    let _barrier = self.barrier_guard.synchronize();
+                    self.optimizer.step(parameters);
+
+                    self.num_updates.set(0);
                 }
-
-                // Wait until all the other threads have finished push down.
-                self.barrier_guard.start_wait();
-
-                // Start.
-                for parameter in parameters {
-                    // Attempt to get the lock. If unsuccessful, skip this parameter:
-                    // another thread is taking care of it already.
-                    if let Ok(mut lock) = parameter.node.value.try_gradient_accumulator() {
-                        if let Some(ref mut sink) = lock.deref_mut() {
-                            self.optimizer.inner_step(&parameter.node.value, sink);
-                        } else {
-                            panic!("Sink should always be instantiated.")
-                        }
-
-                        if let Some(ref mut sink) = lock.deref_mut() {
-                            sink.zero_gradient();
-                        } else {
-                            panic!("Sink should always be instantiated.")
-                        }
-                    }
-                }
-
-                // Wait until all the other threads have finished updating.
-                self.barrier_guard.end_wait();
-            }
-        }
-
-        impl Synchronizable for $type {
-            fn synchronized(&self, num_threads: usize) -> Vec<SynchronizedOptimizer<Self>> {
-                self.synchronized(num_threads)
             }
         }
     };
@@ -99,6 +72,7 @@ macro_rules! impl_sync_optimizer {
 impl_sync_optimizer!(SGD);
 impl_sync_optimizer!(Adagrad);
 impl_sync_optimizer!(Adam);
+impl_sync_optimizer!(Optimizers);
 
 macro_rules! impl_optimizer_enum {
     ($(($tag:ident, $type:ty)),*) => {
@@ -108,6 +82,16 @@ macro_rules! impl_optimizer_enum {
         )*
         }
 
+        impl Optimizers {
+            fn register_thread(&self) -> barrier::SynchronizationBarrierGuard {
+                match self {
+                $(
+                    Optimizers::$tag(val) => val.sync_barrier.register_thread(),
+                )*
+                }
+            }
+        }
+
         impl Optimizer for Optimizers {
             fn step(&self, parameters: &[Variable<ParameterNode>]) {
                 match self {
@@ -115,6 +99,14 @@ macro_rules! impl_optimizer_enum {
                         Optimizers::$tag(val) => val.step(parameters),
                         )*
                 }
+            }
+        }
+
+        impl Synchronizable for Optimizers {
+            fn synchronized(&self, num_threads: usize) -> Vec<SynchronizedOptimizer<Self>> {
+                (0..num_threads)
+                    .map(|_| SynchronizedOptimizer::new(self, self.register_thread()))
+                    .collect()
             }
         }
     }
