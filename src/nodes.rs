@@ -857,10 +857,10 @@ impl ParameterNode {
                 let self_accum = self.gradient.borrow();
                 if self_accum.has_dense() {
                     accum.accumulate_gradient(self_accum.gradient());
-                }
-
-                for (row_idx, grad) in self_accum.sparse_iter() {
-                    accum.accumulate_gradient((row_idx, &grad));
+                } else {
+                    for (row_idx, grad) in self_accum.sparse_iter() {
+                        accum.accumulate_gradient((row_idx, &grad));
+                    }
                 }
             });
     }

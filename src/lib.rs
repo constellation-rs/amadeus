@@ -162,6 +162,8 @@ use std::clone::Clone;
 use std::ops::{Add, Deref, Div, Mul, Neg, Sub};
 use std::rc::Rc;
 
+use itertools::Itertools;
+
 mod fast_approx;
 pub mod nn;
 mod nodes;
@@ -193,12 +195,15 @@ fn merge_parameters(
     xs: &[Variable<ParameterNode>],
     ys: &[Variable<ParameterNode>],
 ) -> Vec<Variable<ParameterNode>> {
-    let mut unique_params: Vec<_> = xs.iter().chain(ys.iter()).cloned().collect();
-
-    unique_params.sort_unstable_by_key(|x| x.as_ptr());
-    unique_params.dedup_by_key(|x| (*x).as_ptr());
-
-    unique_params
+    xs.iter()
+        .merge_join_by(ys.iter(), |x, y| x.as_ptr().cmp(&y.as_ptr()))
+        .map(|either| match either {
+            itertools::EitherOrBoth::Left(x) => x,
+            itertools::EitherOrBoth::Right(x) => x,
+            itertools::EitherOrBoth::Both(x, _) => x,
+        })
+        .cloned()
+        .collect()
 }
 
 /// Handle to a node in the computation graph. The underlying nodes
