@@ -57,6 +57,7 @@ macro_rules! impl_sync_optimizer {
                 // accumulators.
                 for parameter in parameters {
                     parameter.gradient_push_down();
+                    parameter.node.zero_gradient();
                 }
 
                 // Wait until all the other threads have finished push down.

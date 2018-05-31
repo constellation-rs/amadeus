@@ -70,7 +70,6 @@
 //!     loss.backward(1.0);
 //!
 //!     optimizer.step(loss.parameters());
-//!     loss.zero_gradient();
 //! }
 //! # }
 //! ```
@@ -117,7 +116,6 @@
 //!                loss.backward(1.0);
 //!
 //!                optimizer.step(loss.parameters());
-//!                loss.zero_gradient();
 //!            }
 //!        });
 //! # }
@@ -1016,7 +1014,6 @@ mod tests {
             loss.backward(1.0);
 
             optimizer.step(loss.parameters());
-            loss.zero_gradient();
         }
 
         println!(
@@ -1063,7 +1060,6 @@ mod tests {
             loss.backward(1.0);
 
             optimizer.step(loss.parameters());
-            loss.zero_gradient();
         }
 
         println!(
@@ -1124,7 +1120,6 @@ mod tests {
                     loss_val += loss.value().scalar_sum();
 
                     optimizer.step(loss.parameters());
-                    loss.zero_gradient();
                 }
             }
 
@@ -1186,7 +1181,6 @@ mod tests {
                             loss_val += loss.value().scalar_sum();
 
                             optimizer.step(loss.parameters());
-                            loss.zero_gradient();
                         }
                     }
                 }
@@ -1255,7 +1249,6 @@ mod tests {
                             loss_val += loss.value().scalar_sum();
 
                             optimizer.step(loss.parameters());
-                            loss.zero_gradient();
                         }
                     }
                 }

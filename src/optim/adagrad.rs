@@ -104,6 +104,7 @@ impl Optimizer for Adagrad {
     fn step(&self, parameters: &[Variable<ParameterNode>]) {
         for parameter in parameters {
             self.inner_step(&parameter.node.value, parameter.node.gradient.borrow_mut());
+            parameter.node.zero_gradient();
         }
     }
 }
