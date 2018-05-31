@@ -1,5 +1,4 @@
-use super::barrier::SynchronizationBarrier;
-use super::{InnerOptimizer, Optimizer, SynchronizedOptimizer};
+use super::Optimizer;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use {numerics, Arr, HogwildParameter, ParameterNode, Variable};
@@ -21,7 +20,6 @@ pub struct Adam {
     beta_v: f32,
     eps: f32,
     clamp: Option<(f32, f32)>,
-    pub(in optim) sync_barrier: SynchronizationBarrier,
 }
 
 impl Adam {
@@ -34,15 +32,7 @@ impl Adam {
             beta_v: 0.999,
             eps: 1.0e-8,
             clamp: None,
-            sync_barrier: SynchronizationBarrier::default(),
         }
-    }
-
-    /// Return a synchoronised wrapper for this optimizer.
-    pub fn synchronized(&self, num_threads: usize) -> Vec<SynchronizedOptimizer<Self>> {
-        (0..num_threads)
-            .map(|_| SynchronizedOptimizer::new(self, self.sync_barrier.register_thread()))
-            .collect()
     }
 
     /// Set the learning rate.
@@ -86,9 +76,7 @@ impl Adam {
 
         *value -= self.learning_rate / (v_hat.sqrt() + self.eps) * m_hat;
     }
-}
 
-impl InnerOptimizer for Adam {
     fn inner_step<T: DerefMut<Target = ::nodes::GradientAccumulator>>(
         &self,
         param: &Arc<HogwildParameter>,

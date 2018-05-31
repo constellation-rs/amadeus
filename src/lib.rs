@@ -674,6 +674,7 @@ mod tests {
     use rayon::prelude::*;
     use std::sync::Arc;
 
+    use super::optim::Synchronizable;
     use super::*;
 
     const TOLERANCE: f32 = 0.05;

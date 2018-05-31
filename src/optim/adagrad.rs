@@ -1,5 +1,4 @@
-use super::barrier::SynchronizationBarrier;
-use super::{InnerOptimizer, Optimizer, SynchronizedOptimizer};
+use super::Optimizer;
 use numerics::{ArraySlice, ArraySliceMut};
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -14,7 +13,6 @@ pub struct Adagrad {
     l2: f32,
     clamp: Option<(f32, f32)>,
     eps: f32,
-    pub(in optim) sync_barrier: SynchronizationBarrier,
 }
 
 impl Adagrad {
@@ -25,7 +23,6 @@ impl Adagrad {
             l2: 0.0,
             clamp: None,
             eps: 1e-10,
-            sync_barrier: SynchronizationBarrier::default(),
         }
     }
 
@@ -47,15 +44,6 @@ impl Adagrad {
         self
     }
 
-    /// Return a synchoronised wrapper for this optimizer.
-    pub fn synchronized(&self, num_threads: usize) -> Vec<SynchronizedOptimizer<Self>> {
-        (0..num_threads)
-            .map(|_| SynchronizedOptimizer::new(self, self.sync_barrier.register_thread()))
-            .collect()
-    }
-}
-
-impl InnerOptimizer for Adagrad {
     fn inner_step<T: DerefMut<Target = ::nodes::GradientAccumulator>>(
         &self,
         param: &Arc<HogwildParameter>,

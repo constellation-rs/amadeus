@@ -208,6 +208,7 @@ impl SynchronizationBarrierGuard {
     /// Return the id of the current thread.
     /// Threads always update parameters in the
     /// same (ascending) sequence of thread ids.
+    #[allow(dead_code)]
     pub fn thread_id(&self) -> usize {
         self.thread_num
     }
