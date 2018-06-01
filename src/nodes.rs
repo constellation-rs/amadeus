@@ -770,6 +770,11 @@ impl HogwildParameter {
         }
     }
 
+    /// Get the parameter value.
+    pub fn value(&self) -> &Arr {
+        unsafe { &*(self.value.as_ptr()) }
+    }
+
     pub(crate) unsafe fn value_mut(&self) -> &mut Arr {
         &mut *(self.value.as_ptr())
     }
