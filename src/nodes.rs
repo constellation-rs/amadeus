@@ -1210,6 +1210,7 @@ where
 #[derive(Debug)]
 pub struct DotNode<LHS, RHS> {
     value: RefCell<Arr>,
+    gradient: RefCell<Arr>,
     lhs_gradient: RefCell<Arr>,
     rhs_gradient: RefCell<Arr>,
     lhs: Rc<LHS>,
@@ -1226,12 +1227,14 @@ where
     pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
         let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
         let value = lhs.value().dot(rhs.value().deref());
+        let gradient = &value * 0.0;
 
         let lhs_gradient = lhs.value().deref() * 0.0;
         let rhs_gradient = rhs.value().deref() * 0.0;
 
         DotNode {
             value: RefCell::new(value),
+            gradient: RefCell::new(gradient),
             lhs_gradient: RefCell::new(lhs_gradient),
             rhs_gradient: RefCell::new(rhs_gradient),
             lhs: lhs,
@@ -1268,29 +1271,43 @@ where
     }
 
     fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-        let beta = match self.counter.backward() {
-            BackwardAction::Set => 0.0,
-            BackwardAction::Increment => 1.0,
-        };
-
-        {
-            let rhs_value = self.rhs.value();
-            let lhs_value = self.lhs.value();
-
-            let mut lhs_gradient = self.lhs_gradient.borrow_mut();
-            let mut rhs_gradient = self.rhs_gradient.borrow_mut();
-
-            numerics::mat_mul(1.0, gradient, &rhs_value.t(), beta, &mut lhs_gradient);
-            numerics::mat_mul(
-                1.0,
-                &lhs_value.t(),
-                gradient.deref(),
-                beta,
-                &mut rhs_gradient,
-            );
+        match self.counter.backward() {
+            BackwardAction::Set => {
+                self.gradient.borrow_mut().slice_assign(gradient.deref());
+            }
+            BackwardAction::Increment => {
+                self.gradient
+                    .borrow_mut()
+                    .slice_add_assign(gradient.deref());
+            }
         }
 
         if self.counter.recurse_backward() {
+            {
+                let rhs_value = self.rhs.value();
+                let lhs_value = self.lhs.value();
+
+                let gradient = self.gradient.borrow();
+
+                let mut lhs_gradient = self.lhs_gradient.borrow_mut();
+                let mut rhs_gradient = self.rhs_gradient.borrow_mut();
+
+                numerics::mat_mul(
+                    1.0,
+                    gradient.deref(),
+                    &rhs_value.t(),
+                    0.0,
+                    &mut lhs_gradient,
+                );
+                numerics::mat_mul(
+                    1.0,
+                    &lhs_value.t(),
+                    gradient.deref(),
+                    0.0,
+                    &mut rhs_gradient,
+                );
+            }
+
             self.lhs.backward(&self.lhs_gradient.borrow());
             self.rhs.backward(&self.rhs_gradient.borrow());
         }
