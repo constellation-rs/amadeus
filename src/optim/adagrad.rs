@@ -15,6 +15,12 @@ pub struct Adagrad {
     eps: f32,
 }
 
+impl Default for Adagrad {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Adagrad {
     /// Create a new optimizer instance with a given set of parameters.
     pub fn new() -> Self {

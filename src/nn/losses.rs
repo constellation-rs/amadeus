@@ -24,6 +24,7 @@ where
     Variable::new(Rc::new(node), x.parameters.clone())
 }
 
+/// Sparse categorical cross-entropy loss node.
 #[derive(Debug)]
 pub struct SparseCategoricalCrossentropyNode<LHS> {
     operand: Rc<LHS>,
@@ -39,7 +40,7 @@ impl<LHS> SparseCategoricalCrossentropyNode<LHS>
 where
     LHS: Node<Value = Arr, InputGradient = Arr>,
 {
-    pub fn new(operand: Rc<LHS>, y: Rc<IndexInputNode>) -> Self {
+    pub(crate) fn new(operand: Rc<LHS>, y: Rc<IndexInputNode>) -> Self {
         assert!(
             operand.value().rows() == 1,
             "Minibatches not supported: rows must be 1."
@@ -75,6 +76,7 @@ where
         }
     }
 
+    /// Return the predictions made by this layer.
     pub fn predictions(&self) -> Bor<Arr> {
         self.log_softmax.value()
     }

@@ -12,6 +12,12 @@ pub struct SGD {
     clamp: Option<(f32, f32)>,
 }
 
+impl Default for SGD {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SGD {
     /// Create a new optimizer instance with a given set of parameters.
     pub fn new() -> Self {

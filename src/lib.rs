@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
 //! # Features
@@ -186,6 +187,7 @@ fn clamp(x: f32, min: f32, max: f32) -> f32 {
 /// Trait describing nodes that can accept new values once
 /// the graph has been defined.
 pub trait DataInput<T> {
+    /// Set the value of this node.
     fn set_value(&self, T);
 }
 
@@ -260,10 +262,6 @@ where
         }
     }
 
-    pub fn needs_gradient(&self) -> bool {
-        self.node.needs_gradient()
-    }
-
     /// Return the parameters of the graph.
     pub fn parameters(&self) -> &[Variable<ParameterNode>] {
         &self.parameters[..]
@@ -275,6 +273,7 @@ where
     }
 }
 
+/// An alias for a node whose concrete type has been erased.
 pub type BoxedNode = Rc<Node<Value = Arr, InputGradient = Arr>>;
 
 impl<T> Variable<T>

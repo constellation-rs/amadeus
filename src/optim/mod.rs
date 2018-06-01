@@ -10,7 +10,7 @@ mod sgd;
 
 pub use self::adagrad::Adagrad;
 pub use self::adam::Adam;
-pub use self::barrier::SynchronizationBarrier;
+use self::barrier::SynchronizationBarrier;
 pub use self::sgd::SGD;
 
 /// Core trait implemented by all optimizer methods.
@@ -104,10 +104,14 @@ where
 
 macro_rules! impl_optimizer_enum {
     ($(($tag:ident, $type:ty)),*) => {
+        /// Enum containing all optimizers.
+        ///
+        /// Makes runtime switching between optimizers slightly more ergonomic.
         pub enum Optimizers {
-        $(
-            $tag($type),
-        )*
+            $(
+                #[allow(missing_docs)]
+                $tag($type),
+            )*
         }
 
         impl Optimizer for Optimizers {
@@ -115,7 +119,7 @@ macro_rules! impl_optimizer_enum {
                 match self {
                     $(
                         Optimizers::$tag(val) => val.step(parameters),
-                        )*
+                    )*
                 }
             }
         }

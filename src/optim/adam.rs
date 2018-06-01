@@ -22,6 +22,12 @@ pub struct Adam {
     clamp: Option<(f32, f32)>,
 }
 
+impl Default for Adam {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Adam {
     /// Build new optimizer object.
     pub fn new() -> Self {

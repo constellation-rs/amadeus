@@ -89,7 +89,9 @@ impl PassCounter {
 /// and simple references.
 #[derive(Debug)]
 pub enum Bor<'value, T: 'value> {
+    /// Ref from a `RefCell`.
     RefGuard(Ref<'value, T>),
+    /// Plain reference.
     Reference(&'value T),
 }
 
@@ -127,6 +129,7 @@ pub trait Node: fmt::Debug + 'static {
     fn value(&self) -> Bor<Self::Value>;
     /// If the node needs to be used in the backward step.
     fn needs_gradient(&self) -> bool;
+    /// Reset the caches of this node and its parents.
     fn clear(&self);
 }
 
@@ -545,7 +548,7 @@ where
 /// Input node for the graph.
 #[derive(Debug)]
 pub struct InputNode {
-    pub value: RefCell<Arr>,
+    pub(crate) value: RefCell<Arr>,
 }
 
 impl InputNode {
@@ -732,9 +735,9 @@ unsafe impl Sync for HogwildParameter {}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HogwildParameter {
     shape: (usize, usize),
-    pub value: RefCell<Arr>,
-    pub squared_gradients: RefCell<Arr>,
-    pub moments: RefCell<Arr>,
+    pub(crate) value: RefCell<Arr>,
+    pub(crate) squared_gradients: RefCell<Arr>,
+    pub(crate) moments: RefCell<Arr>,
     num_updates: Cell<i32>,
 }
 
@@ -765,14 +768,6 @@ impl HogwildParameter {
             moments: RefCell::new(moments),
             num_updates: Cell::new(0),
         }
-    }
-
-    pub fn value(&self) -> &Arr {
-        unsafe { &*(self.value.as_ptr()) }
-    }
-
-    pub fn squared_gradients(&self) -> &Arr {
-        unsafe { &*(self.squared_gradients.as_ptr()) }
     }
 
     pub(crate) unsafe fn value_mut(&self) -> &mut Arr {
@@ -2526,7 +2521,7 @@ where
 /// for implementing indexable embedding layers.
 #[derive(Debug)]
 pub struct IndexInputNode {
-    pub value: RefCell<SmallVec<[usize; 4]>>,
+    pub(crate) value: RefCell<SmallVec<[usize; 4]>>,
 }
 
 impl IndexInputNode {
