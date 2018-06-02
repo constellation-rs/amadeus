@@ -142,6 +142,7 @@ extern crate serde_derive;
 
 extern crate serde;
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate ndarray;
 extern crate rand;
