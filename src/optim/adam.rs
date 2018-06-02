@@ -1,6 +1,7 @@
-use super::barrier::{SynchronizationBarrier, SynchronizationBarrierGuard};
 use super::Optimizer;
-use {numerics, Arr, ParameterNode, Variable};
+use std::ops::DerefMut;
+use std::sync::Arc;
+use {numerics, Arr, HogwildParameter, ParameterNode, Variable};
 
 use ndarray::Axis;
 
@@ -18,35 +19,31 @@ pub struct Adam {
     beta_m: f32,
     beta_v: f32,
     eps: f32,
-    parameters: Vec<Variable<ParameterNode>>,
     clamp: Option<(f32, f32)>,
-    sync_barrier: Option<SynchronizationBarrierGuard>,
+}
+
+impl Default for Adam {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Adam {
     /// Build new optimizer object.
-    pub fn new(parameters: Vec<Variable<ParameterNode>>) -> Self {
+    pub fn new() -> Self {
         Self {
             learning_rate: 0.05,
             l2: 0.0,
             beta_m: 0.9,
             beta_v: 0.999,
             eps: 1.0e-8,
-            parameters: parameters,
             clamp: None,
-            sync_barrier: None,
         }
     }
 
     /// Set the learning rate.
     pub fn learning_rate(mut self, learning_rate: f32) -> Self {
         self.learning_rate = learning_rate;
-        self
-    }
-
-    /// Use synchronous parallel training.
-    pub fn synchronized(mut self, barrier: &SynchronizationBarrier) -> Self {
-        self.sync_barrier = Some(barrier.register_thread());
         self
     }
 
@@ -62,12 +59,12 @@ impl Adam {
         self
     }
 
-    fn param_fields<'par>(&self, parameter: &'par Variable<ParameterNode>) -> AdamParameters<'par> {
+    fn param_fields<'par>(&self, value: &'par Arc<HogwildParameter>) -> AdamParameters<'par> {
         AdamParameters {
-            value: unsafe { parameter.node.value.value_mut() },
-            m: unsafe { parameter.node.value.squared_gradient_mut() },
-            v: unsafe { parameter.node.value.moments_mut() },
-            t: unsafe { parameter.node.value.num_updates_mut() },
+            value: unsafe { value.value_mut() },
+            m: unsafe { value.squared_gradient_mut() },
+            v: unsafe { value.moments_mut() },
+            t: unsafe { value.num_updates_mut() },
         }
     }
 
@@ -86,39 +83,38 @@ impl Adam {
         *value -= self.learning_rate / (v_hat.sqrt() + self.eps) * m_hat;
     }
 
-    fn do_step(&self, parameter: &Variable<ParameterNode>) {
-        let mut sink = parameter.node.gradient.borrow_mut();
-
+    fn inner_step<T: DerefMut<Target = ::nodes::GradientAccumulator>>(
+        &self,
+        param: &Arc<HogwildParameter>,
+        mut sink: T,
+    ) {
         if let Some((min, max)) = self.clamp {
             sink.clamp(min, max);
         }
 
-        let param = self.param_fields(parameter);
+        let param = self.param_fields(param);
 
         // Increment number of updates
         *param.t = param.t.saturating_add(1);
 
-        if sink.has_dense {
+        if sink.has_dense() {
             for (value, &gradient, m, v) in izip!(
                 param.value.as_slice_mut().unwrap(),
-                sink.dense_gradient().as_slice().unwrap(),
+                sink.gradient().as_slice().unwrap(),
                 param.m.as_slice_mut().unwrap(),
                 param.v.as_slice_mut().unwrap(),
             ) {
                 self.update(value, gradient, m, v, param.t);
             }
-        }
-
-        for &(ref index_vec, ref grad) in sink.sparse_gradient.as_slice() {
-            for (grad_idx, &param_idx) in index_vec.iter().enumerate() {
-                let mut value_row = param.value.subview_mut(Axis(0), param_idx);
-                let grad_row = grad.subview(Axis(0), grad_idx);
-                let mut m_row = param.m.subview_mut(Axis(0), param_idx);
-                let mut v_row = param.v.subview_mut(Axis(0), param_idx);
+        } else {
+            for (row_idx, ref grad) in sink.sparse_iter() {
+                let mut value_row = param.value.subview_mut(Axis(0), row_idx);
+                let mut m_row = param.m.subview_mut(Axis(0), row_idx);
+                let mut v_row = param.v.subview_mut(Axis(0), row_idx);
 
                 for (value, &gradient, m, v) in izip!(
                     value_row.as_slice_mut().unwrap(),
-                    grad_row.into_slice().unwrap(),
+                    grad.iter(),
                     m_row.as_slice_mut().unwrap(),
                     v_row.as_slice_mut().unwrap(),
                 ) {
@@ -131,22 +127,10 @@ impl Adam {
 
 impl Optimizer for Adam {
     /// Perform a single SGD step.
-    fn step(&self) {
-        if let Some(ref barrier) = self.sync_barrier {
-            barrier.start_wait();
-            {
-                let _ = barrier.lock();
-
-                for parameter in &self.parameters {
-                    self.do_step(parameter);
-                }
-            }
-
-            barrier.end_wait();
-        } else {
-            for parameter in &self.parameters {
-                self.do_step(parameter);
-            }
+    fn step(&self, parameters: &[Variable<ParameterNode>]) {
+        for parameter in parameters {
+            self.inner_step(&parameter.node.value, parameter.node.gradient.borrow_mut());
+            parameter.node.zero_gradient();
         }
     }
 }

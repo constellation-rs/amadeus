@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
 //! # Features
@@ -55,7 +56,7 @@
 //! # let y_hat = slope.clone() * x.clone() + intercept.clone();
 //! # let mut loss = (y.clone() - y_hat).square();
 //! # let num_epochs = 10;
-//! let mut optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
+//! let mut optimizer = SGD::new().learning_rate(0.1);
 //!
 //! for _ in 0..num_epochs {
 //!     let x_value: f32 = rand::random();
@@ -69,8 +70,7 @@
 //!     loss.forward();
 //!     loss.backward(1.0);
 //!
-//!     optimizer.step();
-//!     loss.zero_gradient();
+//!     optimizer.step(loss.parameters());
 //! }
 //! # }
 //! ```
@@ -104,7 +104,7 @@
 //!            let y_hat = slope.clone() * x.clone() + intercept.clone();
 //!            let mut loss = (y.clone() - y_hat).square();
 //!
-//!            let optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
+//!            let optimizer = SGD::new().learning_rate(0.1);
 //!
 //!            for _ in 0..num_epochs {
 //!                let x_value: f32 = rand::random();
@@ -116,8 +116,7 @@
 //!                loss.forward();
 //!                loss.backward(1.0);
 //!
-//!                optimizer.step();
-//!                loss.zero_gradient();
+//!                optimizer.step(loss.parameters());
 //!            }
 //!        });
 //! # }
@@ -152,6 +151,8 @@ extern crate smallvec;
 #[macro_use]
 extern crate itertools;
 
+extern crate hibitset;
+
 /// Alias for a `f32` `ndarray` matrix.
 pub type Arr = ndarray::Array2<f32>;
 
@@ -159,6 +160,8 @@ use std::cell::RefCell;
 use std::clone::Clone;
 use std::ops::{Add, Deref, Div, Mul, Neg, Sub};
 use std::rc::Rc;
+
+use itertools::Itertools;
 
 mod fast_approx;
 pub mod nn;
@@ -184,16 +187,23 @@ fn clamp(x: f32, min: f32, max: f32) -> f32 {
 /// Trait describing nodes that can accept new values once
 /// the graph has been defined.
 pub trait DataInput<T> {
+    /// Set the value of this node.
     fn set_value(&self, T);
 }
 
-fn merge_parameters(xs: &[Rc<ParameterNode>], ys: &[Rc<ParameterNode>]) -> Vec<Rc<ParameterNode>> {
-    let mut unique_params: Vec<_> = xs.iter().chain(ys.iter()).cloned().collect();
-
-    unique_params.sort_unstable_by_key(|x| x.deref() as *const ParameterNode);
-    unique_params.dedup_by_key(|x| (*x).deref() as *const ParameterNode);
-
-    unique_params
+fn merge_parameters(
+    xs: &[Variable<ParameterNode>],
+    ys: &[Variable<ParameterNode>],
+) -> Vec<Variable<ParameterNode>> {
+    xs.iter()
+        .merge_join_by(ys.iter(), |x, y| x.as_ptr().cmp(&y.as_ptr()))
+        .map(|either| match either {
+            itertools::EitherOrBoth::Left(x) => x,
+            itertools::EitherOrBoth::Right(x) => x,
+            itertools::EitherOrBoth::Both(x, _) => x,
+        })
+        .cloned()
+        .collect()
 }
 
 /// Handle to a node in the computation graph. The underlying nodes
@@ -206,7 +216,7 @@ where
 {
     node: Rc<T>,
     grad: Option<RefCell<Arr>>,
-    parameters: Vec<Rc<ParameterNode>>,
+    parameters: Vec<Variable<ParameterNode>>,
 }
 
 impl<T: Node> Clone for Variable<T> {
@@ -223,7 +233,7 @@ impl<T> Variable<T>
 where
     T: Node,
 {
-    fn new(node: Rc<T>, parameters: Vec<Rc<ParameterNode>>) -> Self {
+    fn new(node: Rc<T>, parameters: Vec<Variable<ParameterNode>>) -> Self {
         Variable {
             node: node,
             grad: None,
@@ -239,28 +249,31 @@ where
     pub fn forward(&self) {
         self.node.forward()
     }
-    /// Zero the gradients. Must be called after a backward step or whenever inputs change.
-    pub fn zero_gradient(&self) {
-        self.node.zero_gradient();
+    /// Clear the graph caches. Must be called whenever inputs change and [backward] is not
+    /// called.
+    pub fn clear(&self) {
+        self.node.clear();
     }
 
-    pub fn needs_gradient(&self) -> bool {
-        self.node.needs_gradient()
+    /// Zero the accumulated gradients for the parameter nodes in this graph.
+    pub fn zero_gradient(&self) {
+        for param in self.parameters() {
+            param.node.zero_gradient();
+        }
     }
 
     /// Return the parameters of the graph.
-    pub fn parameters(&self) -> Vec<Variable<ParameterNode>> {
-        let mut unique_params = self.parameters.clone();
-        unique_params.sort_unstable_by_key(|x| x.deref() as *const ParameterNode);
-        unique_params.dedup_by_key(|x| (*x).deref() as *const ParameterNode);
+    pub fn parameters(&self) -> &[Variable<ParameterNode>] {
+        &self.parameters[..]
+    }
 
-        unique_params
-            .iter()
-            .map(|x| Variable::new(Rc::clone(x), Vec::new()))
-            .collect()
+    /// Mutably return the parameters of the graph.
+    pub fn parameters_mut(&mut self) -> &mut [Variable<ParameterNode>] {
+        &mut self.parameters[..]
     }
 }
 
+/// An alias for a node whose concrete type has been erased.
 pub type BoxedNode = Rc<Node<Value = Arr, InputGradient = Arr>>;
 
 impl<T> Variable<T>
@@ -446,16 +459,12 @@ where
 
 impl Variable<ParameterNode> {
     /// Return the (dense) gradient value of this node.
-    pub fn dense_gradient(&self) -> Option<Arr> {
-        match self.node.gradient.borrow().dense_gradient {
-            Some(ref gradients) => Some(gradients.clone()),
-            None => None,
-        }
+    pub fn gradient(&self) -> Arr {
+        self.node.gradient.borrow().materialized_gradient()
     }
 
-    /// Return the (dense) gradient value of this node.
-    fn sparse_gradient(&self) -> SparseGradientStore {
-        self.node.gradient.borrow().sparse_gradient.clone()
+    fn as_ptr(&self) -> *const ParameterNode {
+        self.node.deref() as *const ParameterNode
     }
 
     /// Row-wise indexing of this parameter node. Primiarily used
@@ -634,19 +643,7 @@ where
         output.forward();
         output.backward(1.0);
 
-        let mut gradient = input.dense_gradient().unwrap_or(initial_input * 0.0);
-
-        let sparse_gradient = input.sparse_gradient();
-
-        for &(ref indices, ref grad) in sparse_gradient.as_slice() {
-            for &row_idx in indices.iter() {
-                for (dest, orig) in gradient.row_mut(row_idx).iter_mut().zip(grad.iter()) {
-                    *dest += orig;
-                }
-            }
-        }
-
-        gradient
+        input.gradient()
     };
 
     output.zero_gradient();
@@ -676,6 +673,7 @@ mod tests {
     use rayon::prelude::*;
     use std::sync::Arc;
 
+    use super::optim::Synchronizable;
     use super::*;
 
     const TOLERANCE: f32 = 0.05;
@@ -973,14 +971,17 @@ mod tests {
     }
     #[test]
     fn sparse_index_finite_difference() {
-        let mut x = ParameterNode::new(random_matrix(10, 5));
-        let idx_0 = IndexInputNode::new(&[random_index(10)]);
-        let idx_1 = IndexInputNode::new(&[random_index(10)]);
+        let mut x = ParameterNode::new(random_matrix(100, 5));
 
-        let mut z = (x.index(&idx_0).tanh() * x.index(&idx_1)).square();
+        for _ in 0..10 {
+            let idx_0 = IndexInputNode::new(&[random_index(10)]);
+            let idx_1 = IndexInputNode::new(&[random_index(10)]);
 
-        let (difference, gradient) = finite_difference(&mut x, &mut z);
-        assert_close(&difference, &gradient, TOLERANCE);
+            let mut z = (x.index(&idx_0).tanh() * x.index(&idx_1)).square();
+
+            let (difference, gradient) = finite_difference(&mut x, &mut z);
+            assert_close(&difference, &gradient, TOLERANCE);
+        }
     }
     #[test]
     fn univariate_regression() {
@@ -996,7 +997,7 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let optimizer = Adagrad::new(loss.parameters()).learning_rate(0.5);
+        let optimizer = Adagrad::new().learning_rate(0.5);
 
         for _ in 0..num_epochs {
             let _x = arr2(&[[rand::thread_rng().gen()]]);
@@ -1008,8 +1009,7 @@ mod tests {
             loss.forward();
             loss.backward(1.0);
 
-            optimizer.step();
-            loss.zero_gradient();
+            optimizer.step(loss.parameters());
         }
 
         println!(
@@ -1039,7 +1039,7 @@ mod tests {
         let diff = y.clone() - y_hat.clone();
         let mut loss = diff.square();
 
-        let optimizer = SGD::new(loss.parameters()).learning_rate(0.1);
+        let optimizer = SGD::new().learning_rate(0.1);
 
         for _ in 0..num_epochs {
             let _x = arr2(&[[
@@ -1055,8 +1055,7 @@ mod tests {
             loss.forward();
             loss.backward(1.0);
 
-            optimizer.step();
-            loss.zero_gradient();
+            optimizer.step(loss.parameters());
         }
 
         println!(
@@ -1097,7 +1096,7 @@ mod tests {
         let mut loss = (output.clone() - y_hat.clone()).square();
 
         let num_epochs = 200;
-        let optimizer = Adagrad::new(loss.parameters()).learning_rate(0.1);
+        let optimizer = Adagrad::new().learning_rate(0.1);
 
         let mut loss_val = 0.0;
 
@@ -1116,8 +1115,7 @@ mod tests {
 
                     loss_val += loss.value().scalar_sum();
 
-                    optimizer.step();
-                    loss.zero_gradient();
+                    optimizer.step(loss.parameters());
                 }
             }
 
@@ -1159,7 +1157,7 @@ mod tests {
 
                 let num_epochs = 100;
 
-                let optimizer = SGD::new(loss.parameters());
+                let optimizer = SGD::new();
 
                 let mut loss_val = 0.0;
 
@@ -1178,8 +1176,7 @@ mod tests {
 
                             loss_val += loss.value().scalar_sum();
 
-                            optimizer.step();
-                            loss.zero_gradient();
+                            optimizer.step(loss.parameters());
                         }
                     }
                 }
@@ -1194,4 +1191,73 @@ mod tests {
 
         assert!(sum_loss / (losses.len() as f32) < 1e-3);
     }
+
+    #[test]
+    fn synchronized_embedding_factorization() {
+        let (rows, cols) = (10, 4);
+
+        let true_u = random_matrix(rows, 10);
+        let true_v = random_matrix(cols, 10);
+        let x = true_u.dot(&true_v.t());
+
+        let u_input = vec![0];
+        let v_input = vec![0];
+
+        let u_parameters = Arc::new(HogwildParameter::new(random_matrix(rows, 10)));
+        let v_parameters = Arc::new(HogwildParameter::new(random_matrix(cols, 10)));
+
+        let optimizer = SGD::new();
+
+        let losses: Vec<f32> = optimizer
+            .synchronized(rayon::current_num_threads())
+            .into_par_iter()
+            .map(|optimizer| {
+                let u_embedding = ParameterNode::shared(u_parameters.clone());
+                let v_embedding = ParameterNode::shared(v_parameters.clone());
+
+                let u_index = IndexInputNode::new(&u_input);
+                let v_index = IndexInputNode::new(&v_input);
+                let output = InputNode::new(random_matrix(1, 1));
+
+                let u_vec = u_embedding.index(&u_index);
+                let v_vec = v_embedding.index(&v_index);
+
+                let y_hat = u_vec.vector_dot(&v_vec);
+                let mut loss = (output.clone() - y_hat.clone()).square();
+
+                let num_epochs = 100;
+
+                let mut loss_val = 0.0;
+
+                for _ in 0..num_epochs {
+                    loss_val = 0.0;
+
+                    for row_idx in 0..rows {
+                        for col_idx in 0..cols {
+                            u_index.set_value(row_idx);
+                            v_index.set_value(col_idx);
+
+                            output.set_value(x[(row_idx, col_idx)]);
+
+                            loss.forward();
+                            loss.backward(1.0);
+
+                            loss_val += loss.value().scalar_sum();
+
+                            optimizer.step(loss.parameters());
+                        }
+                    }
+                }
+
+                println!("Loss val {}", loss_val);
+
+                loss_val
+            })
+            .collect();
+
+        let sum_loss: f32 = losses.iter().sum();
+
+        assert!(sum_loss / (losses.len() as f32) < 1e-3);
+    }
+
 }

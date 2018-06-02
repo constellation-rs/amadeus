@@ -156,16 +156,11 @@ impl Parameters {
         }
     }
 
-    /// Build an LSTM layer.
-    pub fn build(&self) -> Layer {
-        Layer::new(self.build_cell())
-    }
-
-    /// Build an LSTM cell.
-    pub fn build_cell(&self) -> Cell {
+    fn inner_build_cell(&self, coupled: bool) -> Cell {
         Cell {
             input_dim: self.input_dim,
             hidden_dim: self.hidden_dim,
+            coupled_input: coupled,
 
             forget_weights: ParameterNode::shared(self.forget_weights.clone()),
             forget_biases: ParameterNode::shared(self.forget_biases.clone()),
@@ -180,6 +175,28 @@ impl Parameters {
             output_gate_biases: ParameterNode::shared(self.output_gate_biases.clone()),
         }
     }
+
+    /// Build an LSTM layer.
+    pub fn build(&self) -> Layer {
+        Layer::new(self.build_cell())
+    }
+
+    /// Build an LSTM layer where the input and forget gates
+    /// are coupled.
+    pub fn build_coupled(&self) -> Layer {
+        Layer::new(self.build_coupled_cell())
+    }
+
+    /// Build an LSTM cell.
+    pub fn build_cell(&self) -> Cell {
+        self.inner_build_cell(false)
+    }
+
+    /// Build an LSTM cell where the input and forget gates
+    /// are coupled.
+    pub fn build_coupled_cell(&self) -> Cell {
+        self.inner_build_cell(true)
+    }
 }
 
 /// An LSTM cell.
@@ -187,6 +204,7 @@ impl Parameters {
 pub struct Cell {
     input_dim: usize,
     hidden_dim: usize,
+    coupled_input: bool,
 
     forget_weights: Variable<ParameterNode>,
     forget_biases: Variable<ParameterNode>,
@@ -227,12 +245,16 @@ impl Cell {
         // Forget part of the cell state
         let forget_gate =
             (stacked_input.dot(&self.forget_weights) + self.forget_biases.clone()).sigmoid();
-        let cell = forget_gate * cell;
+        let cell = forget_gate.clone() * cell;
 
         // Update the cell state with new input
-        let update_gate = (stacked_input.dot(&self.update_gate_weights)
-            + self.update_gate_biases.clone())
-            .sigmoid();
+        let update_gate = if self.coupled_input {
+            (1.0 - forget_gate).boxed()
+        } else {
+            (stacked_input.dot(&self.update_gate_weights) + self.update_gate_biases.clone())
+                .sigmoid()
+                .boxed()
+        };
         let update_value = (stacked_input.dot(&self.update_value_weights)
             + self.update_value_biases.clone())
             .tanh();
@@ -354,8 +376,10 @@ mod tests {
             assert_close(&difference, &gradient, TOLERANCE);
         }
 
-        for x in hidden.parameters().iter_mut() {
-            let (difference, gradient) = finite_difference(x, &mut hidden);
+        let mut params = hidden.parameters().to_owned();
+
+        for x in params.iter_mut() {
+            let (difference, gradient) = finite_difference(x, hidden);
             assert_close(&difference, &gradient, TOLERANCE);
         }
     }
@@ -431,7 +455,7 @@ mod tests {
 
         let prediction = hidden.dot(&final_layer);
         let mut loss = sparse_categorical_crossentropy(&prediction, &y);
-        let optimizer = Adam::new(loss.parameters()).learning_rate(0.01);
+        let optimizer = Adam::new().learning_rate(0.01);
 
         let digits = pi_digits(100);
 
@@ -462,7 +486,7 @@ mod tests {
 
                 loss_val += loss.value().scalar_sum();
 
-                optimizer.step();
+                optimizer.step(loss.parameters());
                 loss.zero_gradient();
 
                 if target_digit == predicted_label(prediction.value().deref()) {
