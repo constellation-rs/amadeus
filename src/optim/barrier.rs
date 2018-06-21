@@ -128,6 +128,7 @@ impl SynchronizationBarrier {
     }
 }
 
+#[derive(Debug)]
 struct SynchronizationBarrierCore {
     start_barrier: Barrier,
     end_barrier: Barrier,
@@ -187,6 +188,7 @@ impl SynchronizationBarrierCore {
 /// variables at the same time, and that all updates always occur in
 /// the same order, making results reproducible even when multiple
 /// threads are used.
+#[derive(Debug)]
 pub struct SynchronizationBarrierGuard {
     thread_num: usize,
     barrier: Arc<SynchronizationBarrierCore>,

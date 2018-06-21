@@ -47,6 +47,7 @@ pub trait Synchronizable {
 }
 
 /// Synchronized optimizer wrapper.
+#[derive(Debug)]
 pub struct SynchronizedOptimizer<'a, T: 'a> {
     step_size: usize,
     num_updates: Cell<usize>,
@@ -107,6 +108,7 @@ macro_rules! impl_optimizer_enum {
         /// Enum containing all optimizers.
         ///
         /// Makes runtime switching between optimizers slightly more ergonomic.
+        #[derive(Debug, Clone, Serialize, Deserialize)]
         pub enum Optimizers {
             $(
                 #[allow(missing_docs)]

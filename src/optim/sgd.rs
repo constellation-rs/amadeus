@@ -7,6 +7,7 @@ use {numerics, HogwildParameter, ParameterNode, Variable};
 use ndarray::Axis;
 
 /// Standard stochastic gradient descent optimizer with a fixed learning rate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SGD {
     learning_rate: f32,
     clamp: Option<(f32, f32)>,

@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+#![deny(missing_docs, missing_debug_implementations)]
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
 //! # Features
