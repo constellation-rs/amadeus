@@ -13,6 +13,7 @@ struct AdamParameters<'params> {
 }
 
 /// ADAM optimizer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Adam {
     learning_rate: f32,
     l2: f32,

@@ -8,6 +8,7 @@ use ndarray::Axis;
 
 /// Adagrad optimizer, scaled the learning rate by the inverse of previously
 /// accumulated gradients.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Adagrad {
     learning_rate: f32,
     l2: f32,
