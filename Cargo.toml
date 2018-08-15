@@ -12,6 +12,10 @@ license = "MIT"
 
 [dependencies]
 nom = "2.0"
+url = "1.7"
+url_serde = "0.2"
+serde_derive = "1.0"
+serde = "1.0"
 
 [profile.bench]
 opt-level = 3

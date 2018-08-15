@@ -1,11 +1,11 @@
-extern crate warc_parser;
 extern crate nom;
+extern crate warc_parser;
 
 mod tests {
+    use nom::{ConsumerState, Move, Producer};
+    use nom::{FileProducer, IResult, Needed};
     use std::fs::File;
     use std::io::prelude::*;
-    use nom::{IResult, Needed, FileProducer};
-    use nom::{Producer, ConsumerState, Move};
     fn read_sample_file(sample_name: &str) -> Vec<u8> {
         let full_path = "sample/".to_string() + sample_name;
         let mut f = File::open(full_path).unwrap();
@@ -34,8 +34,7 @@ mod tests {
             counter: 0,
             last_record: None,
         };
-        while let &ConsumerState::Continue(_) = producer.apply(&mut consumer) {
-        }
+        while let &ConsumerState::Continue(_) = producer.apply(&mut consumer) {}
         assert_eq!(consumer.counter, 0);
         assert_eq!(consumer.state, warc_parser::State::Error);
     }
@@ -49,8 +48,7 @@ mod tests {
             counter: 0,
             last_record: None,
         };
-        while let &ConsumerState::Continue(_) = producer.apply(&mut consumer) {
-        }
+        while let &ConsumerState::Continue(_) = producer.apply(&mut consumer) {}
         assert_eq!(consumer.counter, 8);
         assert_eq!(consumer.state, warc_parser::State::Done);
     }
