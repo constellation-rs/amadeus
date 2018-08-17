@@ -1,0 +1,28 @@
+[package]
+name = "streaming_algorithms"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["development-tools","encoding","rust-patterns","network-programming"]
+keywords = ["trait-object","serialization","serde","distributed"]
+description = """
+Performant implementations of various streaming algorithms.
+"""
+repository = "https://github.com/alecmocatta/streaming_algorithms"
+homepage = "https://github.com/alecmocatta/streaming_algorithms"
+documentation = "https://docs.rs/streaming_algorithms/0.1.0"
+readme = "README.md"
+
+[badges]
+appveyor = { repository = "alecmocatta/streaming_algorithms" }
+circle-ci = { repository = "alecmocatta/streaming_algorithms" }
+#gitlab = { repository = "alecmocatta/streaming_algorithms" }
+travis-ci = { repository = "alecmocatta/streaming_algorithms" }
+
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+twox-hash = "1.1"
+serde_derive = "1.0"
+serde = "1.0"
+rand = "0.5"
