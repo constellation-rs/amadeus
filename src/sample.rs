@@ -1,9 +1,7 @@
-#![allow(dead_code)]
-
-use rand::Rng;
+use rand::{self, Rng, SeedableRng};
 use std::{iter, ops, vec};
 
-/// Without replacement
+/// Given population and sample sizes, returns true if this element is in the sample. Without replacement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SampleTotal {
 	total: usize,
@@ -39,7 +37,7 @@ impl Drop for SampleTotal {
 	}
 }
 
-/// Without replacement
+/// [Reservoir sampling](https://en.wikipedia.org/wiki/Reservoir_sampling). Without replacement, and the returned order is unstable.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SampleUnstable<T> {
 	reservoir: Vec<T>,
@@ -103,7 +101,24 @@ impl<T> ops::AddAssign for SampleUnstable<T> {
 			assert_eq!(self.reservoir.capacity(), other.reservoir.capacity());
 			let mut new = Vec::with_capacity(self.reservoir.capacity());
 			let (m, n) = (self.i, other.i);
-			let mut rng = ::rand::thread_rng(); // TODO
+			let mut rng = rand::prng::XorShiftRng::from_seed([
+				m as u8,
+				n as u8,
+				self.reservoir.capacity() as u8,
+				3,
+				4,
+				5,
+				6,
+				7,
+				8,
+				9,
+				10,
+				11,
+				12,
+				13,
+				14,
+				15,
+			]); // TODO
 			for _ in 0..new.capacity() {
 				if rng.gen_range(0, m + n) < m {
 					new.push(self.reservoir.pop().unwrap());
@@ -131,7 +146,7 @@ mod test {
 		let samples = 2;
 
 		let mut hash = HashMap::new();
-		for _ in 0..1000000 {
+		for _ in 0..1_000_000 {
 			let mut res = Vec::with_capacity(samples);
 			let mut x = SampleTotal::new(total, samples);
 			for i in 0..total {
@@ -150,7 +165,7 @@ mod test {
 		let samples = 2;
 
 		let mut hash = HashMap::new();
-		for _ in 0..1000000 {
+		for _ in 0..1_000_000 {
 			let mut x = SampleUnstable::new(samples);
 			for i in 0..total {
 				x.push(i, &mut rand::thread_rng());

@@ -10,16 +10,18 @@
 
 Performant implementations of various [streaming algorithms](https://en.wikipedia.org/wiki/Streaming_algorithm).
 
-This library is a work in progress. See the docs for what algorithms are currently implemented.
+This library is a work in progress. PRs are very welcome! Currently implemented algorithms include:
 
-See [here](https://gist.github.com/debasishg/8172796) for a good list of algorithms to be implemented.
+ * Count–min sketch
+ * Top k (Count–min sketch plus a doubly linked hashmap to track heavy hitters / top k keys when ordered by aggregated value)
+ * HyperLogLog
+ * Reservoir sampling
 
-As these implementations are often in hot code paths, unsafe is used, albeit only when justified.
+A goal of this library is to enable composition of these algorithms; for example Top k + HyperLogLog to enable roughly `SELECT key FROM table GROUP BY key ORDER BY COUNT(DISTINCT value) DESC LIMIT k`.
 
-This library leverages the following prioritisation when deciding whether `unsafe` is justified for a particular implementation:
- 1. Asymptotically optimal algorithm
- 2. Trivial safety (i.e. no `unsafe` at all or extremely limited `unsafe` trivially contained to one or two lines)
- 3. Constant-factor optimisations
+See [this gist](https://gist.github.com/debasishg/8172796) for a good list of further algorithms to be implemented. Other resources are [Probabilistic data structures – Wikipedia](https://en.wikipedia.org/wiki/Category:Probabilistic_data_structures), [DataSketches – A similar Java library originating at Yahoo](https://datasketches.github.io/), and [Algebird  – A similar Java library originating at Twitter](https://github.com/twitter/algebird).
+
+As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 ## License
 Licensed under Apache License, Version 2.0, ([LICENSE.txt](LICENSE.txt) or http://www.apache.org/licenses/LICENSE-2.0).

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{iter, marker, ops};
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
@@ -45,30 +43,34 @@ impl<T> LinkedList<T> {
 		if !cfg!(feature = "assert") {
 			return;
 		}
-		let mut cur = self.head;
 		let mut len = 0;
-		while cur != usize::max_value() {
-			assert!(self.vec[cur].2.is_some());
-			let next = self.vec[cur].1;
-			if next != usize::max_value() {
-				assert_eq!(self.vec[next].0, cur);
-			} else {
-				assert_eq!(self.tail, cur);
+		{
+			let mut cur = self.head;
+			while cur != usize::max_value() {
+				assert!(self.vec[cur].2.is_some());
+				let next = self.vec[cur].1;
+				if next != usize::max_value() {
+					assert_eq!(self.vec[next].0, cur);
+				} else {
+					assert_eq!(self.tail, cur);
+				}
+				cur = next;
+				len += 1;
 			}
-			cur = next;
-			len += 1;
 		}
 		assert_eq!(self.len, len);
-		let mut cur = self.free;
 		let mut len_free = 0;
-		while cur != usize::max_value() {
-			assert!(!self.vec[cur].2.is_some());
-			let next = self.vec[cur].1;
-			if next != usize::max_value() {
-				assert_eq!(self.vec[next].0, cur);
+		{
+			let mut cur = self.free;
+			while cur != usize::max_value() {
+				assert!(!self.vec[cur].2.is_some());
+				let next = self.vec[cur].1;
+				if next != usize::max_value() {
+					assert_eq!(self.vec[next].0, cur);
+				}
+				cur = next;
+				len_free += 1;
 			}
-			cur = next;
-			len_free += 1;
 		}
 		assert_eq!(len + len_free, self.vec.len());
 	}
@@ -225,12 +227,12 @@ impl<T> LinkedList<T> {
 			self.tail = prev;
 		}
 
-		let next = self.vec[to.0].1;
+		let next2 = self.vec[to.0].1;
 		self.vec[from.0].0 = to.0;
-		self.vec[from.0].1 = next;
+		self.vec[from.0].1 = next2;
 		self.vec[to.0].1 = from.0;
-		if next != usize::max_value() {
-			self.vec[next].0 = from.0;
+		if next2 != usize::max_value() {
+			self.vec[next2].0 = from.0;
 		} else {
 			self.tail = from.0;
 		}
@@ -251,12 +253,12 @@ impl<T> LinkedList<T> {
 			self.tail = prev;
 		}
 
-		let prev = self.vec[to.0].0;
-		self.vec[from.0].0 = prev;
+		let prev2 = self.vec[to.0].0;
+		self.vec[from.0].0 = prev2;
 		self.vec[from.0].1 = to.0;
 		self.vec[to.0].0 = from.0;
-		if prev != usize::max_value() {
-			self.vec[prev].1 = from.0;
+		if prev2 != usize::max_value() {
+			self.vec[prev2].1 = from.0;
 		} else {
 			self.head = from.0;
 		}
@@ -271,6 +273,11 @@ impl<T> LinkedList<T> {
 	pub fn decrement(&self, index: &mut LinkedListIndex) {
 		index.0 = self.vec[index.0].0;
 		assert_ne!(index.0, usize::max_value());
+	}
+	pub fn clear(&mut self) {
+		while self.len() != 0 {
+			let _ = self.pop_back();
+		}
 	}
 }
 impl<'a, T> ops::Index<LinkedListIndex<'a>> for LinkedList<T> {

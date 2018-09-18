@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use linked_list::{LinkedList, LinkedListIndex};
 use std::{ops, ptr};
 
@@ -94,8 +92,8 @@ impl<T: Ord> OrderedLinkedList<T> {
 	}
 	pub fn mutate(&mut self, index: OrderedLinkedListIndex, f: impl FnOnce(T) -> T) {
 		let idx = index.0;
-		let val = &mut self.0[idx];
-		unsafe { ptr::write(val, f(ptr::read(val))) };
+		let x = &mut self.0[idx];
+		unsafe { ptr::write(x, f(ptr::read(x))) };
 		{
 			let val = &self.0[idx];
 			let mut prev = idx;
@@ -169,6 +167,9 @@ impl<T: Ord> OrderedLinkedList<T> {
 	#[inline(always)]
 	pub fn decrement(&self, index: &mut OrderedLinkedListIndex) {
 		self.0.decrement(&mut index.0)
+	}
+	pub fn clear(&mut self) {
+		self.0.clear()
 	}
 	pub fn iter(&self) -> OrderedLinkedListIter<'_, T> {
 		OrderedLinkedListIter {
