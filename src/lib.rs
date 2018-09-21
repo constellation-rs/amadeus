@@ -16,7 +16,15 @@
 //! As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 #![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.1.0")]
-#![feature(nll, tool_lints, non_modrs_mods)]
+#![feature(
+	nll,
+	tool_lints,
+	non_modrs_mods,
+	specialization,
+	stdsimd,
+	mmx_target_feature,
+	convert_id
+)]
 #![warn(
 	missing_copy_implementations,
 	missing_debug_implementations,
@@ -46,9 +54,11 @@
 extern crate twox_hash;
 #[macro_use]
 extern crate serde_derive;
-extern crate bytecount;
+// extern crate bytecount;
 extern crate rand;
 extern crate serde;
+// extern crate faster;
+extern crate packed_simd;
 
 mod count_min;
 mod distinct;

@@ -240,6 +240,9 @@ mod test {
 	use super::*;
 	use distinct::HyperLogLog;
 	use rand::{self, Rng, SeedableRng};
+	use std::time;
+	use traits::IntersectPlusUnionIsPlus;
+
 	#[test]
 	fn abc() {
 		let mut rng = rand::prng::XorShiftRng::from_seed([
@@ -320,6 +323,9 @@ mod test {
 			self.0.fmt(fmt)
 		}
 	}
+	impl<V> IntersectPlusUnionIsPlus for HLL<V> {
+		const VAL: bool = <HyperLogLog<V> as IntersectPlusUnionIsPlus>::VAL;
+	}
 
 	#[test]
 	fn top_hll() {
@@ -348,13 +354,15 @@ mod test {
 		// println!("{:#?}", x);
 	}
 
-	#[ignore] // takes too long on CI
+	// #[ignore] // takes too long on CI
 	#[test]
 	fn many() {
+		let start = time::Instant::now();
+
 		let mut rng = rand::prng::XorShiftRng::from_seed([
 			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 		]);
-		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.00408);
+		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.05);
 		// let mut x = HashMap::new();
 		for _ in 0..5_000_000 {
 			let (a, b) = (rng.gen_range(0, 2) == 0, rng.gen_range(0, 2) == 0);
@@ -370,7 +378,9 @@ mod test {
 			// 	.or_insert(0) += 1;
 			top.push(record.0, &record.1);
 		}
-		println!("{:#?}", top);
+
+		println!("{:?}", start.elapsed());
+		// println!("{:#?}", top);
 		// let mut x = x.into_iter().collect::<Vec<_>>();
 		// x.sort_by_key(|x|cmp::Reverse(x.1));
 		// println!("{:#?}", x);

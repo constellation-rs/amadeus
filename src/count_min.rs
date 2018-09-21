@@ -24,7 +24,7 @@ use serde::{de::Deserialize, ser::Serialize};
 use std::{
 	borrow::Borrow, cmp::max, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops
 };
-use traits::{Intersect, New, UnionAssign};
+use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
 
 /// An implementation of a [count-min sketch](https://en.wikipedia.org/wiki/Count–min_sketch) data structure with *conservative updating* for increased accuracy.
@@ -39,7 +39,7 @@ use twox_hash::XxHash;
 ))]
 pub struct CountMinSketch<K: ?Sized, C: New> {
 	counters: Vec<Vec<C>>,
-	// offsets: Vec<usize>,
+	offsets: Vec<usize>, // to avoid malloc/free each push
 	mask: usize,
 	k_num: usize,
 	config: <C as New>::Config,
@@ -58,8 +58,10 @@ where
 		let counters: Vec<Vec<C>> = (0..k_num)
 			.map(|_| (0..width).map(|_| C::new(&config)).collect())
 			.collect();
+		let offsets = vec![0; k_num];
 		Self {
 			counters,
+			offsets,
 			mask: Self::mask(width),
 			k_num,
 			config,
@@ -74,19 +76,40 @@ where
 		K: Borrow<Q>,
 		C: for<'a> ops::AddAssign<&'a V>,
 	{
-		let offsets = self.offsets(key).take(self.k_num).collect::<Vec<_>>();
-		let mut lowest = C::intersect(
-			offsets
-				.iter()
-				.cloned()
-				.enumerate()
-				.map(|(k_i, offset)| &self.counters[k_i][offset]),
-		).unwrap();
-		lowest += value;
-		for (k_i, offset) in offsets.into_iter().enumerate() {
-			self.counters[k_i][offset].union_assign(&lowest);
+		if !<C as IntersectPlusUnionIsPlus>::VAL {
+			let offsets = self.offsets(key);
+			self.offsets
+				.iter_mut()
+				.zip(offsets)
+				.for_each(|(offset, offset_new)| {
+					*offset = offset_new;
+				});
+			let mut lowest = C::intersect(
+				self.offsets
+					.iter()
+					.enumerate()
+					.map(|(k_i, &offset)| &self.counters[k_i][offset]),
+			).unwrap();
+			lowest += value;
+			self.counters
+				.iter_mut()
+				.zip(self.offsets.iter())
+				.for_each(|(counters, &offset)| {
+					counters[offset].union_assign(&lowest);
+				});
+			lowest
+		} else {
+			let offsets = self.offsets(key);
+			C::intersect(
+				self.counters
+					.iter_mut()
+					.zip(offsets)
+					.map(|(counters, offset)| {
+						counters[offset] += value;
+						&counters[offset]
+					}),
+			).unwrap()
 		}
-		lowest
 	}
 
 	/// Union the aggregated value for `key` with `value`.
@@ -95,9 +118,13 @@ where
 		Q: Hash,
 		K: Borrow<Q>,
 	{
-		for (k_i, offset) in self.offsets(key).take(self.k_num).enumerate() {
-			self.counters[k_i][offset].union_assign(value);
-		}
+		let offsets = self.offsets(key);
+		self.counters
+			.iter_mut()
+			.zip(offsets)
+			.for_each(|(counters, offset)| {
+				counters[offset].union_assign(value);
+			})
 	}
 
 	/// Retrieve an estimate of the aggregated value for `key`.
@@ -107,10 +134,10 @@ where
 		K: Borrow<Q>,
 	{
 		C::intersect(
-			self.offsets(key)
-				.take(self.k_num)
-				.enumerate()
-				.map(|(k_i, offset)| &self.counters[k_i][offset]),
+			self.counters
+				.iter()
+				.zip(self.offsets(key))
+				.map(|(counters, offset)| &counters[offset]),
 		).unwrap()
 	}
 
@@ -124,11 +151,13 @@ where
 
 	/// Clears the `CountMinSketch` data structure, as if it was new.
 	pub fn clear(&mut self) {
-		for k_i in 0..self.k_num {
-			for counter in &mut self.counters[k_i] {
-				*counter = C::new(&self.config);
-			}
-		}
+		let config = &self.config;
+		self.counters
+			.iter_mut()
+			.flat_map(|x| x.iter_mut())
+			.for_each(|counter| {
+				*counter = C::new(config);
+			})
 	}
 
 	fn optimal_width(tolerance: f64) -> usize {
@@ -193,6 +222,7 @@ impl<K: ?Sized, C: New + Clone> Clone for CountMinSketch<K, C> {
 	fn clone(&self) -> Self {
 		Self {
 			counters: self.counters.clone(),
+			offsets: vec![0; self.offsets.len()],
 			mask: self.mask,
 			k_num: self.k_num,
 			config: self.config.clone(),
