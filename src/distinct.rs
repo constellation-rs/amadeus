@@ -42,16 +42,14 @@
 
 // https://github.com/twitter/algebird/blob/5fdb079447271a5fe0f1fba068e5f86591ccde36/algebird-core/src/main/scala/com/twitter/algebird/HyperLogLog.scala
 // https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.rdd.RDD countApproxDistinct
+// is_x86_feature_detected ?
 
-// use bytecount;
+use packed_simd::{self, Cast, FromBits, IntoBits};
 use std::{
-	cmp::{self, Ordering}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops
+	cmp::{self, Ordering}, convert::identity, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
 use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
-// use faster::{self, IntoSIMDRefIterator,SIMDIterator};
-use packed_simd::{self, FromBits};
-use std::{convert::identity, ops::Range};
 
 mod consts;
 use self::consts::*;
@@ -80,11 +78,10 @@ where
 		let p = (f64::log2(1.04 / error_rate) * 2.0).ceil() as u8;
 		assert!(0 < p && p < 64);
 		let alpha = Self::get_alpha(p);
-		// let max_rho = 64;//64 - self.p + 1;
 		Self {
 			alpha,
 			zero: 1 << p,
-			sum: (1 << p) as f64, //(1u128 << max_rho) * (1 << p),
+			sum: (1 << p) as f64,
 			p,
 			m: vec![0; 1 << p].into_boxed_slice(),
 			marker: PhantomData,
@@ -117,10 +114,6 @@ where
 		let new = cmp::max(old, rho);
 		self.zero -= if old == 0 { 1 } else { 0 };
 
-		// let max_rho = 64;//64 - self.p + 1;
-		// self.sum -= 1u128 << (max_rho-old);
-		// self.sum += 1u128 << (max_rho-new);
-
 		// see pow_bithack()
 		self.sum -= f64::from_bits(u64::max_value().wrapping_sub(old as u64) << 54 >> 2)
 			- f64::from_bits(u64::max_value().wrapping_sub(new as u64) << 54 >> 2);
@@ -131,7 +124,6 @@ where
 	/// Retrieve an estimate of the carginality of the stream.
 	pub fn len(&self) -> f64 {
 		let v = self.zero;
-		// assert_eq!(bytecount::count(&self.m, 0), self.zero);
 		if v > 0 {
 			let h = self.m.len() as f64 * (self.m.len() as f64 / v as f64).ln();
 			if h <= Self::get_threshold(self.p - 4) {
@@ -141,10 +133,9 @@ where
 		self.ep()
 	}
 
-	/// Returns true if the cardinality estimate is 0
+	/// Returns true if empty.
 	pub fn is_empty(&self) -> bool {
-		// self.len() == 0.0
-		self.m.iter().all(|&x| x == 0)
+		self.zero == self.m.len()
 	}
 
 	/// Merge another HyperLogLog data structure into `self`.
@@ -154,19 +145,7 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		// let mut zero = self.zero;
-		// src.m
-		// 	.iter()
-		// 	.zip(self.m.iter_mut())
-		// 	.for_each(|(src_mir, mir)| {
-		// 		if *mir == 0 && *src_mir != 0 {
-		// 			zero -= 1;
-		// 		}
-		// 		*mir = cmp::max(*mir, *src_mir);
-		// 	});
-		// self.zero = zero;
-		use packed_simd::*;
-		assert_eq!(self.m.len() % u8s::lanes(), 0);
+		assert_eq!(self.m.len() % u8s::lanes(), 0); // TODO: high error rate can trigger this
 		assert_eq!(u8s::lanes(), f32s::lanes() * 4);
 		assert_eq!(f32s::lanes(), u32s::lanes());
 		assert_eq!(u8sq::lanes(), u32s::lanes());
@@ -192,22 +171,9 @@ where
 			}
 		}
 		self.zero = zero.wrapping_sum() as usize;
-		// assert_eq!(self.zero, self.m.iter().filter(|&&x| x == 0).count());// bytecount::count(&self.m, 0);
-		// self.zero = self.m.iter().filter(|&&x| x == 0).count(); //bytecount::count(&self.m, 0);
 		self.sum = sum.sum() as f64;
-		// let max_rho = 64;//64 - self.p + 1;
-		// let sum2 = self
-		// 	.m
-		// 	.iter()
-		// 	.map(|&x| {
-		// 		1u128 << (max_rho-x)
-		// 	}).sum::<u128>() as f64 / (1u128 << max_rho) as f64;
-		// if self.sum != sum2 {
-		// 	println!("{} {}", self.sum, sum2);
-		// }
 		// https://github.com/AdamNiederer/faster/issues/37
 		// (src.m.simd_iter(faster::u8s(0)),self.m.simd_iter_mut(faster::u8s(0))).zip()
-		// 00011111 00011111 00011111 00011111 00011111 00011111 00011111 00011111
 	}
 
 	/// Intersect another HyperLogLog data structure into `self`.
@@ -217,23 +183,10 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		// let mut zero = self.zero;
-		// src.m
-		// 	.iter()
-		// 	.zip(self.m.iter_mut())
-		// 	.for_each(|(src_mir, mir)| {
-		// 		if *mir != 0 && *src_mir == 0 {
-		// 			zero += 1;
-		// 		}
-		// 		*mir = cmp::min(*mir, *src_mir);
-		// 	});
-		// self.zero = zero;
-		use packed_simd::*;
 		assert_eq!(self.m.len() % u8s::lanes(), 0);
 		assert_eq!(u8s::lanes(), f32s::lanes() * 4);
 		assert_eq!(f32s::lanes(), u32s::lanes());
 		assert_eq!(u8sq::lanes(), u32s::lanes());
-		// is_x86_feature_detected
 		let mut zero = u8s_sad_out::splat(0);
 		let mut sum = f32s::splat(0.0);
 		for i in (0..self.m.len()).step_by(u8s::lanes()) {
@@ -253,28 +206,16 @@ where
 					let x: f32s = ((u32s::splat(u32::max_value()) - x) << 25 >> 2).into_bits();
 					sum += x;
 				}
-				// f32::from_bits(u32::max_value().wrapping_sub(x as u32) << 25 >> 2)
-				// f64::from_bits(u64::max_value().wrapping_sub(x as u64) << 54 >> 2)
 			}
 		}
 		self.zero = zero.wrapping_sum() as usize;
-		// assert_eq!(self.zero, self.m.iter().filter(|&&x| x == 0).count());// bytecount::count(&self.m, 0);
 		self.sum = sum.sum() as f64;
-		// let max_rho = 64;//64 - self.p + 1;
-		// let sum2 = self
-		// 	.m
-		// 	.iter()
-		// 	.map(|&x| {
-		// 		1u128 << (max_rho-x)
-		// 	}).sum::<u128>() as f64 / (1u128 << max_rho) as f64;
-		// if self.sum != sum2 {
-		// 	println!("{} {}", self.sum, sum2);
-		// }
 	}
 
 	/// Clears the `HyperLogLog` data structure, as if it was new.
 	pub fn clear(&mut self) {
 		self.zero = self.m.len();
+		self.sum = self.m.len() as f64;
 		self.m.iter_mut().for_each(|x| {
 			*x = 0;
 		});
@@ -308,29 +249,12 @@ where
 	}
 
 	fn get_nearest_neighbors(e: f64, estimate_vector: &[f64]) -> Range<usize> {
-		// TODO binary search
-		// let mut r: Vec<(f64, usize)> = estimate_vector
-		// 	.into_iter()
-		// 	.enumerate()
-		// 	.map(|(i, estimate)| {
-		// 		let dr = e - estimate;
-		// 		(dr * dr, i)
-		// 	}).collect();
-		// r.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
-		// r.truncate(6);
-		// r.sort_by_key(|a| a.1);
-
 		let index = estimate_vector
 			.binary_search_by(|a| a.partial_cmp(&e).unwrap_or(Ordering::Equal))
 			.unwrap_or_else(identity);
+
 		let mut min = if index > 6 { index - 6 } else { 0 };
 		let mut max = cmp::min(index + 6, estimate_vector.len());
-		// let mut b: Vec<(f64, usize)> = estimate_vector[min..max].into_iter().enumerate().map(|(i, estimate)| {
-		// 		let dr = e - estimate;
-		// 		(dr * dr, min+i)
-		// 	}).collect();
-		// b.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
-		// b.truncate(6);
 
 		while max - min != 6 {
 			let (min_val, max_val) = unsafe {
@@ -347,44 +271,10 @@ where
 			}
 		}
 
-		// assert_eq!(r[0].1, min);
-		// assert_eq!(r[5].1, max - 1);
-
 		min..max
-		// let mut c: Vec<(f64, usize)> = estimate_vector[min..max].into_iter().enumerate().map(|(i, estimate)| {
-		// 		let dr = e - estimate;
-		// 		(dr * dr, min+i)
-		// 	}).collect();
-		// c.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
-
-		// assert_eq!(b, c);
-		// b.into_iter().map(|(_, b)| b)
 	}
 
 	fn ep(&self) -> f64 {
-		// let sum = self
-		// 	.m
-		// 	.iter()
-		// 	.map(|&x| {
-		// 		// see pow_bithack()
-		// 		f64::from_bits(u64::max_value().wrapping_sub(x as u64) << 54 >> 2)
-		// 	}).sum::<f64>();
-		// let max_rho = 64;//64 - self.p + 1;
-		// let sum2 = self
-		// 	.m
-		// 	.iter()
-		// 	.map(|&x| {
-		// 		1u128 << (max_rho-x)
-		// 	}).sum::<u128>();
-		// assert_eq!(sum2, self.sum);
-		// let sum = self.sum as f64 / (1u128 << max_rho) as f64;
-		// if (sum - self.sum).abs() > ::std::f64::EPSILON {
-		// 	println!("{} {}", sum, self.sum);
-		// }
-		// https://github.com/AdamNiederer/faster/issues/59
-		// let sum = m.simd_iter(faster::u8s(0)).simd_map(|v| {
-		// 	(u64::max_value() - v) << 54 >> 2
-		// }).simd_reduce(faster::f64s(0.0), |acc, v| acc + v).sum();
 		let e = self.alpha * (self.m.len() * self.m.len()) as f64 / self.sum;
 		if e <= (5 * self.m.len()) as f64 {
 			e - Self::estimate_bias(e, self.p)
@@ -471,6 +361,7 @@ mod simd_types {
 }
 #[cfg(target_feature = "avx2")]
 mod simd_types {
+	#![allow(non_camel_case_types)]
 	use super::*;
 	pub type u8s = packed_simd::u8x32;
 	pub type u8s_sad_out = packed_simd::u64x4;
@@ -480,6 +371,7 @@ mod simd_types {
 }
 #[cfg(all(not(target_feature = "avx2"), target_feature = "sse2"))]
 mod simd_types {
+	#![allow(non_camel_case_types)]
 	use super::*;
 	pub type u8s = packed_simd::u8x16;
 	pub type u8s_sad_out = packed_simd::u64x2;
@@ -489,6 +381,7 @@ mod simd_types {
 }
 #[cfg(all(not(target_feature = "avx2"), not(target_feature = "sse2")))]
 mod simd_types {
+	#![allow(non_camel_case_types)]
 	use super::*;
 	pub type u8s = packed_simd::u8x8;
 	pub type u8s_sad_out = u64;
@@ -509,13 +402,19 @@ struct Sad<X>(PhantomData<fn(X)>);
 // 		packed_simd::Simd(transmute(_mm512_sad_epu8(transmute(a.0), transmute(b.0))))
 // 	}
 // }
+mod x86 {
+	#[cfg(target_arch = "x86")]
+	pub use std::arch::x86::*;
+	#[cfg(target_arch = "x86_64")]
+	pub use std::arch::x86_64::*;
+}
 #[cfg(target_feature = "avx2")]
 impl Sad<packed_simd::u8x32> {
 	#[inline]
 	#[target_feature(enable = "avx2")]
 	unsafe fn sad(a: packed_simd::u8x32, b: packed_simd::u8x32) -> packed_simd::u64x4 {
-		use std::{arch::x86_64::_mm256_sad_epu8, mem::transmute};
-		packed_simd::Simd(transmute(_mm256_sad_epu8(transmute(a.0), transmute(b.0))))
+		use std::mem::transmute;
+		packed_simd::Simd(transmute(x86::_mm256_sad_epu8(transmute(a.0), transmute(b.0))))
 	}
 }
 #[cfg(target_feature = "sse2")]
@@ -523,8 +422,8 @@ impl Sad<packed_simd::u8x16> {
 	#[inline]
 	#[target_feature(enable = "sse2")]
 	unsafe fn sad(a: packed_simd::u8x16, b: packed_simd::u8x16) -> packed_simd::u64x2 {
-		use std::{arch::x86_64::_mm_sad_epu8, mem::transmute};
-		packed_simd::Simd(transmute(_mm_sad_epu8(transmute(a.0), transmute(b.0))))
+		use std::mem::transmute;
+		packed_simd::Simd(transmute(x86::_mm_sad_epu8(transmute(a.0), transmute(b.0))))
 	}
 }
 #[cfg(target_feature = "sse,mmx")]
@@ -532,8 +431,8 @@ impl Sad<packed_simd::u8x8> {
 	#[inline]
 	#[target_feature(enable = "sse,mmx")]
 	unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
-		use std::{arch::x86_64::_mm_sad_pu8, mem::transmute};
-		transmute(_mm_sad_pu8(transmute(a.0), transmute(b.0)))
+		use std::mem::transmute;
+		transmute(x86::_mm_sad_pu8(transmute(a.0), transmute(b.0)))
 	}
 }
 #[cfg(not(target_feature = "sse,mmx"))]
@@ -557,7 +456,9 @@ mod test {
 		for x in 0_u8..65 {
 			let a = 2.0_f64.powi(-(x as i32));
 			let b = f64::from_bits(u64::max_value().wrapping_sub(x as u64) << 54 >> 2);
+			let c = f32::from_bits(u32::max_value().wrapping_sub(x as u32) << 25 >> 2);
 			assert_eq!(a, b);
+			assert_eq!(a, c as f64);
 		}
 	}
 
