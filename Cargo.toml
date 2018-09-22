@@ -6,7 +6,7 @@ authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["data-structures","algorithms","science"]
 keywords = ["streaming-algorithm","probabilistic","sketch","data-structure","hyperloglog"]
 description = """
-Performant implementations of various streaming algorithms, including Count–min sketch; Top k; HyperLogLog; Reservoir sampling.
+SIMD-accelerated implementations of various streaming algorithms, including Count–min sketch, Top k, HyperLogLog, Reservoir sampling.
 """
 repository = "https://github.com/alecmocatta/streaming_algorithms"
 homepage = "https://github.com/alecmocatta/streaming_algorithms"
@@ -26,17 +26,4 @@ twox-hash = "1.1"
 serde_derive = "1.0"
 serde = "1.0"
 rand = "0.5"
-bytecount = "0.3"
-# faster = { git = "https://github.com/alecmocatta/faster" } #"0.5"
-# faster = { path = "./faster" } #"0.5"
 packed_simd = { version = "0.3", features = ["into_bits"] }
-
-[features]
-avx-accel = ["bytecount/avx-accel"]
-simd-accel = ["bytecount/simd-accel"]
-
-# [replace]
-# "vektor:0.2.0" = { git = "https://github.com/alecmocatta/vektor" }
-
-[profile.release]
-debug = 2

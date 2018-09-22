@@ -392,29 +392,33 @@ mod simd_types {
 use self::simd_types::*;
 
 struct Sad<X>(PhantomData<fn(X)>);
-// TODO
-// #[cfg(target_feature = "avx512bw")]
-// impl Sad<packed_simd::u8x64> {
-// 	#[inline]
-// 	#[target_feature(enable = "avx512bw")]
-// 	unsafe fn sad(a: packed_simd::u8x64, b: packed_simd::u8x64) -> packed_simd::u64x8 {
-// 		use std::{arch::x86_64::_mm512_sad_epu8, mem::transmute};
-// 		packed_simd::Simd(transmute(_mm512_sad_epu8(transmute(a.0), transmute(b.0))))
-// 	}
-// }
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86 {
 	#[cfg(target_arch = "x86")]
 	pub use std::arch::x86::*;
 	#[cfg(target_arch = "x86_64")]
 	pub use std::arch::x86_64::*;
 }
+// TODO
+// #[cfg(target_feature = "avx512bw")]
+// impl Sad<packed_simd::u8x64> {
+// 	#[inline]
+// 	#[target_feature(enable = "avx512bw")]
+// 	unsafe fn sad(a: packed_simd::u8x64, b: packed_simd::u8x64) -> packed_simd::u64x8 {
+// 		use std::mem::transmute;
+// 		packed_simd::Simd(transmute(x86::_mm512_sad_epu8(transmute(a.0), transmute(b.0))))
+// 	}
+// }
 #[cfg(target_feature = "avx2")]
 impl Sad<packed_simd::u8x32> {
 	#[inline]
 	#[target_feature(enable = "avx2")]
 	unsafe fn sad(a: packed_simd::u8x32, b: packed_simd::u8x32) -> packed_simd::u64x4 {
 		use std::mem::transmute;
-		packed_simd::Simd(transmute(x86::_mm256_sad_epu8(transmute(a.0), transmute(b.0))))
+		packed_simd::Simd(transmute(x86::_mm256_sad_epu8(
+			transmute(a.0),
+			transmute(b.0),
+		)))
 	}
 }
 #[cfg(target_feature = "sse2")]

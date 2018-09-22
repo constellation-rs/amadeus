@@ -354,7 +354,7 @@ mod test {
 		// println!("{:#?}", x);
 	}
 
-	// #[ignore] // takes too long on CI
+	#[ignore] // takes too long on CI
 	#[test]
 	fn many() {
 		let start = time::Instant::now();
