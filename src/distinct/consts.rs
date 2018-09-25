@@ -2,10 +2,54 @@
 
 // Bias-Correction Data from https://docs.google.com/document/d/1gyjfMHy43U9OWBXxfaeG-3MjGzejW1dlpyMwEYAAWEI/view?fullscreen
 
+#[cfg(test)]
+mod test {
+	use super::*;
+	use std::{cmp::Ordering, fmt::Debug};
+
+	#[test]
+	fn ordered() {
+		assert!(is_sorted(&TRESHOLD_DATA));
+		for raw_estimate_data in RAW_ESTIMATE_DATA {
+			assert!(
+				is_three_sorted(raw_estimate_data),
+				"{:?}",
+				raw_estimate_data
+			);
+		}
+	}
+	fn is_sorted<T>(data: &[T]) -> bool
+	where
+		T: PartialOrd + Debug,
+	{
+		data.windows(2).all(|w| {
+			let ret = w[0].partial_cmp(&w[1]).unwrap() != Ordering::Greater;
+			if !ret {
+				println!("{:?}", w);
+			}
+			ret
+		})
+	}
+	fn is_three_sorted<T>(data: &[T]) -> bool
+	where
+		T: PartialOrd + Debug,
+	{
+		data.windows(3).all(|w| {
+			let ret = w[0].partial_cmp(&w[2]).unwrap() != Ordering::Greater;
+			if !ret {
+				println!("{:?}", w);
+			}
+			ret
+		})
+	}
+}
+
+#[rustfmt::skip]
 pub const TRESHOLD_DATA: [f64; 15] =
 	[10.0, 20.0, 40.0, 80.0, 220.0, 400.0, 900.0, 1800.0, 3100.0, 6500.0,
 	 11500.0, 20000.0, 50000.0, 120000.0, 350000.0];
 
+#[rustfmt::skip]
 pub const RAW_ESTIMATE_DATA: &[&[f64]] =
 	&[&[11.0, 11.717, 12.207, 12.7896, 13.2882, 13.8204, 14.3772, 14.9342,
 		15.5202, 16.161, 16.7722, 17.4636, 18.0396, 18.6766, 19.3566, 20.0454,
@@ -484,6 +528,7 @@ pub const RAW_ESTIMATE_DATA: &[&[f64]] =
 		1244673.795, 1251260.649, 1257697.86, 1264320.983, 1270736.319,
 		1277274.694, 1283804.95, 1290211.514, 1296858.568, 1303455.691]];
 
+#[rustfmt::skip]
 pub const BIAS_DATA: &[&[f64]] =
 	&[&[10.0, 9.717, 9.207, 8.7896, 8.2882, 7.8204, 7.3772, 6.9342, 6.5202,
 		6.161, 5.7722, 5.4636, 5.0396, 4.6766, 4.3566, 4.0454, 3.7936, 3.4856,

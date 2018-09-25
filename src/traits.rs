@@ -119,3 +119,12 @@ impl New for usize {
 		0
 	}
 }
+
+/// An optimisation for cases like putting a HyperLogLog inside a Count–min sketch, where intersecting, adding a val, and then unioning that with counters is the same as simple adding the val to the counters.
+pub trait IntersectPlusUnionIsPlus {
+	/// Apply optimisation or not
+	const VAL: bool;
+}
+impl<T: ?Sized> IntersectPlusUnionIsPlus for T {
+	default const VAL: bool = false;
+}

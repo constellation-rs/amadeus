@@ -42,12 +42,13 @@
 
 // https://github.com/twitter/algebird/blob/5fdb079447271a5fe0f1fba068e5f86591ccde36/algebird-core/src/main/scala/com/twitter/algebird/HyperLogLog.scala
 // https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.rdd.RDD countApproxDistinct
+// is_x86_feature_detected ?
 
-use bytecount;
+use packed_simd::{self, Cast, FromBits, IntoBits};
 use std::{
-	cmp::{self, Ordering}, fmt, hash::{Hash, Hasher}, iter::repeat, marker::PhantomData, ops
+	cmp::{self, Ordering}, convert::identity, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
-use traits::{Intersect, New, UnionAssign};
+use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
 
 mod consts;
@@ -55,11 +56,13 @@ use self::consts::*;
 
 /// An implementation of the [HyperLogLog](https://en.wikipedia.org/wiki/HyperLogLog) data structure with *bias correction*.
 ///
-/// See [*HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm*](http://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf) and [HyperLogLog in Practice: Algorithmic Engineering of a State of The Art Cardinality Estimation Algorithm](https://ai.google/research/pubs/pub40671) for background on HyperLogLog with bias correction.
+/// See [*HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm*](http://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf) and [*HyperLogLog in Practice: Algorithmic Engineering of a State of The Art Cardinality Estimation Algorithm*](https://ai.google/research/pubs/pub40671) for background on HyperLogLog with bias correction.
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct HyperLogLog<V: ?Sized> {
 	alpha: f64,
+	zero: usize,
+	sum: f64,
 	p: u8,
 	m: Box<[u8]>,
 	marker: PhantomData<fn(V)>,
@@ -73,10 +76,12 @@ where
 	pub fn new(error_rate: f64) -> Self {
 		assert!(0.0 < error_rate && error_rate < 1.0);
 		let p = (f64::log2(1.04 / error_rate) * 2.0).ceil() as u8;
-		assert!(p <= 64);
+		assert!(0 < p && p < 64);
 		let alpha = Self::get_alpha(p);
 		Self {
 			alpha,
+			zero: 1 << p,
+			sum: (1 << p) as f64,
 			p,
 			m: vec![0; 1 << p].into_boxed_slice(),
 			marker: PhantomData,
@@ -87,6 +92,8 @@ where
 	pub fn new_from(hll: &Self) -> Self {
 		Self {
 			alpha: hll.alpha,
+			zero: hll.m.len(),
+			sum: hll.m.len() as f64,
 			p: hll.p,
 			m: vec![0; hll.m.len()].into_boxed_slice(),
 			marker: PhantomData,
@@ -94,36 +101,41 @@ where
 	}
 
 	/// "Visit" an element.
+	#[inline]
 	pub fn push(&mut self, value: &V) {
 		let mut hasher = XxHash::default();
 		value.hash(&mut hasher);
 		let x = hasher.finish();
-		let j = x as usize & (self.m.len() - 1);
+		let j = x & (self.m.len() as u64 - 1);
 		let w = x >> self.p;
 		let rho = Self::get_rho(w, 64 - self.p);
-		let mjr = &mut self.m[j];
-		*mjr = cmp::max(*mjr, rho);
+		let mjr = &mut self.m[j as usize];
+		let old = *mjr;
+		let new = cmp::max(old, rho);
+		self.zero -= if old == 0 { 1 } else { 0 };
+
+		// see pow_bithack()
+		self.sum -= f64::from_bits(u64::max_value().wrapping_sub(old as u64) << 54 >> 2)
+			- f64::from_bits(u64::max_value().wrapping_sub(new as u64) << 54 >> 2);
+
+		*mjr = new;
 	}
 
 	/// Retrieve an estimate of the carginality of the stream.
 	pub fn len(&self) -> f64 {
-		let v = Self::vec_count_zero(&self.m);
+		let v = self.zero;
 		if v > 0 {
 			let h = self.m.len() as f64 * (self.m.len() as f64 / v as f64).ln();
-			if h <= Self::get_treshold(self.p - 4) {
-				h
-			} else {
-				self.ep()
+			if h <= Self::get_threshold(self.p - 4) {
+				return h;
 			}
-		} else {
-			self.ep()
 		}
+		self.ep()
 	}
 
-	/// Returns true if the cardinality estimate is 0
+	/// Returns true if empty.
 	pub fn is_empty(&self) -> bool {
-		// self.len() == 0.0
-		self.m.iter().all(|&x| x == 0)
+		self.zero == self.m.len()
 	}
 
 	/// Merge another HyperLogLog data structure into `self`.
@@ -133,12 +145,35 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		src.m
-			.iter()
-			.zip(self.m.iter_mut())
-			.for_each(|(src_mir, mir)| {
-				*mir = cmp::max(*mir, *src_mir);
-			});
+		assert_eq!(self.m.len() % u8s::lanes(), 0); // TODO: high error rate can trigger this
+		assert_eq!(u8s::lanes(), f32s::lanes() * 4);
+		assert_eq!(f32s::lanes(), u32s::lanes());
+		assert_eq!(u8sq::lanes(), u32s::lanes());
+		let mut zero = u8s_sad_out::splat(0);
+		let mut sum = f32s::splat(0.0);
+		for i in (0..self.m.len()).step_by(u8s::lanes()) {
+			unsafe {
+				let self_m = u8s::from_slice_unaligned_unchecked(self.m.get_unchecked(i..));
+				let src_m = u8s::from_slice_unaligned_unchecked(src.m.get_unchecked(i..));
+				let res = self_m.max(src_m);
+				res.write_to_slice_unaligned_unchecked(self.m.get_unchecked_mut(i..));
+				let count: u8s = u8s::splat(0) - u8s::from_bits(res.eq(u8s::splat(0)));
+				let count2 = Sad::<u8s>::sad(count, u8s::splat(0));
+				zero += count2;
+				for j in 0..4 {
+					let x = u8sq::from_slice_unaligned_unchecked(
+						self.m.get_unchecked(i + j * u8sq::lanes()..),
+					);
+					let x: u32s = x.cast();
+					let x: f32s = ((u32s::splat(u32::max_value()) - x) << 25 >> 2).into_bits();
+					sum += x;
+				}
+			}
+		}
+		self.zero = zero.wrapping_sum() as usize;
+		self.sum = sum.sum() as f64;
+		// https://github.com/AdamNiederer/faster/issues/37
+		// (src.m.simd_iter(faster::u8s(0)),self.m.simd_iter_mut(faster::u8s(0))).zip()
 	}
 
 	/// Intersect another HyperLogLog data structure into `self`.
@@ -148,22 +183,45 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		src.m
-			.iter()
-			.zip(self.m.iter_mut())
-			.for_each(|(src_mir, mir)| {
-				*mir = cmp::min(*mir, *src_mir);
-			});
+		assert_eq!(self.m.len() % u8s::lanes(), 0);
+		assert_eq!(u8s::lanes(), f32s::lanes() * 4);
+		assert_eq!(f32s::lanes(), u32s::lanes());
+		assert_eq!(u8sq::lanes(), u32s::lanes());
+		let mut zero = u8s_sad_out::splat(0);
+		let mut sum = f32s::splat(0.0);
+		for i in (0..self.m.len()).step_by(u8s::lanes()) {
+			unsafe {
+				let self_m = u8s::from_slice_unaligned_unchecked(self.m.get_unchecked(i..));
+				let src_m = u8s::from_slice_unaligned_unchecked(src.m.get_unchecked(i..));
+				let res = self_m.min(src_m);
+				res.write_to_slice_unaligned_unchecked(self.m.get_unchecked_mut(i..));
+				let count: u8s = u8s::splat(0) - u8s::from_bits(res.eq(u8s::splat(0)));
+				let count2 = Sad::<u8s>::sad(count, u8s::splat(0));
+				zero += count2;
+				for j in 0..4 {
+					let x = u8sq::from_slice_unaligned_unchecked(
+						self.m.get_unchecked(i + j * u8sq::lanes()..),
+					);
+					let x: u32s = x.cast();
+					let x: f32s = ((u32s::splat(u32::max_value()) - x) << 25 >> 2).into_bits();
+					sum += x;
+				}
+			}
+		}
+		self.zero = zero.wrapping_sum() as usize;
+		self.sum = sum.sum() as f64;
 	}
 
 	/// Clears the `HyperLogLog` data structure, as if it was new.
 	pub fn clear(&mut self) {
+		self.zero = self.m.len();
+		self.sum = self.m.len() as f64;
 		self.m.iter_mut().for_each(|x| {
 			*x = 0;
 		});
 	}
 
-	fn get_treshold(p: u8) -> f64 {
+	fn get_threshold(p: u8) -> f64 {
 		TRESHOLD_DATA[p as usize]
 	}
 
@@ -173,52 +231,51 @@ where
 			4 => 0.673,
 			5 => 0.697,
 			6 => 0.709,
-			_ => 0.7213 / (1.0 + 1.079 / (1_usize << (p as usize)) as f64),
+			_ => 0.7213 / (1.0 + 1.079 / (1_u64 << p) as f64),
 		}
 	}
 
 	fn get_rho(w: u64, max_width: u8) -> u8 {
 		let rho = max_width - (64 - w.leading_zeros() as u8) + 1;
-		assert!(rho > 0);
+		assert!(0 < rho && rho < 65);
 		rho
-	}
-
-	fn vec_count_zero(v: &[u8]) -> usize {
-		// v.iter().filter(|&x| *x == 0).count()
-		bytecount::count(v, 0)
 	}
 
 	fn estimate_bias(e: f64, p: u8) -> f64 {
 		let bias_vector = BIAS_DATA[(p - 4) as usize];
-		let nearest_neighbors = Self::get_nearest_neighbors(e, RAW_ESTIMATE_DATA[(p - 4) as usize]);
-		let sum = nearest_neighbors
-			.iter()
-			.map(|&neighbor| bias_vector[neighbor])
-			.sum::<f64>();
-		sum / nearest_neighbors.len() as f64
+		let neighbors = Self::get_nearest_neighbors(e, RAW_ESTIMATE_DATA[(p - 4) as usize]);
+		assert_eq!(neighbors.len(), 6);
+		bias_vector[neighbors].into_iter().sum::<f64>() / 6.0_f64
 	}
 
-	fn get_nearest_neighbors(e: f64, estimate_vector: &[f64]) -> Vec<usize> {
-		let ev_len = estimate_vector.len();
-		let mut r: Vec<(f64, usize)> = repeat((0.0, 0)).take(ev_len).collect();
-		for i in 0..ev_len {
-			let dr = e - estimate_vector[i];
-			r[i] = (dr * dr, i);
+	fn get_nearest_neighbors(e: f64, estimate_vector: &[f64]) -> Range<usize> {
+		let index = estimate_vector
+			.binary_search_by(|a| a.partial_cmp(&e).unwrap_or(Ordering::Equal))
+			.unwrap_or_else(identity);
+
+		let mut min = if index > 6 { index - 6 } else { 0 };
+		let mut max = cmp::min(index + 6, estimate_vector.len());
+
+		while max - min != 6 {
+			let (min_val, max_val) = unsafe {
+				(
+					*estimate_vector.get_unchecked(min),
+					*estimate_vector.get_unchecked(max - 1),
+				)
+			};
+			// assert!(min_val <= e && e <= max_val);
+			if 2.0 * e - min_val > max_val {
+				min += 1;
+			} else {
+				max -= 1;
+			}
 		}
-		r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
-		r.truncate(6);
-		r.iter()
-			.map(|&ez| match ez {
-				(_, b) => b,
-			}).collect()
+
+		min..max
 	}
 
 	fn ep(&self) -> f64 {
-		let sum = self
-			.m
-			.iter()
-			.fold(0.0, |acc, &x| acc + 2.0_f64.powi(-(x as i32)));
-		let e = self.alpha * (self.m.len() * self.m.len()) as f64 / sum;
+		let e = self.alpha * (self.m.len() * self.m.len()) as f64 / self.sum;
 		if e <= (5 * self.m.len()) as f64 {
 			e - Self::estimate_bias(e, self.p)
 		} else {
@@ -231,6 +288,8 @@ impl<V: ?Sized> Clone for HyperLogLog<V> {
 	fn clone(&self) -> Self {
 		Self {
 			alpha: self.alpha,
+			zero: self.zero,
+			sum: self.sum,
 			p: self.p,
 			m: self.m.clone(),
 			marker: PhantomData,
@@ -265,9 +324,9 @@ where
 		Self: Sized + 'a,
 	{
 		let mut ret = iter.next()?.clone();
-		for x in iter {
+		iter.for_each(|x| {
 			ret.intersect(x);
-		}
+		});
 		Some(ret)
 	}
 }
@@ -287,11 +346,126 @@ where
 		self.push(rhs)
 	}
 }
+impl<V: ?Sized> IntersectPlusUnionIsPlus for HyperLogLog<V> {
+	const VAL: bool = true;
+}
+
+#[cfg(target_feature = "avx512bw")] // TODO
+mod simd_types {
+	use super::*;
+	pub type u8s = packed_simd::u8x64;
+	pub type u8s_sad_out = packed_simd::u64x8;
+	pub type f32s = packed_simd::f32x16;
+	pub type u32s = packed_simd::u32x16;
+	pub type u8sq = packed_simd::u8x16;
+}
+#[cfg(target_feature = "avx2")]
+mod simd_types {
+	#![allow(non_camel_case_types)]
+	use super::*;
+	pub type u8s = packed_simd::u8x32;
+	pub type u8s_sad_out = packed_simd::u64x4;
+	pub type f32s = packed_simd::f32x8;
+	pub type u32s = packed_simd::u32x8;
+	pub type u8sq = packed_simd::u8x8;
+}
+#[cfg(all(not(target_feature = "avx2"), target_feature = "sse2"))]
+mod simd_types {
+	#![allow(non_camel_case_types)]
+	use super::*;
+	pub type u8s = packed_simd::u8x16;
+	pub type u8s_sad_out = packed_simd::u64x2;
+	pub type f32s = packed_simd::f32x4;
+	pub type u32s = packed_simd::u32x4;
+	pub type u8sq = packed_simd::u8x4;
+}
+#[cfg(all(not(target_feature = "avx2"), not(target_feature = "sse2")))]
+mod simd_types {
+	#![allow(non_camel_case_types)]
+	use super::*;
+	pub type u8s = packed_simd::u8x8;
+	pub type u8s_sad_out = u64;
+	pub type f32s = packed_simd::f32x2;
+	pub type u32s = packed_simd::u32x2;
+	pub type u8sq = packed_simd::u8x2;
+}
+use self::simd_types::*;
+
+struct Sad<X>(PhantomData<fn(X)>);
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod x86 {
+	#[cfg(target_arch = "x86")]
+	pub use std::arch::x86::*;
+	#[cfg(target_arch = "x86_64")]
+	pub use std::arch::x86_64::*;
+}
+// TODO
+// #[cfg(target_feature = "avx512bw")]
+// impl Sad<packed_simd::u8x64> {
+// 	#[inline]
+// 	#[target_feature(enable = "avx512bw")]
+// 	unsafe fn sad(a: packed_simd::u8x64, b: packed_simd::u8x64) -> packed_simd::u64x8 {
+// 		use std::mem::transmute;
+// 		packed_simd::Simd(transmute(x86::_mm512_sad_epu8(transmute(a.0), transmute(b.0))))
+// 	}
+// }
+#[cfg(target_feature = "avx2")]
+impl Sad<packed_simd::u8x32> {
+	#[inline]
+	#[target_feature(enable = "avx2")]
+	unsafe fn sad(a: packed_simd::u8x32, b: packed_simd::u8x32) -> packed_simd::u64x4 {
+		use std::mem::transmute;
+		packed_simd::Simd(transmute(x86::_mm256_sad_epu8(
+			transmute(a.0),
+			transmute(b.0),
+		)))
+	}
+}
+#[cfg(target_feature = "sse2")]
+impl Sad<packed_simd::u8x16> {
+	#[inline]
+	#[target_feature(enable = "sse2")]
+	unsafe fn sad(a: packed_simd::u8x16, b: packed_simd::u8x16) -> packed_simd::u64x2 {
+		use std::mem::transmute;
+		packed_simd::Simd(transmute(x86::_mm_sad_epu8(transmute(a.0), transmute(b.0))))
+	}
+}
+#[cfg(target_feature = "sse,mmx")]
+impl Sad<packed_simd::u8x8> {
+	#[inline]
+	#[target_feature(enable = "sse,mmx")]
+	unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
+		use std::mem::transmute;
+		transmute(x86::_mm_sad_pu8(transmute(a.0), transmute(b.0)))
+	}
+}
+#[cfg(not(target_feature = "sse,mmx"))]
+impl Sad<packed_simd::u8x8> {
+	#[inline(always)]
+	unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
+		assert_eq!(b, packed_simd::u8x8::splat(0));
+		(0..8).map(|i| a.extract(i) as u64).sum()
+	}
+}
 
 #[cfg(test)]
 mod test {
 	use super::HyperLogLog;
 	use std::f64;
+
+	#[test]
+	fn pow_bithack() {
+		// build the float from x, manipulating it to be the mantissa we want.
+		// no portability issues in theory https://doc.rust-lang.org/stable/std/primitive.f64.html#method.from_bits
+		for x in 0_u8..65 {
+			let a = 2.0_f64.powi(-(x as i32));
+			let b = f64::from_bits(u64::max_value().wrapping_sub(x as u64) << 54 >> 2);
+			let c = f32::from_bits(u32::max_value().wrapping_sub(x as u32) << 25 >> 2);
+			assert_eq!(a, b);
+			assert_eq!(a, c as f64);
+		}
+	}
+
 	#[test]
 	fn hyperloglog_test_simple() {
 		let mut hll = HyperLogLog::new(0.00408);
