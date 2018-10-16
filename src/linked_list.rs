@@ -28,7 +28,8 @@ impl<T> LinkedList<T> {
 			(0..cap)
 				.map(|_| (usize::max_value(), usize::max_value(), None))
 				.collect::<Vec<_>>()
-		}.into_boxed_slice();
+		}
+		.into_boxed_slice();
 		let ret = Self {
 			vec,
 			head: usize::max_value(),

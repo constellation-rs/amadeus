@@ -89,7 +89,8 @@ where
 					.iter()
 					.enumerate()
 					.map(|(k_i, &offset)| &self.counters[k_i][offset]),
-			).unwrap();
+			)
+			.unwrap();
 			lowest += value;
 			self.counters
 				.iter_mut()
@@ -108,7 +109,8 @@ where
 						counters[offset] += value;
 						&counters[offset]
 					}),
-			).unwrap()
+			)
+			.unwrap()
 		}
 	}
 
@@ -138,7 +140,8 @@ where
 				.iter()
 				.zip(self.offsets(key))
 				.map(|(counters, offset)| &counters[offset]),
-		).unwrap()
+		)
+		.unwrap()
 	}
 
 	// pub fn estimate_memory(
