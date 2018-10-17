@@ -1,0 +1,43 @@
+[package]
+name = "amadeus"
+version = "0.1.1"
+license = "Apache-2.0"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["concurrency","science"]
+keywords = ["constellation","distributed","data-science"]
+description = """
+Harmonious distributed data analysis in Rust.
+"""
+repository = "https://github.com/alecmocatta/amadeus"
+homepage = "https://github.com/alecmocatta/amadeus"
+documentation = "https://docs.rs/amadeus/0.1.1"
+readme = "README.md"
+
+[badges]
+# appveyor = { repository = "alecmocatta/amadeus" }
+circle-ci = { repository = "alecmocatta/amadeus" }
+#gitlab = { repository = "alecmocatta/amadeus" }
+travis-ci = { repository = "alecmocatta/amadeus" }
+
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+serde_derive = "1.0"
+serde = "1.0"
+rand = "0.5"
+either = "1.5"
+serde_closure = { version = "0.1" } #, path = "../serde_closure" }
+serde_traitobject = { version = "0.1.2" } #, path = "../serde_traitobject" }
+constellation-rs = { version = "0.1", git = "https://github.com/alecmocatta/constellation.git" } #, path = "../constellation" }
+streaming_algorithms = { version = "0.1" } #, path = "../streaming_algorithms" }
+
+[dev-dependencies]
+reqwest = "0.8"
+reqwest_resume = "0.1"
+select = "0.4"
+flate2 = "1.0"
+nom = "2.2"
+warc_parser = { git = "https://github.com/alecmocatta/warc_nom_parser" }
+
+[profile.release]
+debug = 2
