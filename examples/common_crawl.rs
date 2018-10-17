@@ -33,36 +33,29 @@
 	unused_results
 )]
 // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
-// #![allow(dead_code, stable_features)]
 #![warn(clippy::pedantic)]
-#![allow(
-	where_clauses_object_safety,
-)]
+#![allow(where_clauses_object_safety)]
 
 #[macro_use]
 extern crate serde_closure;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
+// extern crate serde;
 extern crate amadeus;
 extern crate constellation;
 extern crate flate2;
-extern crate rand;
 extern crate reqwest;
 extern crate reqwest_resume;
-extern crate select;
-extern crate streaming_algorithms;
+// extern crate select;
+// extern crate streaming_algorithms;
 extern crate warc_parser;
 
-use amadeus::{distributed_iterator, process_pool};
+use amadeus::{
+	dist_iter::{self, DistributedIterator, DistributedIteratorMulti}, into_dist_iter::IteratorExt, process_pool
+};
 use constellation::{init, Resources};
-use distributed_iterator::{DistributedIterator, DistributedIteratorExecute, IteratorExt};
-use rand::Rng;
 use reqwest_resume::ClientExt;
 use std::{
-	any, collections::{HashSet, VecDeque}, env, io::{self, BufRead, BufReader, Read}, marker, mem, str, sync::{atomic, Arc, Mutex, RwLock}, thread, time
+	env, io::{BufRead, BufReader}, time
 };
-use streaming_algorithms::Top;
 
 fn main() {
 	init(Resources::default());
@@ -102,15 +95,15 @@ fn main() {
 				.take_while(|x| x.is_some())
 				.map(|x| x.unwrap())
 		}))
-		.execute(
+		.multi(
 			&pool,
-			distributed_iterator::Identity
+			dist_iter::Identity
 				.map(FnMut!(|x: warc_parser::WebpageOwned| -> usize {
 					x.contents.len()
 				}))
 				.map(FnMut!(|x: usize| -> u32 { x as u32 }))
 				.collect(),
-			distributed_iterator::Identity
+			dist_iter::Identity
 				.map(FnMut!(|x: &warc_parser::WebpageOwned| -> usize {
 					x.contents.len()
 				}))

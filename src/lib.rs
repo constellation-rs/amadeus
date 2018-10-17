@@ -15,14 +15,14 @@
 	nll
 )]
 #![warn(
-	missing_copy_implementations,
-	missing_debug_implementations,
-	missing_docs,
-	trivial_numeric_casts,
-	unused_extern_crates,
-	unused_import_braces,
-	unused_qualifications,
-	unused_results
+	// missing_copy_implementations,
+	// missing_debug_implementations,
+	// missing_docs,
+	// trivial_numeric_casts,
+	// unused_extern_crates,
+	// unused_import_braces,
+	// unused_qualifications,
+	// unused_results
 )]
 // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
 // #![allow(dead_code, stable_features)]
@@ -51,5 +51,6 @@ extern crate either;
 extern crate rand;
 extern crate streaming_algorithms;
 
-pub mod distributed_iterator;
+pub mod dist_iter;
+pub mod into_dist_iter;
 pub mod process_pool;
