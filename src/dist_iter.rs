@@ -36,20 +36,19 @@ pub trait DistributedIterator {
 		}
 	}
 
-	fn reduce<A, B, F1, F2>(
+	fn reduce<B, F1, F2>(
 		mut self, pool: &::process_pool::ProcessPool, reduce1: F1, mut reduce2: F2,
 	) -> B
 	where
-		F1: Reducer<Item = Self::Item, Output = A>
+		F1: Reducer<Item = Self::Item>
 			+ Clone
 			+ Serialize
 			+ DeserializeOwned
 			+ Send
 			+ Sync
 			+ 'static,
-		F2: Reducer<Item = A, Output = B>,
-		A: Serialize + DeserializeOwned + Send + Sync + 'static,
-		B: Serialize + DeserializeOwned + Send + Sync + 'static,
+		F2: Reducer<Item = F1::Output, Output = B>,
+		F1::Output: Serialize + DeserializeOwned + Send + Sync + 'static,
 		Self::Task: Serialize + DeserializeOwned + Send + Sync + 'static,
 		Self: Sized,
 	{
@@ -98,7 +97,7 @@ pub trait DistributedIterator {
 			.into_iter()
 			.map(|tasks| {
 				let reduce1 = reduce1.clone();
-				pool.spawn(FnOnce!([tasks,reduce1] move || -> A {
+				pool.spawn(FnOnce!([tasks,reduce1] move || -> F1::Output {
 					let mut reduce1: F1 = reduce1;
 					let tasks: Vec<Self::Task> = tasks;
 					for task in tasks {
@@ -108,10 +107,9 @@ pub trait DistributedIterator {
 				}))
 			})
 			.collect::<Vec<_>>();
-		for x in handles
-			.into_iter()
-			.map(FnMut!(|x: ::process_pool::JoinHandle<A>| -> A { x.join() }))
-		{
+		for x in handles.into_iter().map(FnMut!(
+			|x: ::process_pool::JoinHandle<F1::Output>| -> F1::Output { x.join() }
+		)) {
 			reduce2.push(x)
 		}
 		reduce2.ret()
@@ -333,18 +331,16 @@ pub trait DistributedIterator {
 		ReducerA: DistributedReducer<IteratorA, Self::Item, A>,
 		<ReducerA as DistributedReducer<IteratorA, Self::Item, A>>::ReduceA:
 			Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
-		<ReducerA as DistributedReducer<IteratorA, Self::Item, A>>::Mid:
-			Serialize + DeserializeOwned + Send + Sync + 'static,
-		for<'a> <ReducerB as DistributedReducer<IteratorB, &'static Self::Item, B>>::Mid:
+		<<ReducerA as DistributedReducer<IteratorA, Self::Item, A>>::ReduceA as Reducer>::Output:
 			Serialize + DeserializeOwned + Send + Sync + 'static,
 		for<'a> ReducerB: DistributedReducer<IteratorB, &'static Self::Item, B> + 'static,
 		for<'a> <ReducerB as DistributedReducer<IteratorB, &'static Self::Item, B>>::ReduceA:
 			Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
+		for<'a> <<ReducerB as DistributedReducer<IteratorB, &'static Self::Item, B>>::ReduceA as Reducer>::Output:
+			Serialize + DeserializeOwned + Send + Sync + 'static,
 
-		A: Serialize + DeserializeOwned + Send + Sync + 'static,
-		B: Serialize + DeserializeOwned + Send + Sync + 'static,
 		Self::Task: Serialize + DeserializeOwned + Send + Sync + 'static,
-		Self::Item: 'static, // TODO: this shouldn't be needed?
+		Self::Item: 'static, // TODO: this shouldn't be needed
 		Self: Sized,
 	{
 		struct Connect<A, B, C, CTask, CItem>(A, B, C, marker::PhantomData<fn(CTask, CItem)>);
@@ -517,9 +513,8 @@ pub trait Reducer {
 }
 
 pub trait DistributedReducer<I: DistributedIteratorMulti<Source>, Source, B> {
-	type Mid;
-	type ReduceA: Reducer<Item = <I as DistributedIteratorMulti<Source>>::Item, Output = Self::Mid>;
-	type ReduceB: Reducer<Item = Self::Mid, Output = B>;
+	type ReduceA: Reducer<Item = <I as DistributedIteratorMulti<Source>>::Item>;
+	type ReduceB: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = B>;
 	fn reducers(self) -> (I, Self::ReduceA, Self::ReduceB);
 }
 
@@ -606,7 +601,6 @@ where
 	CollectReducerA<Vec<A>>:
 		Reducer<Item = <I as DistributedIteratorMulti<Source>>::Item, Output = Vec<A>>,
 {
-	type Mid = Vec<A>;
 	type ReduceA = CollectReducerA<Vec<A>>;
 	type ReduceB = CollectReducerB<Vec<A>>;
 	fn reducers(self) -> (I, Self::ReduceA, Self::ReduceB) {
