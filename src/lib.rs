@@ -9,7 +9,6 @@
 	unboxed_closures,
 	fnbox,
 	never_type,
-	fn_traits,
 	specialization,
 	core_intrinsics,
 	nll
@@ -18,39 +17,54 @@
 	// missing_copy_implementations,
 	// missing_debug_implementations,
 	// missing_docs,
-	// trivial_numeric_casts,
-	// unused_extern_crates,
-	// unused_import_braces,
-	// unused_qualifications,
-	// unused_results
+	trivial_numeric_casts,
+	unused_extern_crates,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results
 )]
 // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
-// #![allow(dead_code, stable_features)]
 #![warn(clippy::pedantic)]
 #![allow(
 	where_clauses_object_safety,
-	clippy::doc_markdown,
 	clippy::inline_always,
 	clippy::stutter,
 	clippy::similar_names,
-	clippy::if_not_else,
-	clippy::op_ref,
 	clippy::needless_pass_by_value,
-	clippy::items_after_statements,
-	clippy::float_cmp
+	clippy::trivially_copy_pass_by_ref,
+	clippy::unit_arg,
+	clippy::if_not_else,
+	clippy::type_complexity
 )]
 
 #[macro_use]
 extern crate serde_closure;
 extern crate serde;
 extern crate serde_traitobject;
+extern crate sum;
 #[macro_use]
 extern crate serde_derive;
 extern crate constellation;
 extern crate either;
 extern crate rand;
+extern crate replace_with;
 extern crate streaming_algorithms;
 
 pub mod dist_iter;
 pub mod into_dist_iter;
+pub mod no_pool;
 pub mod process_pool;
+
+#[doc(inline)]
+pub use dist_iter::{DistributedIterator, FromDistributedIterator};
+#[doc(inline)]
+pub use into_dist_iter::{IntoDistributedIterator, IteratorExt};
+#[doc(inline)]
+pub use process_pool::ProcessPool;
+
+pub mod prelude {
+	#[doc(inline)]
+	pub use super::{
+		dist_iter::{DistributedIteratorMulti, Identity}, process_pool::JoinHandle, DistributedIterator, FromDistributedIterator, IntoDistributedIterator, IteratorExt, ProcessPool
+	};
+}

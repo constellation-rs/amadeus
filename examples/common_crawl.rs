@@ -33,8 +33,8 @@
 	unused_results
 )]
 // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
-#![warn(clippy::pedantic)]
-#![allow(where_clauses_object_safety)]
+// #![warn(clippy::pedantic)]
+#![allow(where_clauses_object_safety, clippy::all)]
 
 #[macro_use]
 extern crate serde_closure;
@@ -45,17 +45,16 @@ extern crate flate2;
 extern crate reqwest;
 extern crate reqwest_resume;
 // extern crate select;
-// extern crate streaming_algorithms;
+extern crate streaming_algorithms;
 extern crate warc_parser;
 
-use amadeus::{
-	dist_iter::{self, DistributedIterator, DistributedIteratorMulti}, into_dist_iter::IteratorExt, process_pool
-};
+use amadeus::prelude::*;
 use constellation::{init, Resources};
 use reqwest_resume::ClientExt;
 use std::{
 	env, io::{BufRead, BufReader}, time
 };
+use warc_parser::WebpageOwned;
 
 fn main() {
 	init(Resources::default());
@@ -66,7 +65,8 @@ fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(5);
 
-	let pool = process_pool::ProcessPool::new(processes, Resources::default());
+	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	// let pool = amadeus::no_pool::NoPool;
 
 	let body = reqwest::get(
 		"http://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2018-30/warc.paths.gz",
@@ -74,7 +74,18 @@ fn main() {
 	.unwrap();
 	let body = flate2::read::MultiGzDecoder::new(body); // Content-Encoding isn't set, so decode manually
 
-	let top: (Vec<u32>, Vec<u32>) = BufReader::new(body)
+	let top: (
+		((
+			// Vec<u32>,
+			),),
+		(
+			u32,
+			// std::collections::HashSet<u32>,
+			streaming_algorithms::Top<u32,usize>,
+			streaming_algorithms::Top<usize,streaming_algorithms::HyperLogLogMagnitude<Vec<u8>>>,
+			streaming_algorithms::SampleUnstable<u32>,
+		),
+	) = BufReader::new(body)
 		.lines()
 		.map(|url| format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap()))
 		.take(7)
@@ -94,22 +105,49 @@ fn main() {
 				.map(move |_| parser.next().unwrap().map(|x| x.to_owned()))
 				.take_while(|x| x.is_some())
 				.map(|x| x.unwrap())
+				.take(1000)
 		}))
 		.multi(
 			&pool,
-			dist_iter::Identity
-				.map(FnMut!(|x: warc_parser::WebpageOwned| -> usize {
-					x.contents.len()
-				}))
-				.map(FnMut!(|x: usize| -> u32 { x as u32 }))
-				.collect(),
-			dist_iter::Identity
-				.map(FnMut!(|x: &warc_parser::WebpageOwned| -> usize {
-					x.contents.len()
-				}))
-				.map(FnMut!(|x: usize| -> u32 { x as u32 }))
-				.collect(),
+			((
+				// Identity
+				// 	.map(FnMut!(|x: WebpageOwned| -> usize { x.contents.len() }))
+				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+				// 	.collect(),
+				// (),
+				// Identity
+				// 	.map(FnMut!(|x: WebpageOwned| -> usize {
+				// 		x.contents.len()
+				// 	}))
+				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+				// 	.collect(),
+			),),
+			(
+				Identity
+					.map(FnMut!(|x: &WebpageOwned| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.fold(
+						FnMut!(|| 0_u32),
+						FnMut!(|a: u32, b: either::Either<u32, u32>| a + b.into_inner()),
+					),
+				// .sum(),
+				// Identity
+				// 	.map(FnMut!(|x: &WebpageOwned| -> usize { x.contents.len() }))
+				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+				// 	.collect(),
+				Identity
+					.map(FnMut!(|x: &WebpageOwned| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.most_frequent(100, 0.99, 2.0/1000.0),
+				Identity
+					.map(FnMut!(|x: &WebpageOwned| { (x.contents.len(),x.contents[..5].to_owned()) }))
+					.most_distinct(100, 0.99, 2.0/1000.0, 0.0808),
+				Identity
+					.cloned()
+					.map(FnMut!(|x: WebpageOwned| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.sample_unstable(100),
+			),
 		);
-
 	println!("{:?}", top);
 }

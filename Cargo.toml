@@ -12,6 +12,7 @@ repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
 documentation = "https://docs.rs/amadeus/0.1.1"
 readme = "README.md"
+autotests = true
 
 [badges]
 # appveyor = { repository = "alecmocatta/amadeus" }
@@ -28,8 +29,11 @@ rand = "0.5"
 either = "1.5"
 serde_closure = { version = "0.1" } #, path = "../serde_closure" }
 serde_traitobject = { version = "0.1.2" } #, path = "../serde_traitobject" }
-constellation-rs = { version = "0.1", git = "https://github.com/alecmocatta/constellation.git" } #, path = "../constellation" }
-streaming_algorithms = { version = "0.1" } #, path = "../streaming_algorithms" }
+# constellation-rs = { version = "0.1", git = "https://github.com/alecmocatta/constellation.git" } #, path = "../constellation" }
+constellation-rs = { version = "0.1", path = "../deploy" }
+streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms", branch = "fixes" }#, path = "../streaming_algorithms" }
+sum = "0.1"
+replace_with = "0.1"
 
 [dev-dependencies]
 reqwest = "0.8"
@@ -41,3 +45,15 @@ warc_parser = { git = "https://github.com/alecmocatta/warc_nom_parser" }
 
 [profile.release]
 debug = 2
+
+[[test]]
+name = "into_dist_iter"
+harness = false
+
+[[test]]
+name = "panic"
+harness = false
+
+[[test]]
+name = "threads"
+harness = false
