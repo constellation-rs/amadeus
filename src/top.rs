@@ -33,10 +33,10 @@ use twox_hash::RandomXxHashBuilder;
 /// See [*An Improved Data Stream Summary: The Count-Min Sketch and its Applications*](http://dimacs.rutgers.edu/~graham/pubs/papers/cm-full.pdf) and [*New Directions in Traffic Measurement and Accounting*](http://pages.cs.wisc.edu/~suman/courses/740/papers/estan03tocs.pdf) for background on the count-min sketch with conservative updating.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(bound(
-	serialize = "A: Serialize, C: Serialize, <C as New>::Config: Serialize",
-	deserialize = "A: Deserialize<'de>, C: Deserialize<'de>, <C as New>::Config: Deserialize<'de>"
+	serialize = "A: Hash + Eq + Serialize, C: Serialize, <C as New>::Config: Serialize",
+	deserialize = "A: Hash + Eq + Deserialize<'de>, C: Deserialize<'de>, <C as New>::Config: Deserialize<'de>"
 ))]
-pub struct Top<A: Hash + Eq + Clone, C: Ord + New + for<'a> UnionAssign<&'a C> + Intersect> {
+pub struct Top<A, C: New> {
 	map: HashMap<A, OrderedLinkedListIndex<'static>, RandomXxHashBuilder>,
 	list: OrderedLinkedList<Node<A, C>>,
 	count_min: CountMinSketch<A, C>,
@@ -152,21 +152,90 @@ impl<'a, A: Hash + Eq + Clone + Debug, C: Ord + Debug + 'a> Debug for TopIter<'a
 	}
 }
 
-impl<
-		A: Hash + Eq + Clone,
-		C: Ord + New + Clone + for<'a> ops::AddAssign<&'a C> + for<'a> UnionAssign<&'a C> + Intersect,
-	> iter::Sum for Top<A, C>
+/// For the result of a `std::iter::sum()` when an additive identity (i.e. zero) can't be constructed (in the case where we're summing an empty iterator).
+#[derive(Copy, Clone, Debug)]
+pub enum Zeroable<T> {
+	/// Zero
+	Zero,
+	/// Nonzero
+	Nonzero(T),
+}
+impl<T> Zeroable<T> {
+	/// Transform to a `Result<T, E>`.
+	pub fn ok_or<E>(self, err: E) -> Result<T, E> {
+		match self {
+			Zeroable::Nonzero(v) => Ok(v),
+			Zeroable::Zero => Err(err),
+		}
+	}
+	/// Converts to an `Option<T>`.
+	pub fn nonzero(self) -> Option<T> {
+		match self {
+			Zeroable::Nonzero(v) => Some(v),
+			Zeroable::Zero => None,
+		}
+	}
+}
+impl<T> From<Option<T>> for Zeroable<T> {
+	fn from(a: Option<T>) -> Self {
+		match a {
+			Some(a) => Zeroable::Nonzero(a),
+			None => Zeroable::Zero,
+		}
+	}
+}
+impl<T> std::ops::Try for Zeroable<T> {
+	type Ok = T;
+	type Error = std::option::NoneError;
+
+	#[inline]
+	fn into_result(self) -> Result<T, std::option::NoneError> {
+		self.ok_or(std::option::NoneError)
+	}
+
+	#[inline]
+	fn from_ok(v: T) -> Self {
+		Zeroable::Nonzero(v)
+	}
+
+	#[inline]
+	fn from_error(_: std::option::NoneError) -> Self {
+		Zeroable::Zero
+	}
+}
+impl<T> iter::Sum for Zeroable<T>
+where
+	Self: iter::Sum<T>,
 {
-	fn sum<I>(mut iter: I) -> Self
+	fn sum<I>(iter: I) -> Self
 	where
 		I: Iterator<Item = Self>,
 	{
-		// let mut total = Self::new(0); // TODO
-		let mut total = iter.next().unwrap();
+		iter.filter_map(|item| {
+			if let Zeroable::Nonzero(item) = item {
+				Some(item)
+			} else {
+				None
+			}
+		})
+		.sum()
+	}
+}
+
+impl<
+		A: Hash + Eq + Clone,
+		C: Ord + New + Clone + for<'a> ops::AddAssign<&'a C> + for<'a> UnionAssign<&'a C> + Intersect,
+	> iter::Sum<Top<A, C>> for Zeroable<Top<A, C>>
+{
+	fn sum<I>(mut iter: I) -> Self
+	where
+		I: Iterator<Item = Top<A, C>>,
+	{
+		let mut total = iter.next()?;
 		for sample in iter {
 			total += sample;
 		}
-		total
+		Zeroable::Nonzero(total)
 	}
 }
 impl<
@@ -186,30 +255,25 @@ impl<
 	> ops::AddAssign for Top<A, C>
 {
 	fn add_assign(&mut self, other: Self) {
-		if self.capacity() > 0 {
-			// TODO
-			assert_eq!(self.capacity(), other.capacity());
+		assert_eq!(self.capacity(), other.capacity());
 
-			let mut scores = HashMap::<_, C>::new();
-			for (url, count) in self.iter() {
-				*scores
-					.entry(url.clone())
-					.or_insert_with(|| C::new(&self.config)) += count;
-			}
-			for (url, count) in other.iter() {
-				*scores
-					.entry(url.clone())
-					.or_insert_with(|| C::new(&self.config)) += count;
-			}
-			let mut top = self.clone();
-			top.clear();
-			for (url, count) in scores {
-				top.push(url.clone(), &count);
-			}
-			*self = top;
-		} else {
-			*self = other;
+		let mut scores = HashMap::<_, C>::new();
+		for (url, count) in self.iter() {
+			*scores
+				.entry(url.clone())
+				.or_insert_with(|| C::new(&self.config)) += count;
 		}
+		for (url, count) in other.iter() {
+			*scores
+				.entry(url.clone())
+				.or_insert_with(|| C::new(&self.config)) += count;
+		}
+		let mut top = self.clone();
+		top.clear();
+		for (url, count) in scores {
+			top.push(url.clone(), &count);
+		}
+		*self = top;
 	}
 }
 

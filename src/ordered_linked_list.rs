@@ -11,7 +11,7 @@ impl<'a> OrderedLinkedListIndex<'a> {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct OrderedLinkedList<T: Ord>(LinkedList<T>);
+pub struct OrderedLinkedList<T>(LinkedList<T>);
 impl<T: Ord> OrderedLinkedList<T> {
 	pub fn new(cap: usize) -> Self {
 		OrderedLinkedList(LinkedList::new(cap))

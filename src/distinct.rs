@@ -44,15 +44,82 @@
 // https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.rdd.RDD countApproxDistinct
 // is_x86_feature_detected ?
 
+use super::{f64_to_u8, u64_to_f64, usize_to_f64};
 use packed_simd::{self, Cast, FromBits, IntoBits};
 use std::{
-	cmp::{self, Ordering}, convert::identity, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
+	cmp::{self, Ordering}, convert::{identity, TryFrom}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
 use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
 
 mod consts;
 use self::consts::*;
+
+/// Like [`HyperLogLog`] but implements `Ord` and `Eq` by using the estimate of the cardinality.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
+pub struct HyperLogLogMagnitude<V>(HyperLogLog<V>);
+impl<V: Hash> Ord for HyperLogLogMagnitude<V> {
+	#[inline(always)]
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.0.len().partial_cmp(&other.0.len()).unwrap()
+	}
+}
+impl<V: Hash> PartialOrd for HyperLogLogMagnitude<V> {
+	#[inline(always)]
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		self.0.len().partial_cmp(&other.0.len())
+	}
+}
+impl<V: Hash> PartialEq for HyperLogLogMagnitude<V> {
+	#[inline(always)]
+	fn eq(&self, other: &Self) -> bool {
+		self.0.len().eq(&other.0.len())
+	}
+}
+impl<V: Hash> Eq for HyperLogLogMagnitude<V> {}
+impl<V: Hash> Clone for HyperLogLogMagnitude<V> {
+	fn clone(&self) -> Self {
+		HyperLogLogMagnitude(self.0.clone())
+	}
+}
+impl<V: Hash> New for HyperLogLogMagnitude<V> {
+	type Config = f64;
+	fn new(config: &Self::Config) -> Self {
+		HyperLogLogMagnitude(New::new(config))
+	}
+}
+impl<V: Hash> Intersect for HyperLogLogMagnitude<V> {
+	fn intersect<'a>(iter: impl Iterator<Item = &'a Self>) -> Option<Self>
+	where
+		Self: Sized + 'a,
+	{
+		Intersect::intersect(iter.map(|x| &x.0)).map(HyperLogLogMagnitude)
+	}
+}
+impl<'a, V: Hash> UnionAssign<&'a HyperLogLogMagnitude<V>> for HyperLogLogMagnitude<V> {
+	fn union_assign(&mut self, rhs: &'a Self) {
+		self.0.union_assign(&rhs.0)
+	}
+}
+impl<'a, V: Hash> ops::AddAssign<&'a V> for HyperLogLogMagnitude<V> {
+	fn add_assign(&mut self, rhs: &'a V) {
+		self.0.add_assign(rhs)
+	}
+}
+impl<'a, V: Hash> ops::AddAssign<&'a Self> for HyperLogLogMagnitude<V> {
+	fn add_assign(&mut self, rhs: &'a Self) {
+		self.0.add_assign(&rhs.0)
+	}
+}
+impl<V: Hash> fmt::Debug for HyperLogLogMagnitude<V> {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		self.0.fmt(fmt)
+	}
+}
+impl<V> IntersectPlusUnionIsPlus for HyperLogLogMagnitude<V> {
+	const VAL: bool = <HyperLogLog<V> as IntersectPlusUnionIsPlus>::VAL;
+}
 
 /// An implementation of the [HyperLogLog](https://en.wikipedia.org/wiki/HyperLogLog) data structure with *bias correction*.
 ///
@@ -75,13 +142,13 @@ where
 	/// Create an empty `HyperLogLog` data structure with the specified error tolerance.
 	pub fn new(error_rate: f64) -> Self {
 		assert!(0.0 < error_rate && error_rate < 1.0);
-		let p = (f64::log2(1.04 / error_rate) * 2.0).ceil() as u8;
+		let p = f64_to_u8((f64::log2(1.04 / error_rate) * 2.0).ceil());
 		assert!(0 < p && p < 64);
 		let alpha = Self::get_alpha(p);
 		Self {
 			alpha,
 			zero: 1 << p,
-			sum: (1 << p) as f64,
+			sum: f64::from(1 << p),
 			p,
 			m: vec![0; 1 << p].into_boxed_slice(),
 			marker: PhantomData,
@@ -93,7 +160,7 @@ where
 		Self {
 			alpha: hll.alpha,
 			zero: hll.m.len(),
-			sum: hll.m.len() as f64,
+			sum: usize_to_f64(hll.m.len()),
 			p: hll.p,
 			m: vec![0; hll.m.len()].into_boxed_slice(),
 			marker: PhantomData,
@@ -109,14 +176,14 @@ where
 		let j = x & (self.m.len() as u64 - 1);
 		let w = x >> self.p;
 		let rho = Self::get_rho(w, 64 - self.p);
-		let mjr = &mut self.m[j as usize];
+		let mjr = &mut self.m[usize::try_from(j).unwrap()];
 		let old = *mjr;
 		let new = cmp::max(old, rho);
 		self.zero -= if old == 0 { 1 } else { 0 };
 
 		// see pow_bithack()
-		self.sum -= f64::from_bits(u64::max_value().wrapping_sub(old as u64) << 54 >> 2)
-			- f64::from_bits(u64::max_value().wrapping_sub(new as u64) << 54 >> 2);
+		self.sum -= f64::from_bits(u64::max_value().wrapping_sub(u64::from(old)) << 54 >> 2)
+			- f64::from_bits(u64::max_value().wrapping_sub(u64::from(new)) << 54 >> 2);
 
 		*mjr = new;
 	}
@@ -125,7 +192,8 @@ where
 	pub fn len(&self) -> f64 {
 		let v = self.zero;
 		if v > 0 {
-			let h = self.m.len() as f64 * (self.m.len() as f64 / v as f64).ln();
+			let h =
+				usize_to_f64(self.m.len()) * (usize_to_f64(self.m.len()) / usize_to_f64(v)).ln();
 			if h <= Self::get_threshold(self.p - 4) {
 				return h;
 			}
@@ -170,8 +238,8 @@ where
 				}
 			}
 		}
-		self.zero = zero.wrapping_sum() as usize;
-		self.sum = sum.sum() as f64;
+		self.zero = usize::try_from(zero.wrapping_sum()).unwrap();
+		self.sum = f64::from(sum.sum());
 		// https://github.com/AdamNiederer/faster/issues/37
 		// (src.m.simd_iter(faster::u8s(0)),self.m.simd_iter_mut(faster::u8s(0))).zip()
 	}
@@ -208,14 +276,14 @@ where
 				}
 			}
 		}
-		self.zero = zero.wrapping_sum() as usize;
-		self.sum = sum.sum() as f64;
+		self.zero = usize::try_from(zero.wrapping_sum()).unwrap();
+		self.sum = f64::from(sum.sum());
 	}
 
 	/// Clears the `HyperLogLog` data structure, as if it was new.
 	pub fn clear(&mut self) {
 		self.zero = self.m.len();
-		self.sum = self.m.len() as f64;
+		self.sum = usize_to_f64(self.m.len());
 		self.m.iter_mut().for_each(|x| {
 			*x = 0;
 		});
@@ -231,12 +299,12 @@ where
 			4 => 0.673,
 			5 => 0.697,
 			6 => 0.709,
-			_ => 0.7213 / (1.0 + 1.079 / (1_u64 << p) as f64),
+			_ => 0.7213 / (1.0 + 1.079 / u64_to_f64(1_u64 << p)),
 		}
 	}
 
 	fn get_rho(w: u64, max_width: u8) -> u8 {
-		let rho = max_width - (64 - w.leading_zeros() as u8) + 1;
+		let rho = max_width - (64 - u8::try_from(w.leading_zeros()).unwrap()) + 1;
 		assert!(0 < rho && rho < 65);
 		rho
 	}
@@ -245,7 +313,7 @@ where
 		let bias_vector = BIAS_DATA[(p - 4) as usize];
 		let neighbors = Self::get_nearest_neighbors(e, RAW_ESTIMATE_DATA[(p - 4) as usize]);
 		assert_eq!(neighbors.len(), 6);
-		bias_vector[neighbors].into_iter().sum::<f64>() / 6.0_f64
+		bias_vector[neighbors].iter().sum::<f64>() / 6.0_f64
 	}
 
 	fn get_nearest_neighbors(e: f64, estimate_vector: &[f64]) -> Range<usize> {
@@ -275,8 +343,8 @@ where
 	}
 
 	fn ep(&self) -> f64 {
-		let e = self.alpha * (self.m.len() * self.m.len()) as f64 / self.sum;
-		if e <= (5 * self.m.len()) as f64 {
+		let e = self.alpha * usize_to_f64(self.m.len() * self.m.len()) / self.sum;
+		if e <= usize_to_f64(5 * self.m.len()) {
 			e - Self::estimate_bias(e, self.p)
 		} else {
 			e
@@ -344,6 +412,14 @@ where
 {
 	fn add_assign(&mut self, rhs: &'a V) {
 		self.push(rhs)
+	}
+}
+impl<'a, V: ?Sized> ops::AddAssign<&'a Self> for HyperLogLog<V>
+where
+	V: Hash,
+{
+	fn add_assign(&mut self, rhs: &'a Self) {
+		self.union(rhs)
 	}
 }
 impl<V: ?Sized> IntersectPlusUnionIsPlus for HyperLogLog<V> {
@@ -444,13 +520,13 @@ impl Sad<packed_simd::u8x8> {
 	#[inline(always)]
 	unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
 		assert_eq!(b, packed_simd::u8x8::splat(0));
-		(0..8).map(|i| a.extract(i) as u64).sum()
+		(0..8).map(|i| u64::from(a.extract(i))).sum()
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::HyperLogLog;
+	use super::{super::f64_to_usize, HyperLogLog};
 	use std::f64;
 
 	#[test]
@@ -458,11 +534,11 @@ mod test {
 		// build the float from x, manipulating it to be the mantissa we want.
 		// no portability issues in theory https://doc.rust-lang.org/stable/std/primitive.f64.html#method.from_bits
 		for x in 0_u8..65 {
-			let a = 2.0_f64.powi(-(x as i32));
-			let b = f64::from_bits(u64::max_value().wrapping_sub(x as u64) << 54 >> 2);
-			let c = f32::from_bits(u32::max_value().wrapping_sub(x as u32) << 25 >> 2);
+			let a = 2.0_f64.powi(-(i32::from(x)));
+			let b = f64::from_bits(u64::max_value().wrapping_sub(u64::from(x)) << 54 >> 2);
+			let c = f32::from_bits(u32::max_value().wrapping_sub(u32::from(x)) << 25 >> 2);
 			assert_eq!(a, b);
-			assert_eq!(a, c as f64);
+			assert_eq!(a, f64::from(c));
 		}
 	}
 
@@ -505,7 +581,7 @@ mod test {
 		let actual = 100_000.0;
 		let p = 0.05;
 		let mut hll = HyperLogLog::new(p);
-		for i in 0..actual as usize {
+		for i in 0..f64_to_usize(actual) {
 			hll.push(&i);
 		}
 
