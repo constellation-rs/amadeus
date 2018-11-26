@@ -20,9 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use super::f64_to_usize;
 use serde::{de::Deserialize, ser::Serialize};
 use std::{
-	borrow::Borrow, cmp::max, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops
+	borrow::Borrow, cmp::max, convert::TryFrom, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops
 };
 use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
@@ -165,7 +166,7 @@ where
 
 	fn optimal_width(tolerance: f64) -> usize {
 		let e = tolerance;
-		let width = (2.0 / e).round() as usize;
+		let width = f64_to_usize((2.0 / e).round());
 		max(2, width)
 			.checked_next_power_of_two()
 			.expect("Width would be way too large")
@@ -178,7 +179,10 @@ where
 	}
 
 	fn optimal_k_num(probability: f64) -> usize {
-		max(1, ((1.0 - probability).ln() / 0.5_f64.ln()) as usize)
+		max(
+			1,
+			f64_to_usize(((1.0 - probability).ln() / 0.5_f64.ln()).floor()),
+		)
 	}
 
 	fn offsets<Q: ?Sized>(&self, key: &Q) -> impl Iterator<Item = usize>
@@ -186,19 +190,8 @@ where
 		Q: Hash,
 		K: Borrow<Q>,
 	{
-		// if k_i < 2 {
-		//     let sip = &mut self.hashers[k_i as usize].clone();
-		//     key.hash(sip);
-		//     let hash = sip.finish();
-		//     hashes[k_i as usize] = hash;
-		//     hash as usize & self.mask
-		// } else {
-		//     hashes[0]
-		//         .wrapping_add((k_i as u64).wrapping_mul(hashes[1]) %
-		//                       0xffffffffffffffc5) as usize & self.mask
-		// }
 		let mask = self.mask;
-		hashes(key).map(move |hash| hash as usize & mask)
+		hashes(key).map(move |hash| usize::try_from(hash & u64::try_from(mask).unwrap()).unwrap())
 	}
 }
 

@@ -145,21 +145,29 @@ impl<T> LinkedList<T> {
 		LinkedListIndex(idx, marker::PhantomData)
 	}
 	pub fn pop_back(&mut self) -> T {
+		assert_ne!(self.len, 0);
 		let idx = self.tail;
 		let ret = self.vec[idx].2.take().unwrap();
 		self.tail = self.vec[idx].0;
-		self.vec[self.tail].1 = usize::max_value();
+		if self.tail != usize::max_value() {
+			self.vec[self.tail].1 = usize::max_value();
+		} else {
+			self.head = usize::max_value();
+		}
 		self.free(idx);
 		self.len -= 1;
 		self.assert();
 		ret
 	}
 	pub fn pop_front(&mut self) -> T {
+		assert_ne!(self.len, 0);
 		let idx = self.head;
 		let ret = self.vec[idx].2.take().unwrap();
 		self.head = self.vec[idx].1;
 		if self.head != usize::max_value() {
 			self.vec[self.head].0 = usize::max_value();
+		} else {
+			self.tail = usize::max_value();
 		}
 		self.free(idx);
 		self.len -= 1;

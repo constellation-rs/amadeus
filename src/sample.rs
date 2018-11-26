@@ -1,5 +1,8 @@
 use rand::{self, Rng, SeedableRng};
-use std::{iter, ops, vec};
+use serde::{
+	de::{Deserialize, Deserializer}, ser::{Serialize, Serializer}
+};
+use std::{convert::TryFrom, fmt, iter, ops, vec};
 
 /// Given population and sample sizes, returns true if this element is in the sample. Without replacement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -37,17 +40,99 @@ impl Drop for SampleTotal {
 	}
 }
 
+#[derive(Clone)]
+struct FixedCapVec<T>(Vec<T>);
+impl<T> FixedCapVec<T> {
+	fn new(cap: usize) -> Self {
+		let self_ = FixedCapVec(Vec::with_capacity(cap));
+		assert_eq!(self_.capacity(), cap);
+		self_
+	}
+	fn len(&self) -> usize {
+		self.0.len()
+	}
+	fn capacity(&self) -> usize {
+		self.0.capacity()
+	}
+	fn push(&mut self, t: T) {
+		assert!(self.len() < self.capacity());
+		let cap = self.capacity();
+		self.0.push(t);
+		assert_eq!(self.capacity(), cap);
+	}
+	fn pop(&mut self) -> Option<T> {
+		let cap = self.capacity();
+		let ret = self.0.pop();
+		assert_eq!(self.capacity(), cap);
+		ret
+	}
+	fn into_iter(self) -> std::vec::IntoIter<T> {
+		self.0.into_iter()
+	}
+}
+impl<T, Idx> std::ops::Index<Idx> for FixedCapVec<T>
+where
+	Idx: std::slice::SliceIndex<[T]>,
+{
+	type Output = <Vec<T> as std::ops::Index<Idx>>::Output;
+	fn index(&self, index: Idx) -> &Self::Output {
+		std::ops::Index::index(&self.0, index)
+	}
+}
+impl<T, Idx> std::ops::IndexMut<Idx> for FixedCapVec<T>
+where
+	Idx: std::slice::SliceIndex<[T]>,
+{
+	fn index_mut(&mut self, index: Idx) -> &mut Self::Output {
+		std::ops::IndexMut::index_mut(&mut self.0, index)
+	}
+}
+impl<T> fmt::Debug for FixedCapVec<T>
+where
+	T: fmt::Debug,
+{
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		self.0.fmt(f)
+	}
+}
+impl<T> Serialize for FixedCapVec<T>
+where
+	T: Serialize,
+{
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		<(usize, &Vec<T>)>::serialize(&(self.0.capacity(), &self.0), serializer)
+	}
+}
+impl<'de, T> Deserialize<'de> for FixedCapVec<T>
+where
+	T: Deserialize<'de>,
+{
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		<(usize, Vec<T>)>::deserialize(deserializer).map(|(cap, mut vec)| {
+			vec.reserve_exact(cap - vec.len());
+			assert_eq!(vec.capacity(), cap);
+			FixedCapVec(vec)
+		})
+	}
+}
+
 /// [Reservoir sampling](https://en.wikipedia.org/wiki/Reservoir_sampling). Without replacement, and the returned order is unstable.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SampleUnstable<T> {
-	reservoir: Vec<T>,
+	reservoir: FixedCapVec<T>,
 	i: usize,
 }
 impl<T> SampleUnstable<T> {
 	/// Create a `SampleUnstable` that will provide a sample of size `samples`.
 	pub fn new(samples: usize) -> Self {
 		Self {
-			reservoir: Vec::with_capacity(samples),
+			reservoir: FixedCapVec::new(samples),
 			i: 0,
 		}
 	}
@@ -99,12 +184,12 @@ impl<T> ops::AddAssign for SampleUnstable<T> {
 		if self.reservoir.capacity() > 0 {
 			// TODO
 			assert_eq!(self.reservoir.capacity(), other.reservoir.capacity());
-			let mut new = Vec::with_capacity(self.reservoir.capacity());
+			let mut new = FixedCapVec::new(self.reservoir.capacity());
 			let (m, n) = (self.i, other.i);
 			let mut rng = rand::prng::XorShiftRng::from_seed([
-				m as u8,
-				n as u8,
-				self.reservoir.capacity() as u8,
+				u8::try_from(m & 0xff).unwrap(),
+				u8::try_from(n & 0xff).unwrap(),
+				u8::try_from(self.reservoir.capacity() & 0xff).unwrap(),
 				3,
 				4,
 				5,

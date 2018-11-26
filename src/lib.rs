@@ -22,7 +22,7 @@
 //! As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 #![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.1.0")]
-#![feature(nll, specialization, convert_id)]
+#![feature(nll, specialization, convert_id, try_trait, try_from)]
 #![warn(
 	missing_copy_implementations,
 	missing_debug_implementations,
@@ -43,10 +43,7 @@
 	clippy::if_not_else,
 	clippy::op_ref,
 	clippy::needless_pass_by_value,
-	clippy::cast_possible_truncation,
-	clippy::cast_sign_loss,
-	clippy::cast_precision_loss,
-	clippy::cast_lossless,
+	clippy::suspicious_op_assign_impl,
 	clippy::float_cmp
 )]
 
@@ -70,3 +67,35 @@ pub use distinct::*;
 pub use sample::*;
 pub use top::*;
 pub use traits::*;
+
+// TODO: replace all instances of the following with a.try_into().unwrap() if/when that exists https://github.com/rust-lang/rust/pull/47857
+#[allow(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	clippy::cast_precision_loss
+)]
+fn f64_to_usize(a: f64) -> usize {
+	assert!(a.is_sign_positive() && a <= usize::max_value() as f64 && a.fract() == 0.0);
+	a as usize
+}
+
+#[allow(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	clippy::cast_precision_loss
+)]
+fn f64_to_u8(a: f64) -> u8 {
+	assert!(a.is_sign_positive() && a <= f64::from(u8::max_value()) && a.fract() == 0.0);
+	a as u8
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn usize_to_f64(a: usize) -> f64 {
+	assert!(a as u64 <= 1_u64 << 53);
+	a as f64
+}
+#[allow(clippy::cast_precision_loss)]
+fn u64_to_f64(a: u64) -> f64 {
+	assert!(a <= 1_u64 << 53);
+	a as f64
+}
