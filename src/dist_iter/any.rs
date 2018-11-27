@@ -3,43 +3,43 @@ use serde::{de::Deserialize, ser::Serialize};
 use std::marker;
 
 #[must_use]
-pub struct All<I, F> {
+pub struct Any<I, F> {
 	i: I,
 	f: F,
 }
-impl<I, F> All<I, F> {
+impl<I, F> Any<I, F> {
 	pub(super) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
 
 impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, bool>
-	for All<I, F>
+	for Any<I, F>
 where
 	F: FnMut(I::Item) -> bool + Clone,
 {
-	type ReduceAFactory = AllReducerFactory<I::Item, F>;
-	type ReduceA = AllReducer<I::Item, F>;
-	type ReduceB = BoolAndReducer;
+	type ReduceAFactory = AnyReducerFactory<I::Item, F>;
+	type ReduceA = AnyReducer<I::Item, F>;
+	type ReduceB = BoolOrReducer;
 
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			AllReducerFactory(self.f, marker::PhantomData),
-			BoolAndReducer(true),
+			AnyReducerFactory(self.f, marker::PhantomData),
+			BoolOrReducer(false),
 		)
 	}
 }
 
-pub struct AllReducerFactory<A, F>(F, marker::PhantomData<fn(A)>);
+pub struct AnyReducerFactory<A, F>(F, marker::PhantomData<fn(A)>);
 
-impl<A, F> ReduceFactory for AllReducerFactory<A, F>
+impl<A, F> ReduceFactory for AnyReducerFactory<A, F>
 where
 	F: FnMut(A) -> bool + Clone,
 {
-	type Reducer = AllReducer<A, F>;
+	type Reducer = AnyReducer<A, F>;
 	fn make(&self) -> Self::Reducer {
-		AllReducer(self.0.clone(), true, marker::PhantomData)
+		AnyReducer(self.0.clone(), true, marker::PhantomData)
 	}
 }
 
@@ -48,9 +48,9 @@ where
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct AllReducer<A, F>(F, bool, marker::PhantomData<fn(A)>);
+pub struct AnyReducer<A, F>(F, bool, marker::PhantomData<fn(A)>);
 
-impl<A, F> Reducer for AllReducer<A, F>
+impl<A, F> Reducer for AnyReducer<A, F>
 where
 	F: FnMut(A) -> bool,
 {
@@ -59,24 +59,24 @@ where
 
 	#[inline(always)]
 	fn push(&mut self, item: Self::Item) -> bool {
-		self.1 = self.1 && self.0(item);
+		self.1 = self.1 && !self.0(item);
 		self.1
 	}
 	fn ret(self) -> Self::Output {
-		self.1
+		!self.1
 	}
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BoolAndReducer(bool);
+pub struct BoolOrReducer(bool);
 
-impl Reducer for BoolAndReducer {
+impl Reducer for BoolOrReducer {
 	type Item = bool;
 	type Output = bool;
 
 	#[inline(always)]
 	fn push(&mut self, item: Self::Item) -> bool {
-		self.0 = self.0 && item;
+		self.0 = self.0 || item;
 		self.0
 	}
 	fn ret(self) -> Self::Output {

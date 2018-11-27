@@ -53,12 +53,15 @@ impl<C: Consumer, F: FnMut(C::Item) -> R + Clone, R: IntoIterator> Consumer
 {
 	type Item = R::Item;
 
-	fn run(self, i: &mut impl FnMut(Self::Item)) {
+	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		let (task, mut f) = (self.task, self.f);
 		task.run(&mut |item| {
 			for x in f(item) {
-				i(x)
+				if !i(x) {
+					return false;
+				}
 			}
+			true
 		})
 	}
 }
@@ -70,12 +73,15 @@ where
 {
 	type Item = R::Item;
 
-	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item)) {
+	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		let (task, f) = (&self.task, &self.f);
 		task.run(source, &mut |item| {
 			for x in f.clone()(item) {
-				i(x)
+				if !i(x) {
+					return false;
+				}
 			}
+			true
 		})
 	}
 }

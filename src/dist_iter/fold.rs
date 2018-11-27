@@ -74,7 +74,7 @@ where
 	type Output = B;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		replace_with_or_abort(&mut self.0, |self_0| {
 			Either::Right(self_0.map_left(|mut identity| identity()).into_inner())
 		});
@@ -82,6 +82,7 @@ where
 		replace_with_or_abort(&mut self.0, |self_0| {
 			Either::Right((self_1)(self_0.right().unwrap(), Either::Left(item)))
 		});
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0.map_left(|mut identity| identity()).into_inner()
@@ -118,7 +119,7 @@ where
 	type Output = B;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		replace_with_or_abort(&mut self.0, |self_0| {
 			Either::Right(self_0.map_left(|mut identity| identity()).into_inner())
 		});
@@ -126,6 +127,7 @@ where
 		replace_with_or_abort(&mut self.0, |self_0| {
 			Either::Right((self_1)(self_0.right().unwrap(), Either::Right(item)))
 		});
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0.map_left(|mut identity| identity()).into_inner()

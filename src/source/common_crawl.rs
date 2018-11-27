@@ -81,7 +81,7 @@ pub struct CommonCrawlConsumer {
 impl Consumer for CommonCrawlConsumer {
 	type Item = Result<WebpageOwned, io::Error>;
 
-	fn run(self, i: &mut impl FnMut(Self::Item)) {
+	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		self.task.run(i)
 	}
 }

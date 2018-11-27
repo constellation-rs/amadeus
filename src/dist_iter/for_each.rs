@@ -58,8 +58,9 @@ where
 	type Output = ();
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		self.0(item);
+		true
 	}
 	fn ret(self) -> Self::Output {}
 }

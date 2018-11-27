@@ -28,7 +28,7 @@ pub struct IterIterConsumer<T>(T);
 impl<T> Consumer for IterIterConsumer<T> {
 	type Item = T;
 
-	fn run(self, i: &mut impl FnMut(Self::Item)) {
+	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		i(self.0)
 	}
 }

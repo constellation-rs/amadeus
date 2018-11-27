@@ -56,7 +56,7 @@ where
 {
 	type Item = C::Item;
 
-	fn run(self, i: &mut impl FnMut(Self::Item)) {
+	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		let (task, mut f) = (self.task, self.f);
 		task.run(&mut |mut item| {
 			f(&mut item);
@@ -71,7 +71,7 @@ where
 {
 	type Item = C::Item;
 
-	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item)) {
+	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		let (task, f) = (&self.task, &self.f);
 		task.run(source, &mut |mut item| {
 			f.clone()(&mut item);

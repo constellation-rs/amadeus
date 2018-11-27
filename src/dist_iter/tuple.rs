@@ -2,15 +2,6 @@ use super::{ConsumerMulti, DistributedIteratorMulti, DistributedReducer, ReduceF
 use sum::*;
 
 macro_rules! impl_iterator_multi_tuple {
-	(@run $enum:ident $self:ident $source:ident $i:ident : $num:tt $t:ident, $($tail_num:tt $tail_t:ident,)+) => (
-		$self.$num.run($source, &mut |x| $i($enum::$t(x)));
-		impl_iterator_multi_tuple!(@run $enum $self $source $i: $($tail_num $tail_t,)+);
-	);
-	(@run $enum:ident $self:ident $source:ident $i:ident : $num:tt $t:ident, ) => (
-		$self.$num.run($source, &mut |x| $i($enum::$t(x)));
-	);
-	(@run $enum:ident $self:ident $source:ident $i:ident : ) => (
-	);
 	($reduceafactory:ident $reducea:ident $reduceb:ident $enum:ident $($copy:ident)* : $($i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $num:tt $t:ident),*) => (
 		impl<
 				$($i: DistributedIteratorMulti<Source>,)*
@@ -53,8 +44,8 @@ macro_rules! impl_iterator_multi_tuple {
 		{
 			type Item = $enum<$($c::Item,)*>;
 
-			fn run(&self, source: Source, i: &mut impl FnMut(Self::Item)) {
-				impl_iterator_multi_tuple!(@run $enum self source i: $($num $t,)*);
+			fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
+				$(self.$num.run(source, &mut |x| i($enum::$t(x))) | )* false
 			}
 		}
 
@@ -62,24 +53,27 @@ macro_rules! impl_iterator_multi_tuple {
 		impl<$($r:ReduceFactory,)*> ReduceFactory for $reduceafactory<$($r,)*> {
 			type Reducer = $reducea<$($r::Reducer,)*>;
 			fn make(&self) -> Self::Reducer {
-				$reducea($(self.$num.make(),)*)
+				$reducea($((self.$num.make(),true),)*)
 			}
 		}
 
 		#[derive(Serialize, Deserialize)]
-		pub struct $reducea<$($t,)*>($($t,)*);
+		pub struct $reducea<$($t,)*>($(($t,bool),)*);
 		#[allow(unused_variables)]
 		impl<$($t: Reducer,)*> Reducer for $reducea<$($t,)*> {
 			type Item = $enum<$($t::Item,)*>;
 			type Output = ($($t::Output,)*);
 
-			fn push(&mut self, item: Self::Item) {
+			fn push(&mut self, item: Self::Item) -> bool {
 				match item {
-					$($enum::$t(item) => self.$num.push(item),)*
+					$($enum::$t(item) => self.$num.1 = self.$num.1 && self.$num.0.push(item),)*
+				}
+				#[allow(unreachable_code)] {
+					$(self.$num.1 |)* false
 				}
 			}
 			fn ret(self) -> Self::Output {
-				($(self.$num.ret(),)*)
+				($(self.$num.0.ret(),)*)
 			}
 		}
 
@@ -89,8 +83,8 @@ macro_rules! impl_iterator_multi_tuple {
 			type Item = ($($t::Item,)*);
 			type Output = ($($t::Output,)*);
 
-			fn push(&mut self, item: Self::Item) {
-				$(self.$num.push(item.$num);)*
+			fn push(&mut self, item: Self::Item) -> bool {
+				$(self.$num.push(item.$num) |)* false
 			}
 			fn ret(self) -> Self::Output {
 				($(self.$num.ret(),)*)

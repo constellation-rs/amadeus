@@ -55,7 +55,7 @@ pub struct ClonedConsumer<T> {
 // 	T: Clone,
 // {
 // 	type Item = T;
-// 	fn run(self, i: &mut impl FnMut(Self::Item)) {
+// 	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 // 		self.task.run(&mut |item| i(item.clone()))
 // 	}
 // }
@@ -66,7 +66,7 @@ where
 {
 	type Item = T;
 
-	fn run(&self, source: &'a Source, i: &mut impl FnMut(Self::Item)) {
+	fn run(&self, source: &'a Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		self.task.run(source, &mut |item| i(item.clone()))
 	}
 }

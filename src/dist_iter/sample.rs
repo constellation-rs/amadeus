@@ -56,8 +56,9 @@ impl<A> Reducer for SampleUnstableReducer<A> {
 	type Output = streaming_algorithms::SampleUnstable<A>;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		self.0.push(item, &mut thread_rng());
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0
@@ -75,7 +76,7 @@ where
 	type Output = B;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		self.0.push(item)
 	}
 	fn ret(self) -> Self::Output {
@@ -164,8 +165,9 @@ where
 	type Output = streaming_algorithms::Top<A, usize>;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		self.0.push(item, &1);
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0
@@ -269,8 +271,9 @@ where
 	type Output = streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		self.0.push(item.0, &item.1);
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0

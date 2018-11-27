@@ -36,7 +36,7 @@ where
 	type Output = Option<B>;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		let item: Option<B> = item.into();
 		let self_1 = &mut self.1;
 		if let Some(item) = item {
@@ -48,6 +48,7 @@ where
 				})
 			});
 		}
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0

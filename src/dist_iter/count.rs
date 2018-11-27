@@ -45,8 +45,9 @@ impl<A> Reducer for CountReducer<A> {
 	type Output = usize;
 
 	#[inline(always)]
-	fn push(&mut self, _item: Self::Item) {
+	fn push(&mut self, _item: Self::Item) -> bool {
 		self.0 += 1;
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0

@@ -147,8 +147,9 @@ impl<A, T: Push<A>> Reducer for PushReducer<A, T> {
 	type Output = T;
 
 	#[inline]
-	fn push(&mut self, item: Self::Item) {
-		self.0.push(item)
+	fn push(&mut self, item: Self::Item) -> bool {
+		self.0.push(item);
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0
@@ -169,8 +170,9 @@ impl<A: IntoIterator<Item = B>, T: Extend<B>, B> Reducer for ExtendReducer<A, T>
 	type Output = T;
 
 	#[inline]
-	fn push(&mut self, item: Self::Item) {
-		self.0.extend(item)
+	fn push(&mut self, item: Self::Item) -> bool {
+		self.0.extend(item);
+		true
 	}
 	fn ret(self) -> Self::Output {
 		self.0
@@ -197,7 +199,7 @@ where
 	type Output = T;
 
 	#[inline]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		self.0.push(item)
 	}
 	fn ret(self) -> Self::Output {
@@ -228,13 +230,14 @@ impl<R: Reducer> Reducer for OptionReducer<R> {
 	type Output = Option<R::Output>;
 
 	#[inline]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		match (&mut self.0, item.is_some()) {
 			(&mut Some(ref mut a), true) => {
-				a.push(item.unwrap());
+				return a.push(item.unwrap());
 			}
 			(self_, _) => *self_ = None,
 		}
+		self.0.is_some()
 	}
 	fn ret(self) -> Self::Output {
 		self.0.map(Reducer::ret)
@@ -264,14 +267,15 @@ impl<R: Reducer, E> Reducer for ResultReducer<R, E> {
 	type Output = Result<R::Output, E>;
 
 	#[inline]
-	fn push(&mut self, item: Self::Item) {
+	fn push(&mut self, item: Self::Item) -> bool {
 		match (&mut self.0, item.is_ok()) {
 			(&mut Ok(ref mut a), true) => {
-				a.push(item.ok().unwrap());
+				return a.push(item.ok().unwrap());
 			}
 			(self_, false) => *self_ = Err(item.err().unwrap()),
 			_ => (),
 		}
+		self.0.is_ok()
 	}
 	fn ret(self) -> Self::Output {
 		self.0.map(Reducer::ret)

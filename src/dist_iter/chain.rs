@@ -44,7 +44,7 @@ pub enum ChainConsumer<A, B> {
 impl<A: Consumer, B: Consumer<Item = A::Item>> Consumer for ChainConsumer<A, B> {
 	type Item = A::Item;
 
-	fn run(self, i: &mut impl FnMut(Self::Item)) {
+	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		match self {
 			ChainConsumer::A(a) => a.run(i),
 			ChainConsumer::B(b) => b.run(i),

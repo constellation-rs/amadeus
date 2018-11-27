@@ -15,7 +15,7 @@ pub struct IdentityMultiTask;
 impl<Item> ConsumerMulti<Item> for IdentityMultiTask {
 	type Item = Item;
 
-	fn run(&self, source: Item, i: &mut impl FnMut(Self::Item)) {
+	fn run(&self, source: Item, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		i(source)
 	}
 }

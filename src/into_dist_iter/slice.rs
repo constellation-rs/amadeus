@@ -42,7 +42,7 @@ impl DistributedIterator for Never {
 impl Consumer for Never {
 	type Item = Self;
 
-	fn run(self, _: &mut impl FnMut(Self::Item)) {
+	fn run(self, _: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		unreachable!()
 	}
 }

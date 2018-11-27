@@ -1,4 +1,5 @@
 mod all;
+mod any;
 mod chain;
 mod cloned;
 mod collect;
@@ -17,7 +18,7 @@ mod sum;
 mod tuple;
 mod update;
 pub use self::{
-	all::*, chain::*, cloned::*, collect::*, combine::*, count::*, filter::*, flat_map::*, fold::*, for_each::*, identity::*, inspect::*, map::*, max::*, sample::*, sum::*, tuple::*, update::*
+	all::*, any::*, chain::*, cloned::*, collect::*, combine::*, count::*, filter::*, flat_map::*, fold::*, for_each::*, identity::*, inspect::*, map::*, max::*, sample::*, sum::*, tuple::*, update::*
 };
 
 use crate::into_dist_iter::IntoDistributedIterator;
@@ -143,16 +144,19 @@ pub trait DistributedIterator {
 					let mut reduce1: R1 = reduce1;
 					let tasks: Vec<Self::Task> = tasks;
 					for task in tasks {
-						task.run(&mut |item| reduce1.push(item));
+						if !task.run(&mut |item| reduce1.push(item)) {
+							break;
+						}
 					};
 					reduce1.ret()
 				}))
 			})
 			.collect::<Vec<_>>();
 		let mut panicked = false;
+		let mut more = true;
 		for handle in handles {
 			if let Ok(res) = handle.join() {
-				reduce2.push(res);
+				more = more && reduce2.push(res);
 			} else {
 				panicked = true;
 			}
@@ -204,11 +208,9 @@ pub trait DistributedIterator {
 			B: ConsumerMulti<A::Item>,
 		{
 			type Item = B::Item;
-			fn run(self, i: &mut impl FnMut(Self::Item)) {
+			fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 				let a = self.1;
-				self.0.run(&mut |item| {
-					a.run(item, &mut |item| i(item));
-				})
+				self.0.run(&mut |item| a.run(item, &mut |item| i(item)))
 			}
 		}
 
@@ -278,17 +280,21 @@ pub trait DistributedIterator {
 			B: ConsumerMulti<A::Item>,
 		{
 			type Item = Sum2<B::Item, CItem>;
-			fn run(self, i: &mut impl FnMut(Self::Item)) {
+			fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 				let a = self.1;
 				let b = self.2;
 				self.0.run(&mut |item| {
 					trait ConsumerReducerHack<Source> {
 						type Item;
-						fn run(&self, source: Source, i: &mut impl FnMut(Self::Item));
+						fn run(
+							&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool,
+						) -> bool;
 					}
 					impl<T, Source> ConsumerReducerHack<Source> for T {
 						default type Item = !;
-						default fn run(&self, _source: Source, _i: &mut impl FnMut(Self::Item)) {
+						default fn run(
+							&self, _source: Source, _i: &mut impl FnMut(Self::Item) -> bool,
+						) -> bool {
 							unreachable!()
 						}
 					}
@@ -297,14 +303,15 @@ pub trait DistributedIterator {
 						T: ConsumerMulti<Source>,
 					{
 						type Item = <Self as ConsumerMulti<Source>>::Item;
-						fn run(&self, source: Source, i: &mut impl FnMut(Self::Item)) {
+						fn run(
+							&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool,
+						) -> bool {
 							ConsumerMulti::<Source>::run(self, source, i)
 						}
 					}
 					ConsumerReducerHack::<&A::Item>::run(&b, &item, &mut |item| {
 						i(Sum2::B(unsafe { type_transmute(item) }))
-					});
-					a.run(item, &mut |item| i(Sum2::A(item)));
+					}) | a.run(item, &mut |item| i(Sum2::A(item)))
 				})
 			}
 		}
@@ -539,6 +546,19 @@ pub trait DistributedIterator {
 		)
 	}
 
+	fn any<F>(self, pool: &Pool, f: F) -> bool
+	where
+		F: FnMut(Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
+		Self::Task: Serialize + DeserializeOwned + 'static,
+		Self::Item: 'static,
+		Self: Sized,
+	{
+		self.single(
+			pool,
+			DistributedIteratorMulti::<Self::Item>::any(Identity, f),
+		)
+	}
+
 	fn collect<B>(self, pool: &Pool) -> B
 	where
 		B: FromDistributedIterator<Self::Item>,
@@ -748,6 +768,15 @@ pub trait DistributedIteratorMulti<Source> {
 	}
 
 	#[must_use]
+	fn any<F>(self, f: F) -> Any<Self, F>
+	where
+		F: FnMut(Self::Item) -> bool + Clone,
+		Self: Sized,
+	{
+		Any::new(self, f)
+	}
+
+	#[must_use]
 	fn collect<B>(self) -> Collect<Self, B>
 	where
 		Self: Sized,
@@ -768,17 +797,17 @@ pub trait DistributedIteratorMulti<Source> {
 
 pub trait Consumer {
 	type Item;
-	fn run(self, i: &mut impl FnMut(Self::Item));
+	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool;
 }
 pub trait ConsumerMulti<Source> {
 	type Item;
-	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item));
+	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool;
 }
 
 pub trait Reducer {
 	type Item;
 	type Output;
-	fn push(&mut self, item: Self::Item);
+	fn push(&mut self, item: Self::Item) -> bool;
 	fn ret(self) -> Self::Output;
 }
 
