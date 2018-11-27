@@ -2,7 +2,7 @@ mod collections;
 mod iterator;
 mod slice;
 pub use self::{collections::*, iterator::*, slice::*};
-use dist_iter::{Consumer, DistributedIterator};
+use crate::dist_iter::{Consumer, DistributedIterator};
 
 pub trait IntoDistributedIterator {
 	type Iter: DistributedIterator<Item = Self::Item>;

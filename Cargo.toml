@@ -13,6 +13,7 @@ homepage = "https://github.com/alecmocatta/amadeus"
 documentation = "https://docs.rs/amadeus/0.1.1"
 readme = "README.md"
 autotests = true
+edition = "2018"
 
 [badges]
 # appveyor = { repository = "alecmocatta/amadeus" }
@@ -34,14 +35,15 @@ constellation-rs = { version = "0.1", path = "../deploy" }
 streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms", branch = "fixes" }#, path = "../streaming_algorithms" }
 sum = "0.1"
 replace_with = "0.1"
-
-[dev-dependencies]
 reqwest = "0.8"
 reqwest_resume = "0.1"
-select = "0.4"
 flate2 = "1.0"
 nom = "2.2"
-warc_parser = { git = "https://github.com/alecmocatta/warc_nom_parser" }
+warc_parser = { path = "../../warc_nom_parser" }# git = "https://github.com/alecmocatta/warc_nom_parser" }
+url = "*"
+
+[dev-dependencies]
+select = "0.4"
 
 [profile.release]
 debug = 2
@@ -56,4 +58,8 @@ harness = false
 
 [[test]]
 name = "threads"
+harness = false
+
+[[test]]
+name = "source"
 harness = false

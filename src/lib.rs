@@ -39,32 +39,25 @@
 
 #[macro_use]
 extern crate serde_closure;
-extern crate serde;
-extern crate serde_traitobject;
-extern crate sum;
 #[macro_use]
 extern crate serde_derive;
-extern crate constellation;
-extern crate either;
-extern crate rand;
-extern crate replace_with;
-extern crate streaming_algorithms;
 
 pub mod dist_iter;
 pub mod into_dist_iter;
 pub mod no_pool;
 pub mod process_pool;
+pub mod source;
 
 #[doc(inline)]
-pub use dist_iter::{DistributedIterator, FromDistributedIterator};
+pub use crate::dist_iter::{DistributedIterator, FromDistributedIterator};
 #[doc(inline)]
-pub use into_dist_iter::{IntoDistributedIterator, IteratorExt};
+pub use crate::into_dist_iter::{IntoDistributedIterator, IteratorExt};
 #[doc(inline)]
-pub use process_pool::ProcessPool;
+pub use crate::process_pool::ProcessPool;
 
 pub mod prelude {
 	#[doc(inline)]
 	pub use super::{
-		dist_iter::{DistributedIteratorMulti, Identity}, process_pool::JoinHandle, DistributedIterator, FromDistributedIterator, IntoDistributedIterator, IteratorExt, ProcessPool
+		dist_iter::{DistributedIteratorMulti, Identity}, process_pool::JoinHandle, source::*, DistributedIterator, FromDistributedIterator, IntoDistributedIterator, IteratorExt, ProcessPool
 	};
 }

@@ -1,3 +1,4 @@
+mod all;
 mod chain;
 mod cloned;
 mod collect;
@@ -16,18 +17,18 @@ mod sum;
 mod tuple;
 mod update;
 pub use self::{
-	chain::*, cloned::*, collect::*, combine::*, count::*, filter::*, flat_map::*, fold::*, for_each::*, identity::*, inspect::*, map::*, max::*, sample::*, sum::*, tuple::*, update::*
+	all::*, chain::*, cloned::*, collect::*, combine::*, count::*, filter::*, flat_map::*, fold::*, for_each::*, identity::*, inspect::*, map::*, max::*, sample::*, sum::*, tuple::*, update::*
 };
 
+use crate::into_dist_iter::IntoDistributedIterator;
+use ::sum::*;
 use either::Either;
-use into_dist_iter::IntoDistributedIterator;
 use serde::{
 	de::{Deserialize, DeserializeOwned}, ser::Serialize
 };
 use std::{cmp::Ordering, hash::Hash, iter, marker, vec};
-use sum::*;
 
-type Pool = ::process_pool::ProcessPool;
+type Pool = crate::process_pool::ProcessPool;
 // type Pool = ::no_pool::NoPool;
 
 pub trait DistributedIterator {
@@ -283,7 +284,7 @@ pub trait DistributedIterator {
 				self.0.run(&mut |item| {
 					trait ConsumerReducerHack<Source> {
 						type Item;
-						fn run(&self, Source, &mut impl FnMut(Self::Item));
+						fn run(&self, source: Source, i: &mut impl FnMut(Self::Item));
 					}
 					impl<T, Source> ConsumerReducerHack<Source> for T {
 						default type Item = !;
@@ -525,6 +526,19 @@ pub trait DistributedIterator {
 		)
 	}
 
+	fn all<F>(self, pool: &Pool, f: F) -> bool
+	where
+		F: FnMut(Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
+		Self::Task: Serialize + DeserializeOwned + 'static,
+		Self::Item: 'static,
+		Self: Sized,
+	{
+		self.single(
+			pool,
+			DistributedIteratorMulti::<Self::Item>::all(Identity, f),
+		)
+	}
+
 	fn collect<B>(self, pool: &Pool) -> B
 	where
 		B: FromDistributedIterator<Self::Item>,
@@ -601,14 +615,6 @@ pub trait DistributedIteratorMulti<Source> {
 		Self: Sized,
 	{
 		Chain::new(self, chain.into_dist_iter())
-	}
-
-	#[must_use]
-	fn collect<B>(self) -> Collect<Self, B>
-	where
-		Self: Sized,
-	{
-		Collect::new(self)
 	}
 
 	#[must_use]
@@ -733,6 +739,23 @@ pub trait DistributedIteratorMulti<Source> {
 	}
 
 	#[must_use]
+	fn all<F>(self, f: F) -> All<Self, F>
+	where
+		F: FnMut(Self::Item) -> bool + Clone,
+		Self: Sized,
+	{
+		All::new(self, f)
+	}
+
+	#[must_use]
+	fn collect<B>(self) -> Collect<Self, B>
+	where
+		Self: Sized,
+	{
+		Collect::new(self)
+	}
+
+	#[must_use]
 	fn cloned<'a, Source1: 'a, T: 'a>(self) -> Cloned<Self, Source, T>
 	where
 		Self: Sized,
@@ -745,17 +768,17 @@ pub trait DistributedIteratorMulti<Source> {
 
 pub trait Consumer {
 	type Item;
-	fn run(self, &mut impl FnMut(Self::Item));
+	fn run(self, i: &mut impl FnMut(Self::Item));
 }
 pub trait ConsumerMulti<Source> {
 	type Item;
-	fn run(&self, Source, &mut impl FnMut(Self::Item));
+	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item));
 }
 
 pub trait Reducer {
 	type Item;
 	type Output;
-	fn push(&mut self, Self::Item);
+	fn push(&mut self, item: Self::Item);
 	fn ret(self) -> Self::Output;
 }
 

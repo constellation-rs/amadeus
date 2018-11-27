@@ -38,15 +38,6 @@
 
 #[macro_use]
 extern crate serde_closure;
-// extern crate serde;
-extern crate amadeus;
-extern crate constellation;
-extern crate flate2;
-extern crate reqwest;
-extern crate reqwest_resume;
-// extern crate select;
-extern crate streaming_algorithms;
-extern crate warc_parser;
 
 use amadeus::prelude::*;
 use constellation::{init, Resources};
@@ -100,12 +91,7 @@ fn main() {
 				.send()
 				.unwrap();
 			let body = flate2::read::MultiGzDecoder::new(body);
-			let mut parser = warc_parser::WarcParser::new(body);
-			(0..)
-				.map(move |_| parser.next().unwrap().map(|x| x.to_owned()))
-				.take_while(|x| x.is_some())
-				.map(|x| x.unwrap())
-				.take(1000)
+			warc_parser::WarcParser::new(body).take(1000).map(Result::unwrap)
 		}))
 		.multi(
 			&pool,
