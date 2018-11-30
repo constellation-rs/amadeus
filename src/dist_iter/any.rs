@@ -1,6 +1,6 @@
 use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
 use serde::{de::Deserialize, ser::Serialize};
-use std::marker;
+use std::marker::PhantomData;
 
 #[must_use]
 pub struct Any<I, F> {
@@ -25,13 +25,13 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			AnyReducerFactory(self.f, marker::PhantomData),
+			AnyReducerFactory(self.f, PhantomData),
 			BoolOrReducer(false),
 		)
 	}
 }
 
-pub struct AnyReducerFactory<A, F>(F, marker::PhantomData<fn(A)>);
+pub struct AnyReducerFactory<A, F>(F, PhantomData<fn(A)>);
 
 impl<A, F> ReduceFactory for AnyReducerFactory<A, F>
 where
@@ -39,7 +39,7 @@ where
 {
 	type Reducer = AnyReducer<A, F>;
 	fn make(&self) -> Self::Reducer {
-		AnyReducer(self.0.clone(), true, marker::PhantomData)
+		AnyReducer(self.0.clone(), true, PhantomData)
 	}
 }
 
@@ -48,7 +48,7 @@ where
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct AnyReducer<A, F>(F, bool, marker::PhantomData<fn(A)>);
+pub struct AnyReducer<A, F>(F, bool, PhantomData<fn(A)>);
 
 impl<A, F> Reducer for AnyReducer<A, F>
 where

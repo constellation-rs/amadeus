@@ -1,17 +1,17 @@
 use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
 use serde::{de::Deserialize, ser::Serialize};
-use std::{iter, marker, mem};
+use std::{iter, marker::PhantomData, mem};
 
 #[must_use]
 pub struct Sum<I, B> {
 	i: I,
-	b: marker::PhantomData<fn() -> B>,
+	marker: PhantomData<fn() -> B>,
 }
 impl<I, B> Sum<I, B> {
 	pub(super) fn new(i: I) -> Self {
 		Self {
 			i,
-			b: marker::PhantomData,
+			marker: PhantomData,
 		}
 	}
 }
@@ -27,13 +27,13 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			SumReducerFactory(marker::PhantomData),
-			SumReducer(iter::empty::<B>().sum(), marker::PhantomData),
+			SumReducerFactory(PhantomData),
+			SumReducer(iter::empty::<B>().sum(), PhantomData),
 		)
 	}
 }
 
-pub struct SumReducerFactory<A, B>(marker::PhantomData<fn(A, B)>);
+pub struct SumReducerFactory<A, B>(PhantomData<fn(A, B)>);
 
 impl<A, B> ReduceFactory for SumReducerFactory<A, B>
 where
@@ -41,7 +41,7 @@ where
 {
 	type Reducer = SumReducer<A, B>;
 	fn make(&self) -> Self::Reducer {
-		SumReducer(iter::empty::<B>().sum(), marker::PhantomData)
+		SumReducer(iter::empty::<B>().sum(), PhantomData)
 	}
 }
 
@@ -50,7 +50,7 @@ where
 	bound(serialize = "B: Serialize"),
 	bound(deserialize = "B: Deserialize<'de>")
 )]
-pub struct SumReducer<A, B>(pub(super) B, pub(super) marker::PhantomData<fn(A)>);
+pub struct SumReducer<A, B>(pub(super) B, pub(super) PhantomData<fn(A)>);
 
 impl<A, B> Reducer for SumReducer<A, B>
 where

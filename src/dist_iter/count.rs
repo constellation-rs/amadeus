@@ -1,5 +1,5 @@
 use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, SumReducer};
-use std::marker;
+use std::marker::PhantomData;
 
 #[must_use]
 pub struct Count<I> {
@@ -21,24 +21,24 @@ impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, 
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			CountReducerFactory(marker::PhantomData),
-			SumReducer(0, marker::PhantomData),
+			CountReducerFactory(PhantomData),
+			SumReducer(0, PhantomData),
 		)
 	}
 }
 
-pub struct CountReducerFactory<A>(marker::PhantomData<fn(A)>);
+pub struct CountReducerFactory<A>(PhantomData<fn(A)>);
 
 impl<A> ReduceFactory for CountReducerFactory<A> {
 	type Reducer = CountReducer<A>;
 	fn make(&self) -> Self::Reducer {
-		CountReducer(0, marker::PhantomData)
+		CountReducer(0, PhantomData)
 	}
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct CountReducer<A>(usize, marker::PhantomData<fn(A)>);
+pub struct CountReducer<A>(usize, PhantomData<fn(A)>);
 
 impl<A> Reducer for CountReducer<A> {
 	type Item = A;

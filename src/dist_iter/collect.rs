@@ -1,19 +1,19 @@
 use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
 use serde::{de::Deserialize, ser::Serialize};
 use std::{
-	collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque}, hash::{BuildHasher, Hash}, marker
+	collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque}, hash::{BuildHasher, Hash}, marker::PhantomData
 };
 
 #[must_use]
 pub struct Collect<I, A> {
 	i: I,
-	b: marker::PhantomData<fn() -> A>,
+	marker: PhantomData<fn() -> A>,
 }
 impl<I, A> Collect<I, A> {
 	pub(super) fn new(i: I) -> Self {
 		Self {
 			i,
-			b: marker::PhantomData,
+			marker: PhantomData,
 		}
 	}
 }
@@ -40,10 +40,10 @@ pub trait FromDistributedIterator<T>: Sized {
 	// 	fn from_dist_iter<I>(dist_iter: I, pool: &Pool) -> Self where T: Serialize + DeserializeOwned + Send + 'static, I: IntoDistributedIterator<Item = T>, <<I as IntoDistributedIterator>::Iter as DistributedIterator>::Task: Serialize + DeserializeOwned + Send + 'static;
 }
 
-pub struct DefaultReduceFactory<T>(marker::PhantomData<fn(T)>);
+pub struct DefaultReduceFactory<T>(PhantomData<fn(T)>);
 impl<T> Default for DefaultReduceFactory<T> {
 	fn default() -> Self {
-		DefaultReduceFactory(marker::PhantomData)
+		DefaultReduceFactory(PhantomData)
 	}
 }
 impl<T: Default + Reducer> ReduceFactory for DefaultReduceFactory<T> {
@@ -133,13 +133,13 @@ impl Push<Self> for () {
 	bound(serialize = "T: Serialize"),
 	bound(deserialize = "T: Deserialize<'de>")
 )]
-pub struct PushReducer<A, T = A>(pub(super) T, pub(super) marker::PhantomData<fn(A)>);
+pub struct PushReducer<A, T = A>(pub(super) T, pub(super) PhantomData<fn(A)>);
 impl<A, T> Default for PushReducer<A, T>
 where
 	T: Default,
 {
 	fn default() -> Self {
-		PushReducer(T::default(), marker::PhantomData)
+		PushReducer(T::default(), PhantomData)
 	}
 }
 impl<A, T: Push<A>> Reducer for PushReducer<A, T> {
@@ -156,13 +156,13 @@ impl<A, T: Push<A>> Reducer for PushReducer<A, T> {
 	}
 }
 
-pub struct ExtendReducer<A, T = A>(T, marker::PhantomData<fn(A)>);
+pub struct ExtendReducer<A, T = A>(T, PhantomData<fn(A)>);
 impl<A, T> Default for ExtendReducer<A, T>
 where
 	T: Default,
 {
 	fn default() -> Self {
-		ExtendReducer(T::default(), marker::PhantomData)
+		ExtendReducer(T::default(), PhantomData)
 	}
 }
 impl<A: IntoIterator<Item = B>, T: Extend<B>, B> Reducer for ExtendReducer<A, T> {
@@ -179,7 +179,7 @@ impl<A: IntoIterator<Item = B>, T: Extend<B>, B> Reducer for ExtendReducer<A, T>
 	}
 }
 
-pub struct IntoReducer<R: Reducer, T>(R, marker::PhantomData<fn(T)>)
+pub struct IntoReducer<R: Reducer, T>(R, PhantomData<fn(T)>)
 where
 	R::Output: Into<T>;
 impl<R: Reducer, T> Default for IntoReducer<R, T>
@@ -188,7 +188,7 @@ where
 	R::Output: Into<T>,
 {
 	fn default() -> Self {
-		IntoReducer(R::default(), marker::PhantomData)
+		IntoReducer(R::default(), PhantomData)
 	}
 }
 impl<R: Reducer, T> Reducer for IntoReducer<R, T>
@@ -244,7 +244,7 @@ impl<R: Reducer> Reducer for OptionReducer<R> {
 	}
 }
 
-pub struct ResultReduceFactory<RF: ReduceFactory, E>(RF, marker::PhantomData<fn(E)>);
+pub struct ResultReduceFactory<RF: ReduceFactory, E>(RF, PhantomData<fn(E)>);
 impl<RF: ReduceFactory, E> ReduceFactory for ResultReduceFactory<RF, E> {
 	type Reducer = ResultReducer<RF::Reducer, E>;
 
@@ -424,9 +424,6 @@ impl<T, C: FromDistributedIterator<T>, E> FromDistributedIterator<Result<T, E>> 
 
 	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
 		let (a, b) = C::reducers();
-		(
-			ResultReduceFactory(a, marker::PhantomData),
-			ResultReducer(Ok(b)),
-		)
+		(ResultReduceFactory(a, PhantomData), ResultReducer(Ok(b)))
 	}
 }

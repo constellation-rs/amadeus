@@ -1,7 +1,7 @@
 use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, SumReducer};
 use rand::thread_rng;
 use serde::{de::Deserialize, ser::Serialize};
-use std::marker;
+use std::marker::PhantomData;
 
 use std::hash::Hash;
 
@@ -30,16 +30,16 @@ impl<I: DistributedIteratorMulti<Source>, Source>
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			SampleUnstableReducerFactory(self.samples, marker::PhantomData),
+			SampleUnstableReducerFactory(self.samples, PhantomData),
 			SumReducer(
 				streaming_algorithms::SampleUnstable::new(self.samples),
-				marker::PhantomData,
+				PhantomData,
 			),
 		)
 	}
 }
 
-pub struct SampleUnstableReducerFactory<A>(usize, marker::PhantomData<fn(A)>);
+pub struct SampleUnstableReducerFactory<A>(usize, PhantomData<fn(A)>);
 
 impl<A> ReduceFactory for SampleUnstableReducerFactory<A> {
 	type Reducer = SampleUnstableReducer<A>;
@@ -119,12 +119,7 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			MostFrequentReducerFactory(
-				self.n,
-				self.probability,
-				self.tolerance,
-				marker::PhantomData,
-			),
+			MostFrequentReducerFactory(self.n, self.probability, self.tolerance, PhantomData),
 			NonzeroReducer(SumReducer(
 				streaming_algorithms::Zeroable::Nonzero(streaming_algorithms::Top::new(
 					self.n,
@@ -132,13 +127,13 @@ where
 					self.tolerance,
 					(),
 				)),
-				marker::PhantomData,
+				PhantomData,
 			)),
 		)
 	}
 }
 
-pub struct MostFrequentReducerFactory<A>(usize, f64, f64, marker::PhantomData<fn(A)>);
+pub struct MostFrequentReducerFactory<A>(usize, f64, f64, PhantomData<fn(A)>);
 
 impl<A> ReduceFactory for MostFrequentReducerFactory<A>
 where
@@ -223,7 +218,7 @@ where
 				self.probability,
 				self.tolerance,
 				self.error_rate,
-				marker::PhantomData,
+				PhantomData,
 			),
 			NonzeroReducer(SumReducer(
 				streaming_algorithms::Zeroable::Nonzero(streaming_algorithms::Top::new(
@@ -232,13 +227,13 @@ where
 					self.tolerance,
 					self.error_rate,
 				)),
-				marker::PhantomData,
+				PhantomData,
 			)),
 		)
 	}
 }
 
-pub struct MostDistinctReducerFactory<A, B>(usize, f64, f64, f64, marker::PhantomData<fn(A, B)>);
+pub struct MostDistinctReducerFactory<A, B>(usize, f64, f64, f64, PhantomData<fn(A, B)>);
 
 impl<A, B> ReduceFactory for MostDistinctReducerFactory<A, B>
 where

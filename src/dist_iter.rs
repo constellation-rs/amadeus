@@ -27,7 +27,7 @@ use either::Either;
 use serde::{
 	de::{Deserialize, DeserializeOwned}, ser::Serialize
 };
-use std::{cmp::Ordering, hash::Hash, iter, marker, vec};
+use std::{cmp::Ordering, hash::Hash, iter, marker::PhantomData, vec};
 
 type Pool = crate::process_pool::ProcessPool;
 // type Pool = ::no_pool::NoPool;
@@ -244,7 +244,7 @@ pub trait DistributedIterator {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		struct Connect<A, B, C, CTask, CItem>(A, B, C, marker::PhantomData<fn(CTask, CItem)>);
+		struct Connect<A, B, C, CTask, CItem>(A, B, C, PhantomData<fn(CTask, CItem)>);
 		impl<
 				A: DistributedIterator,
 				B: DistributedIteratorMulti<A::Item>,
@@ -264,7 +264,7 @@ pub trait DistributedIterator {
 						task,
 						self.1.task(),
 						unsafe { type_transmute(self.2.task()) },
-						marker::PhantomData,
+						PhantomData,
 					)
 				})
 			}
@@ -274,7 +274,7 @@ pub trait DistributedIterator {
 			bound(serialize = "A: Serialize, B: Serialize, C: Serialize"),
 			bound(deserialize = "A: Deserialize<'de>, B: Deserialize<'de>, C: Deserialize<'de>")
 		)]
-		struct ConnectConsumer<A, B, C, CItem>(A, B, C, marker::PhantomData<fn(CItem)>);
+		struct ConnectConsumer<A, B, C, CItem>(A, B, C, PhantomData<fn(CItem)>);
 		impl<A: Consumer, B, C, CItem> Consumer for ConnectConsumer<A, B, C, CItem>
 		where
 			B: ConsumerMulti<A::Item>,
@@ -322,7 +322,7 @@ pub trait DistributedIterator {
 			self,
 			iterator_a,
 			iterator_b,
-			marker::PhantomData,
+			PhantomData,
 		)
 		.reduce(
 			pool,
@@ -584,7 +584,7 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn for_each<F>(self, f: F) -> ForEach<Self, F>
 	where
-		F: FnMut(Self::Item),
+		F: FnMut(Self::Item) + Clone,
 		Self: Sized,
 	{
 		ForEach::new(self, f)
@@ -593,7 +593,7 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn inspect<F>(self, f: F) -> Inspect<Self, F>
 	where
-		F: FnMut(&Self::Item),
+		F: FnMut(&Self::Item) + Clone,
 		Self: Sized,
 	{
 		Inspect::new(self, f)
@@ -602,7 +602,7 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn update<F>(self, f: F) -> Update<Self, F>
 	where
-		F: FnMut(&mut Self::Item),
+		F: FnMut(&mut Self::Item) + Clone,
 		Self: Sized,
 	{
 		Update::new(self, f)
@@ -611,7 +611,7 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn map<B, F>(self, f: F) -> Map<Self, F>
 	where
-		F: FnMut(Self::Item) -> B,
+		F: FnMut(Self::Item) -> B + Clone,
 		Self: Sized,
 	{
 		Map::new(self, f)
@@ -620,7 +620,8 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 	where
-		F: FnMut(Self::Item) -> B,
+		F: FnMut(Self::Item) -> B + Clone,
+		B: IntoIterator,
 		Self: Sized,
 	{
 		FlatMap::new(self, f)
@@ -629,20 +630,20 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn filter<F>(self, f: F) -> Filter<Self, F>
 	where
-		F: FnMut(&Self::Item) -> bool,
+		F: FnMut(&Self::Item) -> bool + Clone,
 		Self: Sized,
 	{
 		Filter::new(self, f)
 	}
 
-	#[must_use]
-	fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
-	where
-		C: IntoDistributedIterator<Item = Self::Item>,
-		Self: Sized,
-	{
-		Chain::new(self, chain.into_dist_iter())
-	}
+	// #[must_use]
+	// fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
+	// where
+	// 	C: IntoDistributedIterator<Item = Self::Item>,
+	// 	Self: Sized,
+	// {
+	// 	Chain::new(self, chain.into_dist_iter())
+	// }
 
 	#[must_use]
 	fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
@@ -691,8 +692,8 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn max_by<F>(self, f: F) -> MaxBy<Self, F>
 	where
+		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone,
 		Self: Sized,
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering,
 	{
 		MaxBy::new(self, f)
 	}
@@ -700,9 +701,9 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
 	where
-		Self: Sized,
-		F: FnMut(&Self::Item) -> B,
+		F: FnMut(&Self::Item) -> B + Clone,
 		B: Ord,
+		Self: Sized,
 	{
 		MaxByKey::new(self, f)
 	}
@@ -719,8 +720,8 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn min_by<F>(self, f: F) -> MinBy<Self, F>
 	where
-		Self: Sized,
 		F: FnMut(&Self::Item, &Self::Item) -> Ordering,
+		Self: Sized,
 	{
 		MinBy::new(self, f)
 	}
@@ -728,9 +729,9 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
 	where
-		Self: Sized,
 		F: FnMut(&Self::Item) -> B,
 		B: Ord,
+		Self: Sized,
 	{
 		MinByKey::new(self, f)
 	}
@@ -792,14 +793,38 @@ pub trait DistributedIteratorMulti<Source> {
 	}
 
 	#[must_use]
-	fn cloned<'a, Source1: 'a, T: 'a>(self) -> Cloned<Self, Source, T>
+	fn cloned<'a, Source1: 'a, T: 'a>(self) -> Cloned<Self, T, Source>
 	where
-		Self: Sized,
-		Self: DistributedIteratorMulti<&'a Source1, Item = &'a T>,
 		T: Clone,
+		Self: DistributedIteratorMulti<&'a Source1, Item = &'a T>,
+		Self: Sized,
 	{
 		Cloned::new(self)
 	}
+}
+
+// TODO add all methods
+fn _assert<I, Source, MapFn, MapB, FlatMapFn, FlatMapB>(i: I, map_fn: MapFn, flat_map_fn: FlatMapFn)
+where
+	I: DistributedIteratorMulti<Source> + Clone,
+	MapFn: FnMut(I::Item) -> MapB + Clone,
+	FlatMapFn: FnMut(I::Item) -> FlatMapB + Clone,
+	FlatMapB: IntoIterator,
+{
+	_assert_iterator(i.clone().map(map_fn));
+	_assert_iterator(i.clone().flat_map(flat_map_fn));
+	_assert_reducer(i.clone().for_each(|_x| ()));
+}
+fn _assert_iterator<I, Source>(_i: I)
+where
+	I: DistributedIteratorMulti<Source>,
+{
+}
+fn _assert_reducer<R, I, B, Source>(_r: R)
+where
+	R: DistributedReducer<I, Source, B>,
+	I: DistributedIteratorMulti<Source>,
+{
 }
 
 pub trait Consumer {

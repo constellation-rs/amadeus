@@ -4,7 +4,7 @@ use constellation::*;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_traitobject as st;
 use std::{
-	any, collections::VecDeque, fmt, marker, mem, panic, sync::{atomic, Arc, Mutex, RwLock}
+	any, collections::VecDeque, fmt, marker::PhantomData, mem, panic, sync::{atomic, Arc, Mutex, RwLock}
 };
 
 #[derive(Debug)]
@@ -145,7 +145,7 @@ impl ProcessPoolInner {
 		JoinHandleInner(
 			process_index,
 			process_inner.tail + process_inner.queue.len() - 1,
-			marker::PhantomData,
+			PhantomData,
 		)
 	}
 	fn join<T: any::Any>(&self, key: JoinHandleInner<T>) -> Result<T, ()> {
@@ -210,7 +210,7 @@ impl Drop for ProcessPoolInner {
 // an st::Box<Response>, which is what auto un-Sync's us, can only be accessed from a single thread.
 unsafe impl Sync for ProcessPoolInner {}
 
-struct JoinHandleInner<T: any::Any>(usize, usize, marker::PhantomData<fn() -> T>);
+struct JoinHandleInner<T: any::Any>(usize, usize, PhantomData<fn() -> T>);
 
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);

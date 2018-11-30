@@ -40,7 +40,11 @@ fn main() {
 				Identity.for_each(FnMut!(|x: Result<Row, _>| {
 					println!("{:?}", x.unwrap().url);
 				})),
-				() //Identity.count()
+				(
+					Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
+					Identity.cloned().count(),
+					DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity),
+				)
 			)
 	);
 }

@@ -1,6 +1,6 @@
 use super::{DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer};
 use serde::{de::Deserialize, ser::Serialize};
-use std::marker;
+use std::marker::PhantomData;
 
 #[must_use]
 pub struct ForEach<I, F> {
@@ -25,13 +25,13 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			ForEachReducerFactory(self.f, marker::PhantomData),
-			PushReducer((), marker::PhantomData),
+			ForEachReducerFactory(self.f, PhantomData),
+			PushReducer((), PhantomData),
 		)
 	}
 }
 
-pub struct ForEachReducerFactory<A, F>(F, marker::PhantomData<fn(A)>);
+pub struct ForEachReducerFactory<A, F>(F, PhantomData<fn(A)>);
 
 impl<A, F> ReduceFactory for ForEachReducerFactory<A, F>
 where
@@ -39,7 +39,7 @@ where
 {
 	type Reducer = ForEachReducer<A, F>;
 	fn make(&self) -> Self::Reducer {
-		ForEachReducer(self.0.clone(), marker::PhantomData)
+		ForEachReducer(self.0.clone(), PhantomData)
 	}
 }
 
@@ -48,7 +48,7 @@ where
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct ForEachReducer<A, F>(F, marker::PhantomData<fn(A)>);
+pub struct ForEachReducer<A, F>(F, PhantomData<fn(A)>);
 
 impl<A, F> Reducer for ForEachReducer<A, F>
 where

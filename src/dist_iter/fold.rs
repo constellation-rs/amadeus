@@ -2,14 +2,14 @@ use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer
 use either::Either;
 use replace_with::replace_with_or_abort;
 use serde::{de::Deserialize, ser::Serialize};
-use std::marker;
+use std::marker::PhantomData;
 
 #[must_use]
 pub struct Fold<I, ID, F, B> {
 	i: I,
 	identity: ID,
 	op: F,
-	b: marker::PhantomData<fn() -> B>,
+	marker: PhantomData<fn() -> B>,
 }
 impl<I, ID, F, B> Fold<I, ID, F, B> {
 	pub(super) fn new(i: I, identity: ID, op: F) -> Self {
@@ -17,7 +17,7 @@ impl<I, ID, F, B> Fold<I, ID, F, B> {
 			i,
 			identity,
 			op,
-			b: marker::PhantomData,
+			marker: PhantomData,
 		}
 	}
 }
@@ -35,13 +35,13 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
 		(
 			self.i,
-			FoldReducerFactory(self.identity.clone(), self.op.clone(), marker::PhantomData),
-			FoldReducerB(Either::Left(self.identity), self.op, marker::PhantomData),
+			FoldReducerFactory(self.identity.clone(), self.op.clone(), PhantomData),
+			FoldReducerB(Either::Left(self.identity), self.op, PhantomData),
 		)
 	}
 }
 
-pub struct FoldReducerFactory<A, ID, F, B>(ID, F, marker::PhantomData<fn(A, B)>);
+pub struct FoldReducerFactory<A, ID, F, B>(ID, F, PhantomData<fn(A, B)>);
 
 impl<A, ID, F, B> ReduceFactory for FoldReducerFactory<A, ID, F, B>
 where
@@ -50,11 +50,7 @@ where
 {
 	type Reducer = FoldReducerA<A, ID, F, B>;
 	fn make(&self) -> Self::Reducer {
-		FoldReducerA(
-			Either::Left(self.0.clone()),
-			self.1.clone(),
-			marker::PhantomData,
-		)
+		FoldReducerA(Either::Left(self.0.clone()), self.1.clone(), PhantomData)
 	}
 }
 
@@ -63,7 +59,7 @@ where
 	bound(serialize = "ID: Serialize, B: Serialize, F: Serialize"),
 	bound(deserialize = "ID: Deserialize<'de>, B: Deserialize<'de>, F: Deserialize<'de>")
 )]
-pub struct FoldReducerA<A, ID, F, B>(Either<ID, B>, F, marker::PhantomData<fn(A)>);
+pub struct FoldReducerA<A, ID, F, B>(Either<ID, B>, F, PhantomData<fn(A)>);
 
 impl<A, ID, F, B> Reducer for FoldReducerA<A, ID, F, B>
 where
@@ -94,7 +90,7 @@ where
 	bound(serialize = "ID: Serialize, B: Serialize, F: Serialize"),
 	bound(deserialize = "ID: Deserialize<'de>, B: Deserialize<'de>, F: Deserialize<'de>")
 )]
-pub struct FoldReducerB<A, ID, F, B>(Either<ID, B>, F, marker::PhantomData<fn(A)>);
+pub struct FoldReducerB<A, ID, F, B>(Either<ID, B>, F, PhantomData<fn(A)>);
 
 impl<A, ID, F, B> Clone for FoldReducerB<A, ID, F, B>
 where
@@ -105,7 +101,7 @@ where
 		FoldReducerB(
 			Either::Left(self.0.as_ref().left().unwrap().clone()),
 			self.1.clone(),
-			marker::PhantomData,
+			PhantomData,
 		)
 	}
 }

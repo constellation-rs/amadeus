@@ -1,16 +1,16 @@
 use super::{ConsumerMulti, DistributedIteratorMulti};
-use std::marker;
+use std::marker::PhantomData;
 
 #[must_use]
-pub struct Cloned<I, Source, T> {
+pub struct Cloned<I, T, Source> {
 	i: I,
-	marker: marker::PhantomData<fn(Source, T)>,
+	marker: PhantomData<fn(Source, T)>,
 }
-impl<I, Source, T> Cloned<I, Source, T> {
+impl<I, T, Source> Cloned<I, T, Source> {
 	pub(super) fn new(i: I) -> Self {
 		Self {
 			i,
-			marker: marker::PhantomData,
+			marker: PhantomData,
 		}
 	}
 }
@@ -33,7 +33,7 @@ impl<I, Source, T> Cloned<I, Source, T> {
 // https://github.com/rust-lang/rust/issues/55731
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2015&gist=238651c4992913bcd62b68b4832fcd9a
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2015&gist=2f1da304878b050cc313c0279047b0fa
-impl<'a, I, Source, T: 'a> DistributedIteratorMulti<&'a Source> for Cloned<I, Source, T>
+impl<'a, I, Source, T: 'a> DistributedIteratorMulti<&'a Source> for Cloned<I, T, Source>
 where
 	I: DistributedIteratorMulti<&'a Source, Item = &'a T>,
 	T: Clone,
