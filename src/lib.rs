@@ -11,7 +11,11 @@
 	never_type,
 	specialization,
 	core_intrinsics,
-	nll
+	nll,
+	try_from,
+	convert_id,
+	iter_unfold,
+	transpose_result
 )]
 #![warn(
 	// missing_copy_implementations,

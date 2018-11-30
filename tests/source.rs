@@ -1,9 +1,7 @@
 #![allow(where_clauses_object_safety)]
 
-extern crate amadeus;
 #[macro_use]
 extern crate serde_closure;
-extern crate constellation;
 
 use amadeus::prelude::*;
 use constellation::*;
@@ -31,5 +29,18 @@ fn main() {
 			println!("{}", x.unwrap().url);
 			start.elapsed().unwrap() < Duration::new(10,0)
 		}),
+	);
+
+	println!(
+		"{:?}",
+		Cloudfront::new(rusoto_core::Region::UsEast1, "craigwrightlogs", "")
+			.unwrap()
+			.multi(
+				&pool,
+				Identity.for_each(FnMut!(|x: Result<Row, _>| {
+					println!("{:?}", x.unwrap().url);
+				})),
+				() //Identity.count()
+			)
 	);
 }

@@ -1,6 +1,7 @@
 use super::{ConsumerMulti, DistributedIteratorMulti};
 use std::marker;
 
+#[must_use]
 pub struct Cloned<I, Source, T> {
 	i: I,
 	marker: marker::PhantomData<fn(Source, T)>,

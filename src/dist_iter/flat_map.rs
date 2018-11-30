@@ -1,5 +1,6 @@
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
 
+#[must_use]
 pub struct FlatMap<I, F> {
 	i: I,
 	f: F,

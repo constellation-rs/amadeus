@@ -581,6 +581,7 @@ pub trait DistributedIteratorMulti<Source> {
 
 	fn task(&self) -> Self::Task;
 
+	#[must_use]
 	fn for_each<F>(self, f: F) -> ForEach<Self, F>
 	where
 		F: FnMut(Self::Item),
@@ -589,6 +590,7 @@ pub trait DistributedIteratorMulti<Source> {
 		ForEach::new(self, f)
 	}
 
+	#[must_use]
 	fn inspect<F>(self, f: F) -> Inspect<Self, F>
 	where
 		F: FnMut(&Self::Item),
@@ -597,6 +599,7 @@ pub trait DistributedIteratorMulti<Source> {
 		Inspect::new(self, f)
 	}
 
+	#[must_use]
 	fn update<F>(self, f: F) -> Update<Self, F>
 	where
 		F: FnMut(&mut Self::Item),
@@ -605,6 +608,7 @@ pub trait DistributedIteratorMulti<Source> {
 		Update::new(self, f)
 	}
 
+	#[must_use]
 	fn map<B, F>(self, f: F) -> Map<Self, F>
 	where
 		F: FnMut(Self::Item) -> B,
@@ -613,6 +617,7 @@ pub trait DistributedIteratorMulti<Source> {
 		Map::new(self, f)
 	}
 
+	#[must_use]
 	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 	where
 		F: FnMut(Self::Item) -> B,
@@ -621,6 +626,7 @@ pub trait DistributedIteratorMulti<Source> {
 		FlatMap::new(self, f)
 	}
 
+	#[must_use]
 	fn filter<F>(self, f: F) -> Filter<Self, F>
 	where
 		F: FnMut(&Self::Item) -> bool,
@@ -629,6 +635,7 @@ pub trait DistributedIteratorMulti<Source> {
 		Filter::new(self, f)
 	}
 
+	#[must_use]
 	fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
 	where
 		C: IntoDistributedIterator<Item = Self::Item>,

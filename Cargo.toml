@@ -32,7 +32,7 @@ serde_closure = { version = "0.1" } #, path = "../serde_closure" }
 serde_traitobject = { version = "0.1.2" } #, path = "../serde_traitobject" }
 # constellation-rs = { version = "0.1", git = "https://github.com/alecmocatta/constellation.git" } #, path = "../constellation" }
 constellation-rs = { version = "0.1", path = "../deploy" }
-streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms", branch = "fixes" }#, path = "../streaming_algorithms" }
+streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms" }#, path = "../streaming_algorithms" }
 sum = "0.1"
 replace_with = "0.1"
 reqwest = "0.8"
@@ -41,12 +41,18 @@ flate2 = "1.0"
 nom = "2.2"
 warc_parser = { path = "../../warc_nom_parser" }# git = "https://github.com/alecmocatta/warc_nom_parser" }
 url = "*"
+url_serde = "*"
+rusoto_s3 = {git = "https://github.com/rusoto/rusoto" }
+rusoto_core = {git = "https://github.com/rusoto/rusoto" }
+futures = "*"
+chrono = "*"
+http = "*"
 
 [dev-dependencies]
 select = "0.4"
 
 [profile.release]
-debug = 2
+# debug = 2
 
 [[test]]
 name = "into_dist_iter"

@@ -1,5 +1,6 @@
 use super::{Consumer, DistributedIterator};
 
+#[must_use]
 pub struct Chain<A, B> {
 	a: A,
 	b: B,

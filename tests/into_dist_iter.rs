@@ -1,10 +1,7 @@
 #![allow(where_clauses_object_safety)]
 
-extern crate amadeus;
 #[macro_use]
 extern crate serde_closure;
-extern crate constellation;
-extern crate either;
 
 use amadeus::prelude::*;
 use constellation::*;
