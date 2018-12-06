@@ -47,6 +47,7 @@ rusoto_core = {git = "https://github.com/rusoto/rusoto" }
 futures = "*"
 chrono = "*"
 http = "*"
+parquet = { path = "./parquet-rs" }# "*"
 
 [dev-dependencies]
 select = "0.4"
@@ -68,4 +69,8 @@ harness = false
 
 [[test]]
 name = "source"
+harness = false
+
+[[test]]
+name = "parquet"
 harness = false
