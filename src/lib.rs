@@ -15,7 +15,10 @@
 	try_from,
 	convert_id,
 	iter_unfold,
-	transpose_result
+	transpose_result,
+	maybe_uninit,
+	test,
+	existential_type
 )]
 #![warn(
 	// missing_copy_implementations,
@@ -45,6 +48,7 @@
 extern crate serde_closure;
 #[macro_use]
 extern crate serde_derive;
+extern crate test;
 
 pub mod dist_iter;
 pub mod into_dist_iter;
