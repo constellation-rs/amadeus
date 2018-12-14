@@ -1,4 +1,4 @@
-#![feature(maybe_uninit,try_from,test,box_patterns,transpose_result,existential_type)]
+#![feature(maybe_uninit,try_from,test,box_patterns,transpose_result,existential_type,specialization)]
 
 extern crate test;
 
@@ -67,9 +67,6 @@ macro_rules! impl_parquet_deserialize_struct {
 			type Schema = $struct_schema;
 			type Reader = $struct_reader;
 
-			fn placeholder() -> Self::Schema {
-				$struct_schema{$($name: <$type_ as Deserialize>::placeholder(),)*}
-			}
 			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 				if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED {
 					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
@@ -78,10 +75,7 @@ macro_rules! impl_parquet_deserialize_struct {
 				}
 				Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
 			}
-			fn render(name: &str, schema: &Self::Schema) -> Type {
-				Type::group_type_builder(name).with_repetition(Repetition::REQUIRED).with_fields(&mut vec![$(Rc::new(<$type_ as Deserialize>::render(stringify!($name), &schema.$name)),)*]).build().unwrap()
-			}
-			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 				$(
 					path.push(stringify!($name).to_owned());
 					let $name = <$type_ as Deserialize>::reader(&schema.$name, path, curr_def_level, curr_rep_level, paths);
@@ -94,9 +88,6 @@ macro_rules! impl_parquet_deserialize_struct {
 			type Schema = RootSchema<$struct, $struct_schema>;
 			type Reader = RootReader<$struct_reader>;
 
-			fn placeholder() -> Self::Schema {
-				RootSchema(String::from("<name>"), $struct_schema{$($name: <$type_ as Deserialize>::placeholder(),)*}, PhantomData)
-			}
 			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 				if schema.is_schema() {
 					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
@@ -105,10 +96,7 @@ macro_rules! impl_parquet_deserialize_struct {
 				}
 				Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
 			}
-			fn render(name: &str, schema: &Self::Schema) -> Type {
-				Type::group_type_builder(&schema.0).with_fields(&mut vec![$(Rc::new(<$type_ as Deserialize>::render(stringify!($name), &(schema.1).$name)),)*]).build().unwrap()
-			}
-			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 				RootReader(<$struct as Deserialize>::reader(&schema.1, path, curr_def_level, curr_rep_level, paths))
 			}
 		}
@@ -366,25 +354,24 @@ fn main() {
 
 	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nullable.impala.parquet")).unwrap()).unwrap();
 
-	let rows = read::<_,
-		(
-			Option<i64>,
+	type Nullable = (
+		Option<i64>,
+		Option<List<Option<i32>>>,
+		Option<List<Option<List<Option<i32>>>>>,
+		Option<Map<String,Option<i32>>>,
+		Option<List<Option<Map<String,Option<i32>>>>>,
+		Option<(
+			Option<i32>,
 			Option<List<Option<i32>>>,
-			Option<List<Option<List<Option<i32>>>>>,
-			Option<Map<String,Option<i32>>>,
-			Option<List<Option<Map<String,Option<i32>>>>>,
-			Option<(
-				Option<i32>,
-				Option<List<Option<i32>>>,
-				Option<(Option<List<Option<List<Option<(Option<i32>,Option<String>)>>>>>,)>,
-				Option<Map<String,Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
-			)>
-		)
-		>(&file);
+			Option<(Option<List<Option<List<Option<(Option<i32>,Option<String>)>>>>>,)>,
+			Option<Map<String,Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
+		)>
+	);
+	let rows = read::<_,Nullable>(&file);
 	println!("{}", rows.unwrap().count());
 
 	let rows = read::<_,Value>(&file);
-	println!("{}", rows.unwrap().count());
+	println!("{}", rows.unwrap().map(|x| -> Nullable { x.downcast().unwrap() }).count());
 
 	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nulls.snappy.parquet")).unwrap()).unwrap();
 
@@ -413,53 +400,51 @@ fn main() {
 
 	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/test_datapage_v2.snappy.parquet")).unwrap()).unwrap();
 
-	let rows = read::<_,
-		(
-			Option<String>,
-			i32,
-			f64,
-			bool,
-			Option<List<i32>>,
-		)
-		>(&file);
+	type TestDatapage = (
+		Option<String>,
+		i32,
+		f64,
+		bool,
+		Option<List<i32>>,
+	);
+	let rows = read::<_,TestDatapage>(&file);
 	println!("{}", rows.unwrap().count());
 
 	let rows = read::<_,Value>(&file);
-	println!("{}", rows.unwrap().count());
+	println!("{}", rows.unwrap().map(|x| -> TestDatapage { x.downcast().unwrap() }).count());
 
 	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/commits.parquet")).unwrap()).unwrap();
 
-	let rows = read::<_,
-		(
-			Option<String>, // id
-			Option<i32>, // delay
-			Option<i32>, // age
-			Option<bool>, // ismerge
-			Option<i32>, // squashof
-			Option<String>, // author_name
-			Option<String>, // author_email
-			Option<String>, // committer_name
-			Option<String>, // committer_email
-			Option<Timestamp>, // author_time (TIMESTAMP_MILLIS)
-			Option<Timestamp>, // committer_time (TIMESTAMP_MILLIS)
-			Option<i64>, // loc_d
-			Option<i64>, // loc_i
-			Option<i64>, // comp_d
-			Option<i64>, // comp_i
-			Option<u16>, // nfiles
-			Option<String>, // message
-			Option<u16>, // ndiffs
-			Option<String>, // author_email_dedup
-			Option<String>, // author_name_dedup
-			Option<String>, // committer_email_dedup
-			Option<String>, // committer_name_dedup
-			Option<i64>, // __index_level_0__
-		)
-		>(&file);
+	type Commits = (
+		Option<String>, // id
+		Option<i32>, // delay
+		Option<i32>, // age
+		Option<bool>, // ismerge
+		Option<i32>, // squashof
+		Option<String>, // author_name
+		Option<String>, // author_email
+		Option<String>, // committer_name
+		Option<String>, // committer_email
+		Option<Timestamp>, // author_time (TIMESTAMP_MILLIS)
+		Option<Timestamp>, // committer_time (TIMESTAMP_MILLIS)
+		Option<i64>, // loc_d
+		Option<i64>, // loc_i
+		Option<i64>, // comp_d
+		Option<i64>, // comp_i
+		Option<u16>, // nfiles
+		Option<String>, // message
+		Option<u16>, // ndiffs
+		Option<String>, // author_email_dedup
+		Option<String>, // author_name_dedup
+		Option<String>, // committer_email_dedup
+		Option<String>, // committer_name_dedup
+		Option<i64>, // __index_level_0__
+	);
+	let rows = read::<_,Commits>(&file);
 	println!("{}", rows.unwrap().count());
 
 	let rows = read::<_,Value>(&file);
-	println!("{}", rows.unwrap().count());
+	println!("{}", rows.unwrap().map(|x| -> Commits { x.downcast().unwrap() }).count());
 }
 
 #[bench]
@@ -567,6 +552,11 @@ const MICROS_PER_MILLI: i64 = 1_000;
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
 struct Timestamp(Int96);
 impl Timestamp {
+	fn as_day_nanos(&self) -> (i64,i64) {
+		let day = self.0.data()[2] as i64;
+		let nanoseconds = ((self.0.data()[1] as i64) << 32) + self.0.data()[0] as i64;
+		(day, nanoseconds)
+	}
 	fn as_millis(&self) -> Option<i64> {
 		let day = self.0.data()[2] as i64;
 		let nanoseconds = ((self.0.data()[1] as i64) << 32) + self.0.data()[0] as i64;
@@ -639,6 +629,238 @@ impl Hash for Value {
 }
 impl Eq for Value {}
 
+impl Value {
+	fn is_bool(&self) -> bool {
+		if let Value::Bool(ret) = self { true } else { false }
+	}
+	fn as_bool(self) -> Result<bool, ParquetError> {
+		if let Value::Bool(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_u8(&self) -> bool {
+		if let Value::U8(ret) = self { true } else { false }
+	}
+	fn as_u8(self) -> Result<u8, ParquetError> {
+		if let Value::U8(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_i8(&self) -> bool {
+		if let Value::I8(ret) = self { true } else { false }
+	}
+	fn as_i8(self) -> Result<i8, ParquetError> {
+		if let Value::I8(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_u16(&self) -> bool {
+		if let Value::U16(ret) = self { true } else { false }
+	}
+	fn as_u16(self) -> Result<u16, ParquetError> {
+		if let Value::U16(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_i16(&self) -> bool {
+		if let Value::I16(ret) = self { true } else { false }
+	}
+	fn as_i16(self) -> Result<i16, ParquetError> {
+		if let Value::I16(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_u32(&self) -> bool {
+		if let Value::U32(ret) = self { true } else { false }
+	}
+	fn as_u32(self) -> Result<u32, ParquetError> {
+		if let Value::U32(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_i32(&self) -> bool {
+		if let Value::I32(ret) = self { true } else { false }
+	}
+	fn as_i32(self) -> Result<i32, ParquetError> {
+		if let Value::I32(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_u64(&self) -> bool {
+		if let Value::U64(ret) = self { true } else { false }
+	}
+	fn as_u64(self) -> Result<u64, ParquetError> {
+		if let Value::U64(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_i64(&self) -> bool {
+		if let Value::I64(ret) = self { true } else { false }
+	}
+	fn as_i64(self) -> Result<i64, ParquetError> {
+		if let Value::I64(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_f32(&self) -> bool {
+		if let Value::F32(ret) = self { true } else { false }
+	}
+	fn as_f32(self) -> Result<f32, ParquetError> {
+		if let Value::F32(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_f64(&self) -> bool {
+		if let Value::F64(ret) = self { true } else { false }
+	}
+	fn as_f64(self) -> Result<f64, ParquetError> {
+		if let Value::F64(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_timestamp(&self) -> bool {
+		if let Value::Timestamp(ret) = self { true } else { false }
+	}
+	fn as_timestamp(self) -> Result<Timestamp, ParquetError> {
+		if let Value::Timestamp(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_array(&self) -> bool {
+		if let Value::Array(ret) = self { true } else { false }
+	}
+	fn as_array(self) -> Result<Vec<u8>, ParquetError> {
+		if let Value::Array(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_string(&self) -> bool {
+		if let Value::String(ret) = self { true } else { false }
+	}
+	fn as_string(self) -> Result<String, ParquetError> {
+		if let Value::String(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_list(&self) -> bool {
+		if let Value::List(ret) = self { true } else { false }
+	}
+	fn as_list(self) -> Result<List<Value>, ParquetError> {
+		if let Value::List(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_map(&self) -> bool {
+		if let Value::Map(ret) = self { true } else { false }
+	}
+	fn as_map(self) -> Result<Map<Value,Value>, ParquetError> {
+		if let Value::Map(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_group(&self) -> bool {
+		if let Value::Group(ret) = self { true } else { false }
+	}
+	fn as_group(self) -> Result<Group, ParquetError> {
+		if let Value::Group(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+	fn is_option(&self) -> bool {
+		if let Value::Option(ret) = self { true } else { false }
+	}
+	fn as_option(self) -> Result<Option<Value>, ParquetError> {
+		if let Value::Option(ret) = self { Ok(*ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+}
+
+trait Downcast<T> {
+	fn downcast(self) -> Result<T,ParquetError>;
+}
+impl Downcast<Value> for Value {
+	fn downcast(self) -> Result<Value,ParquetError> {
+		Ok(self)
+	}
+}
+impl Downcast<bool> for Value {
+	fn downcast(self) -> Result<bool,ParquetError> {
+		self.as_bool()
+	}
+}
+impl Downcast<u8> for Value {
+	fn downcast(self) -> Result<u8,ParquetError> {
+		self.as_u8()
+	}
+}
+impl Downcast<i8> for Value {
+	fn downcast(self) -> Result<i8,ParquetError> {
+		self.as_i8()
+	}
+}
+impl Downcast<u16> for Value {
+	fn downcast(self) -> Result<u16,ParquetError> {
+		self.as_u16()
+	}
+}
+impl Downcast<i16> for Value {
+	fn downcast(self) -> Result<i16,ParquetError> {
+		self.as_i16()
+	}
+}
+impl Downcast<u32> for Value {
+	fn downcast(self) -> Result<u32,ParquetError> {
+		self.as_u32()
+	}
+}
+impl Downcast<i32> for Value {
+	fn downcast(self) -> Result<i32,ParquetError> {
+		self.as_i32()
+	}
+}
+impl Downcast<u64> for Value {
+	fn downcast(self) -> Result<u64,ParquetError> {
+		self.as_u64()
+	}
+}
+impl Downcast<i64> for Value {
+	fn downcast(self) -> Result<i64,ParquetError> {
+		self.as_i64()
+	}
+}
+impl Downcast<f32> for Value {
+	fn downcast(self) -> Result<f32,ParquetError> {
+		self.as_f32()
+	}
+}
+impl Downcast<f64> for Value {
+	fn downcast(self) -> Result<f64,ParquetError> {
+		self.as_f64()
+	}
+}
+impl Downcast<Timestamp> for Value {
+	fn downcast(self) -> Result<Timestamp,ParquetError> {
+		self.as_timestamp()
+	}
+}
+impl Downcast<Vec<u8>> for Value {
+	fn downcast(self) -> Result<Vec<u8>,ParquetError> {
+		self.as_array()
+	}
+}
+impl Downcast<String> for Value {
+	fn downcast(self) -> Result<String,ParquetError> {
+		self.as_string()
+	}
+}
+impl<T> Downcast<List<T>> for Value where Value: Downcast<T> {
+	default fn downcast(self) -> Result<List<T>,ParquetError> {
+		let ret = self.as_list()?;
+		ret.0.into_iter().map(Downcast::downcast).collect::<Result<Vec<_>,_>>().map(List)
+	}
+}
+impl Downcast<List<Value>> for Value {
+	fn downcast(self) -> Result<List<Value>,ParquetError> {
+		self.as_list()
+	}
+}
+impl<K,V> Downcast<Map<K,V>> for Value where Value: Downcast<K> + Downcast<V>, K: Hash+Eq {
+	default fn downcast(self) -> Result<Map<K,V>,ParquetError> {
+		let ret = self.as_map()?;
+		ret.0.into_iter().map(|(k,v)|Ok((k.downcast()?,v.downcast()?))).collect::<Result<HashMap<_,_>,_>>().map(Map)
+	}
+}
+impl Downcast<Map<Value,Value>> for Value {
+	fn downcast(self) -> Result<Map<Value,Value>,ParquetError> {
+		self.as_map()
+	}
+}
+impl Downcast<Group> for Value {
+	fn downcast(self) -> Result<Group,ParquetError> {
+		self.as_group()
+	}
+}
+impl<T> Downcast<Option<T>> for Value where Value: Downcast<T> {
+	default fn downcast(self) -> Result<Option<T>,ParquetError> {
+		let ret = self.as_option()?;
+		match ret {
+			Some(t) => Downcast::<T>::downcast(t).map(Some),
+			None => Ok(None),
+		}
+	}
+}
+impl Downcast<Option<Value>> for Value {
+	fn downcast(self) -> Result<Option<Value>,ParquetError> {
+		self.as_option()
+	}
+}
+
+
 enum ValueSchema {
 	Bool(BoolSchema),
 	U8(U8Schema),
@@ -659,355 +881,232 @@ enum ValueSchema {
 	Group(GroupSchema),
 	Option(Box<OptionSchema<ValueSchema>>),
 }
-impl Value {
+impl ValueSchema {
 	fn is_bool(&self) -> bool {
-		if let Value::Bool(ret) = self { true } else { false }
+		if let ValueSchema::Bool(ret) = self { true } else { false }
 	}
-	fn as_bool(self) -> Option<bool> {
-		if let Value::Bool(ret) = self { Some(ret) } else { None }
+	fn as_bool(self) -> Result<BoolSchema, ParquetError> {
+		if let ValueSchema::Bool(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_u8(&self) -> bool {
-		if let Value::U8(ret) = self { true } else { false }
+		if let ValueSchema::U8(ret) = self { true } else { false }
 	}
-	fn as_u8(self) -> Option<u8> {
-		if let Value::U8(ret) = self { Some(ret) } else { None }
+	fn as_u8(self) -> Result<U8Schema, ParquetError> {
+		if let ValueSchema::U8(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_i8(&self) -> bool {
-		if let Value::I8(ret) = self { true } else { false }
+		if let ValueSchema::I8(ret) = self { true } else { false }
 	}
-	fn as_i8(self) -> Option<i8> {
-		if let Value::I8(ret) = self { Some(ret) } else { None }
+	fn as_i8(self) -> Result<I8Schema, ParquetError> {
+		if let ValueSchema::I8(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_u16(&self) -> bool {
-		if let Value::U16(ret) = self { true } else { false }
+		if let ValueSchema::U16(ret) = self { true } else { false }
 	}
-	fn as_u16(self) -> Option<u16> {
-		if let Value::U16(ret) = self { Some(ret) } else { None }
+	fn as_u16(self) -> Result<U16Schema, ParquetError> {
+		if let ValueSchema::U16(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_i16(&self) -> bool {
-		if let Value::I16(ret) = self { true } else { false }
+		if let ValueSchema::I16(ret) = self { true } else { false }
 	}
-	fn as_i16(self) -> Option<i16> {
-		if let Value::I16(ret) = self { Some(ret) } else { None }
+	fn as_i16(self) -> Result<I16Schema, ParquetError> {
+		if let ValueSchema::I16(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_u32(&self) -> bool {
-		if let Value::U32(ret) = self { true } else { false }
+		if let ValueSchema::U32(ret) = self { true } else { false }
 	}
-	fn as_u32(self) -> Option<u32> {
-		if let Value::U32(ret) = self { Some(ret) } else { None }
+	fn as_u32(self) -> Result<U32Schema, ParquetError> {
+		if let ValueSchema::U32(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_i32(&self) -> bool {
-		if let Value::I32(ret) = self { true } else { false }
+		if let ValueSchema::I32(ret) = self { true } else { false }
 	}
-	fn as_i32(self) -> Option<i32> {
-		if let Value::I32(ret) = self { Some(ret) } else { None }
+	fn as_i32(self) -> Result<I32Schema, ParquetError> {
+		if let ValueSchema::I32(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_u64(&self) -> bool {
-		if let Value::U64(ret) = self { true } else { false }
+		if let ValueSchema::U64(ret) = self { true } else { false }
 	}
-	fn as_u64(self) -> Option<u64> {
-		if let Value::U64(ret) = self { Some(ret) } else { None }
+	fn as_u64(self) -> Result<U64Schema, ParquetError> {
+		if let ValueSchema::U64(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_i64(&self) -> bool {
-		if let Value::I64(ret) = self { true } else { false }
+		if let ValueSchema::I64(ret) = self { true } else { false }
 	}
-	fn as_i64(self) -> Option<i64> {
-		if let Value::I64(ret) = self { Some(ret) } else { None }
+	fn as_i64(self) -> Result<I64Schema, ParquetError> {
+		if let ValueSchema::I64(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_f32(&self) -> bool {
-		if let Value::F32(ret) = self { true } else { false }
+		if let ValueSchema::F32(ret) = self { true } else { false }
 	}
-	fn as_f32(self) -> Option<f32> {
-		if let Value::F32(ret) = self { Some(ret) } else { None }
+	fn as_f32(self) -> Result<F32Schema, ParquetError> {
+		if let ValueSchema::F32(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_f64(&self) -> bool {
-		if let Value::F64(ret) = self { true } else { false }
+		if let ValueSchema::F64(ret) = self { true } else { false }
 	}
-	fn as_f64(self) -> Option<f64> {
-		if let Value::F64(ret) = self { Some(ret) } else { None }
+	fn as_f64(self) -> Result<F64Schema, ParquetError> {
+		if let ValueSchema::F64(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_timestamp(&self) -> bool {
-		if let Value::Timestamp(ret) = self { true } else { false }
+		if let ValueSchema::Timestamp(ret) = self { true } else { false }
 	}
-	fn as_timestamp(self) -> Option<Timestamp> {
-		if let Value::Timestamp(ret) = self { Some(ret) } else { None }
+	fn as_timestamp(self) -> Result<TimestampSchema, ParquetError> {
+		if let ValueSchema::Timestamp(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_array(&self) -> bool {
-		if let Value::Array(ret) = self { true } else { false }
+		if let ValueSchema::Array(ret) = self { true } else { false }
 	}
-	fn as_array(self) -> Option<Vec<u8>> {
-		if let Value::Array(ret) = self { Some(ret) } else { None }
+	fn as_array(self) -> Result<VecSchema, ParquetError> {
+		if let ValueSchema::Array(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_string(&self) -> bool {
-		if let Value::String(ret) = self { true } else { false }
+		if let ValueSchema::String(ret) = self { true } else { false }
 	}
-	fn as_string(self) -> Option<String> {
-		if let Value::String(ret) = self { Some(ret) } else { None }
+	fn as_string(self) -> Result<StringSchema, ParquetError> {
+		if let ValueSchema::String(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_list(&self) -> bool {
-		if let Value::List(ret) = self { true } else { false }
+		if let ValueSchema::List(ret) = self { true } else { false }
 	}
-	fn as_list(self) -> Option<List<Value>> {
-		if let Value::List(ret) = self { Some(ret) } else { None }
+	fn as_list(self) -> Result<ListSchema<ValueSchema>, ParquetError> {
+		if let ValueSchema::List(ret) = self { Ok(*ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_map(&self) -> bool {
-		if let Value::Map(ret) = self { true } else { false }
+		if let ValueSchema::Map(ret) = self { true } else { false }
 	}
-	fn as_map(self) -> Option<Map<Value,Value>> {
-		if let Value::Map(ret) = self { Some(ret) } else { None }
+	fn as_map(self) -> Result<MapSchema<ValueSchema,ValueSchema>, ParquetError> {
+		if let ValueSchema::Map(ret) = self { Ok(*ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_group(&self) -> bool {
-		if let Value::Group(ret) = self { true } else { false }
+		if let ValueSchema::Group(ret) = self { true } else { false }
 	}
-	fn as_group(self) -> Option<Group> {
-		if let Value::Group(ret) = self { Some(ret) } else { None }
+	fn as_group(self) -> Result<GroupSchema, ParquetError> {
+		if let ValueSchema::Group(ret) = self { Ok(ret) } else { Err(ParquetError::General(String::from(""))) }
 	}
 	fn is_option(&self) -> bool {
-		if let Value::Option(ret) = self { true } else { false }
+		if let ValueSchema::Option(ret) = self { true } else { false }
 	}
-	fn as_option(self) -> Option<Option<Value>> {
-		if let Value::Option(ret) = self { Some(*ret) } else { None }
+	fn as_option(self) -> Result<OptionSchema<ValueSchema>, ParquetError> {
+		if let ValueSchema::Option(ret) = self { Ok(*ret) } else { Err(ParquetError::General(String::from(""))) }
+	}
+}
+
+impl Downcast<ValueSchema> for ValueSchema {
+	fn downcast(self) -> Result<ValueSchema,ParquetError> {
+		Ok(self)
+	}
+}
+impl Downcast<BoolSchema> for ValueSchema {
+	fn downcast(self) -> Result<BoolSchema,ParquetError> {
+		self.as_bool()
+	}
+}
+impl Downcast<U8Schema> for ValueSchema {
+	fn downcast(self) -> Result<U8Schema,ParquetError> {
+		self.as_u8()
+	}
+}
+impl Downcast<I8Schema> for ValueSchema {
+	fn downcast(self) -> Result<I8Schema,ParquetError> {
+		self.as_i8()
+	}
+}
+impl Downcast<U16Schema> for ValueSchema {
+	fn downcast(self) -> Result<U16Schema,ParquetError> {
+		self.as_u16()
+	}
+}
+impl Downcast<I16Schema> for ValueSchema {
+	fn downcast(self) -> Result<I16Schema,ParquetError> {
+		self.as_i16()
+	}
+}
+impl Downcast<U32Schema> for ValueSchema {
+	fn downcast(self) -> Result<U32Schema,ParquetError> {
+		self.as_u32()
+	}
+}
+impl Downcast<I32Schema> for ValueSchema {
+	fn downcast(self) -> Result<I32Schema,ParquetError> {
+		self.as_i32()
+	}
+}
+impl Downcast<U64Schema> for ValueSchema {
+	fn downcast(self) -> Result<U64Schema,ParquetError> {
+		self.as_u64()
+	}
+}
+impl Downcast<I64Schema> for ValueSchema {
+	fn downcast(self) -> Result<I64Schema,ParquetError> {
+		self.as_i64()
+	}
+}
+impl Downcast<F32Schema> for ValueSchema {
+	fn downcast(self) -> Result<F32Schema,ParquetError> {
+		self.as_f32()
+	}
+}
+impl Downcast<F64Schema> for ValueSchema {
+	fn downcast(self) -> Result<F64Schema,ParquetError> {
+		self.as_f64()
+	}
+}
+impl Downcast<TimestampSchema> for ValueSchema {
+	fn downcast(self) -> Result<TimestampSchema,ParquetError> {
+		self.as_timestamp()
+	}
+}
+impl Downcast<VecSchema> for ValueSchema {
+	fn downcast(self) -> Result<VecSchema,ParquetError> {
+		self.as_array()
+	}
+}
+impl Downcast<StringSchema> for ValueSchema {
+	fn downcast(self) -> Result<StringSchema,ParquetError> {
+		self.as_string()
+	}
+}
+impl<T> Downcast<ListSchema<T>> for ValueSchema where ValueSchema: Downcast<T> {
+	default fn downcast(self) -> Result<ListSchema<T>,ParquetError> {
+		let ret = self.as_list()?;
+		Ok(ListSchema(ret.0.downcast()?, ret.1))
+	}
+}
+impl Downcast<ListSchema<ValueSchema>> for ValueSchema {
+	fn downcast(self) -> Result<ListSchema<ValueSchema>,ParquetError> {
+		self.as_list()
+	}
+}
+impl<K,V> Downcast<MapSchema<K,V>> for ValueSchema where ValueSchema: Downcast<K> + Downcast<V> {
+	default fn downcast(self) -> Result<MapSchema<K,V>,ParquetError> {
+		let ret = self.as_map()?;
+		Ok(MapSchema(ret.0.downcast()?, ret.1.downcast()?, ret.2, ret.3, ret.4))
+	}
+}
+impl Downcast<MapSchema<ValueSchema,ValueSchema>> for ValueSchema {
+	fn downcast(self) -> Result<MapSchema<ValueSchema,ValueSchema>,ParquetError> {
+		self.as_map()
+	}
+}
+impl Downcast<GroupSchema> for ValueSchema {
+	fn downcast(self) -> Result<GroupSchema,ParquetError> {
+		self.as_group()
+	}
+}
+impl<T> Downcast<OptionSchema<T>> for ValueSchema where ValueSchema: Downcast<T> {
+	default fn downcast(self) -> Result<OptionSchema<T>,ParquetError> {
+		let ret = self.as_option()?;
+		ret.0.downcast().map(OptionSchema)
+	}
+}
+impl Downcast<OptionSchema<ValueSchema>> for ValueSchema {
+	fn downcast(self) -> Result<OptionSchema<ValueSchema>,ParquetError> {
+		self.as_option()
 	}
 }
 
 
-// #[derive(Clone, PartialEq, Debug)]
-// enum ValueRequired {
-// 	Bool(bool),
-// 	U8(u8),
-// 	I8(i8),
-// 	U16(u16),
-// 	I16(i16),
-// 	U32(u32),
-// 	I32(i32),
-// 	U64(u64),
-// 	I64(i64),
-// 	F32(f32),
-// 	F64(f64),
-// 	Timestamp(Timestamp),
-// 	Array(Vec<u8>),
-// 	String(String),
-// 	List(List<Value>),
-// 	Map(Map<Value,Value>),
-// 	Group(Group),
-// }
-// enum ValueRequiredSchema {
-// 	Bool(BoolSchema),
-// 	U8(U8Schema),
-// 	I8(I8Schema),
-// 	U16(U16Schema),
-// 	I16(I16Schema),
-// 	U32(U32Schema),
-// 	I32(I32Schema),
-// 	U64(U64Schema),
-// 	I64(I64Schema),
-// 	F32(F32Schema),
-// 	F64(F64Schema),
-// 	Timestamp(TimestampSchema),
-// 	Array(VecSchema),
-// 	String(StringSchema),
-// 	List(Box<ListSchema<ValueSchema>>),
-// 	Map(Box<MapSchema<ValueSchema,ValueSchema>>),
-// 	Group(GroupSchema),
-// }
-// impl TryFrom<ValueSchema> for ValueRequiredSchema {
-// 	type Error = ParquetError;
-// 	fn try_from(value: ValueSchema) -> Result<Self, Self::Error> {
-// 		Ok(match value {
-// 			ValueSchema::Bool(schema) => ValueRequiredSchema::Bool(schema),
-// 			ValueSchema::U8(schema) => ValueRequiredSchema::U8(schema),
-// 			ValueSchema::I8(schema) => ValueRequiredSchema::I8(schema),
-// 			ValueSchema::U16(schema) => ValueRequiredSchema::U16(schema),
-// 			ValueSchema::I16(schema) => ValueRequiredSchema::I16(schema),
-// 			ValueSchema::U32(schema) => ValueRequiredSchema::U32(schema),
-// 			ValueSchema::I32(schema) => ValueRequiredSchema::I32(schema),
-// 			ValueSchema::U64(schema) => ValueRequiredSchema::U64(schema),
-// 			ValueSchema::I64(schema) => ValueRequiredSchema::I64(schema),
-// 			ValueSchema::F32(schema) => ValueRequiredSchema::F32(schema),
-// 			ValueSchema::F64(schema) => ValueRequiredSchema::F64(schema),
-// 			ValueSchema::Timestamp(schema) => ValueRequiredSchema::Timestamp(schema),
-// 			ValueSchema::Array(schema) => ValueRequiredSchema::Array(schema),
-// 			ValueSchema::String(schema) => ValueRequiredSchema::String(schema),
-// 			ValueSchema::List(schema) => ValueRequiredSchema::List(schema),
-// 			ValueSchema::Map(schema) => ValueRequiredSchema::Map(schema),
-// 			ValueSchema::Group(schema) => ValueRequiredSchema::Group(schema),
-// 			ValueSchema::Option(_) => return Err(ParquetError::General(String::from("ccc"))),
-// 		})
-// 	}
-// }
-// impl TryFrom<ValueSchema> for PrimitiveSchema {
-// 	type Error = ParquetError;
-// 	fn try_from(value: ValueSchema) -> Result<Self, Self::Error> {
-// 		Ok(match value {
-// 			ValueSchema::Bool(schema) => PrimitiveSchema::Bool(schema),
-// 			ValueSchema::U8(schema) => PrimitiveSchema::U8(schema),
-// 			ValueSchema::I8(schema) => PrimitiveSchema::I8(schema),
-// 			ValueSchema::U16(schema) => PrimitiveSchema::U16(schema),
-// 			ValueSchema::I16(schema) => PrimitiveSchema::I16(schema),
-// 			ValueSchema::U32(schema) => PrimitiveSchema::U32(schema),
-// 			ValueSchema::I32(schema) => PrimitiveSchema::I32(schema),
-// 			ValueSchema::U64(schema) => PrimitiveSchema::U64(schema),
-// 			ValueSchema::I64(schema) => PrimitiveSchema::I64(schema),
-// 			ValueSchema::F32(schema) => PrimitiveSchema::F32(schema),
-// 			ValueSchema::F64(schema) => PrimitiveSchema::F64(schema),
-// 			ValueSchema::Timestamp(schema) => PrimitiveSchema::Timestamp(schema),
-// 			ValueSchema::Array(schema) => PrimitiveSchema::Array(schema),
-// 			ValueSchema::String(schema) => PrimitiveSchema::String(schema),
-// 			ValueSchema::Option(OptionSchema(schema)) => return schema.try_into().map(OptionSchema).map(PrimitiveSchema::Option),
-// 			ValueSchema::List(_) | ValueSchema::Map(_) | ValueSchema::Group(_) => return Err(ParquetError::General(String::from("ccc"))),
-// 		})
-// 	}
-// }
-
-// impl TryFrom<ValueRequiredSchema> for PrimitiveRequiredSchema {
-// 	type Error = ParquetError;
-// 	fn try_from(value: ValueRequiredSchema) -> Result<Self, Self::Error> {
-// 		Ok(match value {
-// 			ValueRequiredSchema::Bool(schema) => PrimitiveRequiredSchema::Bool(schema),
-// 			ValueRequiredSchema::U8(schema) => PrimitiveRequiredSchema::U8(schema),
-// 			ValueRequiredSchema::I8(schema) => PrimitiveRequiredSchema::I8(schema),
-// 			ValueRequiredSchema::U16(schema) => PrimitiveRequiredSchema::U16(schema),
-// 			ValueRequiredSchema::I16(schema) => PrimitiveRequiredSchema::I16(schema),
-// 			ValueRequiredSchema::U32(schema) => PrimitiveRequiredSchema::U32(schema),
-// 			ValueRequiredSchema::I32(schema) => PrimitiveRequiredSchema::I32(schema),
-// 			ValueRequiredSchema::U64(schema) => PrimitiveRequiredSchema::U64(schema),
-// 			ValueRequiredSchema::I64(schema) => PrimitiveRequiredSchema::I64(schema),
-// 			ValueRequiredSchema::F32(schema) => PrimitiveRequiredSchema::F32(schema),
-// 			ValueRequiredSchema::F64(schema) => PrimitiveRequiredSchema::F64(schema),
-// 			ValueRequiredSchema::Timestamp(schema) => PrimitiveRequiredSchema::Timestamp(schema),
-// 			ValueRequiredSchema::Array(schema) => PrimitiveRequiredSchema::Array(schema),
-// 			ValueRequiredSchema::String(schema) => PrimitiveRequiredSchema::String(schema),
-// 			ValueRequiredSchema::List(_) | ValueRequiredSchema::Map(_) | ValueRequiredSchema::Group(_) => return Err(ParquetError::General(String::from("ccc"))),
-// 		})
-// 	}
-// }
-
-// impl TryFrom<PrimitiveSchema> for PrimitiveRequiredSchema {
-// 	type Error = ParquetError;
-// 	fn try_from(value: PrimitiveSchema) -> Result<Self, Self::Error> {
-// 		Ok(match value {
-// 			PrimitiveSchema::Bool(schema) => PrimitiveRequiredSchema::Bool(schema),
-// 			PrimitiveSchema::U8(schema) => PrimitiveRequiredSchema::U8(schema),
-// 			PrimitiveSchema::I8(schema) => PrimitiveRequiredSchema::I8(schema),
-// 			PrimitiveSchema::U16(schema) => PrimitiveRequiredSchema::U16(schema),
-// 			PrimitiveSchema::I16(schema) => PrimitiveRequiredSchema::I16(schema),
-// 			PrimitiveSchema::U32(schema) => PrimitiveRequiredSchema::U32(schema),
-// 			PrimitiveSchema::I32(schema) => PrimitiveRequiredSchema::I32(schema),
-// 			PrimitiveSchema::U64(schema) => PrimitiveRequiredSchema::U64(schema),
-// 			PrimitiveSchema::I64(schema) => PrimitiveRequiredSchema::I64(schema),
-// 			PrimitiveSchema::F32(schema) => PrimitiveRequiredSchema::F32(schema),
-// 			PrimitiveSchema::F64(schema) => PrimitiveRequiredSchema::F64(schema),
-// 			PrimitiveSchema::Timestamp(schema) => PrimitiveRequiredSchema::Timestamp(schema),
-// 			PrimitiveSchema::Array(schema) => PrimitiveRequiredSchema::Array(schema),
-// 			PrimitiveSchema::String(schema) => PrimitiveRequiredSchema::String(schema),
-// 			PrimitiveSchema::Option(_) => return Err(ParquetError::General(String::from("ccc"))),
-// 		})
-// 	}
-// }
-
-// impl TryFrom<PrimitiveSchema> for Option PrimitiveRequiredSchema {
-// 	type Error = ParquetError;
-// 	fn try_from(value: PrimitiveSchema) -> Result<Self, Self::Error> {
-// 		Ok(match value {
-// 			PrimitiveSchema::Bool(schema) => PrimitiveRequiredSchema::Bool(schema),
-// 			PrimitiveSchema::U8(schema) => PrimitiveRequiredSchema::U8(schema),
-// 			PrimitiveSchema::I8(schema) => PrimitiveRequiredSchema::I8(schema),
-// 			PrimitiveSchema::U16(schema) => PrimitiveRequiredSchema::U16(schema),
-// 			PrimitiveSchema::I16(schema) => PrimitiveRequiredSchema::I16(schema),
-// 			PrimitiveSchema::U32(schema) => PrimitiveRequiredSchema::U32(schema),
-// 			PrimitiveSchema::I32(schema) => PrimitiveRequiredSchema::I32(schema),
-// 			PrimitiveSchema::U64(schema) => PrimitiveRequiredSchema::U64(schema),
-// 			PrimitiveSchema::I64(schema) => PrimitiveRequiredSchema::I64(schema),
-// 			PrimitiveSchema::F32(schema) => PrimitiveRequiredSchema::F32(schema),
-// 			PrimitiveSchema::F64(schema) => PrimitiveRequiredSchema::F64(schema),
-// 			PrimitiveSchema::Timestamp(schema) => PrimitiveRequiredSchema::Timestamp(schema),
-// 			PrimitiveSchema::Array(schema) => PrimitiveRequiredSchema::Array(schema),
-// 			PrimitiveSchema::String(schema) => PrimitiveRequiredSchema::String(schema),
-// 			PrimitiveSchema::Option(_) => return Err(ParquetError::General(String::from("ccc"))),
-// 		})
-// 	}
-// }
-
-// impl TryFrom<OptionSchema<ValueRequiredSchema>> for OptionSchema<PrimitiveRequiredSchema> where U: TryFrom<T> {
-// 	type Error = ParquetError;
-// 	fn try_from(value: OptionSchema<ValueRequiredSchema>) -> Result<Self, Self::Error> {
-// 		value.0.try_into().map(OptionSchema)
-// 	}
-// }
-
-// #[derive(Clone, Hash, PartialEq, Eq, Debug)]
-// enum Primitive {
-// 	Bool(bool),
-// 	U8(u8),
-// 	I8(i8),
-// 	U16(u16),
-// 	I16(i16),
-// 	U32(u32),
-// 	I32(i32),
-// 	U64(u64),
-// 	I64(i64),
-// 	// F32(f32),
-// 	// F64(f64),
-// 	Timestamp(Timestamp),
-// 	Array(Vec<u8>),
-// 	String(String),
-// 	Option(Option<PrimitiveRequired>),
-// }
-// enum PrimitiveSchema {
-// 	Bool(BoolSchema),
-// 	U8(U8Schema),
-// 	I8(I8Schema),
-// 	U16(U16Schema),
-// 	I16(I16Schema),
-// 	U32(U32Schema),
-// 	I32(I32Schema),
-// 	U64(U64Schema),
-// 	I64(I64Schema),
-// 	F32(F32Schema),
-// 	F64(F64Schema),
-// 	Timestamp(TimestampSchema),
-// 	Array(VecSchema),
-// 	String(StringSchema),
-// 	Option(OptionSchema<PrimitiveRequiredSchema>),
-// }
-// impl PrimitiveSchema {
-// 	fn as_option(self) -> Option<OptionSchema<PrimitiveRequiredSchema>> {
-// 		if let PrimitiveSchema::Option(schema) = self { Some(schema) } else { None }
-// 	}
-// }
-// #[derive(Clone, Hash, PartialEq, Eq, Debug)]
-// enum PrimitiveRequired {
-// 	Bool(bool),
-// 	U8(u8),
-// 	I8(i8),
-// 	U16(u16),
-// 	I16(i16),
-// 	U32(u32),
-// 	I32(i32),
-// 	U64(u64),
-// 	I64(i64),
-// 	// F32(f32),
-// 	// F64(f64),
-// 	Timestamp(Timestamp),
-// 	Array(Vec<u8>),
-// 	String(String),
-// }
-// enum PrimitiveRequiredSchema {
-// 	Bool(BoolSchema),
-// 	U8(U8Schema),
-// 	I8(I8Schema),
-// 	U16(U16Schema),
-// 	I16(I16Schema),
-// 	U32(U32Schema),
-// 	I32(I32Schema),
-// 	U64(U64Schema),
-// 	I64(I64Schema),
-// 	F32(F32Schema),
-// 	F64(F64Schema),
-// 	Timestamp(TimestampSchema),
-// 	Array(VecSchema),
-// 	String(StringSchema),
-// }
 #[derive(Clone, PartialEq, Debug)]
 struct Group(pub Vec<Value>,pub Rc<HashMap<String,usize>>);
 type Row = Group;
@@ -1017,9 +1116,6 @@ impl Deserialize for Group {
 	type Schema = GroupSchema;
 	type Reader = GroupReader;
 
-	fn placeholder() -> Self::Schema {
-		unimplemented!()
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED {
 			let mut map = HashMap::new();
@@ -1034,11 +1130,7 @@ impl Deserialize for Group {
 		}
 		Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		// Type::group_type_builder(name).with_repetition(Repetition::REQUIRED).with_fields(&mut vec![$(Rc::new(<$type_ as Deserialize>::render(stringify!($name), &schema.$name)),)*]).build().unwrap()
-		unimplemented!()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let mut names_ = vec![None; schema.0.len()];
 		for (name,&index) in schema.1.iter() {
 			names_[index].replace(name.to_owned());
@@ -1115,34 +1207,6 @@ enum TimestampSchema {
 	Millis,
 	Micros,
 }
-
-
-// impl Deserialize for Root<Value> {
-// 	type Schema = RootSchema<Value, ValueSchema>;
-// 	type Reader = Reader;
-// 	fn placeholder() -> Self::Schema {
-// 		unimplemented!()
-// 	}
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		if schema.is_schema() {
-// 			let mut schema2 = schema.clone();
-// 			let basic_info = match schema2 {Type::PrimitiveType{ref mut basic_info,..} => basic_info, Type::GroupType{ref mut basic_info,..} => basic_info};
-// 			basic_info.set_repetition(Some(Repetition::REQUIRED));
-// 			return Value::parse(&schema2).map(|(name,schema)|(String::from(""),RootSchema(name, schema, PhantomData)))
-// 		}
-// 		Err(ParquetError::General(String::from("Root<Value>")))
-// 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		assert_eq!(name, "");
-// 		let mut schema2 = Value::render(&schema.0, &schema.1);
-// 		let basic_info = match schema2 {Type::PrimitiveType{ref mut basic_info,..} => basic_info, Type::GroupType{ref mut basic_info,..} => basic_info};
-// 		basic_info.set_repetition(None);
-// 		schema2
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
-// 	}
-// }
 
 
 enum ValueReader {
@@ -1286,9 +1350,6 @@ impl Deserialize for Value {
 	type Schema = ValueSchema;
 	type Reader = ValueReader;
 
-	fn placeholder() -> Self::Schema {
-		unimplemented!()
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 		let mut value = None;
 		if schema.is_primitive() {
@@ -1369,88 +1430,7 @@ impl Deserialize for Value {
 
 		Ok((schema.name().to_owned(),value))
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		let (schema, repetition) = match schema {
-			&ValueSchema::Option(box OptionSchema(ref schema)) => (schema, Repetition::OPTIONAL),
-			&ValueSchema::List(box ListSchema(ref schema, None)) => (schema, Repetition::REPEATED),
-			schema => (schema, Repetition::REQUIRED),
-		};
-		if let Some((physical,logical,length)) = match schema {
-			ValueSchema::Bool(_) => Some((PhysicalType::BOOLEAN, LogicalType::NONE, None)),
-			ValueSchema::U8(_) => Some((PhysicalType::INT32, LogicalType::UINT_8, None)),
-			ValueSchema::I8(_) => Some((PhysicalType::INT32, LogicalType::INT_8, None)),
-			ValueSchema::U16(_) => Some((PhysicalType::INT32, LogicalType::UINT_16, None)),
-			ValueSchema::I16(_) => Some((PhysicalType::INT32, LogicalType::INT_16, None)),
-			ValueSchema::U32(_) => Some((PhysicalType::INT32, LogicalType::UINT_32, None)),
-			ValueSchema::I32(_) => Some((PhysicalType::INT32, LogicalType::INT_32, None)),
-			ValueSchema::U64(_) => Some((PhysicalType::INT64, LogicalType::UINT_64, None)),
-			ValueSchema::I64(_) => Some((PhysicalType::INT64, LogicalType::INT_64, None)),
-			ValueSchema::F32(_) => Some((PhysicalType::FLOAT, LogicalType::NONE, None)),
-			ValueSchema::F64(_) => Some((PhysicalType::DOUBLE, LogicalType::NONE, None)),
-			ValueSchema::Timestamp(TimestampSchema::Int96) => Some((PhysicalType::INT96, LogicalType::NONE, None)),
-			ValueSchema::Timestamp(TimestampSchema::Millis) => Some((PhysicalType::INT64, LogicalType::TIMESTAMP_MILLIS, None)),
-			ValueSchema::Timestamp(TimestampSchema::Micros) => Some((PhysicalType::INT64, LogicalType::TIMESTAMP_MICROS, None)),
-			ValueSchema::Array(VecSchema(None)) => Some((PhysicalType::BYTE_ARRAY, LogicalType::NONE, None)),
-			ValueSchema::Array(VecSchema(Some(x))) => Some((PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::NONE, Some(*x))),
-			ValueSchema::String(_) => Some((PhysicalType::BYTE_ARRAY, LogicalType::UTF8, None)),
-			ValueSchema::List(_) | ValueSchema::Map(_) | ValueSchema::Group(_) => None,
-			ValueSchema::Option(_) => unreachable!(),
-		} {
-			return Type::primitive_type_builder(name, physical)
-				.with_repetition(repetition)
-				.with_logical_type(logical)
-				.with_length(length.map(|x| x as i32).unwrap_or(-1))
-				.with_precision(-1)
-				.with_scale(-1)
-				.build()
-				.unwrap()
-		}
-		if let Some((logical_type, mut fields)) = match schema {
-			ValueSchema::List(box ListSchema(ref element_schema, Some((ref list_name, ref element_name)))) => {
-				let list_name = list_name.as_ref().map(|x|&**x).unwrap_or("list");
-				let element_name = element_name.as_ref().map(|x|&**x).unwrap_or("element");
-				Some((LogicalType::LIST, vec![Rc::new(
-						Type::group_type_builder(list_name)
-							.with_repetition(Repetition::REPEATED)
-							.with_logical_type(LogicalType::NONE)
-							.with_fields(&mut vec![Rc::new(Value::render(element_name, element_schema))])
-							.build()
-							.unwrap(),
-					)]))
-			}
-			ValueSchema::List(box ListSchema(ref element_schema, None)) => unreachable!(),
-			ValueSchema::Map(box MapSchema(ref key_schema, ref value_schema, ref key_value_name, ref key_name, ref value_name)) => {
-				let key_value_name = key_value_name.as_ref().map(|x|&**x).unwrap_or("key_value");
-				let key_name = key_name.as_ref().map(|x|&**x).unwrap_or("key");
-				let value_name = value_name.as_ref().map(|x|&**x).unwrap_or("value");
-				Some((LogicalType::MAP, vec![Rc::new(
-						Type::group_type_builder(key_value_name)
-							.with_repetition(Repetition::REPEATED)
-							.with_logical_type(LogicalType::NONE)
-							.with_fields(&mut vec![Rc::new(Value::render(key_name, key_schema)),Rc::new(Value::render(value_name, value_schema))])
-							.build()
-							.unwrap(),
-					)]))
-			}
-			ValueSchema::Group(GroupSchema(ref fields, ref names)) => {
-				let mut names_ = vec![None; fields.len()];
-				for (name,&index) in names {
-					names_[index].replace(name);
-				}
-				Some((LogicalType::NONE, fields.iter().enumerate().map(|(index,field)|Rc::new(Value::render(names_[index].take().unwrap(), field))).collect()))
-			}
-			_ => None,
-		} {
-			return Type::group_type_builder(name)
-				.with_repetition(repetition)
-				.with_logical_type(logical_type)
-				.with_fields(&mut fields)
-				.build()
-				.unwrap()
-		}
-		unimplemented!()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		match *schema {
 			ValueSchema::Bool(ref schema) => ValueReader::Bool(<bool as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
 			ValueSchema::U8(ref schema) => ValueReader::U8(<u8 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
@@ -1476,9 +1456,7 @@ impl Deserialize for Value {
 impl Deserialize for Root<Value> {
 	type Schema = RootSchema<Value, ValueSchema>;
 	type Reader = RootReader<ValueReader>;
-	fn placeholder() -> Self::Schema {
-		unimplemented!()
-	}
+
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 		assert!(schema.is_schema());
 		let mut value = None;
@@ -1519,378 +1497,49 @@ impl Deserialize for Root<Value> {
 
 		Ok((String::from(""),RootSchema(schema.name().to_owned(), value, PhantomData)))
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		assert_eq!(name, "");
-		let name = &schema.0;
-		let (schema, repetition) = match &schema.1 {
-			&ValueSchema::Option(box OptionSchema(ref schema)) => (schema, Repetition::OPTIONAL),
-			&ValueSchema::List(box ListSchema(ref schema, None)) => (schema, Repetition::REPEATED),
-			schema => (schema, Repetition::REQUIRED),
-		};
-		if let Some((physical,logical)) = match schema {
-			ValueSchema::Bool(_) => Some((PhysicalType::BOOLEAN, LogicalType::NONE)),
-			ValueSchema::U8(_) => Some((PhysicalType::INT32, LogicalType::UINT_8)),
-			ValueSchema::I8(_) => Some((PhysicalType::INT32, LogicalType::INT_8)),
-			ValueSchema::U16(_) => Some((PhysicalType::INT32, LogicalType::UINT_16)),
-			ValueSchema::I16(_) => Some((PhysicalType::INT32, LogicalType::INT_16)),
-			ValueSchema::U32(_) => Some((PhysicalType::INT32, LogicalType::UINT_32)),
-			ValueSchema::I32(_) => Some((PhysicalType::INT32, LogicalType::INT_32)),
-			ValueSchema::U64(_) => Some((PhysicalType::INT64, LogicalType::UINT_64)),
-			ValueSchema::I64(_) => Some((PhysicalType::INT64, LogicalType::INT_64)),
-			ValueSchema::F32(_) => Some((PhysicalType::FLOAT, LogicalType::NONE)),
-			ValueSchema::F64(_) => Some((PhysicalType::DOUBLE, LogicalType::NONE)),
-			ValueSchema::Timestamp(_) => Some((PhysicalType::INT96, LogicalType::NONE)),
-			ValueSchema::Array(_) => Some((PhysicalType::BYTE_ARRAY, LogicalType::NONE)),
-			ValueSchema::String(_) => Some((PhysicalType::BYTE_ARRAY, LogicalType::UTF8)),
-			ValueSchema::List(_) | ValueSchema::Map(_) | ValueSchema::Group(_) => None,
-			ValueSchema::Option(_) => unreachable!(),
-		} {
-			return Type::primitive_type_builder(name, physical)
-				.with_repetition(repetition)
-				.with_logical_type(logical)
-				.with_length(-1)
-				.with_precision(-1)
-				.with_scale(-1)
-				.build()
-				.unwrap()
-		}
-		if let Some((logical_type, mut fields)) = match schema {
-			ValueSchema::List(box ListSchema(ref element_schema, Some((ref list_name, ref element_name)))) => {
-				let list_name = list_name.as_ref().map(|x|&**x).unwrap_or("list");
-				let element_name = element_name.as_ref().map(|x|&**x).unwrap_or("element");
-				Some((LogicalType::LIST, vec![Rc::new(
-						Type::group_type_builder(list_name)
-							.with_repetition(Repetition::REPEATED)
-							.with_logical_type(LogicalType::NONE)
-							.with_fields(&mut vec![Rc::new(Value::render(element_name, element_schema))])
-							.build()
-							.unwrap(),
-					)]))
-			}
-			ValueSchema::Group(GroupSchema(ref fields, ref names)) => {
-				let mut names_ = vec![None; fields.len()];
-				for (name,&index) in names {
-					names_[index].replace(name);
-				}
-				Some((LogicalType::NONE, fields.iter().enumerate().map(|(index,field)|Rc::new(Value::render(names_[index].take().unwrap(), field))).collect()))
-			}
-			_ => None,
-		} {
-			return Type::group_type_builder(name)
-				// .with_repetition(repetition)
-				.with_logical_type(logical_type)
-				.with_fields(&mut fields)
-				.build()
-				.unwrap()
-		}
-		unimplemented!()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		RootReader(match schema.1 {
-			ValueSchema::Bool(ref schema) => ValueReader::Bool(<bool as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::U8(ref schema) => ValueReader::U8(<u8 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::I8(ref schema) => ValueReader::I8(<i8 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::U16(ref schema) => ValueReader::U16(<u16 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::I16(ref schema) => ValueReader::I16(<i16 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::U32(ref schema) => ValueReader::U32(<u32 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::I32(ref schema) => ValueReader::I32(<i32 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::U64(ref schema) => ValueReader::U64(<u64 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::I64(ref schema) => ValueReader::I64(<i64 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::F32(ref schema) => ValueReader::F32(<f32 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::F64(ref schema) => ValueReader::F64(<f64 as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::Timestamp(ref schema) => ValueReader::Timestamp(<Timestamp as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::Array(ref schema) => ValueReader::Array(<Vec<u8> as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::String(ref schema) => ValueReader::String(<String as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::List(ref schema) => ValueReader::List(Box::new(<List<Value> as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths))),
-			ValueSchema::Map(ref schema) => ValueReader::Map(Box::new(<Map<Value,Value> as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths))),
-			ValueSchema::Group(ref schema) => ValueReader::Group(<Group as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths)),
-			ValueSchema::Option(ref schema) => ValueReader::Option(Box::new(<Option<Value> as Deserialize>::reader(schema, path, curr_def_level, curr_rep_level, paths))),
-		})
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+		RootReader(<Value as Deserialize>::reader(&schema.1, path, curr_def_level, curr_rep_level, paths))
 	}
 }
 
-impl Deserialize for Option<Value> {
-	type Schema = OptionSchema<ValueSchema>;
-	// type Reader = OptionReader<ValueReader>;
-	existential type Reader: RRReader<Item = Self>;
+// impl Deserialize for Option<Value> {
+// 	type Schema = OptionSchema<ValueSchema>;
+// 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		unimplemented!()
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-			match schema {
-				ValueSchema::Option(schema) => Ok((name, *schema)),
-				_ => Err(ParquetError::General(String::from(""))),
-			}
-		})
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		unimplemented!()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		OptionReader{def_level: curr_def_level, reader: <Value as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}//, |x:Value|x.as_option().ok_or(ParquetError::General(String::from("x"))))
-	}
-}
-
-// enum Any<T> {
-// 	Option(Option<T>),
-// 	One(T),
-// 	List(List<T>),
-// }
-// impl<T> Any<T> {
-// 	fn as_one(self) -> Option<T> {
-// 		match self {
-// 			Any::One(t) => Some(t),
-// 			Any::Option(_) | Any::List(_) => None,
-// 		}
-// 	}
-// 	fn as_option(self) -> Option<Option<T>> {
-// 		match self {
-// 			Any::Option(t) => Some(t),
-// 			Any::One(_) | Any::List(_) => None,
-// 		}
-// 	}
-// 	fn as_list(self) -> Option<List<T>> {
-// 		match self {
-// 			Any::List(t) => Some(t),
-// 			Any::Option(_) | Any::One(_) => None,
-// 		}
-// 	}
-// }
-// enum AnySchema<T> {
-// 	Option(OptionSchema<T>),
-// 	One(T),
-// 	List(ListSchema<T>),
-// }
-// impl<T> AnySchema<T> {
-// 	fn as_one(self) -> Option<T> {
-// 		match self {
-// 			AnySchema::One(t) => Some(t),
-// 			AnySchema::Option(_) | AnySchema::List(_) => None,
-// 		}
-// 	}
-// 	fn as_option(self) -> Option<OptionSchema<T>> {
-// 		match self {
-// 			AnySchema::Option(t) => Some(t),
-// 			AnySchema::One(_) | AnySchema::List(_) => None,
-// 		}
-// 	}
-// 	fn as_list(self) -> Option<ListSchema<T>> {
-// 		match self {
-// 			AnySchema::List(t) => Some(t),
-// 			AnySchema::Option(_) | AnySchema::One(_) => None,
-// 		}
-// 	}
-// }
-
-// impl Deserialize for Any<ValueRequired> {
-// 	type Schema = AnySchema<ValueRequiredSchema>;
-// 	type Reader = Reader;
-//
-// 	fn placeholder() -> Self::Schema {
-// 		unimplemented!()
-// 	}
 // 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		Value::parse(schema).and_then(|(name, schema)| {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
 // 			match schema {
-// 				ValueSchema::Bool(schema) => Ok(AnySchema::One(ValueRequiredSchema::Bool(schema))),
-// 				ValueSchema::Option(OptionSchema(ValueRequiredSchema::Bool(schema))) => Ok(AnySchema::Option(OptionSchema(ValueRequiredSchema::Bool(schema)))),
-// 				ValueSchema::List(box ListSchema(ValueSchema::Bool(schema), a)) => Ok(AnySchema::List(ListSchema(ValueRequiredSchema::Bool(schema), a))),
-// 				_ => Err(ParquetError::General(String::from("")))
-// 			}.map(|schema| (name, schema))
+// 				ValueSchema::Option(schema) => Ok((name, *schema)),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
 // 		})
 // 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		Value::render(name, &match schema {
-// 			AnySchema::One(ValueRequiredSchema::Bool(schema)) => ValueSchema::Bool(*schema),
-// 			AnySchema::Option(OptionSchema(ValueRequiredSchema::Bool(schema))) => ValueSchema::Option(OptionSchema(ValueRequiredSchema::Bool(*schema))),
-// 			AnySchema::List(ListSchema(ValueRequiredSchema::Bool(schema), a)) => ValueSchema::List(Box::new(ListSchema(ValueSchema::Bool(*schema), a.clone()))),
-// 			_ => unimplemented!()
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <Value as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
 // 	}
 // }
-// // impl Deserialize for Option<ValueRequired> {
-// // 	type Schema = OptionSchema<ValueRequiredSchema>;
-// // 	type Reader = Reader;
-// // 	fn placeholder() -> Self::Schema {
-// // 		unimplemented!()
-// // 	}
-// // 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// // 		Any::<ValueRequired>::parse(schema).and_then(|(name,schema)|schema.as_option().ok_or(ParquetError::General(String::from("a"))).map(|schema|(name,schema)))
-// // 	}
-// // 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// // 		Any::<ValueRequired>::render(name, &AnySchema::Option(OptionSchema(schema.0)))
-// // 	}
-// // 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// // 		unimplemented!()
-// // 	}
-// // }
-// // impl Deserialize for ValueRequired {
-// // 	type Schema = ValueRequiredSchema;
-// // 	type Reader = Reader;
-// // 	fn placeholder() -> Self::Schema {
-// // 		unimplemented!()
-// // 	}
-// // 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// // 		Any::<ValueRequired>::parse(schema).and_then(|(name,schema)|schema.as_one().ok_or(ParquetError::General(String::from("a"))).map(|schema|(name,schema)))
-// // 	}
-// // 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// // 		Any::<ValueRequired>::render(name, &AnySchema::One(*schema))
-// // 	}
-// // 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// // 		unimplemented!()
-// // 	}
-// // }
 
-
-// impl Deserialize for Primitive {
-// 	type Schema = PrimitiveSchema;
-// 	type Reader = Reader;
-// 	fn placeholder() -> Self::Schema {
-// 		unimplemented!()
-// 	}
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		Value::parse(schema).and_then(|(name,schema)|schema.try_into().map(|schema|(name,schema)))
-// 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		unimplemented!()
-// 		// let (physical,logical) = match schema {
-// 		// 	PrimitiveSchema::Bool(_) => (PhysicalType::BOOLEAN, LogicalType::NONE),
-// 		// 	PrimitiveSchema::U8(_) => (PhysicalType::INT32, LogicalType::UINT_8),
-// 		// 	PrimitiveSchema::I8(_) => (PhysicalType::INT32, LogicalType::INT_8),
-// 		// 	PrimitiveSchema::U16(_) => (PhysicalType::INT32, LogicalType::UINT_16),
-// 		// 	PrimitiveSchema::I16(_) => (PhysicalType::INT32, LogicalType::INT_16),
-// 		// 	PrimitiveSchema::U32(_) => (PhysicalType::INT32, LogicalType::UINT_32),
-// 		// 	PrimitiveSchema::I32(_) => (PhysicalType::INT32, LogicalType::INT_32),
-// 		// 	PrimitiveSchema::U64(_) => (PhysicalType::INT64, LogicalType::UINT_64),
-// 		// 	PrimitiveSchema::I64(_) => (PhysicalType::INT64, LogicalType::INT_64),
-// 		// 	PrimitiveSchema::F32(_) => (PhysicalType::FLOAT, LogicalType::NONE),
-// 		// 	PrimitiveSchema::F64(_) => (PhysicalType::DOUBLE, LogicalType::NONE),
-// 		// 	PrimitiveSchema::Timestamp(_) => (PhysicalType::INT96, LogicalType::NONE),
-// 		// 	PrimitiveSchema::Array(_) => (PhysicalType::BYTE_ARRAY, LogicalType::NONE),
-// 		// 	PrimitiveSchema::String(_) => (PhysicalType::BYTE_ARRAY, LogicalType::UTF8),
-// 		// };
-// 		// Type::primitive_type_builder(name, physical)
-// 		// 	.with_repetition(Repetition::REQUIRED)
-// 		// 	.with_logical_type(logical)
-// 		// 	.with_length(-1)
-// 		// 	.with_precision(-1)
-// 		// 	.with_scale(-1)
-// 		// 	.build()
-// 		// 	.unwrap()
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
-// 	}
-// }
-// impl Deserialize for PrimitiveRequired {
-// 	type Schema = PrimitiveRequiredSchema;
-// 	type Reader = Reader;
-// 	fn placeholder() -> Self::Schema {
-// 		unimplemented!()
-// 	}
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		Primitive::parse(schema).and_then(|(name,schema)|schema.try_into().map(|schema|(name,schema)))
-// 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		let (physical,logical) = match schema {
-// 			PrimitiveRequiredSchema::Bool(_) => (PhysicalType::BOOLEAN, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::U8(_) => (PhysicalType::INT32, LogicalType::UINT_8),
-// 			PrimitiveRequiredSchema::I8(_) => (PhysicalType::INT32, LogicalType::INT_8),
-// 			PrimitiveRequiredSchema::U16(_) => (PhysicalType::INT32, LogicalType::UINT_16),
-// 			PrimitiveRequiredSchema::I16(_) => (PhysicalType::INT32, LogicalType::INT_16),
-// 			PrimitiveRequiredSchema::U32(_) => (PhysicalType::INT32, LogicalType::UINT_32),
-// 			PrimitiveRequiredSchema::I32(_) => (PhysicalType::INT32, LogicalType::INT_32),
-// 			PrimitiveRequiredSchema::U64(_) => (PhysicalType::INT64, LogicalType::UINT_64),
-// 			PrimitiveRequiredSchema::I64(_) => (PhysicalType::INT64, LogicalType::INT_64),
-// 			PrimitiveRequiredSchema::F32(_) => (PhysicalType::FLOAT, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::F64(_) => (PhysicalType::DOUBLE, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::Timestamp(_) => (PhysicalType::INT96, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::Array(_) => (PhysicalType::BYTE_ARRAY, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::String(_) => (PhysicalType::BYTE_ARRAY, LogicalType::UTF8),
-// 		};
-// 		Type::primitive_type_builder(name, physical)
-// 			.with_repetition(Repetition::REQUIRED)
-// 			.with_logical_type(logical)
-// 			.with_length(-1)
-// 			.with_precision(-1)
-// 			.with_scale(-1)
-// 			.build()
-// 			.unwrap()
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
-// 	}
-// }
-// impl Deserialize for Option<PrimitiveRequired> {
-// 	type Schema = OptionSchema<PrimitiveRequiredSchema>;
-// 	type Reader = Reader;
-// 	fn placeholder() -> Self::Schema {
-// 		unimplemented!()
-// 	}
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		Primitive::parse(schema).and_then(|(name,schema)|schema.as_option().ok_or(ParquetError::General(String::from("aA"))).map(|schema|(name,schema)))
-// 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		let (physical,logical) = match schema.0 {
-// 			PrimitiveRequiredSchema::Bool(_) => (PhysicalType::BOOLEAN, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::U8(_) => (PhysicalType::INT32, LogicalType::UINT_8),
-// 			PrimitiveRequiredSchema::I8(_) => (PhysicalType::INT32, LogicalType::INT_8),
-// 			PrimitiveRequiredSchema::U16(_) => (PhysicalType::INT32, LogicalType::UINT_16),
-// 			PrimitiveRequiredSchema::I16(_) => (PhysicalType::INT32, LogicalType::INT_16),
-// 			PrimitiveRequiredSchema::U32(_) => (PhysicalType::INT32, LogicalType::UINT_32),
-// 			PrimitiveRequiredSchema::I32(_) => (PhysicalType::INT32, LogicalType::INT_32),
-// 			PrimitiveRequiredSchema::U64(_) => (PhysicalType::INT64, LogicalType::UINT_64),
-// 			PrimitiveRequiredSchema::I64(_) => (PhysicalType::INT64, LogicalType::INT_64),
-// 			PrimitiveRequiredSchema::F32(_) => (PhysicalType::FLOAT, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::F64(_) => (PhysicalType::DOUBLE, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::Timestamp(_) => (PhysicalType::INT96, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::Array(_) => (PhysicalType::BYTE_ARRAY, LogicalType::NONE),
-// 			PrimitiveRequiredSchema::String(_) => (PhysicalType::BYTE_ARRAY, LogicalType::UTF8),
-// 		};
-// 		Type::primitive_type_builder(name, physical)
-// 			.with_repetition(Repetition::REQUIRED)
-// 			.with_logical_type(logical)
-// 			.with_length(-1)
-// 			.with_precision(-1)
-// 			.with_scale(-1)
-// 			.build()
-// 			.unwrap()
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
-// 	}
-// }
 
 trait Deserialize: Sized {
 	type Schema;
 	type Reader: RRReader<Item = Self>;
-	fn placeholder() -> Self::Schema;
+
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError>;
-	fn render(name: &str, schema: &Self::Schema) -> Type;
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader;
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader;
 }
-// fn read<'a, R: ParquetReader + 'static, T>(
-// 	reader: R,
-// ) -> Result<impl Iterator<Item = T> + 'a,ParquetError> where T: 'a, Root<T>: Deserialize, <Root<T> as Deserialize>::Schema: 'a {
-// 	let reader = SerializedFileReader::new(reader).unwrap();
-// 	read2(&reader)
-// }
+
+
 fn read<'a, R: ParquetReader + 'static, T>(
 	reader: &'a SerializedFileReader<R>,
 ) -> Result<impl Iterator<Item = T> + 'a,ParquetError> where Root<T>: Deserialize, <Root<T> as Deserialize>::Schema: 'a, <Root<T> as Deserialize>::Reader: 'a {
 	let file_schema = reader.metadata().file_metadata().schema_descr_ptr();
 	let file_schema = file_schema.root_schema();
 	let schema = <Root<T> as Deserialize>::parse(file_schema).map_err(|err| {
-		let schema: Type = <Root<T> as Deserialize>::render("", &<Root<T> as Deserialize>::placeholder());
+		// let schema: Type = <Root<T> as Deserialize>::render("", &<Root<T> as Deserialize>::placeholder());
 		let mut b = Vec::new();
 		print_schema(&mut b, file_schema);
 		let mut a = Vec::new();
-		print_schema(&mut a, &schema);
+		// print_schema(&mut a, &schema);
 		ParquetError::General(format!(
 			"Types don't match schema.\nSchema is:\n{}\nBut types require:\n{}\nError: {}",
 			String::from_utf8(b).unwrap(),
@@ -1968,8 +1617,8 @@ fn read<'a, R: ParquetReader + 'static, T>(
 	}))
 }
 fn write<R: ParquetReader + 'static, T>(reader: R, schema: <Root<T> as Deserialize>::Schema) -> () where Root<T>: Deserialize {
-	let schema = <Root<T>>::render("", &schema);
-	print_schema(&mut std::io::stdout(), &schema);
+	// let schema = <Root<T>>::render("", &schema);
+	// print_schema(&mut std::io::stdout(), &schema);
 	// println!("{:#?}", schema);
 	let reader = SerializedFileReader::new(reader).unwrap();
 	// let iter = reader.get_row_iter(None).unwrap();
@@ -2029,9 +1678,6 @@ where
 	type Schema = MapSchema<K::Schema, V::Schema>;
 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		MapSchema(K::placeholder(), V::placeholder(), None, None, None)
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED && (schema.get_basic_info().logical_type() == LogicalType::MAP || schema.get_basic_info().logical_type() == LogicalType::MAP_KEY_VALUE) && schema.get_fields().len() == 1 {
 			let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
@@ -2046,26 +1692,7 @@ where
 		}
 		Err(ParquetError::General(String::from("Map<K,V>")))
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		let key_value_name = schema.2.as_ref().map(|x|&**x).unwrap_or("key_value");
-		let key_name = schema.3.as_ref().map(|x|&**x).unwrap_or("key");
-		let value_name = schema.4.as_ref().map(|x|&**x).unwrap_or("value");
-		Type::group_type_builder(name)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::MAP)
-			.with_fields(&mut vec![Rc::new(
-				Type::group_type_builder(key_value_name)
-					.with_repetition(Repetition::REPEATED)
-					.with_logical_type(LogicalType::NONE)
-					.with_fields(&mut vec![Rc::new(K::render(key_name, &schema.0)),Rc::new(V::render(value_name, &schema.1))])
-					.build()
-					.unwrap(),
-			)])
-			.build()
-			.unwrap()
-	}
-
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let key_value_name = schema.2.as_ref().map(|x|&**x).unwrap_or("key_value");
 		let key_name = schema.3.as_ref().map(|x|&**x).unwrap_or("key");
 		let value_name = schema.4.as_ref().map(|x|&**x).unwrap_or("value");
@@ -2087,71 +1714,32 @@ where
 		}, |x:Vec<_>|Ok(Map(x.into_iter().collect())))
 	}
 }
-impl<K,V> Deserialize for Option<Map<K,V>>
-where
-	K: Deserialize + Hash + Eq,
-	V: Deserialize,
-{
-	type Schema = OptionSchema<MapSchema<K::Schema, V::Schema>>;
-	existential type Reader: RRReader<Item = Self>;
+// impl<K,V> Deserialize for Option<Map<K,V>>
+// where
+// 	K: Deserialize + Hash + Eq,
+// 	V: Deserialize,
+// {
+// 	type Schema = OptionSchema<MapSchema<K::Schema, V::Schema>>;
+// 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(MapSchema(K::placeholder(), V::placeholder(), None, None, None))
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && (schema.get_basic_info().logical_type() == LogicalType::MAP || schema.get_basic_info().logical_type() == LogicalType::MAP_KEY_VALUE) && schema.get_fields().len() == 1 {
-			let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
-			if sub_schema.is_group() && !sub_schema.is_schema() && sub_schema.get_basic_info().repetition() == Repetition::REPEATED && sub_schema.get_fields().len() == 2 {
-				let mut fields = sub_schema.get_fields().into_iter();
-				let (key, value) = (fields.next().unwrap(), fields.next().unwrap());
-				let key_value_name = if sub_schema.name() == "key_value" { None } else { Some(sub_schema.name().to_owned()) };
-				let key_name = if key.name() == "key" { None } else { Some(key.name().to_owned()) };
-				let value_name = if value.name() == "value" { None } else { Some(value.name().to_owned()) };
-				return Ok((schema.name().to_owned(), OptionSchema(MapSchema(K::parse(&*key)?.1,V::parse(&*value)?.1, key_value_name, key_name, value_name))));
-			}
-		}
-		Err(ParquetError::General(String::from("Option<Map<K,V>>")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		let key_value_name = (schema.0).2.as_ref().map(|x|&**x).unwrap_or("key_value");
-		let key_name = (schema.0).3.as_ref().map(|x|&**x).unwrap_or("key");
-		let value_name = (schema.0).4.as_ref().map(|x|&**x).unwrap_or("value");
-		Type::group_type_builder(name)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::MAP)
-			.with_fields(&mut vec![Rc::new(
-				Type::group_type_builder(key_value_name)
-					.with_repetition(Repetition::REPEATED)
-					.with_logical_type(LogicalType::NONE)
-					.with_fields(&mut vec![Rc::new(K::render(key_name, &(schema.0).0)),Rc::new(V::render(value_name, &(schema.0).1))])
-					.build()
-					.unwrap(),
-			)])
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let key_value_name = (schema.0).2.as_ref().map(|x|&**x).unwrap_or("key_value");
-		let key_name = (schema.0).3.as_ref().map(|x|&**x).unwrap_or("key");
-		let value_name = (schema.0).4.as_ref().map(|x|&**x).unwrap_or("value");
-
-		path.push(key_value_name.to_owned());
-		path.push(key_name.to_owned());
-		let keys_reader = K::reader(&(schema.0).0, path, curr_def_level + 1 + 1, curr_rep_level + 1, paths);
-		path.pop().unwrap();
-		path.push(value_name.to_owned());
-		let values_reader = V::reader(&(schema.0).1, path, curr_def_level + 1 + 1, curr_rep_level + 1, paths);
-		path.pop().unwrap();
-		path.pop().unwrap();
-
-		OptionReader{def_level: curr_def_level, reader: MapReader(KeyValueReader{
-			def_level: curr_def_level + 1,
-			rep_level: curr_rep_level,
-			keys_reader,
-			values_reader
-		}, |x:Vec<_>|Ok(Map(x.into_iter().collect())))}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && (schema.get_basic_info().logical_type() == LogicalType::MAP || schema.get_basic_info().logical_type() == LogicalType::MAP_KEY_VALUE) && schema.get_fields().len() == 1 {
+// 			let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
+// 			if sub_schema.is_group() && !sub_schema.is_schema() && sub_schema.get_basic_info().repetition() == Repetition::REPEATED && sub_schema.get_fields().len() == 2 {
+// 				let mut fields = sub_schema.get_fields().into_iter();
+// 				let (key, value) = (fields.next().unwrap(), fields.next().unwrap());
+// 				let key_value_name = if sub_schema.name() == "key_value" { None } else { Some(sub_schema.name().to_owned()) };
+// 				let key_name = if key.name() == "key" { None } else { Some(key.name().to_owned()) };
+// 				let value_name = if value.name() == "value" { None } else { Some(value.name().to_owned()) };
+// 				return Ok((schema.name().to_owned(), OptionSchema(MapSchema(K::parse(&*key)?.1,V::parse(&*value)?.1, key_value_name, key_name, value_name))));
+// 			}
+// 		}
+// 		Err(ParquetError::General(String::from("Option<Map<K,V>>")))
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <Map<K,V> as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 
 
 impl<T> Deserialize for List<T>
@@ -2161,10 +1749,13 @@ where
 	type Schema = ListSchema<T::Schema>;
 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		ListSchema(T::placeholder(), Some((None, None)))
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+		// <Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+		// 	match schema {
+		// 		ValueSchema::List(box ListSchema(schema, a)) => Ok((name, ListSchema(schema, a))),
+		// 		_ => Err(ParquetError::General(String::from(""))),
+		// 	}
+		// })
 		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_basic_info().logical_type() == LogicalType::LIST && schema.get_fields().len() == 1 {
 			let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
 			if sub_schema.is_group() && !sub_schema.is_schema() && sub_schema.get_basic_info().repetition() == Repetition::REPEATED && sub_schema.get_fields().len() == 1 {
@@ -2183,32 +1774,7 @@ where
 		// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
 		Err(ParquetError::General(String::from("List<T>")))
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		if let Some((ref list_name,ref element_name)) = schema.1 {
-			let list_name = list_name.as_ref().map(|x|&**x).unwrap_or("list");
-			let element_name = element_name.as_ref().map(|x|&**x).unwrap_or("element");
-			Type::group_type_builder(name)
-				.with_repetition(Repetition::REQUIRED)
-				.with_logical_type(LogicalType::LIST)
-				.with_fields(&mut vec![Rc::new(
-					Type::group_type_builder(list_name)
-						.with_repetition(Repetition::REPEATED)
-						.with_logical_type(LogicalType::NONE)
-						.with_fields(&mut vec![Rc::new(T::render(element_name, &schema.0))])
-						.build()
-						.unwrap(),
-				)])
-				.build()
-				.unwrap()
-		} else {
-			let mut ret = T::render(name, &schema.0);
-			let basic_info = match ret {Type::PrimitiveType{ref mut basic_info,..} => basic_info, Type::GroupType{ref mut basic_info,..} => basic_info};
-			assert_eq!(basic_info.repetition(), Repetition::REQUIRED);
-			basic_info.set_repetition(Some(Repetition::REPEATED));
-			ret
-		}
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		MapReader(if let Some((ref list_name,ref element_name)) = schema.1 {
 			let list_name = list_name.as_ref().map(|x|&**x).unwrap_or("list");
 			let element_name = element_name.as_ref().map(|x|&**x).unwrap_or("element");
@@ -2234,128 +1800,33 @@ where
 		}, |x|Ok(List(x)))
 	}
 }
-impl<T> Deserialize for Option<List<T>>
-where
-	T: Deserialize,
-{
-	type Schema = OptionSchema<ListSchema<T::Schema>>;
-	existential type Reader: RRReader<Item = Self>;
+// impl<T> Deserialize for Option<List<T>>
+// where
+// 	T: Deserialize,
+// {
+// 	type Schema = OptionSchema<ListSchema<T::Schema>>;
+// 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(ListSchema(T::placeholder(), Some((None, None))))
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_basic_info().logical_type() == LogicalType::LIST && schema.get_fields().len() == 1 {
-			let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
-			if sub_schema.is_group() && !sub_schema.is_schema() && sub_schema.get_basic_info().repetition() == Repetition::REPEATED && sub_schema.get_fields().len() == 1 {
-				let element = sub_schema.get_fields().into_iter().nth(0).unwrap();
-				let list_name = if sub_schema.name() == "list" { None } else { Some(sub_schema.name().to_owned()) };
-				let element_name = if element.name() == "element" { None } else { Some(element.name().to_owned()) };
-				return Ok((schema.name().to_owned(), OptionSchema(ListSchema(T::parse(&*element)?.1, Some((list_name, element_name))))));
-			}
-		}
-		Err(ParquetError::General(String::from("Option<List<T>>")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		if let Some((ref list_name,ref element_name)) = (schema.0).1 {
-			let list_name = list_name.as_ref().map(|x|&**x).unwrap_or("list");
-			let element_name = element_name.as_ref().map(|x|&**x).unwrap_or("element");
-			Type::group_type_builder(name)
-				.with_repetition(Repetition::OPTIONAL)
-				.with_logical_type(LogicalType::LIST)
-				.with_fields(&mut vec![Rc::new(
-					Type::group_type_builder(list_name)
-						.with_repetition(Repetition::REPEATED)
-						.with_logical_type(LogicalType::NONE)
-						.with_fields(&mut vec![Rc::new(T::render(element_name, &(schema.0).0))])
-						.build()
-						.unwrap(),
-				)])
-				.build()
-				.unwrap()
-		} else {
-			unreachable!()
-		}
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		if let Some((ref list_name,ref element_name)) = (schema.0).1 {
-			let list_name = list_name.as_ref().map(|x|&**x).unwrap_or("list");
-			let element_name = element_name.as_ref().map(|x|&**x).unwrap_or("element");
-
-			path.push(list_name.to_owned());
-			path.push(element_name.to_owned());
-			let reader = T::reader(&(schema.0).0, path, curr_def_level + 1 + 1, curr_rep_level + 1, paths);
-			path.pop().unwrap();
-			path.pop().unwrap();
-
-			OptionReader{def_level: curr_def_level, reader: MapReader(RepeatedReader{
-				def_level: curr_def_level+1,
-				rep_level: curr_rep_level,
-				reader,
-			}, |x|Ok(List(x)))}
-		} else {
-			unreachable!()
-		}
-	}
-}
-
-// impl Deserialize for Any<bool> {
-// 	type Schema = AnySchema<BoolSchema>;
-// 	type Reader = Reader;
-// 	fn placeholder() -> Self::Schema {
-// 		AnySchema::One(BoolSchema)
-// 	}
 // 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		Value::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Bool(schema) => Ok(AnySchema::One(schema)),
-// 				ValueSchema::Option(OptionSchema(ValueRequiredSchema::Bool(schema))) => Ok(AnySchema::Option(OptionSchema(schema))),
-// 				ValueSchema::List(box ListSchema(ValueSchema::Bool(schema), a)) => Ok(AnySchema::List(ListSchema(schema, a))),
-// 				_ => Err(ParquetError::General(String::from("")))
-// 			}.map(|schema| (name, schema))
-// 		})
+// 		// <Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 		// 	match schema {
+// 		// 		ValueSchema::Option(box OptionSchema(ValueSchema::List(schema))) => Ok((name, OptionSchema(schema))),
+// 		// 		_ => Err(ParquetError::General(String::from(""))),
+// 		// 	}
+// 		// })
+// 		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_basic_info().logical_type() == LogicalType::LIST && schema.get_fields().len() == 1 {
+// 			let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
+// 			if sub_schema.is_group() && !sub_schema.is_schema() && sub_schema.get_basic_info().repetition() == Repetition::REPEATED && sub_schema.get_fields().len() == 1 {
+// 				let element = sub_schema.get_fields().into_iter().nth(0).unwrap();
+// 				let list_name = if sub_schema.name() == "list" { None } else { Some(sub_schema.name().to_owned()) };
+// 				let element_name = if element.name() == "element" { None } else { Some(element.name().to_owned()) };
+// 				return Ok((schema.name().to_owned(), OptionSchema(ListSchema(T::parse(&*element)?.1, Some((list_name, element_name))))));
+// 			}
+// 		}
+// 		Err(ParquetError::General(String::from("Option<List<T>>")))
 // 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		Value::render(name, &match schema {
-// 			AnySchema::One(schema) => ValueSchema::Bool(*schema),
-// 			AnySchema::Option(OptionSchema(schema)) => ValueSchema::Option(OptionSchema(ValueRequiredSchema::Bool(*schema))),
-// 			AnySchema::List(ListSchema(schema, a)) => ValueSchema::List(Box::new(ListSchema(ValueSchema::Bool(*schema), a.clone()))),
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
-// 	}
-// }
-// impl Deserialize for Option<bool> {
-// 	type Schema = OptionSchema<BoolSchema>;
-// 	type Reader = OptionReader<BoolReader>;
-// 	fn placeholder() -> Self::Schema {
-// 		OptionSchema(BoolSchema)
-// 	}
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		Any::<bool>::parse(schema).and_then(|(name,schema)|schema.as_option().ok_or(ParquetError::General(String::from("a"))).map(|schema|(name,schema)))
-// 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		Any::<bool>::render(name, &AnySchema::Option(OptionSchema(schema.0)))
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
-// 	}
-// }
-// impl Deserialize for bool {
-// 	type Schema = BoolSchema;
-// 	type Reader = BoolReader;
-// 	fn placeholder() -> Self::Schema {
-// 		BoolSchema
-// 	}
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		Any::<bool>::parse(schema).and_then(|(name,schema)|schema.as_one().ok_or(ParquetError::General(String::from("a"))).map(|schema|(name,schema)))
-// 	}
-// 	fn render(name: &str, schema: &Self::Schema) -> Type {
-// 		Any::<bool>::render(name, &AnySchema::One(*schema))
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		unimplemented!()
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <List<T> as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
 // 	}
 // }
 
@@ -2363,266 +1834,147 @@ impl Deserialize for bool {
 	type Schema = BoolSchema;
 	type Reader = BoolReader;
 
-	fn placeholder() -> Self::Schema {
-		BoolSchema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::BOOLEAN && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), BoolSchema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::BOOLEAN)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		BoolReader{column: TypedTripletIter::<BoolType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-impl Deserialize for Option<bool> {
-	type Schema = OptionSchema<BoolSchema>;
-	type Reader = OptionReader<BoolReader>;
+// impl Deserialize for Option<bool> {
+// 	type Schema = OptionSchema<BoolSchema>;
+// 	type Reader = OptionReader<BoolReader>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(BoolSchema)
-	}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			Ok((name, schema.downcast()?))
+// 			// match schema {
+// 			// 	ValueSchema::Option(box OptionSchema(ValueSchema::Bool(schema))) => Ok((name, OptionSchema(schema))),
+// 			// 	_ => Err(ParquetError::General(String::from(""))),
+// 			// }
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <bool as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
+impl<T> Deserialize for Option<T> where T: Deserialize, ValueSchema: Downcast<<T as Deserialize>::Schema> {
+	type Schema = OptionSchema<T::Schema>;
+	type Reader = OptionReader<T::Reader>;
+
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::BOOLEAN && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), OptionSchema(BoolSchema)))
-		}
-		Err(ParquetError::General(String::from("")))
+		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+			Ok((name, OptionSchema(schema.as_option()?.0.downcast()?)))
+		})
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::BOOLEAN)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+		OptionReader{def_level: curr_def_level, reader: <T as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
 	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: BoolReader{column: TypedTripletIter::<BoolType>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}}
-	}
+}
+fn downcast<T>((name, schema): (String, ValueSchema)) -> Result<(String, T),ParquetError> where ValueSchema: Downcast<T> {
+	schema.downcast().map(|schema| (name, schema))
 }
 impl Deserialize for f32 {
 	type Schema = F32Schema;
 	type Reader = F32Reader;
 
-	fn placeholder() -> Self::Schema {
-		F32Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::FLOAT && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), F32Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::FLOAT)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		F32Reader{column: TypedTripletIter::<FloatType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-impl Deserialize for Option<f32> {
-	type Schema = OptionSchema<F32Schema>;
-	type Reader = OptionReader<F32Reader>;
+// impl Deserialize for Option<f32> {
+// 	type Schema = OptionSchema<F32Schema>;
+// 	type Reader = OptionReader<F32Reader>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(F32Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::FLOAT && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), OptionSchema(F32Schema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::FLOAT)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: F32Reader{column: TypedTripletIter::<FloatType>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::F32(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <f32 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for f64 {
 	type Schema = F64Schema;
 	type Reader = F64Reader;
 
-	fn placeholder() -> Self::Schema {
-		F64Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::DOUBLE && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), F64Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::DOUBLE)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		F64Reader{column: TypedTripletIter::<DoubleType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-impl Deserialize for Option<f64> {
-	type Schema = OptionSchema<F64Schema>;
-	type Reader = OptionReader<F64Reader>;
+// impl Deserialize for Option<f64> {
+// 	type Schema = OptionSchema<F64Schema>;
+// 	type Reader = OptionReader<F64Reader>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(F64Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::DOUBLE && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), OptionSchema(F64Schema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::DOUBLE)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: F64Reader{column: TypedTripletIter::<DoubleType>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::F64(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <f64 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for i8 {
 	type Schema = I8Schema;
 	type Reader = TryIntoReader<I32Reader, i8>;
 
-	fn placeholder() -> Self::Schema {
-		I8Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::INT_8 {
-			return Ok((schema.name().to_owned(), I8Schema));
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::INT_8)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)
 	}
 }
-impl Deserialize for Option<i8> {
-	type Schema = OptionSchema<I8Schema>;
-	type Reader = OptionReader<TryIntoReader<I32Reader, i8>>;
+// impl Deserialize for Option<i8> {
+// 	type Schema = OptionSchema<I8Schema>;
+// 	type Reader = OptionReader<TryIntoReader<I32Reader, i8>>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(I8Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::INT_8 {
-			return Ok((schema.name().to_owned(), OptionSchema(I8Schema)));
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::INT_8)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::I8(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <i8 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for u8 {
 	type Schema = U8Schema;
 	type Reader = TryIntoReader<I32Reader, u8>;
 
-	fn placeholder() -> Self::Schema {
-		U8Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::UINT_8 {
-			return Ok((schema.name().to_owned(), U8Schema));
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::UINT_8)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
@@ -2634,206 +1986,100 @@ impl Deserialize for i16 {
 	type Schema = I16Schema;
 	type Reader = TryIntoReader<I32Reader, i16>;
 
-	fn placeholder() -> Self::Schema {
-		I16Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::INT_16 {
-			return Ok((schema.name().to_owned(), I16Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::INT_16)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)
 	}
 }
-impl Deserialize for Option<i16> {
-	type Schema = OptionSchema<I16Schema>;
-	type Reader = OptionReader<TryIntoReader<I32Reader, i16>>;
+// impl Deserialize for Option<i16> {
+// 	type Schema = OptionSchema<I16Schema>;
+// 	type Reader = OptionReader<TryIntoReader<I32Reader, i16>>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(I16Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::INT_16 {
-			return Ok((schema.name().to_owned(), OptionSchema(I16Schema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::INT_16)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::I16(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <i16 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for u16 {
 	type Schema = U16Schema;
 	type Reader = TryIntoReader<I32Reader, u16>;
 
-	fn placeholder() -> Self::Schema {
-		U16Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::UINT_16 {
-			return Ok((schema.name().to_owned(), U16Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::UINT_16)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)
 	}
 }
-impl Deserialize for Option<u16> {
-	type Schema = OptionSchema<U16Schema>;
-	type Reader = OptionReader<TryIntoReader<I32Reader, u16>>;
+// impl Deserialize for Option<u16> {
+// 	type Schema = OptionSchema<U16Schema>;
+// 	type Reader = OptionReader<TryIntoReader<I32Reader, u16>>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(U16Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::UINT_16 {
-			return Ok((schema.name().to_owned(), OptionSchema(U16Schema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::UINT_16)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::U16(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <u16 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for i32 {
 	type Schema = I32Schema;
 	type Reader = I32Reader;
 
-	fn placeholder() -> Self::Schema {
-		I32Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT32 && (schema.get_basic_info().logical_type() == LogicalType::NONE || schema.get_basic_info().logical_type() == LogicalType::INT_32) {
-			return Ok((schema.name().to_owned(), I32Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::INT_32)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-impl Deserialize for Option<i32> {
-	type Schema = OptionSchema<I32Schema>;
-	type Reader = OptionReader<I32Reader>;
+// impl Deserialize for Option<i32> {
+// 	type Schema = OptionSchema<I32Schema>;
+// 	type Reader = OptionReader<I32Reader>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(I32Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::INT32 && (schema.get_basic_info().logical_type() == LogicalType::NONE || schema.get_basic_info().logical_type() == LogicalType::INT_32) {
-			return Ok((schema.name().to_owned(), OptionSchema(I32Schema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::INT_32)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::I32(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <i32 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for u32 {
 	type Schema = U32Schema;
 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		U32Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT32 && schema.get_basic_info().logical_type() == LogicalType::UINT_32 {
-			return Ok((schema.name().to_owned(), U32Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT32)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::UINT_32)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
@@ -2844,158 +2090,70 @@ impl Deserialize for i64 {
 	type Schema = I64Schema;
 	type Reader = I64Reader;
 
-	fn placeholder() -> Self::Schema {
-		I64Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT64 && (schema.get_basic_info().logical_type() == LogicalType::NONE || schema.get_basic_info().logical_type() == LogicalType::INT_64) {
-			return Ok((schema.name().to_owned(), I64Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT64)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::INT_64)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-impl Deserialize for Option<i64> {
-	type Schema = OptionSchema<I64Schema>;
-	type Reader = OptionReader<I64Reader>;
+// impl Deserialize for Option<i64> {
+// 	type Schema = OptionSchema<I64Schema>;
+// 	type Reader = OptionReader<I64Reader>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(I64Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::INT64 && (schema.get_basic_info().logical_type() == LogicalType::NONE || schema.get_basic_info().logical_type() == LogicalType::INT_64) {
-			return Ok((schema.name().to_owned(), OptionSchema(I64Schema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT64)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::INT_64)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::I64(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <i64 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for u64 {
 	type Schema = U64Schema;
 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		U64Schema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::INT64 && schema.get_basic_info().logical_type() == LogicalType::UINT_64 {
-			return Ok((schema.name().to_owned(), U64Schema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT64)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::UINT_64)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		MapReader(I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, |x|Ok(x as u64))
 	}
 }
-impl Deserialize for Option<u64> {
-	type Schema = OptionSchema<U64Schema>;
-	existential type Reader: RRReader<Item = Self>;
+// impl Deserialize for Option<u64> {
+// 	type Schema = OptionSchema<U64Schema>;
+// 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(U64Schema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::INT64 && schema.get_basic_info().logical_type() == LogicalType::UINT_64 {
-			return Ok((schema.name().to_owned(), OptionSchema(U64Schema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT64)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::UINT_64)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: MapReader(I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, |x|Ok(x as u64))}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::U64(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <u64 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for Timestamp {
 	type Schema = TimestampSchema;
 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		TimestampSchema::Millis
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-			match schema {
-				ValueSchema::Timestamp(schema) => Ok((name, schema)),
-				_ => Err(ParquetError::General(String::from(""))),
-			}
-		})
-		// if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED &&
-		// (schema.get_physical_type() == PhysicalType::INT96 && schema.get_basic_info().logical_type() == LogicalType::NONE) || 
-		// (schema.get_physical_type() == PhysicalType::INT64 && schema.get_basic_info().logical_type() == LogicalType::TIMESTAMP_MILLIS) || 
-		// (schema.get_physical_type() == PhysicalType::INT64 && schema.get_basic_info().logical_type() == LogicalType::TIMESTAMP_MICROS)
-		// {
-		// 	return Ok((schema.name().to_owned(), match schema.get_basic_info().logical_type() { LogicalType::NONE => ))
-		// }
-		// Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		unimplemented!()
-		// Value::render(name, &ValueSchema::Timestamp(schema))
-		// Type::primitive_type_builder(name, PhysicalType::INT96)
-		// 	.with_repetition(Repetition::REQUIRED)
-		// 	.with_logical_type(LogicalType::NONE)
-		// 	.with_length(-1)
-		// 	.with_precision(-1)
-		// 	.with_scale(-1)
-		// 	.build()
-		// 	.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
@@ -3022,63 +2180,22 @@ impl Deserialize for Timestamp {
 		}
 	}
 }
-impl Deserialize for Option<Timestamp> {
-	type Schema = OptionSchema<TimestampSchema>;
-	existential type Reader: RRReader<Item = Self>;
+// impl Deserialize for Option<Timestamp> {
+// 	type Schema = OptionSchema<TimestampSchema>;
+// 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(TimestampSchema::Millis)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-			match schema {
-				ValueSchema::Option(box OptionSchema(ValueSchema::Timestamp(schema))) => Ok((name, OptionSchema(schema))),
-				_ => Err(ParquetError::General(String::from(""))),
-			}
-		})
-		// if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::INT96 && schema.get_basic_info().logical_type() == LogicalType::NONE {
-		// 	return Ok((schema.name().to_owned(), OptionSchema(TimestampSchema)))
-		// }
-		// Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::INT96)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		let reader = match schema.0 {
-			TimestampSchema::Int96 => {
-				sum::Sum3::A(MapReader(I96Reader{column: TypedTripletIter::<Int96Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, |x|Ok(Timestamp(x))))
-			}
-			TimestampSchema::Millis => {
-				sum::Sum3::B(MapReader(I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, |millis| {
-					let day: i64 = ((JULIAN_DAY_OF_EPOCH * SECONDS_PER_DAY * MILLIS_PER_SECOND) + millis) / (SECONDS_PER_DAY * MILLIS_PER_SECOND);
-					let nanoseconds: i64 = (millis - ((day - JULIAN_DAY_OF_EPOCH) * SECONDS_PER_DAY * MILLIS_PER_SECOND)) * 1_000_000;
-
-					Ok(Timestamp(Int96::new((nanoseconds & 0xffff).try_into().unwrap(),((nanoseconds as u64) >> 32).try_into().unwrap(),day.try_into().map_err(|err:TryFromIntError|ParquetError::General(err.description().to_owned()))?)))
-				}))
-			}
-			TimestampSchema::Micros => {
-				sum::Sum3::C(MapReader(I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, |micros| {
-					let day: i64 = ((JULIAN_DAY_OF_EPOCH * SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI) + micros) / (SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI);
-					let nanoseconds: i64 = (micros - ((day - JULIAN_DAY_OF_EPOCH) * SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI)) * 1_000;
-
-					Ok(Timestamp(Int96::new((nanoseconds & 0xffff).try_into().unwrap(),((nanoseconds as u64) >> 32).try_into().unwrap(),day.try_into().map_err(|err:TryFromIntError|ParquetError::General(err.description().to_owned()))?)))
-				}))
-			}
-		};
-		OptionReader{def_level: curr_def_level, reader} 
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::Timestamp(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <Timestamp as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 
 
 
@@ -3117,146 +2234,73 @@ impl Deserialize for Vec<u8> {
 	type Schema = VecSchema;
 	type Reader = ByteArrayReader;
 
-	fn placeholder() -> Self::Schema {
-		VecSchema(None)
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::BYTE_ARRAY && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), VecSchema(None)))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::BYTE_ARRAY)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(schema.0.map(|x| x as i32).unwrap_or(-1))
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		ByteArrayReader{column: TypedTripletIter::<ByteArrayType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-impl Deserialize for Option<Vec<u8>> {
-	type Schema = OptionSchema<VecSchema>;
-	type Reader = OptionReader<ByteArrayReader>;
+// impl Deserialize for Option<Vec<u8>> {
+// 	type Schema = OptionSchema<VecSchema>;
+// 	type Reader = OptionReader<ByteArrayReader>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(VecSchema(None))
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::BYTE_ARRAY && schema.get_basic_info().logical_type() == LogicalType::NONE {
-			return Ok((schema.name().to_owned(), OptionSchema(VecSchema(None))))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::BYTE_ARRAY)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: ByteArrayReader{column: TypedTripletIter::<ByteArrayType>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::Array(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <Vec<u8> as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for String {
 	type Schema = StringSchema;
 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		StringSchema
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::BYTE_ARRAY && schema.get_basic_info().logical_type() == LogicalType::UTF8 {
-			return Ok((schema.name().to_owned(), StringSchema))
-		}
-		Err(ParquetError::General(String::from("")))
+		Value::parse(schema).and_then(downcast)
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::BYTE_ARRAY)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::UTF8)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
 		MapReader(ByteArrayReader{column: TypedTripletIter::<ByteArrayType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, |x|String::from_utf8(x).map_err(|err:FromUtf8Error|ParquetError::General(err.to_string())))
 	}
 }
-impl Deserialize for Option<String> {
-	type Schema = OptionSchema<StringSchema>;
-	existential type Reader: RRReader<Item = Self>;
+// impl Deserialize for Option<String> {
+// 	type Schema = OptionSchema<StringSchema>;
+// 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		OptionSchema(StringSchema)
-	}
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::OPTIONAL && schema.get_physical_type() == PhysicalType::BYTE_ARRAY && schema.get_basic_info().logical_type() == LogicalType::UTF8 {
-			return Ok((schema.name().to_owned(), OptionSchema(StringSchema)))
-		}
-		Err(ParquetError::General(String::from("")))
-	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::BYTE_ARRAY)
-			.with_repetition(Repetition::OPTIONAL)
-			.with_logical_type(LogicalType::UTF8)
-			.with_length(-1)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level+1, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		OptionReader{def_level: curr_def_level, reader: MapReader(ByteArrayReader{column: TypedTripletIter::<ByteArrayType>::new(curr_def_level+1, curr_rep_level, BATCH_SIZE, col_reader)}, |x|String::from_utf8(x).map_err(|err:FromUtf8Error|ParquetError::General(err.to_string())))}
-	}
-}
+// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
+// 			match schema {
+// 				ValueSchema::Option(box OptionSchema(ValueSchema::String(schema))) => Ok((name, OptionSchema(schema))),
+// 				_ => Err(ParquetError::General(String::from(""))),
+// 			}
+// 		})
+// 	}
+// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		OptionReader{def_level: curr_def_level, reader: <String as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+// 	}
+// }
 impl Deserialize for [u8; 1024] {
 	type Schema = ArraySchema<Self>;
 	existential type Reader: RRReader<Item = Self>;
 
-	fn placeholder() -> Self::Schema {
-		ArraySchema(PhantomData)
-	}
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 		if schema.is_primitive() && schema.get_basic_info().repetition() == Repetition::REQUIRED && schema.get_physical_type() == PhysicalType::FIXED_LEN_BYTE_ARRAY && schema.get_basic_info().logical_type() == LogicalType::NONE && schema.get_type_length() == 1024 {
 			return Ok((schema.name().to_owned(), ArraySchema(PhantomData)))
 		}
 		Err(ParquetError::General(String::from("")))
 	}
-	fn render(name: &str, schema: &Self::Schema) -> Type {
-		Type::primitive_type_builder(name, PhysicalType::FIXED_LEN_BYTE_ARRAY)
-			.with_repetition(Repetition::REQUIRED)
-			.with_logical_type(LogicalType::NONE)
-			.with_length(1024)
-			.with_precision(-1)
-			.with_scale(-1)
-			.build()
-			.unwrap()
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 		let col_path = ColumnPath::new(path.to_vec());
 		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
 		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
@@ -3332,9 +2376,9 @@ macro_rules! impl_parquet_deserialize_tuple {
 
 			fn from_str(s: &str) -> Result<Self, Self::Err> {
 				parse_message_type(s).and_then(|x|<Root<($($t,)*)> as Deserialize>::parse(&x).map_err(|err| {
-					let x: Type = <Root<($($t,)*)> as Deserialize>::render("", &<Root<($($t,)*)> as Deserialize>::placeholder());
+					// let x: Type = <Root<($($t,)*)> as Deserialize>::render("", &<Root<($($t,)*)> as Deserialize>::placeholder());
 					let mut a = Vec::new();
-					print_schema(&mut a, &x);
+					// print_schema(&mut a, &x);
 					ParquetError::General(format!(
 						"Types don't match schema.\nSchema is:\n{}\nBut types require:\n{}\nError: {}",
 						s,
@@ -3348,9 +2392,6 @@ macro_rules! impl_parquet_deserialize_tuple {
 			type Schema = RootSchema<($($t,)*),TupleSchema<($((String,$t::Schema,),)*)>>;
 			type Reader = RootReader<TupleReader<($($t::Reader,)*)>>;
 
-			fn placeholder() -> Self::Schema {
-				RootSchema(String::from("<name>"), TupleSchema(($((String::from("<name>"),$t::placeholder()),)*)), PhantomData)
-			}
 			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 				if schema.is_schema() {
 					let mut fields = schema.get_fields().iter();
@@ -3361,11 +2402,7 @@ macro_rules! impl_parquet_deserialize_tuple {
 				}
 				Err(ParquetError::General(String::from("")))
 			}
-			fn render(name: &str, schema: &Self::Schema) -> Type {
-				assert_eq!(name, "");
-				Type::group_type_builder(&schema.0).with_fields(&mut vec![$(Rc::new($t::render(&((schema.1).0).$i.0, &((schema.1).0).$i.1)),)*]).build().unwrap()
-			}
-			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 				RootReader(<($($t,)*) as Deserialize>::reader(&schema.1, path, curr_def_level, curr_rep_level, paths))
 			}
 		}
@@ -3373,9 +2410,6 @@ macro_rules! impl_parquet_deserialize_tuple {
 			type Schema = TupleSchema<($((String,$t::Schema,),)*)>;
 			type Reader = TupleReader<($($t::Reader,)*)>;
 
-			fn placeholder() -> Self::Schema {
-				TupleSchema(($((String::from("<name>"),$t::placeholder()),)*))
-			}
 			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
 				if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED {
 					let mut fields = schema.get_fields().iter();
@@ -3386,10 +2420,7 @@ macro_rules! impl_parquet_deserialize_tuple {
 				}
 				Err(ParquetError::General(String::from("")))
 			}
-			fn render(name: &str, schema: &Self::Schema) -> Type {
-				Type::group_type_builder(name).with_repetition(Repetition::REQUIRED).with_fields(&mut vec![$(Rc::new($t::render(&(schema.0).$i.0, &(schema.0).$i.1)),)*]).build().unwrap()
-			}
-			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
 				$(
 					path.push((schema.0).$i.0.to_owned());
 					let $t = <$t as Deserialize>::reader(&(schema.0).$i.1, path, curr_def_level, curr_rep_level, paths);
@@ -3398,33 +2429,40 @@ macro_rules! impl_parquet_deserialize_tuple {
 				TupleReader(($($t,)*))
 			}
 		}
-		impl<$($t,)*> Deserialize for Option<($($t,)*)> where $($t: Deserialize,)* {
-			type Schema = OptionSchema<TupleSchema<($((String,$t::Schema,),)*)>>;
-			type Reader = OptionReader<TupleReader<($($t::Reader,)*)>>;
+		// impl<$($t,)*> Deserialize for Option<($($t,)*)> where $($t: Deserialize,)* {
+		// 	type Schema = OptionSchema<TupleSchema<($((String,$t::Schema,),)*)>>;
+		// 	type Reader = OptionReader<TupleReader<($($t::Reader,)*)>>;
 
-			fn placeholder() -> Self::Schema {
-				OptionSchema(TupleSchema(($((String::from("<name>"),$t::placeholder()),)*)))
+		// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+		// 		if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::OPTIONAL {
+		// 			let mut fields = schema.get_fields().iter();
+		// 			let schema_ = OptionSchema(TupleSchema(($(fields.next().ok_or(ParquetError::General(String::from("Group missing field"))).and_then(|x|$t::parse(&**x))?,)*)));
+		// 			if fields.next().is_none() {
+		// 				return Ok((schema.name().to_owned(), schema_))
+		// 			}
+		// 		}
+		// 		Err(ParquetError::General(String::from("")))
+		// 	}
+		// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+		// 		OptionReader{def_level: curr_def_level, reader: <($($t,)*) as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
+		// 	}
+		// }
+		impl<$($t,)*> Downcast<($($t,)*)> for Value where Value: $(Downcast<$t> +)* {
+			fn downcast(self) -> Result<($($t,)*),ParquetError> {
+				let mut fields = self.as_group()?.0.into_iter();
+				Ok(($({$i;fields.next().unwrap().downcast()?},)*))
 			}
-			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-				if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::OPTIONAL {
-					let mut fields = schema.get_fields().iter();
-					let schema_ = OptionSchema(TupleSchema(($(fields.next().ok_or(ParquetError::General(String::from("Group missing field"))).and_then(|x|$t::parse(&**x))?,)*)));
-					if fields.next().is_none() {
-						return Ok((schema.name().to_owned(), schema_))
-					}
+		}
+		impl<$($t,)*> Downcast<TupleSchema<($((String,$t,),)*)>> for ValueSchema where ValueSchema: $(Downcast<$t> +)* {
+			fn downcast(self) -> Result<TupleSchema<($((String,$t,),)*)>,ParquetError> {
+				let group = self.as_group()?;
+				let mut fields = group.0.into_iter();
+				let mut names = vec![None; group.1.len()];
+				for (name,&index) in group.1.iter() {
+					names[index].replace(name.to_owned());
 				}
-				Err(ParquetError::General(String::from("")))
-			}
-			fn render(name: &str, schema: &Self::Schema) -> Type {
-				Type::group_type_builder(name).with_repetition(Repetition::OPTIONAL).with_fields(&mut vec![$(Rc::new($t::render(&((schema.0).0).$i.0, &((schema.0).0).$i.1)),)*]).build().unwrap()
-			}
-			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, mut curr_def_level: i16, mut curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-				$(
-					path.push(((schema.0).0).$i.0.to_owned());
-					let $t = <$t as Deserialize>::reader(&((schema.0).0).$i.1, path, curr_def_level+1, curr_rep_level, paths);
-					path.pop().unwrap();
-				)*;
-				OptionReader{def_level: curr_def_level, reader: TupleReader(($($t,)*))}
+				let mut names = names.into_iter().map(Option::unwrap);
+				Ok(TupleSchema(($({$i;(names.next().unwrap(),fields.next().unwrap().downcast()?)},)*)))
 			}
 		}
 	);
