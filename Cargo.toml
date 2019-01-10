@@ -42,8 +42,8 @@ nom = "2.2"
 warc_parser = { path = "../../warc_nom_parser" }# git = "https://github.com/alecmocatta/warc_nom_parser" }
 url = "*"
 url_serde = "*"
-rusoto_s3 = {git = "https://github.com/rusoto/rusoto" }
-rusoto_core = {git = "https://github.com/rusoto/rusoto" }
+rusoto_s3 = "0.36"
+rusoto_core = "0.36"
 futures = "*"
 chrono = "*"
 http = "*"

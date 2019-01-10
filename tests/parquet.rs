@@ -14,7 +14,7 @@ use parquet::schema::types::ColumnDescPtr;
 use parquet::schema::types::ColumnPath;
 use parquet::data_type::Int96;
 use parquet::schema::parser::parse_message_type;
-use std::{fs::File, path::Path, rc::Rc, str};
+use std::{fs::File, path::Path, rc::Rc, str, fmt, fmt::Debug};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
@@ -27,10 +27,30 @@ use std::string::FromUtf8Error;
 use std::error::Error;
 use std::hash::Hasher;
 
+struct DebugDebugType<T>(PhantomData<fn(T)>) where T: DebugType;
+impl<T> DebugDebugType<T> where T: DebugType {
+	fn new() -> Self {
+		Self(PhantomData)
+	}
+}
+impl<T> Debug for DebugDebugType<T> where T: DebugType {
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		T::fmt(f)
+	}
+}
+
 macro_rules! impl_parquet_deserialize_struct {
 	($struct:ident $struct_schema:ident $struct_reader:ident $($name:ident: $type_:ty,)*) => (
+		#[derive(Debug)]
 		struct $struct_schema {
 			$($name: <$type_ as Deserialize>::Schema,)*
+		}
+		impl DebugType for $struct_schema {
+			fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+				f.debug_struct(stringify!($struct_schema))
+					$(.field(stringify!($name), &DebugDebugType::<<$type_ as Deserialize>::Schema>::new()))*
+					.finish()
+			}
 		}
 		struct $struct_reader {
 			$($name: <$type_ as Deserialize>::Reader,)*
@@ -861,6 +881,7 @@ impl Downcast<Option<Value>> for Value {
 }
 
 
+#[derive(Debug)]
 enum ValueSchema {
 	Bool(BoolSchema),
 	U8(U8Schema),
@@ -880,6 +901,11 @@ enum ValueSchema {
 	Map(Box<MapSchema<ValueSchema,ValueSchema>>),
 	Group(GroupSchema),
 	Option(Box<OptionSchema<ValueSchema>>),
+}
+impl DebugType for ValueSchema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("ValueSchema")
+	}
 }
 impl ValueSchema {
 	fn is_bool(&self) -> bool {
@@ -1110,7 +1136,13 @@ impl Downcast<OptionSchema<ValueSchema>> for ValueSchema {
 #[derive(Clone, PartialEq, Debug)]
 struct Group(pub Vec<Value>,pub Rc<HashMap<String,usize>>);
 type Row = Group;
+#[derive(Debug)]
 struct GroupSchema(Vec<ValueSchema>,HashMap<String,usize>);
+impl DebugType for GroupSchema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("GroupSchema")
+	}
+}
 
 impl Deserialize for Group {
 	type Schema = GroupSchema;
@@ -1182,30 +1214,156 @@ impl RRReader for GroupReader {
   }
 }
 
+trait DebugType {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error>;
+}
+
 struct RootSchema<T,S>(String, S, PhantomData<fn(T)>);
+impl<T,S> Debug for RootSchema<T,S> where S: Debug {
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.debug_tuple("RootSchema").field(&self.0).field(&self.1).finish()
+	}
+}
+impl<T,S> DebugType for RootSchema<T,S> where S: DebugType {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("RootSchema")
+	}
+}
+#[derive(Debug)]
 struct VecSchema(Option<u32>);
+impl DebugType for VecSchema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("VecSchema")
+	}
+}
 struct ArraySchema<T>(PhantomData<fn(T)>);
+impl<T> Debug for ArraySchema<T> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.debug_tuple("ArraySchema").finish()
+	}
+}
+impl<T> DebugType for ArraySchema<T> {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("ArraySchema<T>")
+	}
+}
 struct TupleSchema<T>(T);
 struct TupleReader<T>(T);
+#[derive(Debug)]
 struct MapSchema<K,V>(K,V,Option<String>,Option<String>,Option<String>);
+impl<K,V> DebugType for MapSchema<K,V> where K: DebugType, V: DebugType {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("MapSchema")
+	}
+}
+#[derive(Debug)]
 struct OptionSchema<T>(T);
+impl<T> DebugType for OptionSchema<T> where T: DebugType {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("OptionSchema")
+	}
+}
+#[derive(Debug)]
 struct ListSchema<T>(T,Option<(Option<String>,Option<String>)>);
+impl<T> DebugType for ListSchema<T> where T: DebugType {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("ListSchema")
+	}
+}
+#[derive(Debug)]
 struct BoolSchema;
+impl DebugType for BoolSchema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("BoolSchema")
+	}
+}
+#[derive(Debug)]
 struct U8Schema;
+impl DebugType for U8Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("U8Schema")
+	}
+}
+#[derive(Debug)]
 struct I8Schema;
+impl DebugType for I8Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("I8Schema")
+	}
+}
+#[derive(Debug)]
 struct U16Schema;
+impl DebugType for U16Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("U16Schema")
+	}
+}
+#[derive(Debug)]
 struct I16Schema;
+impl DebugType for I16Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("I16Schema")
+	}
+}
+#[derive(Debug)]
 struct U32Schema;
+impl DebugType for U32Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("U32Schema")
+	}
+}
+#[derive(Debug)]
 struct I32Schema;
+impl DebugType for I32Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("I32Schema")
+	}
+}
+#[derive(Debug)]
 struct U64Schema;
+impl DebugType for U64Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("U64Schema")
+	}
+}
+#[derive(Debug)]
 struct I64Schema;
+impl DebugType for I64Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("I64Schema")
+	}
+}
+#[derive(Debug)]
 struct F64Schema;
+impl DebugType for F64Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("F64Schema")
+	}
+}
+#[derive(Debug)]
 struct F32Schema;
+impl DebugType for F32Schema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("F32Schema")
+	}
+}
+#[derive(Debug)]
 struct StringSchema;
+impl DebugType for StringSchema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("StringSchema")
+	}
+}
+#[derive(Debug)]
 enum TimestampSchema {
 	Int96,
 	Millis,
 	Micros,
+}
+impl DebugType for TimestampSchema {
+	fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		f.write_str("TimestampSchema")
+	}
 }
 
 
@@ -1521,7 +1679,7 @@ impl Deserialize for Root<Value> {
 
 
 trait Deserialize: Sized {
-	type Schema;
+	type Schema: Debug + DebugType;
 	type Reader: RRReader<Item = Self>;
 
 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError>;
@@ -1538,12 +1696,13 @@ fn read<'a, R: ParquetReader + 'static, T>(
 		// let schema: Type = <Root<T> as Deserialize>::render("", &<Root<T> as Deserialize>::placeholder());
 		let mut b = Vec::new();
 		print_schema(&mut b, file_schema);
-		let mut a = Vec::new();
+		// let mut a = Vec::new();
 		// print_schema(&mut a, &schema);
 		ParquetError::General(format!(
-			"Types don't match schema.\nSchema is:\n{}\nBut types require:\n{}\nError: {}",
+			"Types don't match schema.\nSchema is:\n{}\nBut types require:\n{:#?}\nError: {}",
 			String::from_utf8(b).unwrap(),
-			String::from_utf8(a).unwrap(),
+			// String::from_utf8(a).unwrap(),
+			DebugDebugType::<<Root<T> as Deserialize>::Schema>::new(),
 			err
 		))
 	}).unwrap().1;
@@ -1830,37 +1989,6 @@ where
 // 	}
 // }
 
-impl Deserialize for bool {
-	type Schema = BoolSchema;
-	type Reader = BoolReader;
-
-	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		Value::parse(schema).and_then(downcast)
-	}
-	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
-		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
-		BoolReader{column: TypedTripletIter::<BoolType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
-	}
-}
-// impl Deserialize for Option<bool> {
-// 	type Schema = OptionSchema<BoolSchema>;
-// 	type Reader = OptionReader<BoolReader>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			Ok((name, schema.downcast()?))
-// 			// match schema {
-// 			// 	ValueSchema::Option(box OptionSchema(ValueSchema::Bool(schema))) => Ok((name, OptionSchema(schema))),
-// 			// 	_ => Err(ParquetError::General(String::from(""))),
-// 			// }
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <bool as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl<T> Deserialize for Option<T> where T: Deserialize, ValueSchema: Downcast<<T as Deserialize>::Schema> {
 	type Schema = OptionSchema<T::Schema>;
 	type Reader = OptionReader<T::Reader>;
@@ -1874,8 +2002,25 @@ impl<T> Deserialize for Option<T> where T: Deserialize, ValueSchema: Downcast<<T
 		OptionReader{def_level: curr_def_level, reader: <T as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
 	}
 }
+
 fn downcast<T>((name, schema): (String, ValueSchema)) -> Result<(String, T),ParquetError> where ValueSchema: Downcast<T> {
 	schema.downcast().map(|schema| (name, schema))
+}
+
+
+impl Deserialize for bool {
+	type Schema = BoolSchema;
+	type Reader = BoolReader;
+
+	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+		Value::parse(schema).and_then(downcast)
+	}
+	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+		let col_path = ColumnPath::new(path.to_vec());
+		let (col_descr, col_reader) = paths.remove(&col_path).unwrap();
+		assert_eq!((curr_def_level, curr_rep_level), (col_descr.max_def_level(), col_descr.max_rep_level()));
+		BoolReader{column: TypedTripletIter::<BoolType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
+	}
 }
 impl Deserialize for f32 {
 	type Schema = F32Schema;
@@ -1891,22 +2036,6 @@ impl Deserialize for f32 {
 		F32Reader{column: TypedTripletIter::<FloatType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-// impl Deserialize for Option<f32> {
-// 	type Schema = OptionSchema<F32Schema>;
-// 	type Reader = OptionReader<F32Reader>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::F32(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <f32 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for f64 {
 	type Schema = F64Schema;
 	type Reader = F64Reader;
@@ -1921,22 +2050,6 @@ impl Deserialize for f64 {
 		F64Reader{column: TypedTripletIter::<DoubleType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-// impl Deserialize for Option<f64> {
-// 	type Schema = OptionSchema<F64Schema>;
-// 	type Reader = OptionReader<F64Reader>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::F64(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <f64 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for i8 {
 	type Schema = I8Schema;
 	type Reader = TryIntoReader<I32Reader, i8>;
@@ -1951,22 +2064,6 @@ impl Deserialize for i8 {
 		TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)
 	}
 }
-// impl Deserialize for Option<i8> {
-// 	type Schema = OptionSchema<I8Schema>;
-// 	type Reader = OptionReader<TryIntoReader<I32Reader, i8>>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::I8(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <i8 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for u8 {
 	type Schema = U8Schema;
 	type Reader = TryIntoReader<I32Reader, u8>;
@@ -1981,7 +2078,6 @@ impl Deserialize for u8 {
 		TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)
 	}
 }
-
 impl Deserialize for i16 {
 	type Schema = I16Schema;
 	type Reader = TryIntoReader<I32Reader, i16>;
@@ -1996,22 +2092,6 @@ impl Deserialize for i16 {
 		TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)
 	}
 }
-// impl Deserialize for Option<i16> {
-// 	type Schema = OptionSchema<I16Schema>;
-// 	type Reader = OptionReader<TryIntoReader<I32Reader, i16>>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::I16(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <i16 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for u16 {
 	type Schema = U16Schema;
 	type Reader = TryIntoReader<I32Reader, u16>;
@@ -2026,22 +2106,6 @@ impl Deserialize for u16 {
 		TryIntoReader(I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, PhantomData)
 	}
 }
-// impl Deserialize for Option<u16> {
-// 	type Schema = OptionSchema<U16Schema>;
-// 	type Reader = OptionReader<TryIntoReader<I32Reader, u16>>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::U16(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <u16 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for i32 {
 	type Schema = I32Schema;
 	type Reader = I32Reader;
@@ -2056,22 +2120,6 @@ impl Deserialize for i32 {
 		I32Reader{column: TypedTripletIter::<Int32Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-// impl Deserialize for Option<i32> {
-// 	type Schema = OptionSchema<I32Schema>;
-// 	type Reader = OptionReader<I32Reader>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::I32(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <i32 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for u32 {
 	type Schema = U32Schema;
 	existential type Reader: RRReader<Item = Self>;
@@ -2100,22 +2148,6 @@ impl Deserialize for i64 {
 		I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-// impl Deserialize for Option<i64> {
-// 	type Schema = OptionSchema<I64Schema>;
-// 	type Reader = OptionReader<I64Reader>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::I64(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <i64 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for u64 {
 	type Schema = U64Schema;
 	existential type Reader: RRReader<Item = Self>;
@@ -2130,22 +2162,6 @@ impl Deserialize for u64 {
 		MapReader(I64Reader{column: TypedTripletIter::<Int64Type>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, |x|Ok(x as u64))
 	}
 }
-// impl Deserialize for Option<u64> {
-// 	type Schema = OptionSchema<U64Schema>;
-// 	existential type Reader: RRReader<Item = Self>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::U64(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <u64 as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for Timestamp {
 	type Schema = TimestampSchema;
 	existential type Reader: RRReader<Item = Self>;
@@ -2180,25 +2196,6 @@ impl Deserialize for Timestamp {
 		}
 	}
 }
-// impl Deserialize for Option<Timestamp> {
-// 	type Schema = OptionSchema<TimestampSchema>;
-// 	existential type Reader: RRReader<Item = Self>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::Timestamp(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <Timestamp as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
-
-
-
 // impl Deserialize for parquet::data_type::Decimal {
 // 	type Schema = DecimalSchema;
 // type Reader = Reader;
@@ -2244,22 +2241,6 @@ impl Deserialize for Vec<u8> {
 		ByteArrayReader{column: TypedTripletIter::<ByteArrayType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}
 	}
 }
-// impl Deserialize for Option<Vec<u8>> {
-// 	type Schema = OptionSchema<VecSchema>;
-// 	type Reader = OptionReader<ByteArrayReader>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::Array(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <Vec<u8> as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for String {
 	type Schema = StringSchema;
 	existential type Reader: RRReader<Item = Self>;
@@ -2274,22 +2255,6 @@ impl Deserialize for String {
 		MapReader(ByteArrayReader{column: TypedTripletIter::<ByteArrayType>::new(curr_def_level, curr_rep_level, BATCH_SIZE, col_reader)}, |x|String::from_utf8(x).map_err(|err:FromUtf8Error|ParquetError::General(err.to_string())))
 	}
 }
-// impl Deserialize for Option<String> {
-// 	type Schema = OptionSchema<StringSchema>;
-// 	existential type Reader: RRReader<Item = Self>;
-
-// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		<Value as Deserialize>::parse(schema).and_then(|(name, schema)| {
-// 			match schema {
-// 				ValueSchema::Option(box OptionSchema(ValueSchema::String(schema))) => Ok((name, OptionSchema(schema))),
-// 				_ => Err(ParquetError::General(String::from(""))),
-// 			}
-// 		})
-// 	}
-// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		OptionReader{def_level: curr_def_level, reader: <String as Deserialize>::reader(&schema.0, path, curr_def_level+1, curr_rep_level, paths)}
-// 	}
-// }
 impl Deserialize for [u8; 1024] {
 	type Schema = ArraySchema<Self>;
 	existential type Reader: RRReader<Item = Self>;
@@ -2386,6 +2351,18 @@ macro_rules! impl_parquet_deserialize_tuple {
 						err
 					))
 				})).map(|x|x.1)
+			}
+		}
+		impl<$($t,)*> Debug for TupleSchema<($((String,$t,),)*)> where $($t: Debug,)* {
+			fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+				f.debug_tuple("TupleSchema")
+					$(.field(&(self.0).$i))*
+					.finish()
+			}
+		}
+		impl<$($t,)*> DebugType for TupleSchema<($((String,$t,),)*)> where $($t: DebugType,)* {
+			fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+				f.write_str("TupleSchema")
 			}
 		}
 		impl<$($t,)*> Deserialize for Root<($($t,)*)> where $($t: Deserialize,)* {
@@ -2492,6 +2469,14 @@ impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 1
 impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20);
 impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21);
 impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23);
 impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24);
 impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30 AF 31);
+impl_parquet_deserialize_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30 AF 31 AG 32);
 
