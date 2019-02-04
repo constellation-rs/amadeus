@@ -4,7 +4,7 @@ extern crate test;
 
 use parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, file::reader::{ParquetReader, SerializedFileReader}, record::{
-		reader::{Reader, RootReader}, schemas::*, types::{Downcast, *}, Deserialize, DisplayType
+		types::{Downcast, *}, Reader, Record
 	}, schema::types::{ColumnDescPtr, ColumnPath, Type}
 };
 use std::{
@@ -12,135 +12,136 @@ use std::{
 };
 use test::Bencher;
 
-struct DisplayDisplayType<T>(PhantomData<fn(T)>)
-where
-	T: DisplayType;
-impl<T> DisplayDisplayType<T>
-where
-	T: DisplayType,
-{
-	fn new() -> Self {
-		Self(PhantomData)
-	}
-}
-impl<T> Display for DisplayDisplayType<T>
-where
-	T: DisplayType,
-{
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		T::fmt(f)
-	}
-}
+// struct DisplayDisplayType<T>(PhantomData<fn(T)>)
+// where
+// 	T: DisplayType;
+// impl<T> DisplayDisplayType<T>
+// where
+// 	T: DisplayType,
+// {
+// 	fn new() -> Self {
+// 		Self(PhantomData)
+// 	}
+// }
+// impl<T> Display for DisplayDisplayType<T>
+// where
+// 	T: DisplayType,
+// {
+// 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+// 		T::fmt(f)
+// 	}
+// }
 
-macro_rules! impl_parquet_deserialize_struct {
-	($struct:ident $struct_schema:ident $struct_reader:ident $($name:ident: $type_:ty,)*) => (
-		#[derive(Debug)]
-		struct $struct_schema {
-			$($name: <$type_ as Deserialize>::Schema,)*
-		}
-		impl Display for $struct_schema {
-			fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-				f.debug_struct(stringify!($struct_schema))
-					// $(.field(stringify!($name), &DisplayDisplayType::<<$type_ as Deserialize>::Schema>::new()))*
-					.finish()
-			}
-		}
-		impl DisplayType for $struct_schema {
-			fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-				f.debug_struct(stringify!($struct_schema))
-					// $(.field(stringify!($name), &DisplayDisplayType::<<$type_ as Deserialize>::Schema>::new()))*
-					.finish()
-			}
-		}
-		struct $struct_reader {
-			$($name: <$type_ as Deserialize>::Reader,)*
-		}
-		impl Reader for $struct_reader {
-			type Item = $struct;
+// macro_rules! impl_parquet_deserialize_struct {
+// 	($struct:ident $struct_schema:ident $struct_reader:ident $($name:ident: $type_:ty,)*) => (
+// 		#[derive(Debug)]
+// 		struct $struct_schema {
+// 			$($name: <$type_ as Record>::Schema,)*
+// 		}
+// 		impl Display for $struct_schema {
+// 			fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+// 				f.debug_struct(stringify!($struct_schema))
+// 					// $(.field(stringify!($name), &DisplayDisplayType::<<$type_ as Record>::Schema>::new()))*
+// 					.finish()
+// 			}
+// 		}
+// 		impl DisplayType for $struct_schema {
+// 			fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+// 				f.debug_struct(stringify!($struct_schema))
+// 					// $(.field(stringify!($name), &DisplayDisplayType::<<$type_ as Record>::Schema>::new()))*
+// 					.finish()
+// 			}
+// 		}
+// 		struct $struct_reader {
+// 			$($name: <$type_ as Record>::Reader,)*
+// 		}
+// 		impl Reader for $struct_reader {
+// 			type Item = $struct;
 
-			fn read(&mut self) -> Result<Self::Item, ParquetError> {
-				Ok($struct {
-					$($name: self.$name.read()?,)*
-				})
-			}
-			fn advance_columns(&mut self) {
-				$(self.$name.advance_columns();)*
-			}
-			fn has_next(&self) -> bool {
-				// self.$first_name.has_next()
-				$(self.$name.has_next() &&)* true
-			}
-			fn current_def_level(&self) -> i16 {
-				$(if true { self.$name.current_def_level() } else)*
-				{
-					panic!("Current definition level: empty group reader")
-				}
-			}
-			fn current_rep_level(&self) -> i16 {
-				$(if true { self.$name.current_rep_level() } else)*
-				{
-					panic!("Current repetition level: empty group reader")
-				}
-			}
-		}
-		impl Deserialize for $struct {
-			type Schema = $struct_schema;
-			type Reader = $struct_reader;
+// 			fn read(&mut self) -> Result<Self::Item, ParquetError> {
+// 				Ok($struct {
+// 					$($name: self.$name.read()?,)*
+// 				})
+// 			}
+// 			fn advance_columns(&mut self) {
+// 				$(self.$name.advance_columns();)*
+// 			}
+// 			fn has_next(&self) -> bool {
+// 				// self.$first_name.has_next()
+// 				$(self.$name.has_next() &&)* true
+// 			}
+// 			fn current_def_level(&self) -> i16 {
+// 				$(if true { self.$name.current_def_level() } else)*
+// 				{
+// 					panic!("Current definition level: empty group reader")
+// 				}
+// 			}
+// 			fn current_rep_level(&self) -> i16 {
+// 				$(if true { self.$name.current_rep_level() } else)*
+// 				{
+// 					panic!("Current repetition level: empty group reader")
+// 				}
+// 			}
+// 		}
+// 		impl Record for $struct {
+// 			type Schema = $struct_schema;
+// 			type Reader = $struct_reader;
 
-			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-				if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED {
-					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
-					let schema_ = $struct_schema{$($name: fields.get(stringify!($name)).ok_or(ParquetError::General(format!("Struct {} missing field {}", stringify!($struct), stringify!($name)))).and_then(|x|<$type_ as Deserialize>::parse(&**x))?.1,)*};
-					return Ok((schema.name().to_owned(), schema_))
-				}
-				Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
-			}
-			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-				$(
-					path.push(stringify!($name).to_owned());
-					let $name = <$type_ as Deserialize>::reader(&schema.$name, path, curr_def_level, curr_rep_level, paths);
-					path.pop().unwrap();
-				)*
-				$struct_reader { $($name,)* }
-			}
-		}
-		// impl Deserialize for Root<$struct> {
-		// 	type Schema = RootSchema<$struct, $struct_schema>;
-		// 	type Reader = RootReader<$struct_reader>;
+// 			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 				if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED {
+// 					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
+// 					let schema_ = $struct_schema{$($name: fields.get(stringify!($name)).ok_or(ParquetError::General(format!("Struct {} missing field {}", stringify!($struct), stringify!($name)))).and_then(|x|<$type_ as Record>::parse(&**x))?.1,)*};
+// 					return Ok((schema.name().to_owned(), schema_))
+// 				}
+// 				Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
+// 			}
+// 			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 				$(
+// 					path.push(stringify!($name).to_owned());
+// 					let $name = <$type_ as Record>::reader(&schema.$name, path, curr_def_level, curr_rep_level, paths);
+// 					path.pop().unwrap();
+// 				)*
+// 				$struct_reader { $($name,)* }
+// 			}
+// 		}
+// 		// impl Record for Root<$struct> {
+// 		// 	type Schema = RootSchema<$struct, $struct_schema>;
+// 		// 	type Reader = RootReader<$struct_reader>;
 
-		// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-		// 		if schema.is_schema() {
-		// 			let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
-		// 			let schema_ = $struct_schema{$($name: fields.get(stringify!($name)).ok_or(ParquetError::General(format!("Struct {} missing field {}", stringify!($struct), stringify!($name)))).and_then(|x|<$type_ as Deserialize>::parse(&**x))?.1,)*};
-		// 			return Ok((String::from(""), RootSchema(schema.name().to_owned(), schema_, PhantomData)))
-		// 		}
-		// 		Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
-		// 	}
-		// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-		// 		RootReader(<$struct as Deserialize>::reader(&schema.1, path, curr_def_level, curr_rep_level, paths))
-		// 	}
-		// }
-		// impl<$($t,)*> Downcast<($($t,)*)> for Value where Value: $(Downcast<$t> +)* {
-		// 	fn downcast(self) -> Result<($($t,)*),ParquetError> {
-		// 		#[allow(unused_mut,unused_variables)]
-		// 		let mut fields = self.as_group()?.0.into_iter();
-		// 		Ok(($({$i;fields.next().unwrap().downcast()?},)*))
-		// 	}
-		// }
-		// impl<$($t,)*> Downcast<($($t,)*)> for Group where Value: $(Downcast<$t> +)* {
-		// 	fn downcast(self) -> Result<($($t,)*),ParquetError> {
-		// 		#[allow(unused_mut,unused_variables)]
-		// 		let mut fields = self.0.into_iter();
-		// 		Ok(($({$i;fields.next().unwrap().downcast()?},)*))
-		// 	}
-		// }
-	);
-}
+// 		// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
+// 		// 		if schema.is_schema() {
+// 		// 			let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
+// 		// 			let schema_ = $struct_schema{$($name: fields.get(stringify!($name)).ok_or(ParquetError::General(format!("Struct {} missing field {}", stringify!($struct), stringify!($name)))).and_then(|x|<$type_ as Record>::parse(&**x))?.1,)*};
+// 		// 			return Ok((String::from(""), RootSchema(schema.name().to_owned(), schema_, PhantomData)))
+// 		// 		}
+// 		// 		Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
+// 		// 	}
+// 		// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
+// 		// 		RootReader(<$struct as Record>::reader(&schema.1, path, curr_def_level, curr_rep_level, paths))
+// 		// 	}
+// 		// }
+// 		// impl<$($t,)*> Downcast<($($t,)*)> for Value where Value: $(Downcast<$t> +)* {
+// 		// 	fn downcast(self) -> Result<($($t,)*),ParquetError> {
+// 		// 		#[allow(unused_mut,unused_variables)]
+// 		// 		let mut fields = self.as_group()?.0.into_iter();
+// 		// 		Ok(($({$i;fields.next().unwrap().downcast()?},)*))
+// 		// 	}
+// 		// }
+// 		// impl<$($t,)*> Downcast<($($t,)*)> for Group where Value: $(Downcast<$t> +)* {
+// 		// 	fn downcast(self) -> Result<($($t,)*),ParquetError> {
+// 		// 		#[allow(unused_mut,unused_variables)]
+// 		// 		let mut fields = self.0.into_iter();
+// 		// 		Ok(($({$i;fields.next().unwrap().downcast()?},)*))
+// 		// 	}
+// 		// }
+// 	);
+// }
 
 #[rustfmt::skip]
 fn main() {
 	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/stock_simulated.parquet")).unwrap()).unwrap();
 
+	#[derive(Record)]
 	struct A {
 		bp1: Option<f64>,
 		bp2: Option<f64>,
@@ -165,30 +166,30 @@ fn main() {
 		valid: Option<f64>,
 		__index_level_0__: Option<i64>,
 	}
-	impl_parquet_deserialize_struct!(A ASchema AReader
-		bp1: Option<f64>,
-		bp2: Option<f64>,
-		bp3: Option<f64>,
-		bp4: Option<f64>,
-		bp5: Option<f64>,
-		bs1: Option<f64>,
-		bs2: Option<f64>,
-		bs3: Option<f64>,
-		bs4: Option<f64>,
-		bs5: Option<f64>,
-		ap1: Option<f64>,
-		ap2: Option<f64>,
-		ap3: Option<f64>,
-		ap4: Option<f64>,
-		ap5: Option<f64>,
-		as1: Option<f64>,
-		as2: Option<f64>,
-		as3: Option<f64>,
-		as4: Option<f64>,
-		as5: Option<f64>,
-		valid: Option<f64>,
-		__index_level_0__: Option<i64>,
-	);
+	// impl_parquet_deserialize_struct!(A ASchema AReader
+	// 	bp1: Option<f64>,
+	// 	bp2: Option<f64>,
+	// 	bp3: Option<f64>,
+	// 	bp4: Option<f64>,
+	// 	bp5: Option<f64>,
+	// 	bs1: Option<f64>,
+	// 	bs2: Option<f64>,
+	// 	bs3: Option<f64>,
+	// 	bs4: Option<f64>,
+	// 	bs5: Option<f64>,
+	// 	ap1: Option<f64>,
+	// 	ap2: Option<f64>,
+	// 	ap3: Option<f64>,
+	// 	ap4: Option<f64>,
+	// 	ap5: Option<f64>,
+	// 	as1: Option<f64>,
+	// 	as2: Option<f64>,
+	// 	as3: Option<f64>,
+	// 	as4: Option<f64>,
+	// 	as5: Option<f64>,
+	// 	valid: Option<f64>,
+	// 	__index_level_0__: Option<i64>,
+	// );
 	// let rows = read::<_,A>(&file);
 	// println!("{}", rows.unwrap().count());
 
@@ -432,7 +433,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/test_datapage_v2.snappy.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/datapage_v2.snappy.parquet")).unwrap()).unwrap();
 
 	type TestDatapage = (
 		Option<String>,
@@ -567,23 +568,23 @@ use parquet::file::reader::FileReader;
 // 	reader: &'a SerializedFileReader<R>,
 // ) -> Result<impl Iterator<Item = T> + 'a, ParquetError>
 // where
-// 	Root<T>: Deserialize,
-// 	<Root<T> as Deserialize>::Schema: 'a,
-// 	<Root<T> as Deserialize>::Reader: 'a,
+// 	T: Record,
+// 	<Root<T> as Record>::Schema: 'a,
+// 	<Root<T> as Record>::Reader: 'a,
 // {
 fn read<'a, R: ParquetReader + 'static, T: 'static>(
 	reader: &'a SerializedFileReader<R>,
 ) -> Result<impl Iterator<Item = T> + 'a, ParquetError>
 where
-	Root<T>: Deserialize,
-	<Root<T> as Deserialize>::Schema: 'a,
-	<Root<T> as Deserialize>::Reader: 'a,
+	T: Record,
+	// <Root<T> as Record>::Schema: 'a,
+	// <Root<T> as Record>::Reader: 'a,
 {
 	reader.get_row_iter(None)
 	// let file_schema = reader.metadata().file_metadata().schema_descr_ptr();
 	// let file_schema = file_schema.root_schema();
-	// let schema = <Root<T> as Deserialize>::parse(file_schema).map_err(|err| {
-	// 	// let schema: Type = <Root<T> as Deserialize>::render("", &<Root<T> as Deserialize>::placeholder());
+	// let schema = <Root<T> as Record>::parse(file_schema).map_err(|err| {
+	// 	// let schema: Type = <Root<T> as Record>::render("", &<Root<T> as Record>::placeholder());
 	// 	let mut b = Vec::new();
 	// 	print_schema(&mut b, file_schema);
 	// 	// let mut a = Vec::new();
@@ -592,7 +593,7 @@ where
 	// 		"Types don't match schema.\nSchema is:\n{}\nBut types require:\n{}\nError: {}",
 	// 		String::from_utf8(b).unwrap(),
 	// 		// String::from_utf8(a).unwrap(),
-	// 		DisplayDisplayType::<<Root<T> as Deserialize>::Schema>::new(),
+	// 		DisplayDisplayType::<<Root<T> as Record>::Schema>::new(),
 	// 		err
 	// 	))
 	// }).unwrap().1;
@@ -665,9 +666,9 @@ where
 	// 	})
 	// }))
 }
-fn write<R: ParquetReader + 'static, T>(reader: R, schema: <Root<T> as Deserialize>::Schema) -> ()
+fn write<R: ParquetReader + 'static, T>(reader: R, schema: <Root<T> as Record>::Schema) -> ()
 where
-	Root<T>: Deserialize,
+	T: Record,
 {
 	// let schema = <Root<T>>::render("", &schema);
 	// print_schema(&mut std::io::stdout(), &schema);

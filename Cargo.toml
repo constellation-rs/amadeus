@@ -47,7 +47,7 @@ rusoto_core = "0.36"
 futures = "*"
 chrono = "*"
 http = "*"
-parquet = { path = "./parquet-rs" }# "*"
+parquet = { git = "https://github.com/alecmocatta/arrow" }
 
 [dev-dependencies]
 select = "0.4"
