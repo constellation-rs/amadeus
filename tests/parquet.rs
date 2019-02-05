@@ -2,146 +2,36 @@
 
 extern crate test;
 
+// use amadeus::prelude::*;
+use amadeus::{source::Data, DistributedIterator, ProcessPool};
+use constellation::*;
 use parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, file::reader::{ParquetReader, SerializedFileReader}, record::{
 		types::{Downcast, *}, Reader, Record
 	}, schema::types::{ColumnDescPtr, ColumnPath, Type}
 };
 use std::{
-	collections::HashMap, fmt::{self, Display}, fs::File, marker::PhantomData, path::Path
+	collections::HashMap, env, fmt::{self, Display}, fs::File, marker::PhantomData, path::{Path, PathBuf}, time::SystemTime
 };
 use test::Bencher;
 
-// struct DisplayDisplayType<T>(PhantomData<fn(T)>)
-// where
-// 	T: DisplayType;
-// impl<T> DisplayDisplayType<T>
-// where
-// 	T: DisplayType,
-// {
-// 	fn new() -> Self {
-// 		Self(PhantomData)
-// 	}
-// }
-// impl<T> Display for DisplayDisplayType<T>
-// where
-// 	T: DisplayType,
-// {
-// 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-// 		T::fmt(f)
-// 	}
-// }
-
-// macro_rules! impl_parquet_deserialize_struct {
-// 	($struct:ident $struct_schema:ident $struct_reader:ident $($name:ident: $type_:ty,)*) => (
-// 		#[derive(Debug)]
-// 		struct $struct_schema {
-// 			$($name: <$type_ as Record>::Schema,)*
-// 		}
-// 		impl Display for $struct_schema {
-// 			fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-// 				f.debug_struct(stringify!($struct_schema))
-// 					// $(.field(stringify!($name), &DisplayDisplayType::<<$type_ as Record>::Schema>::new()))*
-// 					.finish()
-// 			}
-// 		}
-// 		impl DisplayType for $struct_schema {
-// 			fn fmt(f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-// 				f.debug_struct(stringify!($struct_schema))
-// 					// $(.field(stringify!($name), &DisplayDisplayType::<<$type_ as Record>::Schema>::new()))*
-// 					.finish()
-// 			}
-// 		}
-// 		struct $struct_reader {
-// 			$($name: <$type_ as Record>::Reader,)*
-// 		}
-// 		impl Reader for $struct_reader {
-// 			type Item = $struct;
-
-// 			fn read(&mut self) -> Result<Self::Item, ParquetError> {
-// 				Ok($struct {
-// 					$($name: self.$name.read()?,)*
-// 				})
-// 			}
-// 			fn advance_columns(&mut self) {
-// 				$(self.$name.advance_columns();)*
-// 			}
-// 			fn has_next(&self) -> bool {
-// 				// self.$first_name.has_next()
-// 				$(self.$name.has_next() &&)* true
-// 			}
-// 			fn current_def_level(&self) -> i16 {
-// 				$(if true { self.$name.current_def_level() } else)*
-// 				{
-// 					panic!("Current definition level: empty group reader")
-// 				}
-// 			}
-// 			fn current_rep_level(&self) -> i16 {
-// 				$(if true { self.$name.current_rep_level() } else)*
-// 				{
-// 					panic!("Current repetition level: empty group reader")
-// 				}
-// 			}
-// 		}
-// 		impl Record for $struct {
-// 			type Schema = $struct_schema;
-// 			type Reader = $struct_reader;
-
-// 			fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 				if schema.is_group() && !schema.is_schema() && schema.get_basic_info().repetition() == Repetition::REQUIRED {
-// 					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
-// 					let schema_ = $struct_schema{$($name: fields.get(stringify!($name)).ok_or(ParquetError::General(format!("Struct {} missing field {}", stringify!($struct), stringify!($name)))).and_then(|x|<$type_ as Record>::parse(&**x))?.1,)*};
-// 					return Ok((schema.name().to_owned(), schema_))
-// 				}
-// 				Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
-// 			}
-// 			fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 				$(
-// 					path.push(stringify!($name).to_owned());
-// 					let $name = <$type_ as Record>::reader(&schema.$name, path, curr_def_level, curr_rep_level, paths);
-// 					path.pop().unwrap();
-// 				)*
-// 				$struct_reader { $($name,)* }
-// 			}
-// 		}
-// 		// impl Record for Root<$struct> {
-// 		// 	type Schema = RootSchema<$struct, $struct_schema>;
-// 		// 	type Reader = RootReader<$struct_reader>;
-
-// 		// 	fn parse(schema: &Type) -> Result<(String,Self::Schema),ParquetError> {
-// 		// 		if schema.is_schema() {
-// 		// 			let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<HashMap<_,_>>();
-// 		// 			let schema_ = $struct_schema{$($name: fields.get(stringify!($name)).ok_or(ParquetError::General(format!("Struct {} missing field {}", stringify!($struct), stringify!($name)))).and_then(|x|<$type_ as Record>::parse(&**x))?.1,)*};
-// 		// 			return Ok((String::from(""), RootSchema(schema.name().to_owned(), schema_, PhantomData)))
-// 		// 		}
-// 		// 		Err(ParquetError::General(format!("Struct {}", stringify!($struct))))
-// 		// 	}
-// 		// 	fn reader(schema: &Self::Schema, mut path: &mut Vec<String>, curr_def_level: i16, curr_rep_level: i16, paths: &mut HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)>) -> Self::Reader {
-// 		// 		RootReader(<$struct as Record>::reader(&schema.1, path, curr_def_level, curr_rep_level, paths))
-// 		// 	}
-// 		// }
-// 		// impl<$($t,)*> Downcast<($($t,)*)> for Value where Value: $(Downcast<$t> +)* {
-// 		// 	fn downcast(self) -> Result<($($t,)*),ParquetError> {
-// 		// 		#[allow(unused_mut,unused_variables)]
-// 		// 		let mut fields = self.as_group()?.0.into_iter();
-// 		// 		Ok(($({$i;fields.next().unwrap().downcast()?},)*))
-// 		// 	}
-// 		// }
-// 		// impl<$($t,)*> Downcast<($($t,)*)> for Group where Value: $(Downcast<$t> +)* {
-// 		// 	fn downcast(self) -> Result<($($t,)*),ParquetError> {
-// 		// 		#[allow(unused_mut,unused_variables)]
-// 		// 		let mut fields = self.0.into_iter();
-// 		// 		Ok(($({$i;fields.next().unwrap().downcast()?},)*))
-// 		// 	}
-// 		// }
-// 	);
-// }
-
 #[rustfmt::skip]
 fn main() {
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/stock_simulated.parquet")).unwrap()).unwrap();
+	init(Resources::default());
 
-	#[derive(Record)]
+	// Accept the number of processes at the command line, defaulting to 10
+	let processes = env::args()
+		.nth(1)
+		.and_then(|arg| arg.parse::<usize>().ok())
+		.unwrap_or(10);
+
+	let start = SystemTime::now();
+
+	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/stock_simulated.parquet")).unwrap()).unwrap();
+
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct A {
 		bp1: Option<f64>,
 		bp2: Option<f64>,
@@ -166,32 +56,8 @@ fn main() {
 		valid: Option<f64>,
 		__index_level_0__: Option<i64>,
 	}
-	// impl_parquet_deserialize_struct!(A ASchema AReader
-	// 	bp1: Option<f64>,
-	// 	bp2: Option<f64>,
-	// 	bp3: Option<f64>,
-	// 	bp4: Option<f64>,
-	// 	bp5: Option<f64>,
-	// 	bs1: Option<f64>,
-	// 	bs2: Option<f64>,
-	// 	bs3: Option<f64>,
-	// 	bs4: Option<f64>,
-	// 	bs5: Option<f64>,
-	// 	ap1: Option<f64>,
-	// 	ap2: Option<f64>,
-	// 	ap3: Option<f64>,
-	// 	ap4: Option<f64>,
-	// 	ap5: Option<f64>,
-	// 	as1: Option<f64>,
-	// 	as2: Option<f64>,
-	// 	as3: Option<f64>,
-	// 	as4: Option<f64>,
-	// 	as5: Option<f64>,
-	// 	valid: Option<f64>,
-	// 	__index_level_0__: Option<i64>,
-	// );
-	// let rows = read::<_,A>(&file);
-	// println!("{}", rows.unwrap().count());
+	let rows = amadeus::source::Parquet::<A>::new(vec![PathBuf::from("./amadeus-testing/parquet/stock_simulated.parquet")]);
+	println!("{}", rows.unwrap().count(&pool));
 
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
@@ -224,25 +90,21 @@ fn main() {
 	>(&file);
 	println!("{}", rows.unwrap().count());
 
-	// struct B {
-	// 	bs5: Option<f64>,
-	// 	__index_level_0__: Option<i64>,
-	// }
-	// impl_parquet_deserialize_struct!(B BSchema BReader
-	// 	bs5: Option<f64>,
-	// 	__index_level_0__: Option<i64>,
-	// );
-	// let rows = read::<_,B>(&file);
-	// println!("{}", rows.unwrap().count());
+	#[derive(Record)]
+	struct B {
+		bs5: Option<f64>,
+		__index_level_0__: Option<i64>,
+	}
+	let rows = read::<_,B>(&file);
+	println!("{}", rows.unwrap().count());
 
-	// struct C {
-	// }
-	// impl_parquet_deserialize_struct!(C CSchema CReader
-	// );
-	// let rows = read::<_,C>(&file);
-	// println!("{}", rows.unwrap().count());
+	#[derive(Record)]
+	struct C {
+	}
+	let rows = read::<_,C>(&file);
+	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/10k-v2.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/10k-v2.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -261,7 +123,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/alltypes_dictionary.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/alltypes_dictionary.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -283,7 +145,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/alltypes_plain.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/alltypes_plain.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -305,7 +167,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/alltypes_plain.snappy.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/alltypes_plain.snappy.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -327,7 +189,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	// let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nation.dict-malformed.parquet")).unwrap()).unwrap();
+	// let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nation.dict-malformed.parquet")).unwrap()).unwrap();
 	// let rows = read::<_,
 	// 	(
 	// 		Option<i32>,
@@ -338,7 +200,7 @@ fn main() {
 	// >(&file);
 	// println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nested_lists.snappy.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nested_lists.snappy.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -351,7 +213,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nested_maps.snappy.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nested_maps.snappy.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -365,7 +227,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nonnullable.impala.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nonnullable.impala.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -387,7 +249,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nullable.impala.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nullable.impala.parquet")).unwrap()).unwrap();
 
 	type Nullable = (
 		Option<i64>,
@@ -408,7 +270,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().map(|x| -> Nullable { x.downcast().unwrap() }).count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/nulls.snappy.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nulls.snappy.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -420,7 +282,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/repeated_no_annotation.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/repeated_no_annotation.parquet")).unwrap()).unwrap();
 
 	let rows = read::<_,
 		(
@@ -433,7 +295,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/datapage_v2.snappy.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/datapage_v2.snappy.parquet")).unwrap()).unwrap();
 
 	type TestDatapage = (
 		Option<String>,
@@ -448,7 +310,7 @@ fn main() {
 	let rows = read::<_,Row>(&file);
 	println!("{}", rows.unwrap().map(|x| -> TestDatapage { x.downcast().unwrap() }).count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./parquet-rs/data/commits.parquet")).unwrap()).unwrap();
+	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/commits.parquet")).unwrap()).unwrap();
 
 	type Commits = (
 		Option<String>, // id
@@ -484,7 +346,7 @@ fn main() {
 
 #[bench]
 fn record_reader_10k_collect(bench: &mut Bencher) {
-	let path = Path::new("./parquet-rs/data/10k-v2.parquet");
+	let path = Path::new("./amadeus-testing/parquet/10k-v2.parquet");
 	let file = File::open(&path).unwrap();
 	let len = file.metadata().unwrap().len();
 	let parquet_reader = SerializedFileReader::new(file).unwrap();
@@ -497,7 +359,7 @@ fn record_reader_10k_collect(bench: &mut Bencher) {
 }
 #[bench]
 fn record_reader_stock_simulated_collect(bench: &mut Bencher) {
-	let path = Path::new("./parquet-rs/data/stock_simulated.parquet");
+	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
 	let file = File::open(&path).unwrap();
 	let len = file.metadata().unwrap().len();
 	let parquet_reader = SerializedFileReader::new(file).unwrap();
@@ -511,7 +373,7 @@ fn record_reader_stock_simulated_collect(bench: &mut Bencher) {
 
 #[bench]
 fn record_reader_10k_collect_2(bench: &mut Bencher) {
-	let file = File::open(&Path::new("./parquet-rs/data/10k-v2.parquet")).unwrap();
+	let file = File::open(&Path::new("./amadeus-testing/parquet/10k-v2.parquet")).unwrap();
 	let len = file.metadata().unwrap().len();
 	let parquet_reader = SerializedFileReader::new(file).unwrap();
 
@@ -524,7 +386,7 @@ fn record_reader_10k_collect_2(bench: &mut Bencher) {
 }
 #[bench]
 fn record_reader_stock_simulated_collect_2(bench: &mut Bencher) {
-	let path = Path::new("./parquet-rs/data/stock_simulated.parquet");
+	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
 	let file = File::open(&path).unwrap();
 	let len = file.metadata().unwrap().len();
 	let parquet_reader = SerializedFileReader::new(file).unwrap();
@@ -580,7 +442,9 @@ where
 	// <Root<T> as Record>::Schema: 'a,
 	// <Root<T> as Record>::Reader: 'a,
 {
-	reader.get_row_iter(None)
+	reader
+		.get_row_iter(None)
+		.map(|iter| iter.map(Result::unwrap))
 	// let file_schema = reader.metadata().file_metadata().schema_descr_ptr();
 	// let file_schema = file_schema.root_schema();
 	// let schema = <Root<T> as Record>::parse(file_schema).map_err(|err| {

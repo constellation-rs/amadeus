@@ -13,12 +13,11 @@
 	core_intrinsics,
 	nll,
 	try_from,
-	convert_id,
 	iter_unfold,
-	transpose_result,
 	maybe_uninit,
 	test,
-	existential_type
+	existential_type,
+	bind_by_move_pattern_guards
 )]
 #![warn(
 	// missing_copy_implementations,
@@ -48,7 +47,7 @@
 extern crate serde_closure;
 #[macro_use]
 extern crate serde_derive;
-extern crate test;
+// extern crate test;
 
 pub mod dist_iter;
 pub mod into_dist_iter;

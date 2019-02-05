@@ -23,9 +23,16 @@ travis-ci = { repository = "alecmocatta/amadeus" }
 
 maintenance = { status = "actively-developed" }
 
+[workspace]
+members = [
+    "./",
+    "amadeus_derive",
+]
+
 [dependencies]
+amadeus_derive = { version = "0.1.0", path = "amadeus_derive" }
 serde_derive = "1.0"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 rand = "0.5"
 either = "1.5"
 serde_closure = { version = "0.1" } #, path = "../serde_closure" }
@@ -47,7 +54,9 @@ rusoto_core = "0.36"
 futures = "*"
 chrono = "*"
 http = "*"
-parquet = { git = "https://github.com/alecmocatta/arrow" }
+walkdir = "2.2"
+parquet = { git = "https://github.com/alecmocatta/arrow", branch = "testing" }
+# parquet = { path = "./arrow/rust/parquet" }
 
 [dev-dependencies]
 select = "0.4"

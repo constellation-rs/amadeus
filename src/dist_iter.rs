@@ -15,6 +15,7 @@ mod map;
 mod max;
 mod sample;
 mod sum;
+mod sum_type;
 mod tuple;
 mod update;
 pub use self::{

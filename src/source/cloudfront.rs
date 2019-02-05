@@ -1,3 +1,4 @@
+use super::ResultExpand;
 use crate::{dist_iter::Consumer, DistributedIterator, IteratorExt};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use flate2::read::MultiGzDecoder;
@@ -5,7 +6,7 @@ use http::{Method, StatusCode};
 use rusoto_core::Region;
 use rusoto_s3::{S3Client, S3};
 use std::{
-	error, io::{self, BufRead, BufReader}, iter, net, sync::Arc, time::Duration, vec
+	convert::identity, error, fmt::{self, Display}, io::{self, BufRead, BufReader}, iter, net, sync::Arc, time::Duration, vec
 };
 use url::Url;
 
@@ -44,32 +45,30 @@ impl Cloudfront {
 		let (bucket, prefix) = (bucket.to_owned(), prefix.to_owned());
 		let s3client = S3Client::new(region.clone());
 
-		let objects: Result<Vec<String>, _> = iter::unfold(
-			(true, None),
-			|&mut (ref mut first, ref mut continuation_token)| {
-				if !*first && continuation_token.is_none() {
-					return None;
-				}
-				*first = false;
-				Some(ResultExpand(
-					s3client
-						.list_objects_v2(rusoto_s3::ListObjectsV2Request {
-							bucket: bucket.clone(),
-							prefix: Some(prefix.clone()),
-							continuation_token: continuation_token.take(),
-							..rusoto_s3::ListObjectsV2Request::default()
-						})
-						.sync()
-						.map(|res| {
-							*continuation_token = res.next_continuation_token;
-							res.contents
-								.unwrap_or_default()
-								.into_iter()
-								.map(|object: rusoto_s3::Object| object.key.unwrap())
-						}),
-				))
-			},
-		)
+		let (mut first, mut continuation_token) = (true, None);
+		let objects: Result<Vec<String>, _> = iter::from_fn(|| {
+			if !first && continuation_token.is_none() {
+				return None;
+			}
+			first = false;
+			Some(ResultExpand(
+				s3client
+					.list_objects_v2(rusoto_s3::ListObjectsV2Request {
+						bucket: bucket.clone(),
+						prefix: Some(prefix.clone()),
+						continuation_token: continuation_token.take(),
+						..rusoto_s3::ListObjectsV2Request::default()
+					})
+					.sync()
+					.map(|res| {
+						continuation_token = res.next_continuation_token;
+						res.contents
+							.unwrap_or_default()
+							.into_iter()
+							.map(|object: rusoto_s3::Object| object.key.unwrap())
+					}),
+			))
+		})
 		.flatten()
 		.collect();
 
@@ -242,9 +241,7 @@ impl Cloudfront {
 						}),
 				)
 			}))
-			.map(FnMut!(
-				|x: Result<Result<Row, _>, _>| x.and_then(std::convert::identity)
-			));
+			.map(FnMut!(|x: Result<Result<Row, _>, _>| x.and_then(identity)));
 		Ok(Self { i })
 	}
 }
@@ -289,6 +286,21 @@ pub enum Error {
 	Unknown(Arc<rusoto_core::request::BufferedHttpResponse>),
 	Io(Arc<io::Error>),
 }
+impl error::Error for Error {}
+impl Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Error::NoSuchBucket(err) => err.fmt(f),
+			Error::NoSuchKey(err) => err.fmt(f),
+			Error::HttpDispatch(err) => err.fmt(f),
+			Error::Credentials(err) => fmt::Debug::fmt(err, f),
+			Error::Validation(err) => err.fmt(f),
+			Error::ParseError(err) => err.fmt(f),
+			Error::Unknown(err) => fmt::Debug::fmt(err, f),
+			Error::Io(err) => err.fmt(f),
+		}
+	}
+}
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
 		Error::Io(Arc::new(err))
@@ -323,7 +335,7 @@ impl From<rusoto_s3::GetObjectError> for Error {
 	}
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub struct Row {
 	pub time: DateTime<Utc>,
 	pub edge_location: String,
@@ -417,34 +429,5 @@ mod http_serde {
 		D: Deserializer<'de>,
 	{
 		Serde::<T>::deserialize(deserializer).map(|x| x.0)
-	}
-}
-
-struct ResultExpand<T, E>(Result<T, E>);
-impl<T, E> IntoIterator for ResultExpand<T, E>
-where
-	T: IntoIterator,
-{
-	type Item = Result<T::Item, E>;
-	type IntoIter = ResultExpandIter<T::IntoIter, E>;
-	fn into_iter(self) -> Self::IntoIter {
-		ResultExpandIter(self.0.map(IntoIterator::into_iter).map_err(Some))
-	}
-}
-struct ResultExpandIter<T, E>(Result<T, Option<E>>);
-impl<T, E> Iterator for ResultExpandIter<T, E>
-where
-	T: Iterator,
-{
-	type Item = Result<T::Item, E>;
-	fn next(&mut self) -> Option<Self::Item> {
-		transpose(self.0.as_mut().map(Iterator::next).map_err(Option::take))
-	}
-}
-fn transpose<T, E>(result: Result<Option<T>, Option<E>>) -> Option<Result<T, E>> {
-	match result {
-		Ok(Some(x)) => Some(Ok(x)),
-		Err(Some(e)) => Some(Err(e)),
-		Ok(None) | Err(None) => None,
 	}
 }
