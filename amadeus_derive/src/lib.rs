@@ -25,7 +25,6 @@ extern crate syn;
 extern crate quote;
 
 use proc_macro2::{Span, TokenStream};
-use std::iter;
 use syn::{
 	punctuated::Punctuated, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Field, Fields, Ident, Lit, LitStr, Meta, NestedMeta, TypeParam, WhereClause
 };
@@ -106,19 +105,19 @@ fn impl_struct(
 	for TypeParam { ident, .. } in ast.generics.type_params() {
 		where_clause_with_data
 			.predicates
-			.push(syn::parse2(quote! { #ident: Data }).unwrap());
+			.push(syn::parse2(quote! { #ident: __::Data }).unwrap());
 	}
 	let mut where_clause_with_data_debug = where_clause_with_data.clone();
 	for TypeParam { ident, .. } in ast.generics.type_params() {
 		where_clause_with_data_debug
 			.predicates
-			.push(syn::parse2(quote! { <#ident as Data>::Schema: Debug }).unwrap());
+			.push(syn::parse2(quote! { <#ident as __::Data>::Schema: __::Debug }).unwrap());
 	}
 	let mut where_clause_with_data_default = where_clause_with_data.clone();
 	for TypeParam { ident, .. } in ast.generics.type_params() {
 		where_clause_with_data_default
 			.predicates
-			.push(syn::parse2(quote! { <#ident as Data>::Schema: Default }).unwrap());
+			.push(syn::parse2(quote! { <#ident as __::Data>::Schema: __::Default }).unwrap());
 	}
 
 	// The struct field names
@@ -128,6 +127,8 @@ fn impl_struct(
 		.collect::<Vec<_>>();
 	let field_names1 = &field_names;
 	let field_names2 = &field_names;
+
+	let num_fields = field_names.len();
 
 	// The field names specified via `#[amadeus(rename = "foo")]`, falling back to struct
 	// field names
@@ -176,9 +177,6 @@ fn impl_struct(
 	let field_types = fields.iter().map(|field| &field.ty).collect::<Vec<_>>();
 	let field_types1 = &field_types;
 
-	// The struct name, repeated so it can be used in a repeated block
-	let name1 = iter::repeat(name).take(fields.len());
-
 	let name_str = LitStr::new(&name.to_string(), name.span());
 
 	let gen = quote! {
@@ -191,10 +189,10 @@ fn impl_struct(
 				basic::Repetition,
 				column::reader::ColumnReader,
 				errors::{ParquetError, Result as ParquetResult},
-				record::{Schema, Reader, _private::DisplaySchemaGroup},
+				record::{Schema as ParquetSchema, Reader, _private::DisplaySchemaGroup},
 				schema::types::{ColumnPath, Type},
 			};
-			pub use amadeus::source::{serde_data, _serde::{Serialize, Deserialize, Serializer, Deserializer}, Data};
+			pub use amadeus::data::{serde_data, _serde::{Serialize, Deserialize, Serializer, Deserializer}, Data, types::{Downcast, DowncastError, Value, Schema}};
 			pub use ::std::{collections::HashMap, cmp::PartialEq, default::Default, fmt::{self, Debug}, result::Result::{self, Ok, Err}, string::String, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
@@ -203,7 +201,7 @@ fn impl_struct(
 		#[serde(bound = "")]
 		struct #serde_name #impl_generics #where_clause_with_data {
 			#(
-				#[serde(with = "__::serde_data")]
+				#[serde(with = "__::serde_data", rename = #field_renames1)]
 				#field_names1: #field_types1,
 			)*
 		}
@@ -211,14 +209,14 @@ fn impl_struct(
 		struct #schema_name #impl_generics #where_clause_with_data {
 			#(#field_names1: <#field_types1 as __::Data>::ParquetSchema,)*
 		}
-		#[automatically_derived]
-		impl #impl_generics __::Default for #schema_name #ty_generics #where_clause_with_data_default {
-			fn default() -> Self {
-				Self {
-					#(#field_names1: __::Default::default(),)*
-				}
-			}
-		}
+		// #[automatically_derived]
+		// impl #impl_generics __::Default for #schema_name #ty_generics #where_clause_with_data_default {
+		// 	fn default() -> Self {
+		// 		Self {
+		// 			#(#field_names1: __::Default::default(),)*
+		// 		}
+		// 	}
+		// }
 		#[automatically_derived]
 		impl #impl_generics __::Debug for #schema_name #ty_generics #where_clause_with_data_debug {
 			fn fmt(&self, f: &mut __::fmt::Formatter) -> __::fmt::Result {
@@ -228,7 +226,7 @@ fn impl_struct(
 			}
 		}
 		#[automatically_derived]
-		impl #impl_generics __::Schema for #schema_name #ty_generics #where_clause_with_data {
+		impl #impl_generics __::ParquetSchema for #schema_name #ty_generics #where_clause_with_data {
 			fn fmt(self_: __::Option<&Self>, r: __::Option<__::Repetition>, name: __::Option<&str>, f: &mut __::fmt::Formatter) -> __::fmt::Result {
 				let mut printer = __::DisplaySchemaGroup::new(r, name, None, f);
 				#(
@@ -293,22 +291,23 @@ fn impl_struct(
 			type ParquetSchema = #schema_name #ty_generics;
 			type ParquetReader = #reader_name #ty_generics;
 
-			fn serde_serialize<S>(&self, serializer: S) -> __::Result<S::Ok, S::Error>
+			fn serde_serialize<__S>(&self, serializer: __S) -> __::Result<__S::Ok, __S::Error>
 			where
-				S: __::Serializer {
+				__S: __::Serializer {
 				<#serde_name #ty_generics>::serialize(self, serializer)
 			}
-			fn serde_deserialize<'de,D>(deserializer: D) -> __::Result<Self, D::Error>
+			fn serde_deserialize<'de, __D>(deserializer: __D, schema: __::Option<__::Schema>) -> __::Result<Self, __D::Error>
 			where
-				D: __::Deserializer<'de> {
+				__D: __::Deserializer<'de> {
 				<#serde_name #ty_generics>::deserialize(deserializer)
 			}
 
 			fn parquet_parse(schema: &__::Type, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::ParquetSchema)> {
 				if schema.is_group() && repetition == __::Some(__::Repetition::REQUIRED) {
 					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<__::HashMap<_,_>>();
+					let name = stringify!(#name);
 					let schema_ = #schema_name{
-						#(#field_names1: fields.get(#field_renames1).ok_or(__::ParquetError::General(format!("Struct \"{}\" has field \"{}\" not in the schema", stringify!(#name1), #field_renames2))).and_then(|x|<#field_types1 as __::Data>::parquet_parse(&**x, __::Some(x.get_basic_info().repetition())))?.1,)*
+						#(#field_names1: fields.get(#field_renames1).ok_or_else(|| __::ParquetError::General(format!("Struct \"{}\" has field \"{}\" not in the schema", name, #field_renames2))).and_then(|x|<#field_types1 as __::Data>::parquet_parse(&**x, __::Some(x.get_basic_info().repetition())))?.1,)*
 					};
 					return __::Ok((schema.name().to_owned(), schema_))
 				}
@@ -321,6 +320,28 @@ fn impl_struct(
 					path.pop().unwrap();
 				)*
 				#reader_name { #(#field_names1,)* }
+			}
+		}
+
+		impl #impl_generics __::Downcast<#name #ty_generics> for __::Value #where_clause_with_data {
+			fn downcast(self) -> __::Result<#name #ty_generics, __::DowncastError> {
+				let group = self.into_group()?;
+				let field_names = group.field_names();
+				let mut fields = group.into_fields().into_iter();
+				let err = __::DowncastError{from:"group",to:stringify!(#name)};
+				__::Ok(if let Some(field_names) = field_names {
+					let mut fields = fields.map(__::Some).collect::<__::Vec<_>>();
+					#name {
+						#(#field_names1: fields[*field_names.get(#field_renames1).ok_or(err)?].take().ok_or(err)?.downcast()?,)*
+					}
+				} else {
+					if fields.len() != #num_fields {
+						return Err(err);
+					}
+					#name {
+						#(#field_names1: fields.next().unwrap().downcast()?,)*
+					}
+				})
 			}
 		}
 	};

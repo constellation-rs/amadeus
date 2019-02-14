@@ -30,8 +30,8 @@ use serde::{
 };
 use std::{cmp::Ordering, hash::Hash, iter, marker::PhantomData, vec};
 
-type Pool = crate::process_pool::ProcessPool;
-// type Pool = ::no_pool::NoPool;
+// type Pool = crate::process_pool::ProcessPool;
+type Pool = crate::no_pool::NoPool;
 
 pub trait DistributedIterator {
 	type Item;

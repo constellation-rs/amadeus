@@ -1,21 +1,18 @@
-#![feature(test)]
+// #![feature(test)]
 
-extern crate test;
+// extern crate test;
 
 // use amadeus::prelude::*;
-use amadeus::{source::Data, DistributedIterator, ProcessPool};
+use amadeus::{
+	data::{
+		types::{Downcast, List, Map, Timestamp, Value}, Data
+	}, source::Parquet, DistributedIterator, ProcessPool
+};
 use constellation::*;
-use parquet::{
-	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, file::reader::{ParquetReader, SerializedFileReader}, record::{
-		types::{Downcast, *}, Reader, Record
-	}, schema::types::{ColumnDescPtr, ColumnPath, Type}
-};
-use std::{
-	collections::HashMap, env, fmt::{self, Display}, fs::File, marker::PhantomData, path::{Path, PathBuf}, time::SystemTime
-};
-use test::Bencher;
+use serde_closure::FnMut;
+use std::{env, path::PathBuf, time::SystemTime};
+// use test::Bencher;
 
-#[rustfmt::skip]
 fn main() {
 	init(Resources::default());
 
@@ -29,10 +26,8 @@ fn main() {
 
 	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/stock_simulated.parquet")).unwrap()).unwrap();
-
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
-	struct A {
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct StockSimulatedDerived {
 		bp1: Option<f64>,
 		bp2: Option<f64>,
 		bp3: Option<f64>,
@@ -56,490 +51,852 @@ fn main() {
 		valid: Option<f64>,
 		__index_level_0__: Option<i64>,
 	}
-	let rows = amadeus::source::Parquet::<A>::new(vec![PathBuf::from("./amadeus-testing/parquet/stock_simulated.parquet")]);
-	println!("{}", rows.unwrap().count(&pool));
+	let rows = Parquet::<StockSimulatedDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/stock_simulated.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		42_000
+	);
 
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/stock_simulated.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: StockSimulatedDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		42_000
+	);
 
-	let rows = read::<_,
-		(
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<f64>,
-			Option<i64>,
-		)
-	>(&file);
-	println!("{}", rows.unwrap().count());
-
-	#[derive(Record)]
-	struct B {
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct StockSimulatedDerivedProjection1 {
 		bs5: Option<f64>,
 		__index_level_0__: Option<i64>,
 	}
-	let rows = read::<_,B>(&file);
-	println!("{}", rows.unwrap().count());
 
-	#[derive(Record)]
-	struct C {
+	let rows = Parquet::<StockSimulatedDerivedProjection1>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/stock_simulated.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		42_000
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/stock_simulated.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: StockSimulatedDerivedProjection1 = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		42_000
+	);
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct StockSimulatedDerivedProjection2 {}
+
+	let rows = Parquet::<StockSimulatedDerivedProjection2>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/stock_simulated.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		42_000
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/stock_simulated.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: StockSimulatedDerivedProjection2 = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		42_000
+	);
+
+	type TenKayVeeTwo = (
+		Vec<u8>,
+		i32,
+		i64,
+		bool,
+		f32,
+		f64,
+		Vec<u8>, // [u8;1024],
+		Timestamp,
+	);
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct TenKayVeeTwoDerived {
+		binary_field: Vec<u8>,
+		int32_field: i32,
+		int64_field: i64,
+		boolean_field: bool,
+		float_field: f32,
+		double_field: f64,
+		flba_field: Vec<u8>, // [u8;1024],
+		int96_field: Timestamp,
 	}
-	let rows = read::<_,C>(&file);
-	println!("{}", rows.unwrap().count());
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/10k-v2.parquet")).unwrap()).unwrap();
+	let rows = Parquet::<TenKayVeeTwo>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/10k-v2.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		10_000
+	);
 
-	let rows = read::<_,
+	let rows = Parquet::<TenKayVeeTwoDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/10k-v2.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		10_000
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/10k-v2.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: TenKayVeeTwo = value.clone().downcast().unwrap();
+				let _: TenKayVeeTwoDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		10_000
+	);
+
+	type AlltypesDictionary = (
+		Option<i32>,
+		Option<bool>,
+		Option<i32>,
+		Option<i32>,
+		Option<i32>,
+		Option<i64>,
+		Option<f32>,
+		Option<f64>,
+		Option<Vec<u8>>,
+		Option<Vec<u8>>,
+		Option<Timestamp>,
+	);
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct AlltypesDictionaryDerived {
+		id: Option<i32>,
+		bool_col: Option<bool>,
+		tinyint_col: Option<i32>,
+		smallint_col: Option<i32>,
+		int_col: Option<i32>,
+		bigint_col: Option<i64>,
+		float_col: Option<f32>,
+		double_col: Option<f64>,
+		date_string_col: Option<Vec<u8>>,
+		string_col: Option<Vec<u8>>,
+		timestamp_col: Option<Timestamp>,
+	}
+
+	let rows = Parquet::<AlltypesDictionary>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_dictionary.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		2
+	);
+
+	let rows = Parquet::<AlltypesDictionaryDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_dictionary.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		2
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_dictionary.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: AlltypesDictionary = value.clone().downcast().unwrap();
+				let _: AlltypesDictionaryDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		2
+	);
+
+	type AlltypesPlain = (
+		Option<i32>,
+		Option<bool>,
+		Option<i32>,
+		Option<i32>,
+		Option<i32>,
+		Option<i64>,
+		Option<f32>,
+		Option<f64>,
+		Option<Vec<u8>>,
+		Option<Vec<u8>>,
+		Option<Timestamp>,
+	);
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct AlltypesPlainDerived {
+		id: Option<i32>,
+		bool_col: Option<bool>,
+		tinyint_col: Option<i32>,
+		smallint_col: Option<i32>,
+		int_col: Option<i32>,
+		bigint_col: Option<i64>,
+		float_col: Option<f32>,
+		double_col: Option<f64>,
+		date_string_col: Option<Vec<u8>>,
+		string_col: Option<Vec<u8>>,
+		timestamp_col: Option<Timestamp>,
+	}
+
+	let rows = Parquet::<AlltypesPlain>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_plain.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		8
+	);
+
+	let rows = Parquet::<AlltypesPlainDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_plain.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		8
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_plain.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: AlltypesPlain = value.clone().downcast().unwrap();
+				let _: AlltypesPlainDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		8
+	);
+
+	type AlltypesPlainSnappy = (
+		Option<i32>,
+		Option<bool>,
+		Option<i32>,
+		Option<i32>,
+		Option<i32>,
+		Option<i64>,
+		Option<f32>,
+		Option<f64>,
+		Option<Vec<u8>>,
+		Option<Vec<u8>>,
+		Option<Timestamp>,
+	);
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct AlltypesPlainSnappyDerived {
+		id: Option<i32>,
+		bool_col: Option<bool>,
+		tinyint_col: Option<i32>,
+		smallint_col: Option<i32>,
+		int_col: Option<i32>,
+		bigint_col: Option<i64>,
+		float_col: Option<f32>,
+		double_col: Option<f64>,
+		date_string_col: Option<Vec<u8>>,
+		string_col: Option<Vec<u8>>,
+		timestamp_col: Option<Timestamp>,
+	}
+
+	let rows = Parquet::<AlltypesPlainSnappy>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		2
+	);
+
+	let rows = Parquet::<AlltypesPlainSnappyDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		2
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: AlltypesPlainSnappy = value.clone().downcast().unwrap();
+				let _: AlltypesPlainSnappyDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		2
+	);
+
+	type NationDictMalformed = (Option<i32>, Option<Vec<u8>>, Option<i32>, Option<Vec<u8>>);
+
+	let rows = Parquet::<NationDictMalformed>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nation.dict-malformed.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap().collect::<Vec<_>>(&pool),
+		[Err(amadeus::source::parquet::Error::Parquet(
+			parquet::errors::ParquetError::General(String::from(
+				"underlying IO error: failed to fill whole buffer"
+			))
+		))]
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nation.dict-malformed.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap().collect::<Vec<_>>(&pool),
+		[Err(amadeus::source::parquet::Error::Parquet(
+			parquet::errors::ParquetError::General(String::from(
+				"underlying IO error: failed to fill whole buffer"
+			))
+		))]
+	);
+
+	type NestedLists = (
+		Option<List<Option<List<Option<List<Option<String>>>>>>>,
+		i32,
+	);
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NestedListsDerived {
+		a: Option<List<Option<List<Option<List<Option<String>>>>>>>,
+		b: i32,
+	}
+	let rows = Parquet::<NestedLists>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nested_lists.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		3
+	);
+
+	let rows = Parquet::<NestedListsDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nested_lists.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		3
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nested_lists.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: NestedLists = value.clone().downcast().unwrap();
+				let _: NestedListsDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		3
+	);
+
+	type NestedMaps = (Option<Map<String, Option<Map<i32, bool>>>>, i32, f64);
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NestedMapsDerived {
+		a: Option<Map<String, Option<Map<i32, bool>>>>,
+		b: i32,
+		c: f64,
+	}
+	let rows = Parquet::<NestedMaps>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nested_maps.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		6
+	);
+
+	let rows = Parquet::<NestedMapsDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nested_maps.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		6
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nested_maps.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: NestedMaps = value.clone().downcast().unwrap();
+				let _: NestedMapsDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		6
+	);
+
+	type Nonnullable = (
+		i64,
+		List<i32>,
+		List<List<i32>>,
+		Map<String, i32>,
+		List<Map<String, i32>>,
 		(
-			Vec<u8>,
 			i32,
-			i64,
-			bool,
-			f32,
-			f64,
-			[u8;1024],
-			Timestamp,
-		)
-	>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/alltypes_dictionary.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			Option<i32>,
-			Option<bool>,
-			Option<i32>,
-			Option<i32>,
-			Option<i32>,
-			Option<i64>,
-			Option<f32>,
-			Option<f64>,
-			Option<Vec<u8>>,
-			Option<Vec<u8>>,
-			Option<Timestamp>,
-		)
-	>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/alltypes_plain.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			Option<i32>,
-			Option<bool>,
-			Option<i32>,
-			Option<i32>,
-			Option<i32>,
-			Option<i64>,
-			Option<f32>,
-			Option<f64>,
-			Option<Vec<u8>>,
-			Option<Vec<u8>>,
-			Option<Timestamp>,
-		)
-	>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/alltypes_plain.snappy.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			Option<i32>,
-			Option<bool>,
-			Option<i32>,
-			Option<i32>,
-			Option<i32>,
-			Option<i64>,
-			Option<f32>,
-			Option<f64>,
-			Option<Vec<u8>>,
-			Option<Vec<u8>>,
-			Option<Timestamp>,
-		)
-	>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	// let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nation.dict-malformed.parquet")).unwrap()).unwrap();
-	// let rows = read::<_,
-	// 	(
-	// 		Option<i32>,
-	// 		Option<Vec<u8>>,
-	// 		Option<i32>,
-	// 		Option<Vec<u8>>,
-	// 	)
-	// >(&file);
-	// println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nested_lists.snappy.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			Option<List<Option<List<Option<List<Option<String>>>>>>>,
-			i32,
-		)
-	>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nested_maps.snappy.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			Option<Map<String,Option<Map<i32,bool>>>>,
-			i32,
-			f64,
-		)
-	>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nonnullable.impala.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			i64,
 			List<i32>,
-			List<List<i32>>,
-			Map<String,i32>,
-			List<Map<String,i32>>,
-			(
-				i32,
-				List<i32>,
-				(List<List<(i32,String)>>,),
-				Map<String,((List<f64>,),)>,
-			)
-		)
-		>(&file);
-	println!("{}", rows.unwrap().count());
+			(List<List<(i32, String)>>,),
+			Map<String, ((List<f64>,),)>,
+		),
+	);
 
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NonnullableDerived {
+		#[amadeus(rename = "ID")]
+		id: i64,
+		#[amadeus(rename = "Int_Array")]
+		int_array: List<i32>,
+		int_array_array: List<List<i32>>,
+		#[amadeus(rename = "Int_Map")]
+		int_map: Map<String, i32>,
+		int_map_array: List<Map<String, i32>>,
+		#[amadeus(rename = "nested_Struct")]
+		nested_struct: NonnullableDerivedInner,
+	}
 
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nullable.impala.parquet")).unwrap()).unwrap();
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NonnullableDerivedInner {
+		a: i32,
+		#[amadeus(rename = "B")]
+		b: List<i32>,
+		c: NonnullableDerivedInnerInner,
+		#[amadeus(rename = "G")]
+		g: Map<String, ((List<f64>,),)>,
+	}
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NonnullableDerivedInnerInner {
+		#[amadeus(rename = "D")]
+		d: List<List<NonnullableDerivedInnerInnerInner>>,
+	}
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NonnullableDerivedInnerInnerInner {
+		e: i32,
+		f: String,
+	}
+
+	let rows = Parquet::<Nonnullable>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nonnullable.impala.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		1
+	);
+
+	let rows = Parquet::<NonnullableDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nonnullable.impala.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		1
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nonnullable.impala.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: Nonnullable = value.clone().downcast().unwrap();
+				let _: NonnullableDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		1
+	);
 
 	type Nullable = (
 		Option<i64>,
 		Option<List<Option<i32>>>,
 		Option<List<Option<List<Option<i32>>>>>,
-		Option<Map<String,Option<i32>>>,
-		Option<List<Option<Map<String,Option<i32>>>>>,
+		Option<Map<String, Option<i32>>>,
+		Option<List<Option<Map<String, Option<i32>>>>>,
 		Option<(
 			Option<i32>,
 			Option<List<Option<i32>>>,
-			Option<(Option<List<Option<List<Option<(Option<i32>,Option<String>)>>>>>,)>,
-			Option<Map<String,Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
-		)>
+			Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
+			Option<Map<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
+		)>,
 	);
-	let rows = read::<_,Nullable>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().map(|x| -> Nullable { x.downcast().unwrap() }).count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/nulls.snappy.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			Option<(Option<i32>,)>,
-		)
-		>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/repeated_no_annotation.parquet")).unwrap()).unwrap();
-
-	let rows = read::<_,
-		(
-			i32,
-			Option<(List<(i64,Option<String>)>,)>,
-		)
-		>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/datapage_v2.snappy.parquet")).unwrap()).unwrap();
-
-	type TestDatapage = (
-		Option<String>,
-		i32,
-		f64,
-		bool,
-		Option<List<i32>>,
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NullableDerived {
+		id: Option<i64>,
+		int_array: Option<List<Option<i32>>>,
+		#[amadeus(rename = "int_array_Array")]
+		int_array_array: Option<List<Option<List<Option<i32>>>>>,
+		int_map: Option<Map<String, Option<i32>>>,
+		#[amadeus(rename = "int_Map_Array")]
+		int_map_array: Option<List<Option<Map<String, Option<i32>>>>>,
+		nested_struct: Option<(
+			Option<i32>,
+			Option<List<Option<i32>>>,
+			Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
+			Option<Map<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
+		)>,
+	}
+	let rows = Parquet::<Nullable>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nullable.impala.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		7
 	);
-	let rows = read::<_,TestDatapage>(&file);
-	println!("{}", rows.unwrap().count());
 
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().map(|x| -> TestDatapage { x.downcast().unwrap() }).count());
-
-	let file = SerializedFileReader::new(File::open(&Path::new("./amadeus-testing/parquet/commits.parquet")).unwrap()).unwrap();
-
-	type Commits = (
-		Option<String>, // id
-		Option<i32>, // delay
-		Option<i32>, // age
-		Option<bool>, // ismerge
-		Option<i32>, // squashof
-		Option<String>, // author_name
-		Option<String>, // author_email
-		Option<String>, // committer_name
-		Option<String>, // committer_email
-		Option<Timestamp>, // author_time (TIMESTAMP_MILLIS)
-		Option<Timestamp>, // committer_time (TIMESTAMP_MILLIS)
-		Option<i64>, // loc_d
-		Option<i64>, // loc_i
-		Option<i64>, // comp_d
-		Option<i64>, // comp_i
-		Option<u16>, // nfiles
-		Option<String>, // message
-		Option<u16>, // ndiffs
-		Option<String>, // author_email_dedup
-		Option<String>, // author_name_dedup
-		Option<String>, // committer_email_dedup
-		Option<String>, // committer_name_dedup
-		Option<i64>, // __index_level_0__
+	let rows = Parquet::<NullableDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nullable.impala.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		7
 	);
-	let rows = read::<_,Commits>(&file);
-	println!("{}", rows.unwrap().count());
 
-	let rows = read::<_,Row>(&file);
-	println!("{}", rows.unwrap().map(|x| -> Commits { x.downcast().unwrap() }).count());
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nullable.impala.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: Nullable = value.clone().downcast().unwrap();
+				let _: NullableDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		7
+	);
+
+	type Nulls = (Option<(Option<i32>,)>,);
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct NullsDerived {
+		b_struct: Option<(Option<i32>,)>,
+	}
+	let rows = Parquet::<Nulls>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nulls.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		8
+	);
+
+	let rows = Parquet::<NullsDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nulls.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		8
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/nulls.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: Nulls = value.clone().downcast().unwrap();
+				let _: NullsDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		8
+	);
+
+	type Repeated = (i32, Option<(List<(i64, Option<String>)>,)>);
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct RepeatedDerived {
+		id: i32,
+		#[amadeus(rename = "phoneNumbers")]
+		phone_numbers: Option<(List<(i64, Option<String>)>,)>,
+	}
+	let rows = Parquet::<Repeated>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/repeated_no_annotation.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		6
+	);
+
+	let rows = Parquet::<RepeatedDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/repeated_no_annotation.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		6
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/repeated_no_annotation.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: Repeated = value.clone().downcast().unwrap();
+				let _: RepeatedDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		6
+	);
+
+	type TestDatapage = (Option<String>, i32, f64, bool, Option<List<i32>>);
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct TestDatapageDerived {
+		a: Option<String>,
+		b: i32,
+		c: f64,
+		d: bool,
+		e: Option<List<i32>>,
+	}
+	let rows = Parquet::<TestDatapage>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		5
+	);
+
+	let rows = Parquet::<TestDatapageDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		5
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: TestDatapage = value.clone().downcast().unwrap();
+				let _: TestDatapageDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		5
+	);
+
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct CommitsDerived {
+		id: Option<String>,
+		delay: Option<i32>,
+		age: Option<i32>,
+		ismerge: Option<bool>,
+		squashof: Option<i32>,
+		author_name: Option<String>,
+		author_email: Option<String>,
+		committer_name: Option<String>,
+		committer_email: Option<String>,
+		author_time: Option<Timestamp>,
+		committer_time: Option<Timestamp>,
+		loc_d: Option<i64>,
+		loc_i: Option<i64>,
+		comp_d: Option<i64>,
+		comp_i: Option<i64>,
+		nfiles: Option<u16>,
+		message: Option<String>,
+		ndiffs: Option<u16>,
+		author_email_dedup: Option<String>,
+		author_name_dedup: Option<String>,
+		committer_email_dedup: Option<String>,
+		committer_name_dedup: Option<String>,
+		__index_level_0__: Option<i64>,
+	}
+
+	let rows = Parquet::<CommitsDerived>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/commits.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(&pool),
+		14_444
+	);
+
+	let rows = Parquet::<Value>::new(vec![PathBuf::from(
+		"amadeus-testing/parquet/commits.parquet",
+	)]);
+	assert_eq!(
+		rows.unwrap()
+			.map(FnMut!(|row: Result<Value, _>| -> Value {
+				let value = row.unwrap();
+				let _: CommitsDerived = value.clone().downcast().unwrap();
+				value
+			}))
+			.count(&pool),
+		14_444
+	);
 }
 
-#[bench]
-fn record_reader_10k_collect(bench: &mut Bencher) {
-	let path = Path::new("./amadeus-testing/parquet/10k-v2.parquet");
-	let file = File::open(&path).unwrap();
-	let len = file.metadata().unwrap().len();
-	let parquet_reader = SerializedFileReader::new(file).unwrap();
+// #[bench]
+// fn record_reader_10k_collect(bench: &mut Bencher) {
+// 	let path = Path::new("./amadeus-testing/parquet/10k-v2.parquet");
+// 	let file = File::open(&path).unwrap();
+// 	let len = file.metadata().unwrap().len();
+// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
 
-	bench.bytes = len;
-	bench.iter(|| {
-		let iter = parquet_reader.get_row_iter(None).unwrap();
-		println!("{}", iter.count());
-	})
-}
-#[bench]
-fn record_reader_stock_simulated_collect(bench: &mut Bencher) {
-	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
-	let file = File::open(&path).unwrap();
-	let len = file.metadata().unwrap().len();
-	let parquet_reader = SerializedFileReader::new(file).unwrap();
+// 	bench.bytes = len;
+// 	bench.iter(|| {
+// 		let iter = parquet_reader.get_row_iter(None).unwrap();
+// 		println!("{}", iter.count());
+// 	})
+// }
+// #[bench]
+// fn record_reader_stock_simulated_collect(bench: &mut Bencher) {
+// 	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
+// 	let file = File::open(&path).unwrap();
+// 	let len = file.metadata().unwrap().len();
+// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
 
-	bench.bytes = len;
-	bench.iter(|| {
-		let iter = parquet_reader.get_row_iter(None).unwrap();
-		println!("{}", iter.count());
-	})
-}
+// 	bench.bytes = len;
+// 	bench.iter(|| {
+// 		let iter = parquet_reader.get_row_iter(None).unwrap();
+// 		println!("{}", iter.count());
+// 	})
+// }
 
-#[bench]
-fn record_reader_10k_collect_2(bench: &mut Bencher) {
-	let file = File::open(&Path::new("./amadeus-testing/parquet/10k-v2.parquet")).unwrap();
-	let len = file.metadata().unwrap().len();
-	let parquet_reader = SerializedFileReader::new(file).unwrap();
+// #[bench]
+// fn record_reader_10k_collect_2(bench: &mut Bencher) {
+// 	let file = File::open(&Path::new("./amadeus-testing/parquet/10k-v2.parquet")).unwrap();
+// 	let len = file.metadata().unwrap().len();
+// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
 
-	bench.bytes = len;
-	bench.iter(|| {
-		let iter =
-			read2::<_, (Vec<u8>, i32, i64, bool, f32, f64, [u8; 1024], Timestamp)>(&parquet_reader);
-		println!("{}", iter.unwrap().count());
-	})
-}
-#[bench]
-fn record_reader_stock_simulated_collect_2(bench: &mut Bencher) {
-	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
-	let file = File::open(&path).unwrap();
-	let len = file.metadata().unwrap().len();
-	let parquet_reader = SerializedFileReader::new(file).unwrap();
+// 	bench.bytes = len;
+// 	bench.iter(|| {
+// 		let iter =
+// 			read2::<_, (Vec<u8>, i32, i64, bool, f32, f64, [u8; 1024], Timestamp)>(&parquet_reader);
+// 		println!("{}", iter.unwrap().count());
+// 	})
+// }
+// #[bench]
+// fn record_reader_stock_simulated_collect_2(bench: &mut Bencher) {
+// 	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
+// 	let file = File::open(&path).unwrap();
+// 	let len = file.metadata().unwrap().len();
+// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
 
-	bench.bytes = len;
-	bench.iter(|| {
-		let iter = read2::<
-			_,
-			(
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<f64>,
-				Option<i64>,
-			),
-		>(&parquet_reader);
-		println!("{}", iter.unwrap().count());
-	})
-}
-
-use parquet::file::reader::FileReader;
-
-// fn read<'a, R: ParquetReader + 'static, T>(
-// 	reader: &'a SerializedFileReader<R>,
-// ) -> Result<impl Iterator<Item = T> + 'a, ParquetError>
-// where
-// 	T: Record,
-// 	<Root<T> as Record>::Schema: 'a,
-// 	<Root<T> as Record>::Reader: 'a,
-// {
-fn read<'a, R: ParquetReader + 'static, T: 'static>(
-	reader: &'a SerializedFileReader<R>,
-) -> Result<impl Iterator<Item = T> + 'a, ParquetError>
-where
-	T: Record,
-	// <Root<T> as Record>::Schema: 'a,
-	// <Root<T> as Record>::Reader: 'a,
-{
-	reader
-		.get_row_iter(None)
-		.map(|iter| iter.map(Result::unwrap))
-	// let file_schema = reader.metadata().file_metadata().schema_descr_ptr();
-	// let file_schema = file_schema.root_schema();
-	// let schema = <Root<T> as Record>::parse(file_schema).map_err(|err| {
-	// 	// let schema: Type = <Root<T> as Record>::render("", &<Root<T> as Record>::placeholder());
-	// 	let mut b = Vec::new();
-	// 	print_schema(&mut b, file_schema);
-	// 	// let mut a = Vec::new();
-	// 	// print_schema(&mut a, &schema);
-	// 	ParquetError::General(format!(
-	// 		"Types don't match schema.\nSchema is:\n{}\nBut types require:\n{}\nError: {}",
-	// 		String::from_utf8(b).unwrap(),
-	// 		// String::from_utf8(a).unwrap(),
-	// 		DisplayDisplayType::<<Root<T> as Record>::Schema>::new(),
-	// 		err
-	// 	))
-	// }).unwrap().1;
-	// // let dyn_schema = <Root<T>>::render("", &schema);
-	// // print_schema(&mut std::io::stdout(), &dyn_schema);
-	// // assert!(file_schema.check_contains(&dyn_schema));
-	// // println!("{:#?}", schema);
-	// // let iter = reader.get_row_iter(None).unwrap();
-	// // println!("{:?}", iter.count());
-	// // print_parquet_metadata(&mut std::io::stdout(), &reader.metadata());
-	// {
-	// 	// println!("file: {:#?}", reader.metadata().file_metadata());
-	// 	// print_file_metadata(&mut std::io::stdout(), &*reader.metadata().file_metadata());
-	// 	let schema = reader.metadata().file_metadata().schema_descr_ptr().clone();
-	// 	let schema = schema.root_schema();
-	// 	// println!("{:#?}", schema);
-	// 	print_schema(&mut std::io::stdout(), &schema);
-	// 	// let mut iter = reader.get_row_iter(None).unwrap();
-	// 	// while let Some(record) = iter.next() {
-	// 	// 	// See record API for different field accessors
-	// 	// 	// println!("{}", record);
-	// 	// }
-	// }
-	// // print_parquet_metadata(&mut std::io::stdout(), reader.metadata());
-	// // println!("file: {:#?}", reader.metadata().file_metadata());
-	// // println!("file: {:#?}", reader.metadata().row_groups());
-
-	// // let descr = Rc::new(SchemaDescriptor::new(Rc::new(dyn_schema)));
-
-	// // let tree_builder = parquet::record::reader::TreeBuilder::new();
-	// let schema = Rc::new(schema); // TODO!
-	// Ok((0..reader.num_row_groups()).flat_map(move |i| {
-	// 	// let schema = &schema;
-	// 	let row_group = reader.get_row_group(i).unwrap();
-
-	// 	let mut paths: HashMap<ColumnPath, (ColumnDescPtr,ColumnReader)> = HashMap::new();
-	// 	let row_group_metadata = row_group.metadata();
-
-	// 	for col_index in 0..row_group.num_columns() {
-	// 		let col_meta = row_group_metadata.column(col_index);
-	// 		let col_path = col_meta.column_path().clone();
-	// 		// println!("path: {:?}", col_path);
-	// 		let col_descr = row_group
-	// 			.metadata()
-	// 			.column(col_index)
-	// 			.column_descr_ptr();
-	// 		let col_reader = row_group.get_column_reader(col_index).unwrap();
-
-	// 		let x = paths.insert(col_path, (col_descr, col_reader));
-	// 		assert!(x.is_none());
-	// 	}
-
-	// 	let mut path = Vec::new();
-
-	// 	let mut reader = <Root<T>>::reader(&schema, &mut path, 0, 0, &mut paths);
-
-	// 	// let mut reader = tree_builder.build(descr.clone(), &*row_group);
-	// 	reader.advance_columns();
-	// 	// for row in tree_builder.as_iter(descr.clone(), &*row_group) {
-	// 	// 	println!("{:?}", row);
-	// 	// }
-	// 	// std::iter::empty()
-	// 	// println!("{:?}", reader.read());
-	// 	let schema = schema.clone();
-	// 	(0..row_group.metadata().num_rows()).map(move |_| {
-	// 		// println!("row");
-	// 		reader.read().unwrap().0
-	// 		// unimplemented!()
-	// 		// <Root<T>>::read(&schema, &mut reader).unwrap().0
-	// 	})
-	// }))
-}
-fn write<R: ParquetReader + 'static, T>(reader: R, schema: <Root<T> as Record>::Schema) -> ()
-where
-	T: Record,
-{
-	// let schema = <Root<T>>::render("", &schema);
-	// print_schema(&mut std::io::stdout(), &schema);
-	// println!("{:#?}", schema);
-	let reader = SerializedFileReader::new(reader).unwrap();
-	// let iter = reader.get_row_iter(None).unwrap();
-	// println!("{:?}", iter.count());
-	// print_parquet_metadata(&mut std::io::stdout(), &reader.metadata());
-	unimplemented!()
-}
+// 	bench.bytes = len;
+// 	bench.iter(|| {
+// 		let iter = read2::<
+// 			_,
+// 			(
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<f64>,
+// 				Option<i64>,
+// 			),
+// 		>(&parquet_reader);
+// 		println!("{}", iter.unwrap().count());
+// 	})
+// }

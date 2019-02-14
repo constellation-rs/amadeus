@@ -49,6 +49,7 @@ extern crate serde_closure;
 extern crate serde_derive;
 // extern crate test;
 
+pub mod data;
 pub mod dist_iter;
 pub mod into_dist_iter;
 pub mod no_pool;
