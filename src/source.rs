@@ -8,6 +8,17 @@ pub use self::{
 	cloudfront::*, common_crawl::*, csv::Csv, json::Json, parquet::Parquet, postgres::Postgres
 };
 
+pub trait Source {
+	type Item: super::data::Data;
+	type DistIter: super::DistributedIterator<Item = Self::Item>;
+	// type ParIter: ParallelIterator;
+	type Iter: Iterator<Item = Self::Item>;
+
+	fn dist_iter(self) -> Self::DistIter;
+	// fn par_iter(self) -> Self::ParIter;
+	fn iter(self) -> Self::Iter;
+}
+
 struct ResultExpand<T, E>(Result<T, E>);
 impl<T, E> IntoIterator for ResultExpand<T, E>
 where

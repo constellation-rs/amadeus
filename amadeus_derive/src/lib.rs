@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![recursion_limit = "300"]
+#![recursion_limit = "400"]
 
 extern crate proc_macro;
 extern crate proc_macro2;
@@ -192,8 +192,8 @@ fn impl_struct(
 				record::{Schema as ParquetSchema, Reader, _private::DisplaySchemaGroup},
 				schema::types::{ColumnPath, Type},
 			};
-			pub use amadeus::data::{serde_data, _serde::{Serialize, Deserialize, Serializer, Deserializer}, Data, types::{Downcast, DowncastError, Value, Schema}};
-			pub use ::std::{collections::HashMap, cmp::PartialEq, default::Default, fmt::{self, Debug}, result::Result::{self, Ok, Err}, string::String, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
+			pub use amadeus::{data::{serde_data, _serde::{Serialize, Deserialize, Serializer, Deserializer}, Data, types::{Downcast, DowncastError, Value, Schema}},source::postgres::{Names,read_be_i32,read_value}};
+			pub use ::std::{boxed::Box, collections::HashMap, convert::Into, cmp::PartialEq, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
 		#[derive(__::Serialize, __::Deserialize)]
@@ -290,6 +290,45 @@ fn impl_struct(
 		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {
 			type ParquetSchema = #schema_name #ty_generics;
 			type ParquetReader = #reader_name #ty_generics;
+
+			fn postgres_query(f: &mut __::fmt::Formatter, name: __::Option<&__::Names<'_>>) -> __::fmt::Result {
+				if let __::Some(name) = name {
+					__::Write::write_str(f, "CASE WHEN ")?;
+					__::fmt::Display::fmt(name, f)?;
+					__::Write::write_str(f, " IS NOT NULL THEN ROW(")?;
+				} else {
+					__::Write::write_str(f, "ROW(")?;
+				}
+				let mut comma = false;
+				#(
+					if comma { __::Write::write_str(f, ",")? } comma = true;
+					<#field_types1 as __::Data>::postgres_query(f, __::Some(&__::Names(name, #field_renames1)))?;
+				)*
+				if let __::Some(_name) = name {
+					__::Write::write_str(f, ") ELSE NULL END")
+				} else {
+					__::Write::write_str(f, ")")
+				}
+			}
+			fn postgres_decode(type_: &::postgres::types::Type, buf: Option<&[u8]>) -> __::Result<Self, __::Box<__::Error + __::Sync + __::Send>> {
+				let buf = buf.unwrap();
+				assert_eq!(type_, &::postgres::types::RECORD);
+
+				let mut buf = buf;
+				let num_fields = __::read_be_i32(&mut buf)?;
+				if num_fields as usize != #num_fields {
+					return __::Err(__::Into::into(format!("invalid field count: {} vs {}", num_fields, #num_fields)));
+				}
+
+				Ok(Self {
+					#(
+						#field_names1: {
+							let oid = __::read_be_i32(&mut buf)? as u32;
+							__::read_value(&::postgres::types::Type::from_oid(oid).unwrap_or(::postgres::types::OPAQUE), &mut buf)?
+						},
+					)*
+				})
+			}
 
 			fn serde_serialize<__S>(&self, serializer: __S) -> __::Result<__S::Ok, __S::Error>
 			where

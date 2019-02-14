@@ -8,7 +8,9 @@ mod data {
 		basic::Repetition, column::reader::ColumnReader, errors::ParquetError, record::{Reader as ParquetReader, Record as ParquetRecord, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
 	};
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-	use std::{collections::HashMap, fmt::Debug};
+	use std::{
+		collections::HashMap, fmt::{self, Debug, Display}
+	};
 
 	pub trait Data
 	where
@@ -23,6 +25,13 @@ mod data {
 		fn upcast(self) -> super::types::Value {
 			unimplemented!()
 		}
+
+		fn postgres_query(
+			f: &mut fmt::Formatter, name: Option<&super::super::source::postgres::Names<'_>>,
+		) -> fmt::Result;
+		fn postgres_decode(
+			type_: &::postgres::types::Type, buf: Option<&[u8]>,
+		) -> Result<Self, Box<std::error::Error + Sync + Send>>;
 
 		fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where
@@ -43,13 +52,19 @@ mod data {
 	}
 
 	macro_rules! impl_data_for_record {
-		($($t:ty)*) => (
+		($($t:ty : $pt:ty),*) => (
 			$(impl Data for $t {
 				type ParquetSchema = <$t as ParquetRecord>::Schema;
 				type ParquetReader = <$t as ParquetRecord>::Reader;
 
-				fn upcast(self) -> super::types::Value {
-					panic!()
+				fn postgres_query(f: &mut fmt::Formatter, name: Option<&super::super::source::postgres::Names<'_>>) -> fmt::Result {
+					name.unwrap().fmt(f)
+				}
+				fn postgres_decode(type_: &::postgres::types::Type, buf: Option<&[u8]>) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+					if !<$pt as ::postgres::types::FromSql>::accepts(type_) {
+						return Err(Into::into("invalid type"));
+					}
+					<$pt as ::postgres::types::FromSql>::from_sql(type_, buf.ok_or_else(||Box::new(::postgres::types::WasNull))?).map(|x|x as Self)
 				}
 
 				fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -77,7 +92,20 @@ mod data {
 			})*
 		);
 	}
-	impl_data_for_record!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 String);
+	impl_data_for_record!(
+		bool: bool,
+		u8: i8,
+		i8: i8,
+		u16: i16,
+		i16: i16,
+		u32: i32,
+		i32: i32,
+		u64: i64,
+		i64: i64,
+		f32: f32,
+		f64: f64,
+		String: String
+	);
 	// use super::types::{Date,Time,Timestamp,Decimal};
 
 	impl<T> Data for Option<T>
@@ -87,6 +115,20 @@ mod data {
 		type ParquetSchema = <Option<crate::source::parquet::Record<T>> as ParquetRecord>::Schema;
 		type ParquetReader =
 			XxxReader<<Option<crate::source::parquet::Record<T>> as ParquetRecord>::Reader>;
+
+		fn postgres_query(
+			f: &mut fmt::Formatter, name: Option<&super::super::source::postgres::Names<'_>>,
+		) -> fmt::Result {
+			T::postgres_query(f, name)
+		}
+		fn postgres_decode(
+			type_: &::postgres::types::Type, buf: Option<&[u8]>,
+		) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+			match buf {
+				Some(buf) => T::postgres_decode(type_, Some(buf)).map(Some),
+				None => Ok(None),
+			}
+		}
 
 		fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where
@@ -435,6 +477,13 @@ mod tuple {
 			impl<$($t,)*> Data for ($($t,)*) where $($t: Data,)* {
 				type ParquetSchema = <($(crate::source::parquet::Record<$t>,)*) as ParquetRecord>::Schema; //TupleSchema<($((String,$t::Schema,),)*)>;
 				type ParquetReader = TupleXxxReader<($($t,)*),<($(crate::source::parquet::Record<$t>,)*) as ParquetRecord>::Reader>; //TupleReader<($($t::Reader,)*)>;
+
+				fn postgres_query(f: &mut fmt::Formatter, name: Option<&super::super::source::postgres::Names<'_>>) -> fmt::Result {
+					unimplemented!()
+				}
+				fn postgres_decode(type_: &::postgres::types::Type, buf: Option<&[u8]>) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+					unimplemented!()
+				}
 
 				fn serde_serialize<S_>(&self, serializer: S_) -> Result<S_::Ok, S_::Error>
 				where

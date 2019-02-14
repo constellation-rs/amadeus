@@ -1545,6 +1545,17 @@ impl Data for Value {
 	type ParquetReader = ValueReader<<parquet::record::types::Value as Record>::Reader>;
 	type ParquetSchema = <parquet::record::types::Value as Record>::Schema;
 
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		unimplemented!()
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
+
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,

@@ -45,6 +45,24 @@ impl Data for Date {
 	type ParquetReader =
 		IntoReader<<parquet::record::types::Date as parquet::record::Record>::Reader, Self>;
 
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		if !<NaiveDate as ::postgres::types::FromSql>::accepts(type_) {
+			return Err(Into::into("invalid type"));
+		}
+		<NaiveDate as ::postgres::types::FromSql>::from_sql(
+			type_,
+			buf.ok_or_else(|| Box::new(::postgres::types::WasNull))?,
+		)
+		.map(Into::into)
+	}
+
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -181,6 +199,17 @@ impl Data for Time {
 	type ParquetSchema = <parquet::record::types::Time as parquet::record::Record>::Schema;
 	type ParquetReader =
 		IntoReader<<parquet::record::types::Time as parquet::record::Record>::Reader, Self>;
+
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
 
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -471,6 +500,17 @@ impl Data for Timestamp {
 	type ParquetSchema = <parquet::record::types::Timestamp as parquet::record::Record>::Schema;
 	type ParquetReader =
 		IntoReader<<parquet::record::types::Timestamp as parquet::record::Record>::Reader, Self>;
+
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
 
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where

@@ -1,6 +1,8 @@
 //! Implement [`Record`] for [`Decimal`].
 
-use std::collections::HashMap;
+use std::{
+	collections::HashMap, fmt::{self, Display}
+};
 // use num_bigint::{BigInt, Sign};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -115,6 +117,17 @@ impl Data for Decimal {
 	type ParquetSchema = <parquet::data_type::Decimal as parquet::record::Record>::Schema;
 	type ParquetReader =
 		IntoReader<<parquet::data_type::Decimal as parquet::record::Record>::Reader, Self>;
+
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
 
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where

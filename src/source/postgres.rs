@@ -39,9 +39,14 @@ pub struct Table {
 	schema: Option<String>,
 	table: String,
 }
+impl Table {
+	pub fn new(schema: Option<String>, table: String) -> Self {
+		Table { schema, table }
+	}
+}
+
 impl fmt::Display for Table {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		// unsafe{asm!("nop;int3;nop")};
 		if let Some(ref schema) = self.schema {
 			EscapeIdentifier(schema).fmt(f)?;
 			f.write_str(".")?;
@@ -53,7 +58,11 @@ impl str::FromStr for Table {
 	type Err = ();
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		// TODO
+		if s.contains(&['"', '.', '\0'] as &[char]) {
+			unimplemented!(
+				"Table parsing not yet implemented. Construct it with Table::new instead"
+			);
+		}
 		Ok(Self {
 			schema: None,
 			table: s.to_string(),
@@ -137,180 +146,8 @@ where
 			.into_dist_iter()
 			.flat_map(FnMut!(|(connect, tables)| {
 				let (connect, tables): (ConnectParams,Vec<Source>) = (connect, tables);
-				// let connect = connect.into_connect_params().unwrap();
 				let connection = postgres::Connection::connect(connect, postgres::TlsMode::None).unwrap();
 				tables.into_iter().flat_map(FnMut!([connection] move |table:Source| {
-					let mut i = 0;
-
-					use postgres::to_sql_checked;
-					use postgres::types::{FromSql,ToSql};
-					#[derive(Debug)]//, postgres_derive::FromSql, postgres_derive::ToSql)]
-					// #[postgres(name = "row")]
-					struct A {
-						city: Option<String>,
-						temp_lo: Option<i32>,
-						temp_hi: Option<i32>,
-						prcp: Option<f32>,
-						date: Option<chrono::NaiveDate>,
-						invent: Option<InventoryItem>,
-					}
-					#[derive(Default, Debug)]//, postgres_derive::FromSql, postgres_derive::ToSql)]
-					// #[postgres(name = "inventory_item")]
-					struct InventoryItem {
-						name: Option<String>,
-						supplier_id: Option<i32>,
-						price: Option<f64>,
-					}
-
-					fn read_be_i32(buf: &mut &[u8]) -> ::std::io::Result<i32> {
-						let mut bytes = [0; 4];
-						::std::io::Read::read_exact(buf, &mut bytes)?;
-						let num = ((bytes[0] as i32) << 24) |
-							((bytes[1] as i32) << 16) |
-							((bytes[2] as i32) << 8) |
-							(bytes[3] as i32);
-						Ok(num)
-					}
-
-					fn read_value<T>(type_: &::postgres::types::Type,
-									 buf: &mut &[u8])
-									 -> Result<T,
-										 ::std::boxed::Box<::std::error::Error +
-										 ::std::marker::Sync +
-										 ::std::marker::Send>>
-									 where T: ::postgres::types::FromSql
-					{
-						if !T::accepts(type_) {
-							return Err(
-								Into::into("invalid type"));
-						}
-						let len = read_be_i32(buf)?;
-						let value = if len < 0 {
-							None
-						} else {
-							if len as usize > buf.len() {
-								return Err(
-									Into::into("invalid buffer size"));
-							}
-							let (head, tail) = buf.split_at(len as usize);
-							*buf = tail;
-							Some(&head[..])
-						};
-						::postgres::types::FromSql::from_sql_nullable(type_, value)
-					}
-					impl ::postgres::types::FromSql for A {
-						fn from_sql(type_: &::postgres::types::Type,
-									buf: &[u8])
-									-> Result<Self,
-															 ::std::boxed::Box<::std::error::Error +
-																			   ::std::marker::Sync +
-																			   ::std::marker::Send>> {
-							assert!(Self::accepts(type_));
-							// let fields = match *_type.kind() {
-							// 	::postgres::types::Kind::Composite(ref fields) => fields,
-							// 	_ => unreachable!(),
-							// };
-
-							let mut buf = buf;
-							let num_fields = read_be_i32(&mut buf)?;
-							if num_fields as usize != 6 {
-								return Err(
-									Into::into(format!("invalid field count: {} vs {}", num_fields,
-																	   6)));
-							}
-
-							// #(
-							// 	let mut #temp_vars = None;
-							// )*
-
-							// for _ in 0..6 {
-							// 	let oid = read_be_i32(&mut buf)? as u32;
-							// 	if oid != field.type_().oid() {
-							// 		return Err(Into::into("unexpected OID"));
-							// 	}
-
-							// 	match field.name() {
-							// 		#(
-							// 			#field_names => {
-							// 				#temp_vars = Some(
-							// 					read_value(field.type_(), &mut buf)?);
-							// 			}
-							// 		)*
-							// 		_ => unreachable!(),
-							// 	}
-							// }
-
-							Ok(Self {
-								// #(
-									city: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-									temp_lo: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-									temp_hi: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-									prcp: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-									date: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-									invent: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-								// )*
-							})
-						}
-						fn accepts(type_: &::postgres::types::Type) -> bool {
-							type_ == &postgres::types::RECORD
-						}
-					}
-					impl ::postgres::types::FromSql for InventoryItem {
-						fn from_sql(type_: &::postgres::types::Type,
-									buf: &[u8])
-									-> Result<Self,
-															 ::std::boxed::Box<::std::error::Error +
-																			   ::std::marker::Sync +
-																			   ::std::marker::Send>> {
-							assert!(Self::accepts(type_));
-
-							let mut buf = buf;
-							let num_fields = read_be_i32(&mut buf)?;
-							if num_fields as usize != 3 {
-								return Err(
-									Into::into(format!("invalid field count: {} vs {}", num_fields,
-																	   3)));
-							}
-
-							Ok(Self {
-								// #(
-									name: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-									supplier_id: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-									price: {
-										let oid = read_be_i32(&mut buf)? as u32;
-										read_value(&postgres::types::Type::from_oid(oid).unwrap_or(postgres::types::OPAQUE), &mut buf)?
-									},
-								// )*
-							})
-						}
-						fn accepts(type_: &::postgres::types::Type) -> bool {
-							type_ == &postgres::types::RECORD
-						}
-					}
 					// let stmt = connection.prepare("SELECT $1::\"public\".\"weather\"").unwrap();
 					// let type_ = stmt.param_types()[0].clone();
 					// let stmt = connection.prepare("SELECT ROW(city, temp_lo, temp_hi, prcp, date, CASE WHEN invent IS NOT NULL THEN ROW((invent).name, (invent).supplier_id, (invent).price) ELSE NULL END) FROM \"public\".\"weather\"").unwrap();
@@ -318,141 +155,87 @@ where
 					// println!("{:?}", type_);
 					// println!("{:?}", type_.kind());
 					// let stmt = connection.execute("SELECT $1::weather", &[&A::default()]).unwrap();
-					// let mut vec = Vec::new();
-					let writer = |r: Option<&[u8]>, a: &postgres::stmt::CopyInfo| {
-						// vec.extend
-						// i += 1;
-						// if i == 6 {
-						// 	;
-						// }
-						println!("{:?}", r);
-						// let mut vec = Vec::new();
-						// A{
-						// 	city: Some(String::from("london")),
-						// 	temp_lo: Some(10),
-						// 	temp_hi: Some(10),
-						// 	prcp: Some(10.0),
-						// 	date: None,
-						// 	invent: None,
-						// }.to_sql(&type_,&mut vec);
-						// println!("{:?}", vec);
-						let type_ = postgres::types::RECORD;
-						let row = A::from_sql(&type_, r.unwrap()).unwrap();
-						println!("{:?}", row);
-						// match r {
-						// 	Some(r) => out.push(Option::<i32>::from_sql(&INT4, r).unwrap()),
-						// 	None => out.push(Option::<i32>::from_sql_null(&INT4).unwrap()),
-						// }
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 255, 255, 255, 255, 0, 0, 64, 15, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 255, 255, 255, 255, 0, 0, 64, 15, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 0, 0, 0, 4, 0, 0, 17, 31, 0, 0, 64, 15, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 0, 0, 0, 4, 0, 0, 17, 31, 0, 0, 64, 15, 0, 0, 0, 41, 0, 0, 0, 3, 0, 0, 0, 25, 0, 0, 0, 1, 97, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 189, 0, 0, 0, 8, 64, 36, 0, 0, 0, 0, 0, 0])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 255, 255, 255, 255, 0, 0, 8, 201, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 255, 255, 255, 255, 0, 0, 8, 201, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 0, 0, 0, 4, 0, 0, 17, 31, 0, 0, 8, 201, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 0, 0, 0, 4, 0, 0, 17, 31, 0, 0, 8, 201, 0, 0, 0, 41, 0, 0, 0, 3, 0, 0, 0, 25, 0, 0, 0, 1, 97, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 189, 0, 0, 0, 8, 64, 36, 0, 0, 0, 0, 0, 0])
 
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 255, 255, 255, 255, 0, 0, 8, 201, 0, 0, 0, 28, 0, 0, 0, 3, 0, 0, 0, 25, 255, 255, 255, 255, 0, 0, 0, 23, 255, 255, 255, 255, 0, 0, 2, 189, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 255, 255, 255, 255, 0, 0, 8, 201, 0, 0, 0, 28, 0, 0, 0, 3, 0, 0, 0, 25, 255, 255, 255, 255, 0, 0, 0, 23, 255, 255, 255, 255, 0, 0, 2, 189, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 0, 0, 0, 4, 0, 0, 17, 31, 0, 0, 8, 201, 0, 0, 0, 28, 0, 0, 0, 3, 0, 0, 0, 25, 255, 255, 255, 255, 0, 0, 0, 23, 255, 255, 255, 255, 0, 0, 2, 189, 255, 255, 255, 255])
-// Some([0, 0, 0, 6, 0, 0, 4, 19, 0, 0, 0, 6, 108, 111, 110, 100, 111, 110, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 188, 0, 0, 0, 4, 65, 32, 0, 0, 0, 0, 4, 58, 0, 0, 0, 4, 0, 0, 17, 31, 0, 0, 8, 201, 0, 0, 0, 41, 0, 0, 0, 3, 0, 0, 0, 25, 0, 0, 0, 1, 97, 0, 0, 0, 23, 0, 0, 0, 4, 0, 0, 0, 10, 0, 0, 2, 189, 0, 0, 0, 8, 64, 36, 0, 0, 0, 0, 0, 0])
+					let mut vec = Vec::new();
+
+					let writer = |row: Option<&[u8]>, _: &postgres::stmt::CopyInfo| {
+						println!("{:?}", row);
+						let row = Row::postgres_decode(&postgres::types::RECORD, row).unwrap();
+						println!("{:?}", row);
+						vec.push(Ok(row));
 						Ok(())
 					};
 
 					let mut writer = postgres_binary_copy::BinaryCopyWriter::new(writer);
 
-					impl Abc for A {
-						fn abc(buf: &mut String, name: Option<&Names<'_>>) {
-							if let Some(name) = name {
-								buf.push_str("CASE WHEN ");
-								name.print(buf);
-								buf.push_str(" IS NOT NULL THEN ROW(");
-								<Option<String> as Abc>::abc(buf, Some(&Names(Some(name), "city")));
-								buf.push_str(",");
-								<Option<i32> as Abc>::abc(buf, Some(&Names(Some(name), "temp_lo")));
-								buf.push_str(",");
-								<Option<i32> as Abc>::abc(buf, Some(&Names(Some(name), "temp_hi")));
-								buf.push_str(",");
-								<Option<f32> as Abc>::abc(buf, Some(&Names(Some(name), "prcp")));
-								buf.push_str(",");
-								<Option<chrono::NaiveDate> as Abc>::abc(buf, Some(&Names(Some(name), "date")));
-								buf.push_str(",");
-								<Option<InventoryItem> as Abc>::abc(buf, Some(&Names(Some(name), "invent")));
-								buf.push_str(") ELSE NULL END");
-							} else {
-								buf.push_str("ROW(");
-								<Option<String> as Abc>::abc(buf, Some(&Names(name, "city")));
-								buf.push_str(",");
-								<Option<i32> as Abc>::abc(buf, Some(&Names(name, "temp_lo")));
-								buf.push_str(",");
-								<Option<i32> as Abc>::abc(buf, Some(&Names(name, "temp_hi")));
-								buf.push_str(",");
-								<Option<f32> as Abc>::abc(buf, Some(&Names(name, "prcp")));
-								buf.push_str(",");
-								<Option<chrono::NaiveDate> as Abc>::abc(buf, Some(&Names(name, "date")));
-								buf.push_str(",");
-								<Option<InventoryItem> as Abc>::abc(buf, Some(&Names(name, "invent")));
-								buf.push_str(")");
-							}
+					pub struct DisplayFmt<F>(F)
+					where
+						F: Fn(&mut fmt::Formatter) -> fmt::Result;
+					impl<F> DisplayFmt<F>
+					where
+						F: Fn(&mut fmt::Formatter) -> fmt::Result,
+					{
+						pub fn new(f: F) -> Self {
+							Self(f)
 						}
 					}
-					impl<T> Abc for Option<T> where T: ::postgres::types::FromSql {
-						fn abc(buf: &mut String, name: Option<&Names<'_>>) {
-							T::abc(buf, name)
-						}
-					}
-					impl Abc for InventoryItem {
-						fn abc(buf: &mut String, name: Option<&Names<'_>>) {
-							if let Some(name) = name {
-								buf.push_str("CASE WHEN ");
-								name.print(buf);
-								buf.push_str(" IS NOT NULL THEN ROW(");
-								<Option<String> as Abc>::abc(buf, Some(&Names(Some(name), "name")));
-								buf.push_str(",");
-								<Option<i32> as Abc>::abc(buf, Some(&Names(Some(name), "supplier_id")));
-								buf.push_str(",");
-								<Option<f64> as Abc>::abc(buf, Some(&Names(Some(name), "price")));
-								buf.push_str(") ELSE NULL END");
-							} else {
-								buf.push_str("ROW(");
-								<Option<String> as Abc>::abc(buf, Some(&Names(name, "name")));
-								buf.push_str(",");
-								<Option<i32> as Abc>::abc(buf, Some(&Names(name, "supplier_id")));
-								buf.push_str(",");
-								<Option<f64> as Abc>::abc(buf, Some(&Names(name, "price")));
-								buf.push_str(")");
-							}
+					impl<F> Display for DisplayFmt<F>
+					where
+						F: Fn(&mut fmt::Formatter) -> fmt::Result,
+					{
+						fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+							self.0(f)
 						}
 					}
 
-					let mut string = String::new();
-					A::abc(&mut string, None);
 					let table = match table {
 						Source::Table(table) => table.to_string(),
 						Source::Query(query) => format!("({}) _", query),
 					};
-					let query = format!("COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)", string, table);
+					let query = format!("COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)", DisplayFmt::new(|f| Row::postgres_query(f, None)), table);
 					println!("{}", query);
 					let stmt = connection.prepare(&query).unwrap();
 					stmt.copy_out(&[], &mut writer).unwrap();
-					Vec::<Result<Row,Error>>::new().into_iter()
+					vec.into_iter()
 				}))
 			}));
 		Ok(Postgres { i })
 	}
 }
 
+use std::io::Read;
+pub fn read_be_i32(buf: &mut &[u8]) -> ::std::io::Result<i32> {
+	let mut bytes = [0; 4];
+	buf.read_exact(&mut bytes)?;
+	let num = ((bytes[0] as i32) << 24)
+		| ((bytes[1] as i32) << 16)
+		| ((bytes[2] as i32) << 8)
+		| (bytes[3] as i32);
+	Ok(num)
+}
+
+pub fn read_value<T>(
+	type_: &::postgres::types::Type, buf: &mut &[u8],
+) -> Result<T, Box<::std::error::Error + Sync + Send>>
+where
+	T: Data,
+{
+	let len = read_be_i32(buf)?;
+	let value = if len < 0 {
+		None
+	} else {
+		if len as usize > buf.len() {
+			return Err(Into::into("invalid buffer size"));
+		}
+		let (head, tail) = buf.split_at(len as usize);
+		*buf = tail;
+		Some(&head[..])
+	};
+	T::postgres_decode(type_, value)
+}
+
 // https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
 struct EscapeIdentifier<T>(T);
-impl<T: Print> Print for EscapeIdentifier<T> {
-	fn print(&self, f: &mut impl fmt::Write) -> fmt::Result {
-		let mut inner = String::new();
-		self.0.print(&mut inner)?;
-		f.write_str("\"")
-			.and_then(|()| f.write_str(&inner.replace('"', "\"\"")))
-			.and_then(|()| f.write_str("\""))
-	}
-}
 impl<T: Display> fmt::Display for EscapeIdentifier<T> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.write_str("\"")
@@ -460,39 +243,18 @@ impl<T: Display> fmt::Display for EscapeIdentifier<T> {
 			.and_then(|()| f.write_str("\""))
 	}
 }
-trait Print {
-	fn print(&self, f: &mut impl fmt::Write) -> fmt::Result;
-}
 
-impl<'a, T: Print> Print for &'a T {
-	fn print(&self, f: &mut impl fmt::Write) -> fmt::Result {
-		(**self).print(f)
-	}
-}
-
-impl<'a> Print for &'a str {
-	fn print(&self, f: &mut impl fmt::Write) -> fmt::Result {
-		f.write_str(self)
-	}
-}
-
-struct Names<'a>(Option<&'a Names<'a>>, &'static str);
-impl<'a> Print for Names<'a> {
-	fn print(&self, mut f: &mut impl fmt::Write) -> fmt::Result {
+pub struct Names<'a>(pub Option<&'a Names<'a>>, pub &'static str);
+impl<'a> fmt::Display for Names<'a> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		if let Some(prev) = self.0 {
 			f.write_str("(")
-				.and_then(|()| prev.print(f))
+				.and_then(|()| prev.fmt(f))
 				.and_then(|()| f.write_str(")."))?;
 		}
-		EscapeIdentifier(self.1).print(f)
+		EscapeIdentifier(self.1).fmt(f)
 	}
 }
-trait Abc: postgres::types::FromSql {
-	fn abc(buf: &mut String, name: Option<&Names<'_>>) {
-		name.unwrap().print(buf).unwrap();
-	}
-}
-impl<T> Abc for T where T: postgres::types::FromSql {}
 
 // select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
 // select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;

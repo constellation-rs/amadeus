@@ -18,6 +18,17 @@ impl Data for Vec<u8> {
 	type ParquetSchema = <Vec<u8> as parquet::record::Record>::Schema;
 	type ParquetReader = <Vec<u8> as parquet::record::Record>::Reader;
 
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
+
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -53,6 +64,17 @@ impl Data for Bson {
 	type ParquetSchema = <parquet::record::types::Bson as parquet::record::Record>::Schema;
 	type ParquetReader =
 		IntoReader<<parquet::record::types::Bson as parquet::record::Record>::Reader, Self>;
+
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
 
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -113,6 +135,17 @@ impl Data for Json {
 	type ParquetSchema = <parquet::record::types::Json as parquet::record::Record>::Schema;
 	type ParquetReader =
 		IntoReader<<parquet::record::types::Json as parquet::record::Record>::Reader, Self>;
+
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
 
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -177,6 +210,17 @@ impl Data for Enum {
 	type ParquetReader =
 		IntoReader<<parquet::record::types::Enum as parquet::record::Record>::Reader, Self>;
 
+	fn postgres_query(
+		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+	) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn postgres_decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		unimplemented!()
+	}
+
 	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -238,6 +282,17 @@ macro_rules! impl_parquet_record_array {
 			type ParquetReader = <Self as parquet::record::Record>::Reader;
 			type ParquetSchema = <Self as parquet::record::Record>::Schema;
 
+			fn postgres_query(
+				f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+			) -> fmt::Result {
+				name.unwrap().fmt(f)
+			}
+			fn postgres_decode(
+				type_: &::postgres::types::Type, buf: Option<&[u8]>,
+			) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+				unimplemented!()
+			}
+
 			fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
 				S: Serializer,
@@ -274,6 +329,17 @@ macro_rules! impl_parquet_record_array {
 		impl Data for Box<[u8; $i]> {
 			type ParquetReader = <Self as parquet::record::Record>::Reader;
 			type ParquetSchema = <Self as parquet::record::Record>::Schema;
+
+			fn postgres_query(
+				f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+			) -> fmt::Result {
+				name.unwrap().fmt(f)
+			}
+			fn postgres_decode(
+				type_: &::postgres::types::Type, buf: Option<&[u8]>,
+			) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+				unimplemented!()
+			}
 
 			fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where

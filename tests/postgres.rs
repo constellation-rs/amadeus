@@ -22,41 +22,23 @@ fn main() {
 	let pool = amadeus::no_pool::NoPool;
 
 	#[derive(Data, Clone, PartialEq, Debug)]
-	struct BitcoinDerived {
-		date: Date,
-		#[amadeus(rename = "txVolume(USD)")]
-		tx_volume_usd: Option<String>,
-		#[amadeus(rename = "adjustedTxVolume(USD)")]
-		adjusted_tx_volume_usd: Option<String>,
-		#[amadeus(rename = "txCount")]
-		tx_count: u32,
-		#[amadeus(rename = "marketcap(USD)")]
-		marketcap_usd: Option<String>,
-		#[amadeus(rename = "price(USD)")]
-		price_usd: Option<String>,
-		#[amadeus(rename = "exchangeVolume(USD)")]
-		exchange_volume_usd: Option<String>,
-		#[amadeus(rename = "generatedCoins")]
-		generated_coins: f64,
-		fees: f64,
-		#[amadeus(rename = "activeAddresses")]
-		active_addresses: u32,
-		#[amadeus(rename = "averageDifficulty")]
-		average_difficulty: f64,
-		#[amadeus(rename = "paymentCount")]
-		payment_count: Value,
-		#[amadeus(rename = "medianTxValue(USD)")]
-		median_tx_value_usd: Option<String>,
-		#[amadeus(rename = "medianFee")]
-		median_fee: Value,
-		#[amadeus(rename = "blockSize")]
-		block_size: u32,
-		#[amadeus(rename = "blockCount")]
-		block_count: u32,
+	struct Weather {
+		city: Option<String>,
+		temp_lo: Option<i32>,
+		temp_hi: Option<i32>,
+		prcp: Option<f32>,
+		date: Option<Date>,
+		invent: Option<InventoryItem>,
+	}
+	#[derive(Data, Clone, PartialEq, Debug)]
+	struct InventoryItem {
+		name: Option<String>,
+		supplier_id: Option<i32>,
+		price: Option<f64>,
 	}
 
 	// https://datahub.io/cryptocurrency/bitcoin
-	let rows = Postgres::<BitcoinDerived>::new(vec![(
+	let rows = Postgres::<Weather>::new(vec![(
 		"postgres://postgres:a@localhost/alec".parse().unwrap(),
 		vec![amadeus::source::postgres::Source::Table(
 			"weather".parse().unwrap(),
@@ -66,7 +48,7 @@ fn main() {
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
 			.count(&pool),
-		3_605
+		4
 	);
 
 	let rows = Postgres::<Value>::new(vec![(
@@ -84,6 +66,6 @@ fn main() {
 				value
 			}))
 			.count(&pool),
-		3_605
+		4
 	);
 }

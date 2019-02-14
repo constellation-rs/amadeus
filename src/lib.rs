@@ -2,7 +2,7 @@
 //!
 //! **[Crates.io](https://crates.io/crates/amadeus) │ [Repo](https://github.com/alecmocatta/amadeus)**
 //!
-//! This library is very nascent.
+//! This library is very nascent. 3 parts: process pool; sources/sinks (Data/Value); analytics;
 
 #![doc(html_root_url = "https://docs.rs/amadeus/0.1.1")]
 #![feature(
