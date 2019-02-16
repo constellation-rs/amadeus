@@ -19,6 +19,39 @@ use super::{
 };
 
 #[derive(Clone, PartialEq, Debug)]
+pub enum SchemaIncomplete {
+	Bool,
+	U8,
+	I8,
+	U16,
+	I16,
+	U32,
+	I32,
+	U64,
+	I64,
+	F32,
+	F64,
+	Date,
+	Time,
+	Timestamp,
+	Decimal,
+	ByteArray,
+	Bson,
+	String,
+	Json,
+	Enum,
+	List(Box<SchemaIncomplete>),
+	Map(Box<(SchemaIncomplete, SchemaIncomplete)>),
+	Group(
+		Option<(
+			Vec<SchemaIncomplete>,
+			Option<Arc<LinkedHashMap<String, usize, FxBuildHasher>>>,
+		)>,
+	),
+	Option(Box<SchemaIncomplete>),
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub enum Schema {
 	Bool,
 	U8,
@@ -43,10 +76,8 @@ pub enum Schema {
 	List(Box<Schema>),
 	Map(Box<(Schema, Schema)>),
 	Group(
-		Option<(
-			Vec<Schema>,
-			Arc<LinkedHashMap<String, usize, FxBuildHasher>>,
-		)>,
+		Vec<Schema>,
+		Option<Arc<LinkedHashMap<String, usize, FxBuildHasher>>>,
 	),
 	Option(Box<Schema>),
 }
@@ -1624,12 +1655,14 @@ impl Data for Value {
 			},
 		}
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
 		if let Some(schema) = schema {
-			assert_eq!(schema, Schema::Group(None)); // TODO
+			assert_eq!(schema, SchemaIncomplete::Group(None)); // TODO
 			return Group::serde_deserialize(deserializer, Some(schema)).map(Value::Group);
 		}
 		struct ValueVisitor;

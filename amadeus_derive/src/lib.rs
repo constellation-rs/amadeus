@@ -192,7 +192,7 @@ fn impl_struct(
 				record::{Schema as ParquetSchema, Reader, _private::DisplaySchemaGroup},
 				schema::types::{ColumnPath, Type},
 			};
-			pub use amadeus::{data::{serde_data, _serde::{Serialize, Deserialize, Serializer, Deserializer}, Data, types::{Downcast, DowncastError, Value, Schema}},source::postgres::{Names,read_be_i32,read_value}};
+			pub use amadeus::{data::{serde_data, _serde::{Serialize, Deserialize, Serializer, Deserializer}, Data, types::{Downcast, DowncastError, Value, SchemaIncomplete}},source::postgres::{Names,read_be_i32,read_value}};
 			pub use ::std::{boxed::Box, collections::HashMap, convert::Into, cmp::PartialEq, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
@@ -335,7 +335,7 @@ fn impl_struct(
 				__S: __::Serializer {
 				<#serde_name #ty_generics>::serialize(self, serializer)
 			}
-			fn serde_deserialize<'de, __D>(deserializer: __D, schema: __::Option<__::Schema>) -> __::Result<Self, __D::Error>
+			fn serde_deserialize<'de, __D>(deserializer: __D, schema: __::Option<__::SchemaIncomplete>) -> __::Result<Self, __D::Error>
 			where
 				__D: __::Deserializer<'de> {
 				<#serde_name #ty_generics>::deserialize(deserializer)

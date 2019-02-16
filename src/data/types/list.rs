@@ -5,7 +5,7 @@ use std::{
 	collections::HashMap, fmt::{self, Debug}, mem::transmute, ops::Index, slice::{self, SliceIndex}, vec
 };
 
-use super::{super::Data, MapReader, Schema, Value};
+use super::{super::Data, MapReader, SchemaIncomplete, Value};
 use parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
@@ -63,7 +63,9 @@ where
 		// self.serialize(serializer)
 		unimplemented!()
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{

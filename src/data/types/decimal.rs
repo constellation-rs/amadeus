@@ -6,7 +6,7 @@ use std::{
 // use num_bigint::{BigInt, Sign};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{super::Data, IntoReader, Schema};
+use super::{super::Data, IntoReader, SchemaIncomplete};
 use parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
@@ -135,7 +135,9 @@ impl Data for Decimal {
 	{
 		self.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{

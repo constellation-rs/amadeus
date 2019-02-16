@@ -2,6 +2,7 @@ mod cloudfront;
 mod common_crawl;
 pub mod csv;
 pub mod json;
+mod misc_serde;
 pub mod parquet;
 pub mod postgres;
 pub use self::{
@@ -10,16 +11,22 @@ pub use self::{
 
 pub trait Source {
 	type Item: super::data::Data;
-	type DistIter: super::DistributedIterator<Item = Self::Item>;
+	type Error: std::error::Error;
+
+	type DistIter: super::DistributedIterator<Item = Result<Self::Item, Self::Error>>;
 	// type ParIter: ParallelIterator;
-	type Iter: Iterator<Item = Self::Item>;
+	type Iter: Iterator<Item = Result<Self::Item, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter;
 	// fn par_iter(self) -> Self::ParIter;
 	fn iter(self) -> Self::Iter;
 }
 
-struct ResultExpand<T, E>(Result<T, E>);
+// pub trait Dest {
+// 	type Item: super::data::Data;
+// 	type DistDest: super::DistributedReducer<I, Source,
+
+pub struct ResultExpand<T, E>(Result<T, E>); // TODO: unpub
 impl<T, E> IntoIterator for ResultExpand<T, E>
 where
 	T: IntoIterator,
@@ -30,7 +37,7 @@ where
 		ResultExpandIter(self.0.map(IntoIterator::into_iter).map_err(Some))
 	}
 }
-struct ResultExpandIter<T, E>(Result<T, Option<E>>);
+pub struct ResultExpandIter<T, E>(Result<T, Option<E>>);
 impl<T, E> Iterator for ResultExpandIter<T, E>
 where
 	T: Iterator,

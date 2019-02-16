@@ -2,7 +2,7 @@ use super::ResultExpand;
 use crate::{
 	data::Data, dist_iter::Consumer, into_dist_iter::IntoDistributedIterator, DistributedIterator, IteratorExt
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{
 	borrow::Cow, convert::identity, error, fmt::{self, Display}, fs::File, io::{self, BufRead, BufReader}, iter, marker::PhantomData, path::PathBuf, sync::Arc, time, vec
 };
@@ -15,35 +15,19 @@ use crate::data::SerdeDeserialize;
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
 
-type JsonInner<Row> = crate::dist_iter::FlatMap<
-	crate::into_dist_iter::IterIter<vec::IntoIter<PathBuf>>,
-	Closure<
-		(),
-		(PathBuf,),
-		iter::Map<
-			iter::FlatMap<
-				sum::Sum2<
-					iter::Once<Result<PathBuf, io::Error>>,
-					vec::IntoIter<Result<PathBuf, io::Error>>,
-				>,
-				ResultExpand<
-					iter::Map<
-						serde_json::StreamDeserializer<
-							'static,
-							serde_json::de::IoRead<File>,
-							SerdeDeserialize<Row>,
-						>,
-						Closure<
-							(),
-							(Result<SerdeDeserialize<Row>, JsonError>,),
-							Result<Row, JsonError>,
-						>,
+mod private {
+	use super::*;
+	pub type JsonInner<Row> = crate::dist_iter::FlatMap<
+		crate::into_dist_iter::IterIter<vec::IntoIter<PathBuf>>,
+		Closure<
+			(),
+			(PathBuf,),
+			iter::Map<
+				iter::FlatMap<
+					sum::Sum2<
+						iter::Once<Result<PathBuf, io::Error>>,
+						vec::IntoIter<Result<PathBuf, io::Error>>,
 					>,
-					io::Error,
-				>,
-				Closure<
-					(),
-					(Result<PathBuf, io::Error>,),
 					ResultExpand<
 						iter::Map<
 							serde_json::StreamDeserializer<
@@ -59,30 +43,64 @@ type JsonInner<Row> = crate::dist_iter::FlatMap<
 						>,
 						io::Error,
 					>,
+					Closure<
+						(),
+						(Result<PathBuf, io::Error>,),
+						ResultExpand<
+							iter::Map<
+								serde_json::StreamDeserializer<
+									'static,
+									serde_json::de::IoRead<File>,
+									SerdeDeserialize<Row>,
+								>,
+								Closure<
+									(),
+									(Result<SerdeDeserialize<Row>, JsonError>,),
+									Result<Row, JsonError>,
+								>,
+							>,
+							io::Error,
+						>,
+					>,
 				>,
+				Closure<(), (Result<Result<Row, JsonError>, io::Error>,), Result<Row, Error>>,
 			>,
-			Closure<(), (Result<Result<Row, JsonError>, io::Error>,), Result<Row, Error>>,
 		>,
-	>,
->;
+	>;
+}
+use private::JsonInner;
 
 pub struct Json<Row>
 where
 	Row: Data,
 {
-	i: JsonInner<Row>,
+	files: Vec<PathBuf>,
+	marker: PhantomData<fn() -> Row>,
 }
 impl<Row> Json<Row>
 where
 	Row: Data,
 {
-	pub fn new<I>(files: I) -> Result<Self, ()>
-	where
-		I: iter::IntoIterator<Item = PathBuf>,
-	{
-		let i = files
-			.into_iter()
-			.collect::<Vec<_>>()
+	pub fn new(files: Vec<PathBuf>) -> Self {
+		Self {
+			files,
+			marker: PhantomData,
+		}
+	}
+}
+impl<Row> super::Source for Json<Row>
+where
+	Row: Data,
+{
+	type Item = Row;
+	type Error = Error;
+
+	// existential type DistIter: super::super::DistributedIterator<Item = Result<Row, Error>>;//, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
+	type DistIter = JsonInner<Row>;
+	type Iter = iter::Empty<Result<Row, Error>>;
+
+	fn dist_iter(self) -> Self::DistIter {
+		self.files
 			.into_dist_iter()
 			.flat_map(FnMut!(|file: PathBuf| {
 				let files = if !file.is_dir() {
@@ -100,9 +118,33 @@ where
 								)))
 						})
 					)))
-					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
-			}));
-		Ok(Json { i })
+					.map(FnMut!(|row: Result<Result<Row, JsonError>, io::Error>| Ok(
+						row??
+					)))
+			}))
+	}
+	fn iter(self) -> Self::Iter {
+		iter::empty()
+		// self.files
+		// 	.into_iter()
+		// 	.flat_map(|file: PathBuf| {
+		// 		let files = if !file.is_dir() {
+		// 			sum::Sum2::A(iter::once(Ok(file)))
+		// 		} else {
+		// 			sum::Sum2::B(get_json_partitions(file))
+		// 		};
+		// 		files
+		// 			.flat_map(|file: Result<PathBuf, _>| ResultExpand(
+		// 				file.and_then(|file| Ok(File::open(file)?)).map(|file| {
+		// 					serde_json::Deserializer::from_reader(file)
+		// 						.into_iter()
+		// 						.map(FnMut!(|x: Result<SerdeDeserialize<Row>, JsonError>| Ok(
+		// 							x?.0
+		// 						)))
+		// 				})
+		// 			))
+		// 			.map(|row: Result<Result<Row, JsonError>, io::Error>| Ok(row??))
+		// 	})
 	}
 }
 
@@ -157,132 +199,10 @@ fn get_json_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>
 		.into_iter()
 }
 
-mod misc_serde {
-	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-	use serde_json::Error as JsonError;
-	use std::{io, sync::Arc};
-
-	pub struct Serde<T>(T);
-
-	impl Serialize for Serde<&io::ErrorKind> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			usize::serialize(
-				&match self.0 {
-					io::ErrorKind::NotFound => 0,
-					io::ErrorKind::PermissionDenied => 1,
-					io::ErrorKind::ConnectionRefused => 2,
-					io::ErrorKind::ConnectionReset => 3,
-					io::ErrorKind::ConnectionAborted => 4,
-					io::ErrorKind::NotConnected => 5,
-					io::ErrorKind::AddrInUse => 6,
-					io::ErrorKind::AddrNotAvailable => 7,
-					io::ErrorKind::BrokenPipe => 8,
-					io::ErrorKind::AlreadyExists => 9,
-					io::ErrorKind::WouldBlock => 10,
-					io::ErrorKind::InvalidInput => 11,
-					io::ErrorKind::InvalidData => 12,
-					io::ErrorKind::TimedOut => 13,
-					io::ErrorKind::WriteZero => 14,
-					io::ErrorKind::Interrupted => 15,
-					io::ErrorKind::UnexpectedEof => 17,
-					_ => 16,
-				},
-				serializer,
-			)
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<io::ErrorKind> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			usize::deserialize(deserializer)
-				.map(|kind| match kind {
-					0 => io::ErrorKind::NotFound,
-					1 => io::ErrorKind::PermissionDenied,
-					2 => io::ErrorKind::ConnectionRefused,
-					3 => io::ErrorKind::ConnectionReset,
-					4 => io::ErrorKind::ConnectionAborted,
-					5 => io::ErrorKind::NotConnected,
-					6 => io::ErrorKind::AddrInUse,
-					7 => io::ErrorKind::AddrNotAvailable,
-					8 => io::ErrorKind::BrokenPipe,
-					9 => io::ErrorKind::AlreadyExists,
-					10 => io::ErrorKind::WouldBlock,
-					11 => io::ErrorKind::InvalidInput,
-					12 => io::ErrorKind::InvalidData,
-					13 => io::ErrorKind::TimedOut,
-					14 => io::ErrorKind::WriteZero,
-					15 => io::ErrorKind::Interrupted,
-					17 => io::ErrorKind::UnexpectedEof,
-					_ => io::ErrorKind::Other,
-				})
-				.map(Serde)
-		}
-	}
-
-	impl Serialize for Serde<&Arc<io::Error>> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			<(Serde<&io::ErrorKind>, String)>::serialize(
-				&(Serde(&self.0.kind()), self.0.to_string()),
-				serializer,
-			)
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<Arc<io::Error>> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			<(Serde<io::ErrorKind>, String)>::deserialize(deserializer)
-				.map(|(kind, message)| Arc::new(io::Error::new(kind.0, message)))
-				.map(Serde)
-		}
-	}
-
-	impl Serialize for Serde<&JsonError> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			panic!()
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<JsonError> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			panic!()
-		}
-	}
-
-	pub fn serialize<T, S>(t: &T, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		for<'a> Serde<&'a T>: Serialize,
-		S: Serializer,
-	{
-		Serde(t).serialize(serializer)
-	}
-	pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-	where
-		Serde<T>: Deserialize<'de>,
-		D: Deserializer<'de>,
-	{
-		Serde::<T>::deserialize(deserializer).map(|x| x.0)
-	}
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Error {
-	Io(#[serde(with = "misc_serde")] Arc<io::Error>),
-	Json(#[serde(with = "misc_serde")] JsonError),
+	Io(#[serde(with = "super::misc_serde")] Arc<io::Error>),
+	Json(#[serde(with = "super::misc_serde")] JsonError),
 }
 impl PartialEq for Error {
 	fn eq(&self, other: &Self) -> bool {
@@ -310,44 +230,5 @@ impl From<io::Error> for Error {
 impl From<JsonError> for Error {
 	fn from(err: JsonError) -> Self {
 		Error::Json(err)
-	}
-}
-
-impl<Row> DistributedIterator for Json<Row>
-where
-	Row: Data,
-{
-	type Item = Result<Row, Error>;
-	type Task = JsonConsumer<Row>;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.i.size_hint()
-	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| JsonConsumer::<Row> {
-			task,
-			marker: PhantomData,
-		})
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "")]
-pub struct JsonConsumer<Row>
-where
-	Row: Data,
-{
-	task: <JsonInner<Row> as DistributedIterator>::Task,
-	marker: PhantomData<fn() -> Row>,
-}
-
-impl<Row> Consumer for JsonConsumer<Row>
-where
-	Row: Data,
-{
-	type Item = Result<Row, Error>;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		self.task.run(i)
 	}
 }

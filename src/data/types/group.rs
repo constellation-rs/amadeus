@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::{
-	super::{Data, SerdeDeserialize, SerdeSerialize}, IntoReader, Schema, Value
+	super::{Data, SerdeDeserialize, SerdeSerialize}, IntoReader, SchemaIncomplete, Value
 };
 use parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
@@ -115,7 +115,9 @@ impl Data for Group {
 			tuple_serializer.end()
 		}
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{

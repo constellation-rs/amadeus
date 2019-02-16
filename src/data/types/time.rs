@@ -9,7 +9,7 @@ use std::{
 	collections::HashMap, convert::{TryFrom, TryInto}, fmt::{self, Display}
 };
 
-use super::{super::Data, IntoReader, Schema};
+use super::{super::Data, IntoReader, SchemaIncomplete};
 
 const JULIAN_DAY_OF_EPOCH: i64 = 2_440_588;
 const SECONDS_PER_DAY: i64 = 86_400;
@@ -71,7 +71,9 @@ impl Data for Date {
 			.expect("not implemented yet")
 			.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
@@ -219,7 +221,9 @@ impl Data for Time {
 			.expect("not implemented yet")
 			.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
@@ -520,7 +524,9 @@ impl Data for Timestamp {
 			.expect("not implemented yet")
 			.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{

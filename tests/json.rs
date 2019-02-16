@@ -1,14 +1,14 @@
 use amadeus::{
 	data::{
 		types::{Date, Downcast, List, Map, Timestamp, Value}, Data
-	}, source::Json, DistributedIterator, ProcessPool
+	}, source::{Json, Source}, DistributedIterator, ProcessPool
 };
 use constellation::*;
 use serde_closure::FnMut;
 use std::{env, path::PathBuf, time::SystemTime};
 
 fn main() {
-	init(Resources::default());
+	// init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10
 	let processes = env::args()
@@ -18,7 +18,8 @@ fn main() {
 
 	let start = SystemTime::now();
 
-	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	// let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	let pool = amadeus::no_pool::NoPool;
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct BitcoinDerived {
@@ -58,7 +59,7 @@ fn main() {
 	let rows =
 		Json::<BitcoinDerived>::new(vec![PathBuf::from("amadeus-testing/json/bitcoin2.json")]);
 	assert_eq!(
-		rows.unwrap()
+		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
 			.count(&pool),
 		3_605
@@ -66,7 +67,7 @@ fn main() {
 
 	let rows = Json::<Value>::new(vec![PathBuf::from("amadeus-testing/json/bitcoin2.json")]);
 	assert_eq!(
-		rows.unwrap()
+		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				// println!("{:?}", value);

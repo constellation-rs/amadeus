@@ -7,7 +7,7 @@ use std::{
 	collections::HashMap, fmt::{self, Display}, marker::PhantomData, string::FromUtf8Error
 };
 
-use super::{super::Data, IntoReader, Schema};
+use super::{super::Data, IntoReader, SchemaIncomplete};
 use parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
@@ -35,7 +35,9 @@ impl Data for Vec<u8> {
 	{
 		self.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
@@ -82,7 +84,9 @@ impl Data for Bson {
 	{
 		self.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
@@ -153,7 +157,9 @@ impl Data for Json {
 	{
 		self.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
@@ -227,7 +233,9 @@ impl Data for Enum {
 	{
 		self.serialize(serializer)
 	}
-	fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+	fn serde_deserialize<'de, D>(
+		deserializer: D, schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
@@ -300,7 +308,7 @@ macro_rules! impl_parquet_record_array {
 				self.serialize(serializer)
 			}
 			fn serde_deserialize<'de, D>(
-				deserializer: D, schema: Option<Schema>,
+				deserializer: D, schema: Option<SchemaIncomplete>,
 			) -> Result<Self, D::Error>
 			where
 				D: Deserializer<'de>,
@@ -348,7 +356,7 @@ macro_rules! impl_parquet_record_array {
 				self.serialize(serializer)
 			}
 			fn serde_deserialize<'de, D>(
-				deserializer: D, schema: Option<Schema>,
+				deserializer: D, schema: Option<SchemaIncomplete>,
 			) -> Result<Self, D::Error>
 			where
 				D: Deserializer<'de>,

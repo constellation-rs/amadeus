@@ -3,7 +3,7 @@ pub use serde as _serde;
 pub mod types;
 
 mod data {
-	use super::types::Schema;
+	use super::types::SchemaIncomplete;
 	use parquet::{
 		basic::Repetition, column::reader::ColumnReader, errors::ParquetError, record::{Reader as ParquetReader, Record as ParquetRecord, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
 	};
@@ -37,7 +37,7 @@ mod data {
 		where
 			S: Serializer;
 		fn serde_deserialize<'de, D>(
-			deserializer: D, schema: Option<Schema>,
+			deserializer: D, schema: Option<SchemaIncomplete>,
 		) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>;
@@ -72,7 +72,7 @@ mod data {
 					S: Serializer {
 					self.serialize(serializer)
 				}
-				fn serde_deserialize<'de, D>(deserializer: D, schema: Option<Schema>) -> Result<Self, D::Error>
+				fn serde_deserialize<'de, D>(deserializer: D, schema: Option<SchemaIncomplete>) -> Result<Self, D::Error>
 				where
 					D: Deserializer<'de> {
 					Self::deserialize(deserializer)
@@ -137,7 +137,7 @@ mod data {
 			self.as_ref().map(SerdeSerialize).serialize(serializer)
 		}
 		fn serde_deserialize<'de, D>(
-			deserializer: D, schema: Option<Schema>,
+			deserializer: D, schema: Option<SchemaIncomplete>,
 		) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>,
@@ -199,7 +199,8 @@ mod data {
 		where
 			D: Deserializer<'de>,
 		{
-			T::serde_deserialize(deserializer, Some(Schema::Group(None))).map(SerdeDeserializeGroup)
+			T::serde_deserialize(deserializer, Some(SchemaIncomplete::Group(None)))
+				.map(SerdeDeserializeGroup)
 		}
 	}
 
@@ -286,7 +287,7 @@ where
 
 mod tuple {
 	use super::{
-		data::{SerdeDeserialize, SerdeSerialize}, types::Schema, Data
+		data::{SerdeDeserialize, SerdeSerialize}, types::SchemaIncomplete, Data
 	};
 	use std::{
 		collections::HashMap, fmt::{self, Debug}, intrinsics::unlikely, marker::PhantomData, vec
@@ -490,7 +491,7 @@ mod tuple {
 					S_: Serializer {
 					($(SerdeSerialize(&self.$i),)*).serialize(serializer)
 				}
-				fn serde_deserialize<'de,D_>(deserializer: D_, schema: Option<Schema>) -> Result<Self, D_::Error>
+				fn serde_deserialize<'de,D_>(deserializer: D_, schema: Option<SchemaIncomplete>) -> Result<Self, D_::Error>
 				where
 					D_: Deserializer<'de> {
 					<($(SerdeDeserialize<$t>,)*)>::deserialize(deserializer).map(|self_|($((self_.$i).0,)*))
