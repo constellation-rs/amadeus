@@ -22,9 +22,15 @@ pub trait Source {
 	fn iter(self) -> Self::Iter;
 }
 
-// pub trait Dest {
-// 	type Item: super::data::Data;
-// 	type DistDest: super::DistributedReducer<I, Source,
+pub trait Sink<I>
+where
+	I: super::dist_iter::DistributedIteratorMulti<Self::Item>,
+{
+	type Item: super::data::Data;
+	type Error: std::error::Error;
+
+	type DistDest: super::dist_iter::DistributedReducer<I, Self::Item, Result<(), Self::Error>>;
+}
 
 pub struct ResultExpand<T, E>(Result<T, E>); // TODO: unpub
 impl<T, E> IntoIterator for ResultExpand<T, E>

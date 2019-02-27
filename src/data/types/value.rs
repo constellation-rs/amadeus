@@ -83,7 +83,7 @@ pub enum Schema {
 }
 
 /// Represents any valid Parquet value.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Value {
 	// Primitive types
 	/// Boolean value (`true`, `false`).
@@ -136,7 +136,52 @@ pub enum Value {
 	/// Struct, child elements are tuples of field-value pairs.
 	Group(Group),
 	/// Optional element.
-	Option(Option<ValueRequired>),
+	Option(#[serde(with = "optional_value")] Option<ValueRequired>),
+}
+
+mod optional_value {
+	use super::{Value, ValueRequired};
+	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+	pub fn serialize<S>(t: &Option<ValueRequired>, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		match t {
+			Some(value) => match value {
+				ValueRequired::Bool(value) => serializer.serialize_some(&value),
+				ValueRequired::U8(value) => serializer.serialize_some(&value),
+				ValueRequired::I8(value) => serializer.serialize_some(&value),
+				ValueRequired::U16(value) => serializer.serialize_some(&value),
+				ValueRequired::I16(value) => serializer.serialize_some(&value),
+				ValueRequired::U32(value) => serializer.serialize_some(&value),
+				ValueRequired::I32(value) => serializer.serialize_some(&value),
+				ValueRequired::U64(value) => serializer.serialize_some(&value),
+				ValueRequired::I64(value) => serializer.serialize_some(&value),
+				ValueRequired::F32(value) => serializer.serialize_some(&value),
+				ValueRequired::F64(value) => serializer.serialize_some(&value),
+				ValueRequired::Date(value) => serializer.serialize_some(&value),
+				ValueRequired::Time(value) => serializer.serialize_some(&value),
+				ValueRequired::Timestamp(value) => serializer.serialize_some(&value),
+				ValueRequired::Decimal(value) => serializer.serialize_some(&value),
+				ValueRequired::ByteArray(value) => serializer.serialize_some(&value),
+				ValueRequired::Bson(value) => serializer.serialize_some(&value),
+				ValueRequired::String(value) => serializer.serialize_some(&value),
+				ValueRequired::Json(value) => serializer.serialize_some(&value),
+				ValueRequired::Enum(value) => serializer.serialize_some(&value),
+				ValueRequired::List(value) => serializer.serialize_some(&value),
+				ValueRequired::Map(value) => serializer.serialize_some(&value),
+				ValueRequired::Group(value) => serializer.serialize_some(&value),
+			},
+			None => serializer.serialize_none(),
+		}
+	}
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<ValueRequired>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		Option::<Value>::deserialize(deserializer).map(|x| x.map(Into::into).unwrap())
+	}
 }
 
 #[allow(clippy::derive_hash_xor_eq)]

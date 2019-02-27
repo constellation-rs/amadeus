@@ -1,4 +1,4 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
 use either::Either;
 use replace_with::replace_with_or_abort;
 use serde::{de::Deserialize, ser::Serialize};
@@ -25,8 +25,10 @@ impl<I, ID, F, B> Fold<I, ID, F, B> {
 impl<I: DistributedIteratorMulti<Source>, Source, ID, F, B> DistributedReducer<I, Source, B>
 	for Fold<I, ID, F, B>
 where
-	ID: FnMut() -> B + Clone,
-	F: FnMut(B, Either<I::Item, B>) -> B + Clone,
+	ID: FnMut() -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(B, Either<I::Item, B>) -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	B: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	I::Item: 'static,
 {
 	type ReduceAFactory = FoldReducerFactory<I::Item, ID, F, B>;
 	type ReduceA = FoldReducerA<I::Item, ID, F, B>;
@@ -83,6 +85,15 @@ where
 	fn ret(self) -> Self::Output {
 		self.0.map_left(|mut identity| identity()).into_inner()
 	}
+}
+impl<A, ID, F, B> ReducerA for FoldReducerA<A, ID, F, B>
+where
+	A: 'static,
+	ID: FnMut() -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(B, Either<A, B>) -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	B: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = B;
 }
 
 #[derive(Serialize, Deserialize)]

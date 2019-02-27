@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
 
 #[must_use]
@@ -13,7 +15,7 @@ impl<I, F> Inspect<I, F> {
 
 impl<I: DistributedIterator, F> DistributedIterator for Inspect<I, F>
 where
-	F: FnMut(&I::Item) + Clone,
+	F: FnMut(&I::Item) + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
 {
 	type Item = I::Item;
 	type Task = InspectConsumer<I::Task, F>;
@@ -32,7 +34,11 @@ where
 impl<I: DistributedIteratorMulti<Source>, F, Source> DistributedIteratorMulti<Source>
 	for Inspect<I, F>
 where
-	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item) + Clone,
+	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item)
+		+ Clone
+		+ Serialize
+		+ for<'de> Deserialize<'de>
+		+ 'static,
 {
 	type Item = I::Item;
 	type Task = InspectConsumer<I::Task, F>;

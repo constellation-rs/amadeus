@@ -1,4 +1,4 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
 use serde::{de::Deserialize, ser::Serialize};
 use std::{iter, marker::PhantomData, mem};
 
@@ -18,7 +18,8 @@ impl<I, B> Sum<I, B> {
 
 impl<I: DistributedIteratorMulti<Source>, B, Source> DistributedReducer<I, Source, B> for Sum<I, B>
 where
-	B: iter::Sum<I::Item> + iter::Sum<B>,
+	B: iter::Sum<I::Item> + iter::Sum<B> + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	I::Item: 'static,
 {
 	type ReduceAFactory = SumReducerFactory<I::Item, B>;
 	type ReduceA = SumReducer<I::Item, B>;
@@ -69,4 +70,11 @@ where
 	fn ret(self) -> Self::Output {
 		self.0
 	}
+}
+impl<A, B> ReducerA for SumReducer<A, B>
+where
+	A: 'static,
+	B: iter::Sum<A> + iter::Sum + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = B;
 }

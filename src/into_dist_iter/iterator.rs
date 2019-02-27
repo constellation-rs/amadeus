@@ -1,5 +1,7 @@
-use super::{Consumer, DistributedIterator, IntoDistributedIterator};
+use serde::{Deserialize, Serialize};
 use std::ops::{Range, RangeFrom, RangeInclusive};
+
+use super::{Consumer, DistributedIterator, IntoDistributedIterator};
 
 pub trait IteratorExt: Iterator + Sized {
 	fn dist(self) -> IterIter<Self> {
@@ -10,7 +12,10 @@ impl<I: Iterator + Sized> IteratorExt for I {}
 
 pub struct IterIter<I>(pub(super) I);
 
-impl<I: Iterator> DistributedIterator for IterIter<I> {
+impl<I: Iterator> DistributedIterator for IterIter<I>
+where
+	I::Item: Serialize + for<'de> Deserialize<'de> + 'static,
+{
 	type Item = I::Item;
 	type Task = IterIterConsumer<I::Item>;
 
@@ -36,6 +41,7 @@ impl<T> Consumer for IterIterConsumer<T> {
 impl<Idx> IntoDistributedIterator for Range<Idx>
 where
 	Self: Iterator,
+	<Self as Iterator>::Item: Serialize + for<'de> Deserialize<'de> + 'static,
 {
 	type Iter = IterIter<Self>;
 	type Item = <Self as Iterator>::Item;
@@ -51,6 +57,7 @@ where
 impl<Idx> IntoDistributedIterator for RangeFrom<Idx>
 where
 	Self: Iterator,
+	<Self as Iterator>::Item: Serialize + for<'de> Deserialize<'de> + 'static,
 {
 	type Iter = IterIter<Self>;
 	type Item = <Self as Iterator>::Item;
@@ -66,6 +73,7 @@ where
 impl<Idx> IntoDistributedIterator for RangeInclusive<Idx>
 where
 	Self: Iterator,
+	<Self as Iterator>::Item: Serialize + for<'de> Deserialize<'de> + 'static,
 {
 	type Iter = IterIter<Self>;
 	type Item = <Self as Iterator>::Item;

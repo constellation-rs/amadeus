@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
 
 #[must_use]
@@ -13,7 +15,7 @@ impl<I, F> Map<I, F> {
 
 impl<I: DistributedIterator, F, R> DistributedIterator for Map<I, F>
 where
-	F: FnMut(I::Item) -> R + Clone,
+	F: FnMut(I::Item) -> R + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
 {
 	type Item = R;
 	type Task = MapConsumer<I::Task, F>;
@@ -32,7 +34,11 @@ where
 impl<I: DistributedIteratorMulti<Source>, F, R, Source> DistributedIteratorMulti<Source>
 	for Map<I, F>
 where
-	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R + Clone,
+	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R
+		+ Clone
+		+ Serialize
+		+ for<'de> Deserialize<'de>
+		+ 'static,
 {
 	type Item = R;
 	type Task = MapConsumer<I::Task, F>;

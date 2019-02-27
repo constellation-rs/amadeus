@@ -31,6 +31,8 @@ fn main() {
 		}),
 	);
 
+	DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity);
+
 	println!(
 		"{:?}",
 		Cloudfront::new(rusoto_core::Region::UsEast1, "craigwrightlogs", "")
@@ -43,7 +45,7 @@ fn main() {
 				(
 					Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
 					Identity.cloned().count(),
-					DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity),
+					// DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity),
 				)
 			)
 	);

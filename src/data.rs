@@ -290,7 +290,7 @@ mod tuple {
 		data::{SerdeDeserialize, SerdeSerialize}, types::SchemaIncomplete, Data
 	};
 	use std::{
-		collections::HashMap, fmt::{self, Debug}, intrinsics::unlikely, marker::PhantomData, vec
+		collections::HashMap, fmt::{self, Debug}, marker::PhantomData, vec
 	};
 
 	use parquet::{

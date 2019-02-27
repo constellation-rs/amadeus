@@ -1,4 +1,6 @@
-use super::{DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer};
+use super::{
+	DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer, ReducerA
+};
 use serde::{de::Deserialize, ser::Serialize};
 use std::marker::PhantomData;
 
@@ -16,7 +18,8 @@ impl<I, F> ForEach<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, ()>
 	for ForEach<I, F>
 where
-	F: FnMut(I::Item) + Clone,
+	F: FnMut(I::Item) + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	I::Item: 'static,
 {
 	type ReduceAFactory = ForEachReducerFactory<I::Item, F>;
 	type ReduceA = ForEachReducer<I::Item, F>;
@@ -63,4 +66,11 @@ where
 		true
 	}
 	fn ret(self) -> Self::Output {}
+}
+impl<A, F> ReducerA for ForEachReducer<A, F>
+where
+	A: 'static,
+	F: FnMut(A) + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+{
+	type Output = ();
 }

@@ -11,10 +11,8 @@
 	never_type,
 	specialization,
 	core_intrinsics,
-	nll,
 	try_from,
-	iter_unfold,
-	maybe_uninit,
+	step_trait,
 	test,
 	existential_type,
 	bind_by_move_pattern_guards
@@ -55,6 +53,7 @@ pub mod into_dist_iter;
 pub mod no_pool;
 pub mod process_pool;
 pub mod source;
+pub mod thread_pool;
 
 #[doc(inline)]
 pub use crate::dist_iter::{DistributedIterator, FromDistributedIterator};

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
 
 #[must_use]
@@ -11,8 +13,9 @@ impl<I, F> FlatMap<I, F> {
 	}
 }
 
-impl<I: DistributedIterator, F: FnMut(I::Item) -> R + Clone, R: IntoIterator> DistributedIterator
-	for FlatMap<I, F>
+impl<I: DistributedIterator, F, R: IntoIterator> DistributedIterator for FlatMap<I, F>
+where
+	F: FnMut(I::Item) -> R + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
 {
 	type Item = R::Item;
 	type Task = FlatMapConsumer<I::Task, F>;
@@ -31,7 +34,11 @@ impl<I: DistributedIterator, F: FnMut(I::Item) -> R + Clone, R: IntoIterator> Di
 impl<I: DistributedIteratorMulti<Source>, F, R: IntoIterator, Source>
 	DistributedIteratorMulti<Source> for FlatMap<I, F>
 where
-	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R + Clone,
+	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R
+		+ Clone
+		+ Serialize
+		+ for<'de> Deserialize<'de>
+		+ 'static,
 {
 	type Item = R::Item;
 	type Task = FlatMapConsumer<I::Task, F>;

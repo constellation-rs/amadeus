@@ -22,7 +22,7 @@ use parquet::{
 // };
 
 /// [`List<T>`](List) corresponds to the [List logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists).
-#[derive(Clone, Hash, Eq, PartialOrd)]
+#[derive(Clone, Hash, Eq, PartialOrd, Serialize, Deserialize)]
 pub struct List<T>(pub(in super::super) Vec<T>);
 
 impl<T> List<T> {

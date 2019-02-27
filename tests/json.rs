@@ -8,7 +8,7 @@ use serde_closure::FnMut;
 use std::{env, path::PathBuf, time::SystemTime};
 
 fn main() {
-	// init(Resources::default());
+	init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10
 	let processes = env::args()
@@ -18,54 +18,61 @@ fn main() {
 
 	let start = SystemTime::now();
 
-	// let pool = ProcessPool::new(processes, Resources::default()).unwrap();
-	let pool = amadeus::no_pool::NoPool;
+	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	// let pool = amadeus::no_pool::NoPool;
+
+	let tasks = processes * 2;
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct BitcoinDerived {
 		date: Date,
-		#[amadeus(rename = "txVolume(USD)")]
+		#[amadeus(name = "txVolume(USD)")]
 		tx_volume_usd: Option<String>,
-		#[amadeus(rename = "adjustedTxVolume(USD)")]
+		#[amadeus(name = "adjustedTxVolume(USD)")]
 		adjusted_tx_volume_usd: Option<String>,
-		#[amadeus(rename = "txCount")]
+		#[amadeus(name = "txCount")]
 		tx_count: u32,
-		#[amadeus(rename = "marketcap(USD)")]
+		#[amadeus(name = "marketcap(USD)")]
 		marketcap_usd: Option<String>,
-		#[amadeus(rename = "price(USD)")]
+		#[amadeus(name = "price(USD)")]
 		price_usd: Option<String>,
-		#[amadeus(rename = "exchangeVolume(USD)")]
+		#[amadeus(name = "exchangeVolume(USD)")]
 		exchange_volume_usd: Option<String>,
-		#[amadeus(rename = "generatedCoins")]
+		#[amadeus(name = "generatedCoins")]
 		generated_coins: f64,
 		fees: f64,
-		#[amadeus(rename = "activeAddresses")]
+		#[amadeus(name = "activeAddresses")]
 		active_addresses: u32,
-		#[amadeus(rename = "averageDifficulty")]
+		#[amadeus(name = "averageDifficulty")]
 		average_difficulty: f64,
-		#[amadeus(rename = "paymentCount")]
+		#[amadeus(name = "paymentCount")]
 		payment_count: Value,
-		#[amadeus(rename = "medianTxValue(USD)")]
+		#[amadeus(name = "medianTxValue(USD)")]
 		median_tx_value_usd: Option<String>,
-		#[amadeus(rename = "medianFee")]
+		#[amadeus(name = "medianFee")]
 		median_fee: Value,
-		#[amadeus(rename = "blockSize")]
+		#[amadeus(name = "blockSize")]
 		block_size: u32,
-		#[amadeus(rename = "blockCount")]
+		#[amadeus(name = "blockCount")]
 		block_count: u32,
 	}
 
 	// https://datahub.io/cryptocurrency/bitcoin
-	let rows =
-		Json::<BitcoinDerived>::new(vec![PathBuf::from("amadeus-testing/json/bitcoin2.json")]);
+	let rows = Json::<BitcoinDerived>::new(vec![
+		PathBuf::from("amadeus-testing/json/bitcoin2.json");
+		tasks
+	]);
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
 			.count(&pool),
-		3_605
+		3_605 * tasks
 	);
 
-	let rows = Json::<Value>::new(vec![PathBuf::from("amadeus-testing/json/bitcoin2.json")]);
+	let rows = Json::<Value>::new(vec![
+		PathBuf::from("amadeus-testing/json/bitcoin2.json");
+		tasks
+	]);
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
@@ -75,6 +82,6 @@ fn main() {
 				value
 			}))
 			.count(&pool),
-		3_605
+		3_605 * tasks
 	);
 }

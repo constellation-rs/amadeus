@@ -1,7 +1,12 @@
-use super::{Consumer, DistributedIterator, IntoDistributedIterator, IterIter};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{iter, slice};
 
-impl<T> IntoDistributedIterator for [T] {
+use super::{Consumer, DistributedIterator, IntoDistributedIterator, IterIter};
+
+impl<T> IntoDistributedIterator for [T]
+where
+	T: Serialize + for<'de> Deserialize<'de> + 'static,
+{
 	type Iter = Never;
 	type Item = Never;
 
@@ -13,7 +18,10 @@ impl<T> IntoDistributedIterator for [T] {
 	}
 }
 
-impl<'a, T: Clone> IntoDistributedIterator for &'a [T] {
+impl<'a, T: Clone> IntoDistributedIterator for &'a [T]
+where
+	T: Serialize + for<'de> Deserialize<'de> + 'static,
+{
 	type Iter = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
 	type Item = T;
 
@@ -43,6 +51,23 @@ impl Consumer for Never {
 	type Item = Self;
 
 	fn run(self, _: &mut impl FnMut(Self::Item) -> bool) -> bool {
+		unreachable!()
+	}
+}
+
+impl Serialize for Never {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		unreachable!()
+	}
+}
+impl<'de> Deserialize<'de> for Never {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
 		unreachable!()
 	}
 }

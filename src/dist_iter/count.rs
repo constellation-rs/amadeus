@@ -1,4 +1,6 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, SumReducer};
+use super::{
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, SumReducer
+};
 use std::marker::PhantomData;
 
 #[must_use]
@@ -11,8 +13,9 @@ impl<I> Count<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, usize>
-	for Count<I>
+impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, usize> for Count<I>
+where
+	I::Item: 'static,
 {
 	type ReduceAFactory = CountReducerFactory<I::Item>;
 	type ReduceA = CountReducer<I::Item>;
@@ -52,4 +55,10 @@ impl<A> Reducer for CountReducer<A> {
 	fn ret(self) -> Self::Output {
 		self.0
 	}
+}
+impl<A> ReducerA for CountReducer<A>
+where
+	A: 'static,
+{
+	type Output = usize;
 }

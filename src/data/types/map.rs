@@ -22,7 +22,7 @@ use parquet::{
 // };
 
 /// [`Map<K, V>`](Map) corresponds to the [Map logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#maps).
-#[derive(Clone, Eq)]
+#[derive(Clone, Eq, Serialize, Deserialize)]
 pub struct Map<K: Hash + Eq, V>(pub(in super::super) HashMap<K, V>);
 
 impl<K, V> Map<K, V>

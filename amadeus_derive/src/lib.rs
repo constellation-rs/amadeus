@@ -139,13 +139,13 @@ fn impl_struct(
 			for meta_items in field.attrs.iter().filter_map(get_amadeus_meta_items) {
 				for meta_item in meta_items {
 					match meta_item {
-						// Parse `#[amadeus(rename = "foo")]`
-						NestedMeta::Meta(Meta::NameValue(ref m)) if m.ident == "rename" => {
+						// Parse `#[amadeus(name = "foo")]`
+						NestedMeta::Meta(Meta::NameValue(ref m)) if m.ident == "name" => {
 							let s = get_lit_str(&m.ident, &m.ident, &m.lit)?;
 							if rename.is_some() {
 								return Err(Error::new_spanned(
 									&m.ident,
-									"duplicate amadeus attribute `rename`",
+									"duplicate amadeus attribute `name`",
 								));
 							}
 							rename = Some(s.clone());

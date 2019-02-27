@@ -1,12 +1,15 @@
+use serde::{Deserialize, Serialize};
+
+use crate::dist_iter::{Consumer, DistributedIterator};
+
 mod collections;
 mod iterator;
 mod slice;
 pub use self::{collections::*, iterator::*, slice::*};
-use crate::dist_iter::{Consumer, DistributedIterator};
 
 pub trait IntoDistributedIterator {
 	type Iter: DistributedIterator<Item = Self::Item>;
-	type Item;
+	type Item; //: Serialize + for<'de> Deserialize<'de> + 'static;
 	fn into_dist_iter(self) -> Self::Iter
 	where
 		Self: Sized;

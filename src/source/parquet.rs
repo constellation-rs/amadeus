@@ -165,7 +165,7 @@ where
 					.flat_map(FnMut!(|file: Result<PathBuf, _>| ResultExpand(
 						file.and_then(|file| Ok(File::open(file)?))
 							.and_then(|file| Ok(SerializedFileReader::new(file)?
-								.get_row_iter(None)?
+								.get_row_iter()?
 								.map(FnMut!(|x: Result<Record<Row>, ParquetError>| Ok(x?.0)))))
 					)))
 					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))

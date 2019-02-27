@@ -1,5 +1,5 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
-use serde::{de::Deserialize, ser::Serialize};
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use serde::{Deserialize, Serialize};
 use std::{
 	collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque}, hash::{BuildHasher, Hash}, marker::PhantomData
 };
@@ -33,7 +33,7 @@ impl<I: DistributedIteratorMulti<Source>, Source, T: FromDistributedIterator<I::
 
 pub trait FromDistributedIterator<T>: Sized {
 	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA>;
-	type ReduceA: Reducer<Item = T>;
+	type ReduceA: ReducerA<Item = T> + Serialize + for<'de> Deserialize<'de> + 'static;
 	type ReduceB: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self>;
 
 	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB);
@@ -155,6 +155,13 @@ impl<A, T: Push<A>> Reducer for PushReducer<A, T> {
 		self.0
 	}
 }
+impl<A, T: Push<A>> ReducerA for PushReducer<A, T>
+where
+	A: 'static,
+	T: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = T;
+}
 
 pub struct ExtendReducer<A, T = A>(T, PhantomData<fn(A)>);
 impl<A, T> Default for ExtendReducer<A, T>
@@ -243,6 +250,13 @@ impl<R: Reducer> Reducer for OptionReducer<R> {
 		self.0.map(Reducer::ret)
 	}
 }
+impl<R: Reducer> ReducerA for OptionReducer<R>
+where
+	R: Serialize + for<'de> Deserialize<'de> + 'static,
+	R::Output: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = Option<R::Output>;
+}
 
 pub struct ResultReduceFactory<RF: ReduceFactory, E>(RF, PhantomData<fn(E)>);
 impl<RF: ReduceFactory, E> ReduceFactory for ResultReduceFactory<RF, E> {
@@ -281,8 +295,19 @@ impl<R: Reducer, E> Reducer for ResultReducer<R, E> {
 		self.0.map(Reducer::ret)
 	}
 }
+impl<R: Reducer, E> ReducerA for ResultReducer<R, E>
+where
+	R: Serialize + for<'de> Deserialize<'de> + 'static,
+	R::Output: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	E: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = Result<R::Output, E>;
+}
 
-impl<T> FromDistributedIterator<T> for Vec<T> {
+impl<T> FromDistributedIterator<T> for Vec<T>
+where
+	T: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
@@ -292,7 +317,10 @@ impl<T> FromDistributedIterator<T> for Vec<T> {
 	}
 }
 
-impl<T> FromDistributedIterator<T> for VecDeque<T> {
+impl<T> FromDistributedIterator<T> for VecDeque<T>
+where
+	T: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Vec<T>>;
 	type ReduceB = IntoReducer<ExtendReducer<Vec<T>>, Self>;
@@ -302,7 +330,10 @@ impl<T> FromDistributedIterator<T> for VecDeque<T> {
 	}
 }
 
-impl<T: Ord> FromDistributedIterator<T> for BinaryHeap<T> {
+impl<T: Ord> FromDistributedIterator<T> for BinaryHeap<T>
+where
+	T: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Vec<T>>;
 	type ReduceB = IntoReducer<ExtendReducer<Vec<T>>, Self>;
@@ -312,7 +343,10 @@ impl<T: Ord> FromDistributedIterator<T> for BinaryHeap<T> {
 	}
 }
 
-impl<T> FromDistributedIterator<T> for LinkedList<T> {
+impl<T> FromDistributedIterator<T> for LinkedList<T>
+where
+	T: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
@@ -324,8 +358,8 @@ impl<T> FromDistributedIterator<T> for LinkedList<T> {
 
 impl<T, S> FromDistributedIterator<T> for HashSet<T, S>
 where
-	T: Eq + Hash,
-	S: BuildHasher + Default,
+	T: Eq + Hash + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	S: BuildHasher + Default + Send + 'static,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Self>;
@@ -338,8 +372,9 @@ where
 
 impl<K, V, S> FromDistributedIterator<(K, V)> for HashMap<K, V, S>
 where
-	K: Eq + Hash,
-	S: BuildHasher + Default,
+	K: Eq + Hash + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	V: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	S: BuildHasher + Default + Send + 'static,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<(K, V), Self>;
@@ -352,7 +387,7 @@ where
 
 impl<T> FromDistributedIterator<T> for BTreeSet<T>
 where
-	T: Ord,
+	T: Ord + Serialize + for<'de> Deserialize<'de> + Send + 'static,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Self>;
@@ -365,7 +400,8 @@ where
 
 impl<K, V> FromDistributedIterator<(K, V)> for BTreeMap<K, V>
 where
-	K: Ord,
+	K: Ord + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	V: Serialize + for<'de> Deserialize<'de> + Send + 'static,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<(K, V), Self>;
@@ -417,7 +453,11 @@ impl<T, C: FromDistributedIterator<T>> FromDistributedIterator<Option<T>> for Op
 	}
 }
 
-impl<T, C: FromDistributedIterator<T>, E> FromDistributedIterator<Result<T, E>> for Result<C, E> {
+impl<T, C: FromDistributedIterator<T>, E> FromDistributedIterator<Result<T, E>> for Result<C, E>
+where
+	E: Serialize + for<'de> Deserialize<'de> + 'static,
+	E: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
 	type ReduceAFactory = ResultReduceFactory<C::ReduceAFactory, E>;
 	type ReduceA = ResultReducer<C::ReduceA, E>;
 	type ReduceB = ResultReducer<C::ReduceB, E>;

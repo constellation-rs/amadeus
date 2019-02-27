@@ -1,4 +1,6 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, SumReducer};
+use super::{
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, SumReducer
+};
 use rand::thread_rng;
 use serde::{de::Deserialize, ser::Serialize};
 use std::marker::PhantomData;
@@ -17,8 +19,9 @@ impl<I> SampleUnstable<I> {
 }
 
 impl<I: DistributedIteratorMulti<Source>, Source>
-	DistributedReducer<I, Source, streaming_algorithms::SampleUnstable<I::Item>>
-	for SampleUnstable<I>
+	DistributedReducer<I, Source, streaming_algorithms::SampleUnstable<I::Item>> for SampleUnstable<I>
+where
+	I::Item: Serialize + for<'de> Deserialize<'de> + Send + 'static,
 {
 	type ReduceAFactory = SampleUnstableReducerFactory<I::Item>;
 	type ReduceA = SampleUnstableReducer<I::Item>;
@@ -64,6 +67,12 @@ impl<A> Reducer for SampleUnstableReducer<A> {
 		self.0
 	}
 }
+impl<A> ReducerA for SampleUnstableReducer<A>
+where
+	A: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = streaming_algorithms::SampleUnstable<A>;
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct NonzeroReducer<R>(R);
@@ -82,6 +91,16 @@ where
 	fn ret(self) -> Self::Output {
 		self.0.ret().nonzero().unwrap()
 	}
+}
+impl<R, B> ReducerA for NonzeroReducer<R>
+where
+	R: Reducer<Output = streaming_algorithms::Zeroable<B>>
+		+ Serialize
+		+ for<'de> Deserialize<'de>
+		+ 'static,
+	B: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = B;
 }
 
 #[must_use]
@@ -105,7 +124,7 @@ impl<I> MostFrequent<I> {
 impl<I: DistributedIteratorMulti<Source>, Source>
 	DistributedReducer<I, Source, streaming_algorithms::Top<I::Item, usize>> for MostFrequent<I>
 where
-	I::Item: Clone + Hash + Eq,
+	I::Item: Clone + Hash + Eq + Serialize + for<'de> Deserialize<'de> + Send + 'static,
 {
 	type ReduceAFactory = MostFrequentReducerFactory<I::Item>;
 	type ReduceA = MostFrequentReducer<I::Item>;
@@ -168,6 +187,12 @@ where
 		self.0
 	}
 }
+impl<A> ReducerA for MostFrequentReducer<A>
+where
+	A: Clone + Hash + Eq + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+{
+	type Output = streaming_algorithms::Top<A, usize>;
+}
 
 #[must_use]
 pub struct MostDistinct<I> {
@@ -196,8 +221,8 @@ impl<I: DistributedIteratorMulti<Source, Item = (A, B)>, Source, A, B>
 		streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
 	> for MostDistinct<I>
 where
-	A: Clone + Hash + Eq,
-	B: Hash,
+	A: Clone + Hash + Eq + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	B: Hash + 'static,
 {
 	type ReduceAFactory = MostDistinctReducerFactory<A, B>;
 	type ReduceA = MostDistinctReducer<A, B>;
@@ -273,4 +298,11 @@ where
 	fn ret(self) -> Self::Output {
 		self.0
 	}
+}
+impl<A, B> ReducerA for MostDistinctReducer<A, B>
+where
+	A: Clone + Hash + Eq + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	B: Hash + 'static,
+{
+	type Output = streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
 }

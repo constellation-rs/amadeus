@@ -1,5 +1,5 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
-use serde::{de::Deserialize, ser::Serialize};
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 #[must_use]
@@ -16,7 +16,8 @@ impl<I, F> Any<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, bool>
 	for Any<I, F>
 where
-	F: FnMut(I::Item) -> bool + Clone,
+	F: FnMut(I::Item) -> bool + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	I::Item: 'static,
 {
 	type ReduceAFactory = AnyReducerFactory<I::Item, F>;
 	type ReduceA = AnyReducer<I::Item, F>;
@@ -66,6 +67,13 @@ where
 		!self.1
 	}
 }
+impl<A, F> ReducerA for AnyReducer<A, F>
+where
+	A: 'static,
+	F: FnMut(A) -> bool + Serialize + for<'de> Deserialize<'de> + 'static,
+{
+	type Output = bool;
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct BoolOrReducer(bool);
@@ -82,4 +90,7 @@ impl Reducer for BoolOrReducer {
 	fn ret(self) -> Self::Output {
 		self.0
 	}
+}
+impl ReducerA for BoolOrReducer {
+	type Output = bool;
 }

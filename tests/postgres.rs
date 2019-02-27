@@ -8,7 +8,7 @@ use serde_closure::FnMut;
 use std::{env, path::PathBuf, time::SystemTime};
 
 fn main() {
-	// init(Resources::default());
+	init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10
 	let processes = env::args()
@@ -18,8 +18,8 @@ fn main() {
 
 	let start = SystemTime::now();
 
-	// let pool = ProcessPool::new(processes, Resources::default()).unwrap();
-	let pool = amadeus::no_pool::NoPool;
+	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	// let pool = amadeus::no_pool::NoPool;
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct Weather {

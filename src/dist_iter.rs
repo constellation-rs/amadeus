@@ -30,53 +30,76 @@ use serde::{
 };
 use std::{cmp::Ordering, hash::Hash, iter, marker::PhantomData, vec};
 
-// type Pool = crate::process_pool::ProcessPool;
-type Pool = crate::no_pool::NoPool;
+type Pool = crate::process_pool::ProcessPool;
+// type Pool = crate::no_pool::NoPool;
+
+#[inline(always)]
+fn _assert_distributed_iterator<T, I: DistributedIterator<Item = T>>(i: I) -> I {
+	i
+}
+#[inline(always)]
+fn _assert_distributed_iterator_multi<T, I: DistributedIteratorMulti<Source, Item = T>, Source>(
+	i: I,
+) -> I {
+	i
+}
+#[inline(always)]
+fn _assert_distributed_reducer<
+	T,
+	R: DistributedReducer<I, Source, T>,
+	I: DistributedIteratorMulti<Source>,
+	Source,
+>(
+	r: R,
+) -> R {
+	r
+}
 
 pub trait DistributedIterator {
 	type Item;
-	type Task: Consumer<Item = Self::Item>;
+	type Task: Consumer<Item = Self::Item> + Serialize + DeserializeOwned + 'static;
 	fn size_hint(&self) -> (usize, Option<usize>);
 	fn next_task(&mut self) -> Option<Self::Task>;
 
 	fn inspect<F>(self, f: F) -> Inspect<Self, F>
 	where
-		F: FnMut(&Self::Item),
+		F: FnMut(&Self::Item) + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Inspect::new(self, f)
+		_assert_distributed_iterator(Inspect::new(self, f))
 	}
 
 	fn update<F>(self, f: F) -> Update<Self, F>
 	where
-		F: FnMut(&mut Self::Item),
+		F: FnMut(&mut Self::Item) + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Update::new(self, f)
+		_assert_distributed_iterator(Update::new(self, f))
 	}
 
 	fn map<B, F>(self, f: F) -> Map<Self, F>
 	where
-		F: FnMut(Self::Item) -> B,
+		F: FnMut(Self::Item) -> B + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Map::new(self, f)
+		_assert_distributed_iterator(Map::new(self, f))
 	}
 
 	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 	where
-		F: FnMut(Self::Item) -> B,
+		F: FnMut(Self::Item) -> B + Clone + Serialize + DeserializeOwned + 'static,
+		B: IntoIterator,
 		Self: Sized,
 	{
-		FlatMap::new(self, f)
+		_assert_distributed_iterator(FlatMap::new(self, f))
 	}
 
 	fn filter<F>(self, f: F) -> Filter<Self, F>
 	where
-		F: FnMut(&Self::Item) -> bool,
+		F: FnMut(&Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Filter::new(self, f)
+		_assert_distributed_iterator(Filter::new(self, f))
 	}
 
 	fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
@@ -84,16 +107,14 @@ pub trait DistributedIterator {
 		C: IntoDistributedIterator<Item = Self::Item>,
 		Self: Sized,
 	{
-		Chain::new(self, chain.into_dist_iter())
+		_assert_distributed_iterator(Chain::new(self, chain.into_dist_iter()))
 	}
 
 	fn reduce<B, R1F, R1, R2>(mut self, pool: &Pool, reduce1factory: R1F, mut reduce2: R2) -> B
 	where
 		R1F: ReduceFactory<Reducer = R1>,
-		R1: Reducer<Item = Self::Item> + Serialize + DeserializeOwned + 'static,
-		R2: Reducer<Item = R1::Output, Output = B>,
-		R1::Output: Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
+		R1: ReducerA<Item = Self::Item>,
+		R2: Reducer<Item = <R1 as ReducerA>::Output, Output = B>,
 		Self: Sized,
 	{
 		// TODO: don't buffer tasks before sending. requires changes to ProcessPool
@@ -141,16 +162,18 @@ pub trait DistributedIterator {
 			.into_iter()
 			.map(|tasks| {
 				let reduce1 = reduce1factory.make();
-				pool.spawn(FnOnce!([tasks,reduce1] move || -> R1::Output {
-					let mut reduce1: R1 = reduce1;
-					let tasks: Vec<Self::Task> = tasks;
-					for task in tasks {
-						if !task.run(&mut |item| reduce1.push(item)) {
-							break;
-						}
-					};
-					reduce1.ret()
-				}))
+				pool.spawn(
+					FnOnce!([tasks,reduce1] move || -> <R1 as ReducerA>::Output {
+						let mut reduce1: R1 = reduce1;
+						let tasks: Vec<Self::Task> = tasks;
+						for task in tasks {
+							if !task.run(&mut |item| reduce1.push(item)) {
+								break;
+							}
+						};
+						reduce1.ret()
+					}),
+				)
 			})
 			.collect::<Vec<_>>();
 		let mut panicked = false;
@@ -172,15 +195,7 @@ pub trait DistributedIterator {
 	fn single<Iterator, Reducer, A>(self, pool: &Pool, reducer_a: Reducer) -> A
 	where
 		Iterator: DistributedIteratorMulti<Self::Item>,
-		Iterator::Task: Serialize + DeserializeOwned + 'static,
-
 		Reducer: DistributedReducer<Iterator, Self::Item, A>,
-		<Reducer as DistributedReducer<Iterator, Self::Item, A>>::ReduceA:
-			Serialize + DeserializeOwned + 'static,
-		<<Reducer as DistributedReducer<Iterator, Self::Item, A>>::ReduceA as self::Reducer>::Output:
-			Serialize + DeserializeOwned + Send + 'static,
-
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		struct Connect<A, B>(A, B);
@@ -222,26 +237,13 @@ pub trait DistributedIterator {
 	fn multi<IteratorA, IteratorB, ReducerA, ReducerB, A, B>(
 		self, pool: &Pool, reducer_a: ReducerA, reducer_b: ReducerB,
 	) -> (A, B)
-	// TODO: remove Self::Item: 'static
 	where
 		IteratorA: DistributedIteratorMulti<Self::Item>,
-		IteratorA::Task: Serialize + DeserializeOwned + 'static,
 		IteratorB: for<'a> DistributedIteratorMulti<&'a Self::Item> + 'static,
-		for<'a> <IteratorB as DistributedIteratorMulti<&'static Self::Item>>::Task:
-			Serialize + DeserializeOwned + 'static,
 
 		ReducerA: DistributedReducer<IteratorA, Self::Item, A>,
-		<ReducerA as DistributedReducer<IteratorA, Self::Item, A>>::ReduceA:
-			Serialize + DeserializeOwned + 'static,
-		<<ReducerA as DistributedReducer<IteratorA, Self::Item, A>>::ReduceA as Reducer>::Output:
-			Serialize + DeserializeOwned + Send + 'static,
-		ReducerB: for<'a> DistributedReducer<IteratorB, &'a Self::Item, B> + 'static,
-		for<'a> <ReducerB as DistributedReducer<IteratorB, &'static Self::Item, B>>::ReduceA:
-			Serialize + DeserializeOwned + 'static,
-		for<'a> <<ReducerB as DistributedReducer<IteratorB, &'static Self::Item, B>>::ReduceA as Reducer>::Output:
-			Serialize + DeserializeOwned + Send + 'static,
+		ReducerB: for<'a> DistributedReducer<IteratorB, &'a Self::Item, B>,
 
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: 'static,
 		Self: Sized,
 	{
@@ -250,8 +252,8 @@ pub trait DistributedIterator {
 				A: DistributedIterator,
 				B: DistributedIteratorMulti<A::Item>,
 				C: for<'a> DistributedIteratorMulti<&'a A::Item>,
-				CTask,
-				CItem,
+				CTask: Serialize + DeserializeOwned + 'static,
+				CItem: 'static,
 			> DistributedIterator for Connect<A, B, C, CTask, CItem> where
 		{
 			type Item = Sum2<B::Item, CItem>;
@@ -335,7 +337,6 @@ pub trait DistributedIterator {
 	fn for_each<F>(self, pool: &Pool, f: F)
 	where
 		F: FnMut(Self::Item) + Clone + Serialize + DeserializeOwned + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: 'static,
 		Self: Sized,
 	{
@@ -348,9 +349,8 @@ pub trait DistributedIterator {
 	fn fold<ID, F, B>(self, pool: &Pool, identity: ID, op: F) -> B
 	where
 		ID: FnMut() -> B + Clone + Serialize + DeserializeOwned + 'static,
-		B: Serialize + DeserializeOwned + Send + 'static,
 		F: FnMut(B, Either<Self::Item, B>) -> B + Clone + Serialize + DeserializeOwned + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
+		B: Serialize + DeserializeOwned + Send + 'static,
 		Self::Item: 'static,
 		Self: Sized,
 	{
@@ -362,7 +362,6 @@ pub trait DistributedIterator {
 
 	fn count(self, pool: &Pool) -> usize
 	where
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: 'static,
 		Self: Sized,
 	{
@@ -375,7 +374,6 @@ pub trait DistributedIterator {
 	fn sum<S>(self, pool: &Pool) -> S
 	where
 		S: iter::Sum<Self::Item> + iter::Sum<S> + Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: 'static,
 		Self: Sized,
 	{
@@ -390,7 +388,6 @@ pub trait DistributedIterator {
 			+ DeserializeOwned
 			+ 'static,
 		Self::Item: Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		self.single(
@@ -402,7 +399,6 @@ pub trait DistributedIterator {
 	fn max(self, pool: &Pool) -> Option<Self::Item>
 	where
 		Self::Item: Ord + Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		self.single(pool, DistributedIteratorMulti::<Self::Item>::max(Identity))
@@ -416,7 +412,6 @@ pub trait DistributedIterator {
 			+ Clone
 			+ 'static,
 		Self::Item: Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		self.single(
@@ -430,7 +425,6 @@ pub trait DistributedIterator {
 		F: FnMut(&Self::Item) -> B + Serialize + DeserializeOwned + Clone + 'static,
 		B: Ord + 'static,
 		Self::Item: Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		self.single(
@@ -442,7 +436,6 @@ pub trait DistributedIterator {
 	fn min(self, pool: &Pool) -> Option<Self::Item>
 	where
 		Self::Item: Ord + Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		self.single(pool, DistributedIteratorMulti::<Self::Item>::min(Identity))
@@ -456,7 +449,6 @@ pub trait DistributedIterator {
 			+ Clone
 			+ 'static,
 		Self::Item: Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		self.single(
@@ -470,7 +462,6 @@ pub trait DistributedIterator {
 		F: FnMut(&Self::Item) -> B + Serialize + DeserializeOwned + Clone + 'static,
 		B: Ord + 'static,
 		Self::Item: Serialize + DeserializeOwned + Send + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
 		self.single(
@@ -483,7 +474,6 @@ pub trait DistributedIterator {
 		self, pool: &Pool, n: usize, probability: f64, tolerance: f64,
 	) -> ::streaming_algorithms::Top<Self::Item, usize>
 	where
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: Hash + Eq + Clone + Serialize + DeserializeOwned + Send + 'static,
 		Self: Sized,
 	{
@@ -502,7 +492,6 @@ pub trait DistributedIterator {
 		self, pool: &Pool, n: usize, probability: f64, tolerance: f64, error_rate: f64,
 	) -> ::streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>
 	where
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self: DistributedIterator<Item = (A, B)>,
 		A: Hash + Eq + Clone + Serialize + DeserializeOwned + Send + 'static,
 		B: Hash + 'static,
@@ -524,7 +513,7 @@ pub trait DistributedIterator {
 		self, pool: &Pool, samples: usize,
 	) -> ::streaming_algorithms::SampleUnstable<Self::Item>
 	where
-		Self::Task: Serialize + DeserializeOwned + 'static,
+		// Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: Serialize + DeserializeOwned + Send + 'static,
 		Self: Sized,
 	{
@@ -537,7 +526,6 @@ pub trait DistributedIterator {
 	fn all<F>(self, pool: &Pool, f: F) -> bool
 	where
 		F: FnMut(Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: 'static,
 		Self: Sized,
 	{
@@ -550,7 +538,6 @@ pub trait DistributedIterator {
 	fn any<F>(self, pool: &Pool, f: F) -> bool
 	where
 		F: FnMut(Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		Self::Item: 'static,
 		Self: Sized,
 	{
@@ -563,9 +550,8 @@ pub trait DistributedIterator {
 	fn collect<B>(self, pool: &Pool) -> B
 	where
 		B: FromDistributedIterator<Self::Item>,
-		Self::Task: Serialize + DeserializeOwned + 'static,
 		B::ReduceA: Serialize + DeserializeOwned + 'static,
-		<B::ReduceA as Reducer>::Output: Serialize + DeserializeOwned + Send,
+		// <B::ReduceA as Reducer>::Output: Serialize + DeserializeOwned + Send,
 		Self: Sized,
 	{
 		// B::from_dist_iter(self, pool)
@@ -578,63 +564,64 @@ pub trait DistributedIterator {
 
 pub trait DistributedIteratorMulti<Source> {
 	type Item;
-	type Task: ConsumerMulti<Source, Item = Self::Item>;
+	type Task: ConsumerMulti<Source, Item = Self::Item> + Serialize + DeserializeOwned + 'static;
 
 	fn task(&self) -> Self::Task;
 
 	#[must_use]
 	fn for_each<F>(self, f: F) -> ForEach<Self, F>
 	where
-		F: FnMut(Self::Item) + Clone,
+		F: FnMut(Self::Item) + Clone + Serialize + DeserializeOwned + 'static,
+		Self::Item: 'static,
 		Self: Sized,
 	{
-		ForEach::new(self, f)
+		_assert_distributed_reducer(ForEach::new(self, f))
 	}
 
 	#[must_use]
 	fn inspect<F>(self, f: F) -> Inspect<Self, F>
 	where
-		F: FnMut(&Self::Item) + Clone,
+		F: FnMut(&Self::Item) + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Inspect::new(self, f)
+		_assert_distributed_iterator_multi(Inspect::new(self, f))
 	}
 
 	#[must_use]
 	fn update<F>(self, f: F) -> Update<Self, F>
 	where
-		F: FnMut(&mut Self::Item) + Clone,
+		F: FnMut(&mut Self::Item) + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Update::new(self, f)
+		_assert_distributed_iterator_multi(Update::new(self, f))
 	}
 
 	#[must_use]
 	fn map<B, F>(self, f: F) -> Map<Self, F>
 	where
-		F: FnMut(Self::Item) -> B + Clone,
+		F: FnMut(Self::Item) -> B + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Map::new(self, f)
+		_assert_distributed_iterator_multi(Map::new(self, f))
 	}
 
 	#[must_use]
 	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 	where
-		F: FnMut(Self::Item) -> B + Clone,
+		F: FnMut(Self::Item) -> B + Clone + Serialize + DeserializeOwned + 'static,
 		B: IntoIterator,
 		Self: Sized,
 	{
-		FlatMap::new(self, f)
+		_assert_distributed_iterator_multi(FlatMap::new(self, f))
 	}
 
 	#[must_use]
 	fn filter<F>(self, f: F) -> Filter<Self, F>
 	where
-		F: FnMut(&Self::Item) -> bool + Clone,
+		F: FnMut(&Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Filter::new(self, f)
+		_assert_distributed_iterator_multi(Filter::new(self, f))
 	}
 
 	// #[must_use]
@@ -649,101 +636,123 @@ pub trait DistributedIteratorMulti<Source> {
 	#[must_use]
 	fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
 	where
-		ID: FnMut() -> B + Clone,
-		F: FnMut(B, Either<Self::Item, B>) -> B + Clone,
+		ID: FnMut() -> B + Clone + Serialize + DeserializeOwned + 'static,
+		F: FnMut(B, Either<Self::Item, B>) -> B + Clone + Serialize + DeserializeOwned + 'static,
+		B: Serialize + DeserializeOwned + Send + 'static,
+		Self::Item: 'static,
 		Self: Sized,
 	{
-		Fold::new(self, identity, op)
+		_assert_distributed_reducer(Fold::new(self, identity, op))
 	}
 
 	#[must_use]
 	fn count(self) -> Count<Self>
 	where
+		Self::Item: 'static,
 		Self: Sized,
 	{
-		Count::new(self)
+		_assert_distributed_reducer(Count::new(self))
 	}
 
 	#[must_use]
 	fn sum<B>(self) -> Sum<Self, B>
 	where
+		B: iter::Sum<Self::Item> + iter::Sum<B> + Send + Serialize + DeserializeOwned + 'static,
+		Self::Item: 'static,
 		Self: Sized,
 	{
-		Sum::new(self)
+		_assert_distributed_reducer(Sum::new(self))
 	}
 
 	#[must_use]
 	fn combine<F>(self, f: F) -> Combine<Self, F>
 	where
-		F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone,
+		F: FnMut(Self::Item, Self::Item) -> Self::Item
+			+ Clone
+			+ Serialize
+			+ DeserializeOwned
+			+ 'static,
+		Self::Item: Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Combine::new(self, f)
+		_assert_distributed_reducer(Combine::new(self, f))
 	}
 
 	#[must_use]
 	fn max(self) -> Max<Self>
 	where
-		Self::Item: Ord,
+		Self::Item: Ord + Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Max::new(self)
+		_assert_distributed_reducer(Max::new(self))
 	}
 
 	#[must_use]
 	fn max_by<F>(self, f: F) -> MaxBy<Self, F>
 	where
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone,
+		F: FnMut(&Self::Item, &Self::Item) -> Ordering
+			+ Clone
+			+ Serialize
+			+ DeserializeOwned
+			+ 'static,
+		Self::Item: Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		MaxBy::new(self, f)
+		_assert_distributed_reducer(MaxBy::new(self, f))
 	}
 
 	#[must_use]
 	fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
 	where
-		F: FnMut(&Self::Item) -> B + Clone,
-		B: Ord,
+		F: FnMut(&Self::Item) -> B + Clone + Serialize + DeserializeOwned + 'static,
+		B: Ord + 'static,
+		Self::Item: Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		MaxByKey::new(self, f)
+		_assert_distributed_reducer(MaxByKey::new(self, f))
 	}
 
 	#[must_use]
 	fn min(self) -> Min<Self>
 	where
-		Self::Item: Ord,
+		Self::Item: Ord + Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		Min::new(self)
+		_assert_distributed_reducer(Min::new(self))
 	}
 
 	#[must_use]
 	fn min_by<F>(self, f: F) -> MinBy<Self, F>
 	where
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering,
+		F: FnMut(&Self::Item, &Self::Item) -> Ordering
+			+ Clone
+			+ Serialize
+			+ DeserializeOwned
+			+ 'static,
+		Self::Item: Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		MinBy::new(self, f)
+		_assert_distributed_reducer(MinBy::new(self, f))
 	}
 
 	#[must_use]
 	fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
 	where
-		F: FnMut(&Self::Item) -> B,
-		B: Ord,
+		F: FnMut(&Self::Item) -> B + Clone + Serialize + DeserializeOwned + 'static,
+		B: Ord + 'static,
+		Self::Item: Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		MinByKey::new(self, f)
+		_assert_distributed_reducer(MinByKey::new(self, f))
 	}
 
 	#[must_use]
 	fn most_frequent(self, n: usize, probability: f64, tolerance: f64) -> MostFrequent<Self>
 	where
-		Self::Item: Hash + Eq + Clone,
+		Self::Item: Hash + Eq + Clone + Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		MostFrequent::new(self, n, probability, tolerance)
+		_assert_distributed_reducer(MostFrequent::new(self, n, probability, tolerance))
 	}
 
 	#[must_use]
@@ -752,80 +761,67 @@ pub trait DistributedIteratorMulti<Source> {
 	) -> MostDistinct<Self>
 	where
 		Self: DistributedIteratorMulti<Source, Item = (A, B)>,
-		A: Hash + Eq + Clone,
-		B: Hash,
+		A: Hash + Eq + Clone + Send + Serialize + DeserializeOwned + 'static,
+		B: Hash + 'static,
 		Self: Sized,
 	{
-		MostDistinct::new(self, n, probability, tolerance, error_rate)
+		_assert_distributed_reducer(MostDistinct::new(
+			self,
+			n,
+			probability,
+			tolerance,
+			error_rate,
+		))
 	}
 
 	#[must_use]
 	fn sample_unstable(self, samples: usize) -> SampleUnstable<Self>
 	where
+		Self::Item: Send + Serialize + DeserializeOwned + 'static,
 		Self: Sized,
 	{
-		SampleUnstable::new(self, samples)
+		_assert_distributed_reducer(SampleUnstable::new(self, samples))
 	}
 
 	#[must_use]
 	fn all<F>(self, f: F) -> All<Self, F>
 	where
-		F: FnMut(Self::Item) -> bool + Clone,
+		F: FnMut(Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
+		Self::Item: 'static,
 		Self: Sized,
 	{
-		All::new(self, f)
+		_assert_distributed_reducer(All::new(self, f))
 	}
 
 	#[must_use]
 	fn any<F>(self, f: F) -> Any<Self, F>
 	where
-		F: FnMut(Self::Item) -> bool + Clone,
+		F: FnMut(Self::Item) -> bool + Clone + Serialize + DeserializeOwned + 'static,
+		Self::Item: 'static,
 		Self: Sized,
 	{
-		Any::new(self, f)
+		_assert_distributed_reducer(Any::new(self, f))
 	}
 
 	#[must_use]
 	fn collect<B>(self) -> Collect<Self, B>
 	where
+		B: FromDistributedIterator<Self::Item>,
 		Self: Sized,
 	{
-		Collect::new(self)
+		_assert_distributed_reducer::<B, _, _, _>(Collect::new(self))
 	}
 
 	#[must_use]
-	fn cloned<'a, Source1: 'a, T: 'a>(self) -> Cloned<Self, T, Source>
+	fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
 	where
-		T: Clone,
-		Self: DistributedIteratorMulti<&'a Source1, Item = &'a T>,
+		T: Clone + 'a,
+		Source: 'a,
+		Self: DistributedIteratorMulti<&'a Source, Item = &'a T>,
 		Self: Sized,
 	{
-		Cloned::new(self)
+		_assert_distributed_iterator_multi::<T, _, _>(Cloned::new(self))
 	}
-}
-
-// TODO add all methods
-fn _assert<I, Source, MapFn, MapB, FlatMapFn, FlatMapB>(i: I, map_fn: MapFn, flat_map_fn: FlatMapFn)
-where
-	I: DistributedIteratorMulti<Source> + Clone,
-	MapFn: FnMut(I::Item) -> MapB + Clone,
-	FlatMapFn: FnMut(I::Item) -> FlatMapB + Clone,
-	FlatMapB: IntoIterator,
-{
-	_assert_iterator(i.clone().map(map_fn));
-	_assert_iterator(i.clone().flat_map(flat_map_fn));
-	_assert_reducer(i.clone().for_each(|_x| ()));
-}
-fn _assert_iterator<I, Source>(_i: I)
-where
-	I: DistributedIteratorMulti<Source>,
-{
-}
-fn _assert_reducer<R, I, B, Source>(_r: R)
-where
-	R: DistributedReducer<I, Source, B>,
-	I: DistributedIteratorMulti<Source>,
-{
 }
 
 pub trait Consumer {
@@ -843,6 +839,14 @@ pub trait Reducer {
 	fn push(&mut self, item: Self::Item) -> bool;
 	fn ret(self) -> Self::Output;
 }
+pub trait ReducerA:
+	Reducer<Output = <Self as ReducerA>::Output> + Serialize + DeserializeOwned + 'static
+{
+	type Output: Serialize + DeserializeOwned + Send + 'static;
+}
+// impl<T> ReducerA for T where T: Reducer, T::Output: Serialize + DeserializeOwned + Send + 'static {
+// 	type Output2 = T::Output;
+// }
 
 pub trait ReduceFactory {
 	type Reducer: Reducer;
@@ -851,7 +855,10 @@ pub trait ReduceFactory {
 
 pub trait DistributedReducer<I: DistributedIteratorMulti<Source>, Source, B> {
 	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA>;
-	type ReduceA: Reducer<Item = <I as DistributedIteratorMulti<Source>>::Item>;
+	type ReduceA: ReducerA<Item = <I as DistributedIteratorMulti<Source>>::Item>
+		+ Serialize
+		+ DeserializeOwned
+		+ 'static;
 	type ReduceB: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = B>;
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB);
 }

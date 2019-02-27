@@ -510,31 +510,31 @@ fn main() {
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerived {
-		#[amadeus(rename = "ID")]
+		#[amadeus(name = "ID")]
 		id: i64,
-		#[amadeus(rename = "Int_Array")]
+		#[amadeus(name = "Int_Array")]
 		int_array: List<i32>,
 		int_array_array: List<List<i32>>,
-		#[amadeus(rename = "Int_Map")]
+		#[amadeus(name = "Int_Map")]
 		int_map: Map<String, i32>,
 		int_map_array: List<Map<String, i32>>,
-		#[amadeus(rename = "nested_Struct")]
+		#[amadeus(name = "nested_Struct")]
 		nested_struct: NonnullableDerivedInner,
 	}
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerivedInner {
 		a: i32,
-		#[amadeus(rename = "B")]
+		#[amadeus(name = "B")]
 		b: List<i32>,
 		c: NonnullableDerivedInnerInner,
-		#[amadeus(rename = "G")]
+		#[amadeus(name = "G")]
 		g: Map<String, ((List<f64>,),)>,
 	}
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerivedInnerInner {
-		#[amadeus(rename = "D")]
+		#[amadeus(name = "D")]
 		d: List<List<NonnullableDerivedInnerInnerInner>>,
 	}
 
@@ -596,10 +596,10 @@ fn main() {
 	struct NullableDerived {
 		id: Option<i64>,
 		int_array: Option<List<Option<i32>>>,
-		#[amadeus(rename = "int_array_Array")]
+		#[amadeus(name = "int_array_Array")]
 		int_array_array: Option<List<Option<List<Option<i32>>>>>,
 		int_map: Option<Map<String, Option<i32>>>,
-		#[amadeus(rename = "int_Map_Array")]
+		#[amadeus(name = "int_Map_Array")]
 		int_map_array: Option<List<Option<Map<String, Option<i32>>>>>,
 		nested_struct: Option<(
 			Option<i32>,
@@ -687,7 +687,7 @@ fn main() {
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct RepeatedDerived {
 		id: i32,
-		#[amadeus(rename = "phoneNumbers")]
+		#[amadeus(name = "phoneNumbers")]
 		phone_numbers: Option<(List<(i64, Option<String>)>,)>,
 	}
 	let rows = Parquet::<Repeated>::new(vec![PathBuf::from(

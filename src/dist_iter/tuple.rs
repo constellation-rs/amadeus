@@ -1,5 +1,9 @@
-use super::{ConsumerMulti, DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer};
+use serde::{de::Deserialize, ser::Serialize};
 use sum::*;
+
+use super::{
+	ConsumerMulti, DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA
+};
 
 macro_rules! impl_iterator_multi_tuple {
 	($reduceafactory:ident $reducea:ident $reduceb:ident $enum:ident $($copy:ident)* : $($i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $num:tt $t:ident),*) => (
@@ -75,6 +79,9 @@ macro_rules! impl_iterator_multi_tuple {
 			fn ret(self) -> Self::Output {
 				($(self.$num.0.ret(),)*)
 			}
+		}
+		impl<$($t: Reducer,)*> ReducerA for $reducea<$($t,)*> where $($t: Serialize + for<'de> Deserialize<'de> + 'static,)* $($t::Output: Serialize + for<'de> Deserialize<'de> + Send + 'static,)* {
+			type Output = ($($t::Output,)*);
 		}
 
 		pub struct $reduceb<$($t,)*>($(pub(super) $t,)*);
