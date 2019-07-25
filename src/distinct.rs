@@ -45,11 +45,12 @@
 // is_x86_feature_detected ?
 
 use super::{f64_to_u8, u64_to_f64, usize_to_f64};
+use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use packed_simd::{self, Cast, FromBits, IntoBits};
+use serde::{Deserialize, Serialize};
 use std::{
 	cmp::{self, Ordering}, convert::{identity, TryFrom}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
-use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
 
 mod consts;

@@ -1,7 +1,7 @@
 [package]
 name = "streaming_algorithms"
 version = "0.1.0"
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["data-structures","algorithms","science"]
 keywords = ["streaming-algorithm","probabilistic","sketch","data-structure","hyperloglog"]
@@ -12,18 +12,15 @@ repository = "https://github.com/alecmocatta/streaming_algorithms"
 homepage = "https://github.com/alecmocatta/streaming_algorithms"
 documentation = "https://docs.rs/streaming_algorithms/0.1.0"
 readme = "README.md"
+edition = "2018"
 
 [badges]
-appveyor = { repository = "alecmocatta/streaming_algorithms" }
-circle-ci = { repository = "alecmocatta/streaming_algorithms" }
-#gitlab = { repository = "alecmocatta/streaming_algorithms" }
-travis-ci = { repository = "alecmocatta/streaming_algorithms" }
-
+azure-devops = { project = "alecmocatta/streaming_algorithms", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
 twox-hash = "1.1"
 serde_derive = "1.0"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 rand = "0.5"
 packed_simd = { version = "0.3", features = ["into_bits"] }

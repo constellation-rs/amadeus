@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::{iter, marker, ops};
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]

@@ -22,13 +22,13 @@
 //! As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 #![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.1.0")]
-#![feature(nll, specialization, convert_id, try_trait, try_from)]
+#![feature(specialization, try_trait)]
 #![warn(
 	missing_copy_implementations,
 	missing_debug_implementations,
 	missing_docs,
+	trivial_casts,
 	trivial_numeric_casts,
-	unused_extern_crates,
 	unused_import_braces,
 	unused_qualifications,
 	unused_results,
@@ -46,13 +46,6 @@
 	clippy::suspicious_op_assign_impl,
 	clippy::float_cmp
 )]
-
-extern crate twox_hash;
-#[macro_use]
-extern crate serde_derive;
-extern crate packed_simd;
-extern crate rand;
-extern crate serde;
 
 mod count_min;
 mod distinct;

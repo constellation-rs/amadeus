@@ -1,7 +1,5 @@
 use rand::{self, Rng, SeedableRng};
-use serde::{
-	de::{Deserialize, Deserializer}, ser::{Serialize, Serializer}
-};
+use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{convert::TryFrom, fmt, iter, ops, vec};
 
 /// Given population and sample sizes, returns true if this element is in the sample. Without replacement.

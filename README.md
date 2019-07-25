@@ -1,10 +1,8 @@
 # streaming_algorithms
 
-[![Crates.io](https://img.shields.io/crates/v/streaming_algorithms.svg?style=flat-square&maxAge=86400)](https://crates.io/crates/streaming_algorithms)
-[![Apache-2.0 licensed](https://img.shields.io/crates/l/streaming_algorithms.svg?style=flat-square&maxAge=2592000)](LICENSE.txt)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/alecmocatta/streaming_algorithms?branch=master&svg=true)](https://ci.appveyor.com/project/alecmocatta/streaming-algorithms)
-[![Build Status](https://circleci.com/gh/alecmocatta/streaming_algorithms/tree/master.svg?style=shield)](https://circleci.com/gh/alecmocatta/streaming_algorithms)
-[![Build Status](https://travis-ci.com/alecmocatta/streaming_algorithms.svg?branch=master)](https://travis-ci.com/alecmocatta/streaming_algorithms)
+[![Crates.io](https://img.shields.io/crates/v/streaming_algorithms.svg?maxAge=86400)](https://crates.io/crates/streaming_algorithms)
+[![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/streaming_algorithms.svg?maxAge=2592000)](#License)
+[![Build Status](https://dev.azure.com/alecmocatta/template-rust/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/template-rust/_build/latest?branchName=master)
 
 [Docs](https://docs.rs/streaming_algorithms/0.1.0)
 
@@ -30,6 +28,11 @@ See [this gist](https://gist.github.com/debasishg/8172796) for a good list of fu
 As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 ## License
-Licensed under Apache License, Version 2.0, ([LICENSE.txt](LICENSE.txt) or http://www.apache.org/licenses/LICENSE-2.0).
+Licensed under either of
 
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be licensed as above, without any additional terms or conditions.
+ * Apache License, Version 2.0, ([LICENSE-APACHE.txt](LICENSE-APACHE.txt) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT.txt](LICENSE-MIT.txt) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
