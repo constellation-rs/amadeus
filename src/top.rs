@@ -308,9 +308,8 @@ mod test {
 
 	#[test]
 	fn abc() {
-		let mut rng = rand::prng::XorShiftRng::from_seed([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-		]);
+		let mut rng =
+			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 		let mut top = Top::<String, usize>::new(100, 0.99, 2.0 / 1000.0, ());
 		let mut x = HashMap::new();
 		for _ in 0..10_000 {
@@ -392,9 +391,8 @@ mod test {
 
 	#[test]
 	fn top_hll() {
-		let mut rng = rand::prng::XorShiftRng::from_seed([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-		]);
+		let mut rng =
+			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.00408);
 		// let mut x = HashMap::new();
 		for _ in 0..5_000 {
@@ -422,9 +420,8 @@ mod test {
 	fn many() {
 		let start = time::Instant::now();
 
-		let mut rng = rand::prng::XorShiftRng::from_seed([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-		]);
+		let mut rng =
+			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.05);
 		// let mut x = HashMap::new();
 		for _ in 0..5_000_000 {

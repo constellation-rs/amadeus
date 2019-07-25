@@ -184,7 +184,7 @@ impl<T> ops::AddAssign for SampleUnstable<T> {
 			assert_eq!(self.reservoir.capacity(), other.reservoir.capacity());
 			let mut new = FixedCapVec::new(self.reservoir.capacity());
 			let (m, n) = (self.i, other.i);
-			let mut rng = rand::prng::XorShiftRng::from_seed([
+			let mut rng = rand::rngs::SmallRng::from_seed([
 				u8::try_from(m & 0xff).unwrap(),
 				u8::try_from(n & 0xff).unwrap(),
 				u8::try_from(self.reservoir.capacity() & 0xff).unwrap(),

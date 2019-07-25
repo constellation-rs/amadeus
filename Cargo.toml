@@ -22,5 +22,5 @@ maintenance = { status = "actively-developed" }
 twox-hash = "1.1"
 serde_derive = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-rand = "0.7"
+rand = { version = "0.7", features = ["small_rng"] }
 packed_simd = { version = "0.3", features = ["into_bits"] }
