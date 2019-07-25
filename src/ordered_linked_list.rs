@@ -1,4 +1,5 @@
-use linked_list::{LinkedList, LinkedListIndex};
+use crate::linked_list::{LinkedList, LinkedListIndex};
+use serde::{Deserialize, Serialize};
 use std::{ops, ptr};
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
@@ -14,7 +15,7 @@ impl<'a> OrderedLinkedListIndex<'a> {
 pub struct OrderedLinkedList<T>(LinkedList<T>);
 impl<T: Ord> OrderedLinkedList<T> {
 	pub fn new(cap: usize) -> Self {
-		OrderedLinkedList(LinkedList::new(cap))
+		Self(LinkedList::new(cap))
 	}
 	fn assert(&self) {
 		if !cfg!(feature = "assert") {

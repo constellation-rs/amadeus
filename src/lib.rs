@@ -22,13 +22,13 @@
 //! As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 #![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.1.0")]
-#![feature(nll, specialization, convert_id, try_trait, try_from)]
+#![feature(specialization, try_trait)]
 #![warn(
 	missing_copy_implementations,
 	missing_debug_implementations,
 	missing_docs,
+	trivial_casts,
 	trivial_numeric_casts,
-	unused_extern_crates,
 	unused_import_braces,
 	unused_qualifications,
 	unused_results,
@@ -39,20 +39,13 @@
 	dead_code,
 	clippy::doc_markdown,
 	clippy::inline_always,
-	clippy::stutter,
+	clippy::module_name_repetitions,
 	clippy::if_not_else,
 	clippy::op_ref,
 	clippy::needless_pass_by_value,
 	clippy::suspicious_op_assign_impl,
 	clippy::float_cmp
 )]
-
-extern crate twox_hash;
-#[macro_use]
-extern crate serde_derive;
-extern crate packed_simd;
-extern crate rand;
-extern crate serde;
 
 mod count_min;
 mod distinct;
@@ -72,7 +65,8 @@ pub use traits::*;
 #[allow(
 	clippy::cast_possible_truncation,
 	clippy::cast_sign_loss,
-	clippy::cast_precision_loss
+	clippy::cast_precision_loss,
+	clippy::cast_lossless
 )]
 fn f64_to_usize(a: f64) -> usize {
 	assert!(a.is_sign_positive() && a <= usize::max_value() as f64 && a.fract() == 0.0);
@@ -89,7 +83,7 @@ fn f64_to_u8(a: f64) -> u8 {
 	a as u8
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
 fn usize_to_f64(a: usize) -> f64 {
 	assert!(a as u64 <= 1_u64 << 53);
 	a as f64

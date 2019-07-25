@@ -1,10 +1,10 @@
-use count_min::CountMinSketch;
-use ordered_linked_list::{OrderedLinkedList, OrderedLinkedListIndex, OrderedLinkedListIter};
-use serde::{de::Deserialize, ser::Serialize};
+use crate::{
+	count_min::CountMinSketch, ordered_linked_list::{OrderedLinkedList, OrderedLinkedListIndex, OrderedLinkedListIter}, traits::{Intersect, New, UnionAssign}
+};
+use serde::{Deserialize, Serialize};
 use std::{
 	cmp, collections::{hash_map::Entry, HashMap}, fmt::{self, Debug}, hash::Hash, iter, ops
 };
-use traits::{Intersect, New, UnionAssign};
 use twox_hash::RandomXxHashBuilder;
 
 /// This probabilistic data structure tracks the `n` top keys given a stream of `(key,value)` tuples, ordered by the sum of the values for each key (the "aggregated value"). It uses only `O(n)` space.
@@ -302,16 +302,14 @@ impl<T, C: Eq> Eq for Node<T, C> {}
 #[cfg(test)]
 mod test {
 	use super::*;
-	use distinct::HyperLogLog;
+	use crate::{distinct::HyperLogLog, traits::IntersectPlusUnionIsPlus};
 	use rand::{self, Rng, SeedableRng};
 	use std::time;
-	use traits::IntersectPlusUnionIsPlus;
 
 	#[test]
 	fn abc() {
-		let mut rng = rand::prng::XorShiftRng::from_seed([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-		]);
+		let mut rng =
+			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 		let mut top = Top::<String, usize>::new(100, 0.99, 2.0 / 1000.0, ());
 		let mut x = HashMap::new();
 		for _ in 0..10_000 {
@@ -355,13 +353,13 @@ mod test {
 	impl<V: Hash> Eq for HLL<V> {}
 	impl<V: Hash> Clone for HLL<V> {
 		fn clone(&self) -> Self {
-			HLL(self.0.clone())
+			Self(self.0.clone())
 		}
 	}
 	impl<V: Hash> New for HLL<V> {
 		type Config = f64;
 		fn new(config: &Self::Config) -> Self {
-			HLL(New::new(config))
+			Self(New::new(config))
 		}
 	}
 	impl<V: Hash> Intersect for HLL<V> {
@@ -369,7 +367,7 @@ mod test {
 		where
 			Self: Sized + 'a,
 		{
-			Intersect::intersect(iter.map(|x| &x.0)).map(HLL)
+			Intersect::intersect(iter.map(|x| &x.0)).map(Self)
 		}
 	}
 	impl<'a, V: Hash> UnionAssign<&'a HLL<V>> for HLL<V> {
@@ -393,9 +391,8 @@ mod test {
 
 	#[test]
 	fn top_hll() {
-		let mut rng = rand::prng::XorShiftRng::from_seed([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-		]);
+		let mut rng =
+			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.00408);
 		// let mut x = HashMap::new();
 		for _ in 0..5_000 {
@@ -423,9 +420,8 @@ mod test {
 	fn many() {
 		let start = time::Instant::now();
 
-		let mut rng = rand::prng::XorShiftRng::from_seed([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-		]);
+		let mut rng =
+			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.05);
 		// let mut x = HashMap::new();
 		for _ in 0..5_000_000 {

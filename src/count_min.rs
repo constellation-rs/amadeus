@@ -21,11 +21,11 @@
 // SOFTWARE.
 
 use super::f64_to_usize;
-use serde::{de::Deserialize, ser::Serialize};
+use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
+use serde::{Deserialize, Serialize};
 use std::{
 	borrow::Borrow, cmp::max, convert::TryFrom, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops
 };
-use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
 
 /// An implementation of a [count-min sketch](https://en.wikipedia.org/wiki/Count–min_sketch) data structure with *conservative updating* for increased accuracy.
@@ -229,8 +229,8 @@ impl<K: ?Sized, C: New + Clone> Clone for CountMinSketch<K, C> {
 impl<K: ?Sized, C: New> fmt::Debug for CountMinSketch<K, C> {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		fmt.debug_struct("CountMinSketch")
-            // .field("counters", &self.counters)
-            .finish()
+			// .field("counters", &self.counters)
+			.finish()
 	}
 }
 

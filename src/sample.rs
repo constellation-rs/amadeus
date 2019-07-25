@@ -1,7 +1,5 @@
 use rand::{self, Rng, SeedableRng};
-use serde::{
-	de::{Deserialize, Deserializer}, ser::{Serialize, Serializer}
-};
+use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{convert::TryFrom, fmt, iter, ops, vec};
 
 /// Given population and sample sizes, returns true if this element is in the sample. Without replacement.
@@ -44,7 +42,7 @@ impl Drop for SampleTotal {
 struct FixedCapVec<T>(Vec<T>);
 impl<T> FixedCapVec<T> {
 	fn new(cap: usize) -> Self {
-		let self_ = FixedCapVec(Vec::with_capacity(cap));
+		let self_ = Self(Vec::with_capacity(cap));
 		assert_eq!(self_.capacity(), cap);
 		self_
 	}
@@ -117,7 +115,7 @@ where
 		<(usize, Vec<T>)>::deserialize(deserializer).map(|(cap, mut vec)| {
 			vec.reserve_exact(cap - vec.len());
 			assert_eq!(vec.capacity(), cap);
-			FixedCapVec(vec)
+			Self(vec)
 		})
 	}
 }
@@ -186,7 +184,7 @@ impl<T> ops::AddAssign for SampleUnstable<T> {
 			assert_eq!(self.reservoir.capacity(), other.reservoir.capacity());
 			let mut new = FixedCapVec::new(self.reservoir.capacity());
 			let (m, n) = (self.i, other.i);
-			let mut rng = rand::prng::XorShiftRng::from_seed([
+			let mut rng = rand::rngs::SmallRng::from_seed([
 				u8::try_from(m & 0xff).unwrap(),
 				u8::try_from(n & 0xff).unwrap(),
 				u8::try_from(self.reservoir.capacity() & 0xff).unwrap(),

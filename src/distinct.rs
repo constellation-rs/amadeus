@@ -45,11 +45,12 @@
 // is_x86_feature_detected ?
 
 use super::{f64_to_u8, u64_to_f64, usize_to_f64};
+use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use packed_simd::{self, Cast, FromBits, IntoBits};
+use serde::{Deserialize, Serialize};
 use std::{
 	cmp::{self, Ordering}, convert::{identity, TryFrom}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
-use traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use twox_hash::XxHash;
 
 mod consts;
@@ -80,13 +81,13 @@ impl<V: Hash> PartialEq for HyperLogLogMagnitude<V> {
 impl<V: Hash> Eq for HyperLogLogMagnitude<V> {}
 impl<V: Hash> Clone for HyperLogLogMagnitude<V> {
 	fn clone(&self) -> Self {
-		HyperLogLogMagnitude(self.0.clone())
+		Self(self.0.clone())
 	}
 }
 impl<V: Hash> New for HyperLogLogMagnitude<V> {
 	type Config = f64;
 	fn new(config: &Self::Config) -> Self {
-		HyperLogLogMagnitude(New::new(config))
+		Self(New::new(config))
 	}
 }
 impl<V: Hash> Intersect for HyperLogLogMagnitude<V> {
@@ -94,7 +95,7 @@ impl<V: Hash> Intersect for HyperLogLogMagnitude<V> {
 	where
 		Self: Sized + 'a,
 	{
-		Intersect::intersect(iter.map(|x| &x.0)).map(HyperLogLogMagnitude)
+		Intersect::intersect(iter.map(|x| &x.0)).map(Self)
 	}
 }
 impl<'a, V: Hash> UnionAssign<&'a HyperLogLogMagnitude<V>> for HyperLogLogMagnitude<V> {
