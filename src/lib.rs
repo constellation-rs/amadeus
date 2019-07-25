@@ -65,7 +65,8 @@ pub use traits::*;
 #[allow(
 	clippy::cast_possible_truncation,
 	clippy::cast_sign_loss,
-	clippy::cast_precision_loss
+	clippy::cast_precision_loss,
+	clippy::cast_lossless
 )]
 fn f64_to_usize(a: f64) -> usize {
 	assert!(a.is_sign_positive() && a <= usize::max_value() as f64 && a.fract() == 0.0);
@@ -82,7 +83,7 @@ fn f64_to_u8(a: f64) -> u8 {
 	a as u8
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
 fn usize_to_f64(a: usize) -> f64 {
 	assert!(a as u64 <= 1_u64 << 53);
 	a as f64
