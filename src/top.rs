@@ -302,10 +302,9 @@ impl<T, C: Eq> Eq for Node<T, C> {}
 #[cfg(test)]
 mod test {
 	use super::*;
-	use distinct::HyperLogLog;
+	use crate::{distinct::HyperLogLog, traits::IntersectPlusUnionIsPlus};
 	use rand::{self, Rng, SeedableRng};
 	use std::time;
-	use traits::IntersectPlusUnionIsPlus;
 
 	#[test]
 	fn abc() {
@@ -355,13 +354,13 @@ mod test {
 	impl<V: Hash> Eq for HLL<V> {}
 	impl<V: Hash> Clone for HLL<V> {
 		fn clone(&self) -> Self {
-			HLL(self.0.clone())
+			Self(self.0.clone())
 		}
 	}
 	impl<V: Hash> New for HLL<V> {
 		type Config = f64;
 		fn new(config: &Self::Config) -> Self {
-			HLL(New::new(config))
+			Self(New::new(config))
 		}
 	}
 	impl<V: Hash> Intersect for HLL<V> {
@@ -369,7 +368,7 @@ mod test {
 		where
 			Self: Sized + 'a,
 		{
-			Intersect::intersect(iter.map(|x| &x.0)).map(HLL)
+			Intersect::intersect(iter.map(|x| &x.0)).map(Self)
 		}
 	}
 	impl<'a, V: Hash> UnionAssign<&'a HLL<V>> for HLL<V> {

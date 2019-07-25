@@ -15,7 +15,7 @@ impl<'a> OrderedLinkedListIndex<'a> {
 pub struct OrderedLinkedList<T>(LinkedList<T>);
 impl<T: Ord> OrderedLinkedList<T> {
 	pub fn new(cap: usize) -> Self {
-		OrderedLinkedList(LinkedList::new(cap))
+		Self(LinkedList::new(cap))
 	}
 	fn assert(&self) {
 		if !cfg!(feature = "assert") {

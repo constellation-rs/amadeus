@@ -81,13 +81,13 @@ impl<V: Hash> PartialEq for HyperLogLogMagnitude<V> {
 impl<V: Hash> Eq for HyperLogLogMagnitude<V> {}
 impl<V: Hash> Clone for HyperLogLogMagnitude<V> {
 	fn clone(&self) -> Self {
-		HyperLogLogMagnitude(self.0.clone())
+		Self(self.0.clone())
 	}
 }
 impl<V: Hash> New for HyperLogLogMagnitude<V> {
 	type Config = f64;
 	fn new(config: &Self::Config) -> Self {
-		HyperLogLogMagnitude(New::new(config))
+		Self(New::new(config))
 	}
 }
 impl<V: Hash> Intersect for HyperLogLogMagnitude<V> {
@@ -95,7 +95,7 @@ impl<V: Hash> Intersect for HyperLogLogMagnitude<V> {
 	where
 		Self: Sized + 'a,
 	{
-		Intersect::intersect(iter.map(|x| &x.0)).map(HyperLogLogMagnitude)
+		Intersect::intersect(iter.map(|x| &x.0)).map(Self)
 	}
 }
 impl<'a, V: Hash> UnionAssign<&'a HyperLogLogMagnitude<V>> for HyperLogLogMagnitude<V> {

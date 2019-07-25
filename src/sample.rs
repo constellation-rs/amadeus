@@ -42,7 +42,7 @@ impl Drop for SampleTotal {
 struct FixedCapVec<T>(Vec<T>);
 impl<T> FixedCapVec<T> {
 	fn new(cap: usize) -> Self {
-		let self_ = FixedCapVec(Vec::with_capacity(cap));
+		let self_ = Self(Vec::with_capacity(cap));
 		assert_eq!(self_.capacity(), cap);
 		self_
 	}
@@ -115,7 +115,7 @@ where
 		<(usize, Vec<T>)>::deserialize(deserializer).map(|(cap, mut vec)| {
 			vec.reserve_exact(cap - vec.len());
 			assert_eq!(vec.capacity(), cap);
-			FixedCapVec(vec)
+			Self(vec)
 		})
 	}
 }

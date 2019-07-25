@@ -39,7 +39,7 @@
 	dead_code,
 	clippy::doc_markdown,
 	clippy::inline_always,
-	clippy::stutter,
+	clippy::module_name_repetitions,
 	clippy::if_not_else,
 	clippy::op_ref,
 	clippy::needless_pass_by_value,
