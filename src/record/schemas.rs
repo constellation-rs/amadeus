@@ -617,13 +617,13 @@ where
             ) -> fmt::Result {
                 let self_ = self_.unwrap();
                 let mut printer =
-                    DisplaySchemaGroup::new(Some(Repetition::REPEATED), name, None, f);
+                    DisplaySchemaGroup::new(Some(Repetition::Repeated), name, None, f);
                 printer.field(Some(&self_.1), self_.0.map(|(k, _v)| k));
                 printer.field(Some(&self_.2), self_.0.map(|(_k, v)| v));
                 printer.finish()
             }
         }
-        let mut printer = DisplaySchemaGroup::new(r, name, Some(LogicalType::MAP), f);
+        let mut printer = DisplaySchemaGroup::new(r, name, Some(LogicalType::Map), f);
         printer.field(
             Some(
                 &self_
@@ -657,10 +657,10 @@ where
         name: Option<&str>,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
-        assert_eq!(r.unwrap(), Repetition::REQUIRED);
+        assert_eq!(r.unwrap(), Repetition::Required);
         <T as Schema>::fmt(
             self_.map(|self_| &self_.0),
-            Some(Repetition::OPTIONAL),
+            Some(Repetition::Optional),
             name,
             f,
         )
@@ -724,7 +724,7 @@ where
                     ) -> fmt::Result {
                         let self_ = self_.unwrap();
                         let mut printer = DisplaySchemaGroup::new(
-                            Some(Repetition::REPEATED),
+                            Some(Repetition::Repeated),
                             name,
                             None,
                             f,
@@ -745,7 +745,7 @@ where
                 };
 
                 let mut printer =
-                    DisplaySchemaGroup::new(r, name, Some(LogicalType::LIST), f);
+                    DisplaySchemaGroup::new(r, name, Some(LogicalType::List), f);
                 printer.field(
                     Some(&list_name.clone().unwrap_or_else(|| String::from("list"))),
                     Some(&List(
@@ -759,13 +759,13 @@ where
             }
             Some(ListSchema(self_, ListSchemaType::ListCompat(element_name))) => {
                 let mut printer =
-                    DisplaySchemaGroup::new(r, name, Some(LogicalType::LIST), f);
+                    DisplaySchemaGroup::new(r, name, Some(LogicalType::List), f);
                 printer.field(Some(&element_name.clone()), Some(self_));
                 printer.finish()
             }
             Some(ListSchema(self_, ListSchemaType::Repeated)) => {
-                assert_eq!(r, Some(Repetition::REQUIRED));
-                <T as Schema>::fmt(Some(self_), Some(Repetition::REPEATED), name, f)
+                assert_eq!(r, Some(Repetition::Required));
+                <T as Schema>::fmt(Some(self_), Some(Repetition::Repeated), name, f)
             }
         }
     }
@@ -1875,7 +1875,7 @@ mod tests {
     fn schema_printing() {
         let _schema: RootSchema<Value> = "message org.apache.impala.ComplexTypesTbl {
             REQUIRED int64 ID (INT_64);
-            REQUIRED group Int_Array (LIST) {
+            REQUIRED group IntArray (LIST) {
                 REPEATED group list {
                     REQUIRED int32 element (INT_32);
                 }
@@ -1889,7 +1889,7 @@ mod tests {
                     }
                 }
             }
-            REQUIRED group Int_Map (MAP) {
+            REQUIRED group IntMap (MAP) {
                 REPEATED group map {
                     REQUIRED byte_array key (UTF8);
                     REQUIRED int32 value (INT_32);
@@ -2015,5 +2015,4 @@ mod tests {
 }";
         assert_eq!(schema, schema2);
     }
-
 }

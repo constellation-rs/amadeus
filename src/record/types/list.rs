@@ -43,11 +43,11 @@ use crate::{
 /// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
 pub(super) fn parse_list<T: Record>(schema: &Type) -> Result<ListSchema<T::Schema>> {
     if schema.is_group()
-        && schema.get_basic_info().logical_type() == LogicalType::LIST
+        && schema.get_basic_info().logical_type() == LogicalType::List
         && schema.get_fields().len() == 1
     {
         let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
-        if sub_schema.get_basic_info().repetition() == Repetition::REPEATED {
+        if sub_schema.get_basic_info().repetition() == Repetition::Repeated {
             return Ok(
                 if sub_schema.is_group()
                     && sub_schema.get_fields().len() == 1
@@ -74,7 +74,7 @@ pub(super) fn parse_list<T: Record>(schema: &Type) -> Result<ListSchema<T::Schem
                 } else {
                     let element_name = sub_schema.name().to_owned();
                     ListSchema(
-                        T::parse(&*sub_schema, Some(Repetition::REPEATED))?.1,
+                        T::parse(&*sub_schema, Some(Repetition::Repeated))?.1,
                         ListSchemaType::ListCompat(element_name),
                     )
                 },
@@ -101,7 +101,7 @@ where
         schema: &Type,
         repetition: Option<Repetition>,
     ) -> Result<(String, Self::Schema)> {
-        if repetition == Some(Repetition::REQUIRED) {
+        if repetition == Some(Repetition::Required) {
             return parse_list::<T>(schema)
                 .map(|schema2| (schema.name().to_owned(), schema2));
         }
@@ -109,11 +109,11 @@ where
         // group nor annotated by `LIST` or `MAP` should be interpreted as a
         // required list of required elements where the element type is the type
         // of the field.
-        if repetition == Some(Repetition::REPEATED) {
+        if repetition == Some(Repetition::Repeated) {
             return Ok((
                 schema.name().to_owned(),
                 ListSchema(
-                    T::parse(&schema, Some(Repetition::REQUIRED))?.1,
+                    T::parse(&schema, Some(Repetition::Required))?.1,
                     ListSchemaType::Repeated,
                 ),
             ));

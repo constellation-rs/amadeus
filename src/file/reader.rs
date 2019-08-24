@@ -99,7 +99,10 @@ where
     }
 }
 
-impl<R> FileReader for Box<FileReader<RowGroupReader=R>> where R: RowGroupReader {
+impl<R> FileReader for Box<FileReader<RowGroupReader = R>>
+where
+    R: RowGroupReader,
+{
     type RowGroupReader = impl RowGroupReader;
 
     fn metadata(&self) -> ParquetMetaDataPtr {
@@ -296,7 +299,7 @@ impl<R: ParquetReader> SerializedFileReader<R> {
                                 column.logical_type(),
                                 column.physical_type(),
                             );
-                            res.push(ColumnOrder::TYPE_DEFINED_ORDER(sort_order));
+                            res.push(ColumnOrder::TypeDefinedOrder(sort_order));
                         }
                     }
                 }
@@ -417,34 +420,34 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
         let col_descr = schema_descr.column(i);
         let col_page_reader = self.get_column_page_reader(i)?;
         let col_reader = match col_descr.physical_type() {
-            Type::BOOLEAN => ColumnReader::BoolColumnReader(ColumnReaderImpl::new(
+            Type::Boolean => ColumnReader::BoolColumnReader(ColumnReaderImpl::new(
                 col_descr,
                 col_page_reader,
             )),
-            Type::INT32 => ColumnReader::Int32ColumnReader(ColumnReaderImpl::new(
+            Type::Int32 => ColumnReader::Int32ColumnReader(ColumnReaderImpl::new(
                 col_descr,
                 col_page_reader,
             )),
-            Type::INT64 => ColumnReader::Int64ColumnReader(ColumnReaderImpl::new(
+            Type::Int64 => ColumnReader::Int64ColumnReader(ColumnReaderImpl::new(
                 col_descr,
                 col_page_reader,
             )),
-            Type::INT96 => ColumnReader::Int96ColumnReader(ColumnReaderImpl::new(
+            Type::Int96 => ColumnReader::Int96ColumnReader(ColumnReaderImpl::new(
                 col_descr,
                 col_page_reader,
             )),
-            Type::FLOAT => ColumnReader::FloatColumnReader(ColumnReaderImpl::new(
+            Type::Float => ColumnReader::FloatColumnReader(ColumnReaderImpl::new(
                 col_descr,
                 col_page_reader,
             )),
-            Type::DOUBLE => ColumnReader::DoubleColumnReader(ColumnReaderImpl::new(
+            Type::Double => ColumnReader::DoubleColumnReader(ColumnReaderImpl::new(
                 col_descr,
                 col_page_reader,
             )),
-            Type::BYTE_ARRAY => ColumnReader::ByteArrayColumnReader(
+            Type::ByteArray => ColumnReader::ByteArrayColumnReader(
                 ColumnReaderImpl::new(col_descr, col_page_reader),
             ),
-            Type::FIXED_LEN_BYTE_ARRAY => ColumnReader::FixedLenByteArrayColumnReader(
+            Type::FixedLenByteArray => ColumnReader::FixedLenByteArrayColumnReader(
                 ColumnReaderImpl::new(col_descr, col_page_reader),
             ),
         };
@@ -559,7 +562,7 @@ impl<T: Read> PageReader for SerializedPageReader<T> {
             }
 
             let result = match page_header.type_ {
-                PageType::DICTIONARY_PAGE => {
+                PageType::DictionaryPage => {
                     assert!(page_header.dictionary_page_header.is_some());
                     let dict_header =
                         page_header.dictionary_page_header.as_ref().unwrap();
@@ -571,7 +574,7 @@ impl<T: Read> PageReader for SerializedPageReader<T> {
                         is_sorted,
                     }
                 }
-                PageType::DATA_PAGE => {
+                PageType::DataPage => {
                     assert!(page_header.data_page_header.is_some());
                     let header = page_header.data_page_header.unwrap();
                     self.seen_num_values += header.num_values as i64;
@@ -591,7 +594,7 @@ impl<T: Read> PageReader for SerializedPageReader<T> {
                         ),
                     }
                 }
-                PageType::DATA_PAGE_V2 => {
+                PageType::DataPageV2 => {
                     assert!(page_header.data_page_header_v2.is_some());
                     let header = page_header.data_page_header_v2.unwrap();
                     let is_compressed = header.is_compressed.unwrap_or(true);
@@ -775,12 +778,12 @@ mod tests {
         // Define simple schema, we do not need to provide logical types.
         let mut fields = vec![
             Rc::new(
-                SchemaType::primitive_type_builder("col1", Type::INT32)
+                SchemaType::primitive_type_builder("col1", Type::Int32)
                     .build()
                     .unwrap(),
             ),
             Rc::new(
-                SchemaType::primitive_type_builder("col2", Type::FLOAT)
+                SchemaType::primitive_type_builder("col2", Type::Float)
                     .build()
                     .unwrap(),
             ),
@@ -802,8 +805,8 @@ mod tests {
                 &schema_descr
             ),
             Some(vec![
-                ColumnOrder::TYPE_DEFINED_ORDER(SortOrder::SIGNED),
-                ColumnOrder::TYPE_DEFINED_ORDER(SortOrder::SIGNED)
+                ColumnOrder::TypeDefinedOrder(SortOrder::Signed),
+                ColumnOrder::TypeDefinedOrder(SortOrder::Signed)
             ])
         );
 
@@ -951,7 +954,7 @@ mod tests {
         assert_eq!(row_group_metadata.total_byte_size(), 671);
         // Check each column order
         for i in 0..row_group_metadata.num_columns() {
-            assert_eq!(file_metadata.column_order(i), ColumnOrder::UNDEFINED);
+            assert_eq!(file_metadata.column_order(i), ColumnOrder::Undefined);
         }
 
         // Test row group reader
@@ -983,7 +986,7 @@ mod tests {
                 } => {
                     assert_eq!(buf.len(), 32);
                     assert_eq!(num_values, 8);
-                    assert_eq!(encoding, Encoding::PLAIN_DICTIONARY);
+                    assert_eq!(encoding, Encoding::PlainDictionary);
                     assert_eq!(is_sorted, false);
                     true
                 }
@@ -997,9 +1000,9 @@ mod tests {
                 } => {
                     assert_eq!(buf.len(), 11);
                     assert_eq!(num_values, 8);
-                    assert_eq!(encoding, Encoding::PLAIN_DICTIONARY);
-                    assert_eq!(def_level_encoding, Encoding::RLE);
-                    assert_eq!(rep_level_encoding, Encoding::BIT_PACKED);
+                    assert_eq!(encoding, Encoding::PlainDictionary);
+                    assert_eq!(def_level_encoding, Encoding::Rle);
+                    assert_eq!(rep_level_encoding, Encoding::BitPacked);
                     assert!(statistics.is_none());
                     true
                 }
@@ -1037,7 +1040,7 @@ mod tests {
 
         // Check each column order
         for i in 0..row_group_metadata.num_columns() {
-            assert_eq!(file_metadata.column_order(i), ColumnOrder::UNDEFINED);
+            assert_eq!(file_metadata.column_order(i), ColumnOrder::Undefined);
         }
 
         // Test row group reader
@@ -1069,7 +1072,7 @@ mod tests {
                 } => {
                     assert_eq!(buf.len(), 7);
                     assert_eq!(num_values, 1);
-                    assert_eq!(encoding, Encoding::PLAIN);
+                    assert_eq!(encoding, Encoding::Plain);
                     assert_eq!(is_sorted, false);
                     true
                 }
@@ -1086,7 +1089,7 @@ mod tests {
                 } => {
                     assert_eq!(buf.len(), 4);
                     assert_eq!(num_values, 5);
-                    assert_eq!(encoding, Encoding::RLE_DICTIONARY);
+                    assert_eq!(encoding, Encoding::RleDictionary);
                     assert_eq!(num_nulls, 1);
                     assert_eq!(num_rows, 5);
                     assert_eq!(def_levels_byte_len, 2);

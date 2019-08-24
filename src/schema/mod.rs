@@ -33,14 +33,14 @@
 //! //   REQUIRED INT32 b;
 //! // }
 //!
-//! let field_a = Type::primitive_type_builder("a", PhysicalType::BYTE_ARRAY)
-//!     .with_logical_type(LogicalType::UTF8)
-//!     .with_repetition(Repetition::OPTIONAL)
+//! let field_a = Type::primitive_type_builder("a", PhysicalType::ByteArray)
+//!     .with_logical_type(LogicalType::Utf8)
+//!     .with_repetition(Repetition::Optional)
 //!     .build()
 //!     .unwrap();
 //!
-//! let field_b = Type::primitive_type_builder("b", PhysicalType::INT32)
-//!     .with_repetition(Repetition::REQUIRED)
+//! let field_b = Type::primitive_type_builder("b", PhysicalType::Int32)
+//!     .with_repetition(Repetition::Required)
 //!     .build()
 //!     .unwrap();
 //!

@@ -246,9 +246,9 @@ macro_rules! impl_parquet_record_array {
                 repetition: Option<Repetition>,
             ) -> Result<(String, Self::Schema)> {
                 if schema.is_primitive()
-                    && repetition == Some(Repetition::REQUIRED)
-                    && schema.get_physical_type() == PhysicalType::FIXED_LEN_BYTE_ARRAY
-                    && schema.get_basic_info().logical_type() == LogicalType::NONE
+                    && repetition == Some(Repetition::Required)
+                    && schema.get_physical_type() == PhysicalType::FixedLenByteArray
+                    && schema.get_basic_info().logical_type() == LogicalType::None
                     && schema.get_type_length() == $i
                 {
                     return Ok((

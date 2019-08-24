@@ -74,8 +74,8 @@ impl DataPageBuilderImpl {
 
     // Adds levels to the buffer and return number of encoded bytes
     fn add_levels(&mut self, max_level: i16, levels: &[i16]) -> u32 {
-        let size = max_buffer_size(Encoding::RLE, max_level, levels.len());
-        let mut level_encoder = LevelEncoder::v1(Encoding::RLE, max_level, vec![0; size]);
+        let size = max_buffer_size(Encoding::Rle, max_level, levels.len());
+        let mut level_encoder = LevelEncoder::v1(Encoding::Rle, max_level, vec![0; size]);
         level_encoder.put(levels).expect("put() should be OK");
         let encoded_levels = level_encoder.consume().expect("consume() should be OK");
         // Actual encoded bytes (without length offset)
@@ -126,7 +126,7 @@ impl DataPageBuilder for DataPageBuilderImpl {
     }
 
     fn add_indices(&mut self, indices: ByteBufferPtr) {
-        self.encoding = Some(Encoding::RLE_DICTIONARY);
+        self.encoding = Some(Encoding::RleDictionary);
         self.buffer.extend_from_slice(indices.data());
     }
 
@@ -150,8 +150,8 @@ impl DataPageBuilder for DataPageBuilderImpl {
                 buf: ByteBufferPtr::new(self.buffer),
                 num_values: self.num_values,
                 encoding: self.encoding.unwrap(),
-                def_level_encoding: Encoding::RLE,
-                rep_level_encoding: Encoding::RLE,
+                def_level_encoding: Encoding::Rle,
+                rep_level_encoding: Encoding::Rle,
                 statistics: None, // set to None, we do not need statistics for tests
             }
         }

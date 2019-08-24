@@ -111,16 +111,16 @@ pub fn get_decoder<T: DataType>(
     encoding: Encoding,
 ) -> Result<Box<Decoder<T>>> {
     let decoder: Box<Decoder<T>> = match encoding {
-        Encoding::PLAIN => Box::new(PlainDecoder::new(descr.type_length())),
-        Encoding::RLE_DICTIONARY | Encoding::PLAIN_DICTIONARY => {
+        Encoding::Plain => Box::new(PlainDecoder::new(descr.type_length())),
+        Encoding::RleDictionary | Encoding::PlainDictionary => {
             return Err(general_err!(
                 "Cannot initialize this encoding through this function"
             ));
         }
-        Encoding::RLE => Box::new(RleValueDecoder::new()),
-        Encoding::DELTA_BINARY_PACKED => Box::new(DeltaBitPackDecoder::new()),
-        Encoding::DELTA_LENGTH_BYTE_ARRAY => Box::new(DeltaLengthByteArrayDecoder::new()),
-        Encoding::DELTA_BYTE_ARRAY => Box::new(DeltaByteArrayDecoder::new()),
+        Encoding::Rle => Box::new(RleValueDecoder::new()),
+        Encoding::DeltaBinaryPacked => Box::new(DeltaBitPackDecoder::new()),
+        Encoding::DeltaLengthByteArray => Box::new(DeltaLengthByteArrayDecoder::new()),
+        Encoding::DeltaByteArray => Box::new(DeltaByteArrayDecoder::new()),
         e => return Err(nyi_err!("Encoding {} is not supported", e)),
     };
     Ok(decoder)
@@ -184,7 +184,7 @@ impl<T: DataType> Decoder<T> for PlainDecoder<T> {
 
     #[inline]
     fn encoding(&self) -> Encoding {
-        Encoding::PLAIN
+        Encoding::Plain
     }
 
     #[inline]
@@ -368,7 +368,7 @@ impl<T: DataType> Decoder<T> for DictDecoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::RLE_DICTIONARY
+        Encoding::RleDictionary
     }
 }
 
@@ -429,7 +429,7 @@ impl<T: DataType> Decoder<T> for RleValueDecoder<T> {
 
     #[inline]
     fn encoding(&self) -> Encoding {
-        Encoding::RLE
+        Encoding::Rle
     }
 
     #[inline]
@@ -455,7 +455,7 @@ impl Decoder<BoolType> for RleValueDecoder<BoolType> {
 }
 
 // ----------------------------------------------------------------------
-// DELTA_BINARY_PACKED Decoding
+// ::DeltaBinaryPacked Decoding
 
 /// Delta binary packed decoder.
 /// Supports INT32 and INT64 types.
@@ -650,7 +650,7 @@ impl<T: DataType> Decoder<T> for DeltaBitPackDecoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::DELTA_BINARY_PACKED
+        Encoding::DeltaBinaryPacked
     }
 }
 
@@ -705,7 +705,7 @@ impl DeltaBitPackDecoderConversion<Int64Type> for DeltaBitPackDecoder<Int64Type>
 
 /// Delta length byte array decoder.
 /// Only applied to byte arrays to separate the length values and the data, the lengths
-/// are encoded using DELTA_BINARY_PACKED encoding.
+/// are encoded using ::DeltaBinaryPacked encoding.
 /// See [`DeltaLengthByteArrayEncoder`](crate::encoding::DeltaLengthByteArrayEncoder)
 /// for more information.
 pub struct DeltaLengthByteArrayDecoder<T: DataType> {
@@ -761,7 +761,7 @@ impl<T: DataType> Decoder<T> for DeltaLengthByteArrayDecoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::DELTA_LENGTH_BYTE_ARRAY
+        Encoding::DeltaLengthByteArray
     }
 }
 
@@ -801,7 +801,7 @@ impl Decoder<ByteArrayType> for DeltaLengthByteArrayDecoder<ByteArrayType> {
 // DELTA_BYTE_ARRAY Decoding
 
 /// Delta byte array decoder.
-/// Prefix lengths are encoded using `DELTA_BINARY_PACKED` encoding, Suffixes are stored
+/// Prefix lengths are encoded using `::DeltaBinaryPacked` encoding, Suffixes are stored
 /// using `DELTA_LENGTH_BYTE_ARRAY` encoding.
 /// See [`DeltaByteArrayEncoder`](crate::encoding::DeltaByteArrayEncoder) for more
 /// information.
@@ -859,7 +859,7 @@ impl<'m, T: DataType> Decoder<T> for DeltaByteArrayDecoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::DELTA_BYTE_ARRAY
+        Encoding::DeltaByteArray
     }
 }
 
@@ -942,21 +942,21 @@ mod tests {
     #[test]
     fn test_get_decoders() {
         // supported encodings
-        create_and_check_decoder::<Int32Type>(Encoding::PLAIN, None);
-        create_and_check_decoder::<Int32Type>(Encoding::DELTA_BINARY_PACKED, None);
-        create_and_check_decoder::<Int32Type>(Encoding::DELTA_LENGTH_BYTE_ARRAY, None);
-        create_and_check_decoder::<Int32Type>(Encoding::DELTA_BYTE_ARRAY, None);
-        create_and_check_decoder::<BoolType>(Encoding::RLE, None);
+        create_and_check_decoder::<Int32Type>(Encoding::Plain, None);
+        create_and_check_decoder::<Int32Type>(Encoding::DeltaBinaryPacked, None);
+        create_and_check_decoder::<Int32Type>(Encoding::DeltaLengthByteArray, None);
+        create_and_check_decoder::<Int32Type>(Encoding::DeltaByteArray, None);
+        create_and_check_decoder::<BoolType>(Encoding::Rle, None);
 
         // error when initializing
         create_and_check_decoder::<Int32Type>(
-            Encoding::RLE_DICTIONARY,
+            Encoding::RleDictionary,
             Some(general_err!(
                 "Cannot initialize this encoding through this function"
             )),
         );
         create_and_check_decoder::<Int32Type>(
-            Encoding::PLAIN_DICTIONARY,
+            Encoding::PlainDictionary,
             Some(general_err!(
                 "Cannot initialize this encoding through this function"
             )),
@@ -964,7 +964,7 @@ mod tests {
 
         // unsupported
         create_and_check_decoder::<Int32Type>(
-            Encoding::BIT_PACKED,
+            Encoding::BitPacked,
             Some(nyi_err!("Encoding BIT_PACKED is not supported")),
         );
     }
@@ -1355,15 +1355,15 @@ mod tests {
     }
 
     fn test_rle_value_decode<T: DataType>(data: Vec<Vec<T::T>>) {
-        test_encode_decode::<T>(data, Encoding::RLE);
+        test_encode_decode::<T>(data, Encoding::Rle);
     }
 
     fn test_delta_bit_packed_decode<T: DataType>(data: Vec<Vec<T::T>>) {
-        test_encode_decode::<T>(data, Encoding::DELTA_BINARY_PACKED);
+        test_encode_decode::<T>(data, Encoding::DeltaBinaryPacked);
     }
 
     fn test_delta_byte_array_decode(data: Vec<Vec<ByteArray>>) {
-        test_encode_decode::<ByteArrayType>(data, Encoding::DELTA_BYTE_ARRAY);
+        test_encode_decode::<ByteArrayType>(data, Encoding::DeltaByteArray);
     }
 
     // Input data represents vector of data slices to write (test multiple `put()` calls)

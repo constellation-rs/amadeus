@@ -78,16 +78,16 @@ pub fn get_encoder<T: DataType>(
     mem_tracker: MemTrackerPtr,
 ) -> Result<Box<Encoder<T>>> {
     let encoder: Box<Encoder<T>> = match encoding {
-        Encoding::PLAIN => Box::new(PlainEncoder::new(desc, mem_tracker, vec![])),
-        Encoding::RLE_DICTIONARY | Encoding::PLAIN_DICTIONARY => {
+        Encoding::Plain => Box::new(PlainEncoder::new(desc, mem_tracker, vec![])),
+        Encoding::RleDictionary | Encoding::PlainDictionary => {
             return Err(general_err!(
                 "Cannot initialize this encoding through this function"
             ));
         }
-        Encoding::RLE => Box::new(RleValueEncoder::new()),
-        Encoding::DELTA_BINARY_PACKED => Box::new(DeltaBitPackEncoder::new()),
-        Encoding::DELTA_LENGTH_BYTE_ARRAY => Box::new(DeltaLengthByteArrayEncoder::new()),
-        Encoding::DELTA_BYTE_ARRAY => Box::new(DeltaByteArrayEncoder::new()),
+        Encoding::Rle => Box::new(RleValueEncoder::new()),
+        Encoding::DeltaBinaryPacked => Box::new(DeltaBitPackEncoder::new()),
+        Encoding::DeltaLengthByteArray => Box::new(DeltaLengthByteArrayEncoder::new()),
+        Encoding::DeltaByteArray => Box::new(DeltaByteArrayEncoder::new()),
         e => return Err(nyi_err!("Encoding {} is not supported", e)),
     };
     Ok(encoder)
@@ -141,7 +141,7 @@ impl<T: DataType> Encoder<T> for PlainEncoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::PLAIN
+        Encoding::Plain
     }
 
     fn estimated_data_encoded_size(&self) -> usize {
@@ -398,7 +398,7 @@ impl<T: DataType> Encoder<T> for DictEncoder<T> {
 
     #[inline]
     fn encoding(&self) -> Encoding {
-        Encoding::PLAIN_DICTIONARY
+        Encoding::PlainDictionary
     }
 
     #[inline]
@@ -473,7 +473,7 @@ impl<T: DataType> Encoder<T> for RleValueEncoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::RLE
+        Encoding::Rle
     }
 
     #[inline]
@@ -533,7 +533,7 @@ impl Encoder<BoolType> for RleValueEncoder<BoolType> {
 }
 
 // ----------------------------------------------------------------------
-// DELTA_BINARY_PACKED encoding
+// ::DeltaBinaryPacked encoding
 
 const MAX_PAGE_HEADER_WRITER_SIZE: usize = 32;
 const MAX_BIT_WRITER_SIZE: usize = 10 * 1024 * 1024;
@@ -719,7 +719,7 @@ impl<T: DataType> Encoder<T> for DeltaBitPackEncoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::DELTA_BINARY_PACKED
+        Encoding::DeltaBinaryPacked
     }
 
     fn estimated_data_encoded_size(&self) -> usize {
@@ -839,7 +839,7 @@ impl DeltaBitPackEncoderConversion<Int64Type> for DeltaBitPackEncoder<Int64Type>
 // DELTA_LENGTH_BYTE_ARRAY encoding
 
 /// Encoding for byte arrays to separate the length values and the data.
-/// The lengths are encoded using DELTA_BINARY_PACKED encoding, data is
+/// The lengths are encoded using ::DeltaBinaryPacked encoding, data is
 /// stored as raw bytes.
 pub struct DeltaLengthByteArrayEncoder<T: DataType> {
     // length encoder
@@ -869,7 +869,7 @@ impl<T: DataType> Encoder<T> for DeltaLengthByteArrayEncoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::DELTA_LENGTH_BYTE_ARRAY
+        Encoding::DeltaLengthByteArray
     }
 
     fn estimated_data_encoded_size(&self) -> usize {
@@ -911,7 +911,7 @@ impl Encoder<ByteArrayType> for DeltaLengthByteArrayEncoder<ByteArrayType> {
 // ----------------------------------------------------------------------
 // DELTA_BYTE_ARRAY encoding
 
-/// Encoding for byte arrays, prefix lengths are encoded using DELTA_BINARY_PACKED
+/// Encoding for byte arrays, prefix lengths are encoded using ::DeltaBinaryPacked
 /// encoding, followed by suffixes with DELTA_LENGTH_BYTE_ARRAY encoding.
 pub struct DeltaByteArrayEncoder<T: DataType> {
     prefix_len_encoder: DeltaBitPackEncoder<Int32Type>,
@@ -940,7 +940,7 @@ impl<T: DataType> Encoder<T> for DeltaByteArrayEncoder<T> {
     }
 
     fn encoding(&self) -> Encoding {
-        Encoding::DELTA_BYTE_ARRAY
+        Encoding::DeltaByteArray
     }
 
     fn estimated_data_encoded_size(&self) -> usize {
@@ -1031,21 +1031,21 @@ mod tests {
     #[test]
     fn test_get_encoders() {
         // supported encodings
-        create_and_check_encoder::<Int32Type>(Encoding::PLAIN, None);
-        create_and_check_encoder::<Int32Type>(Encoding::DELTA_BINARY_PACKED, None);
-        create_and_check_encoder::<Int32Type>(Encoding::DELTA_LENGTH_BYTE_ARRAY, None);
-        create_and_check_encoder::<Int32Type>(Encoding::DELTA_BYTE_ARRAY, None);
-        create_and_check_encoder::<BoolType>(Encoding::RLE, None);
+        create_and_check_encoder::<Int32Type>(Encoding::Plain, None);
+        create_and_check_encoder::<Int32Type>(Encoding::DeltaBinaryPacked, None);
+        create_and_check_encoder::<Int32Type>(Encoding::DeltaLengthByteArray, None);
+        create_and_check_encoder::<Int32Type>(Encoding::DeltaByteArray, None);
+        create_and_check_encoder::<BoolType>(Encoding::Rle, None);
 
         // error when initializing
         create_and_check_encoder::<Int32Type>(
-            Encoding::RLE_DICTIONARY,
+            Encoding::RleDictionary,
             Some(general_err!(
                 "Cannot initialize this encoding through this function"
             )),
         );
         create_and_check_encoder::<Int32Type>(
-            Encoding::PLAIN_DICTIONARY,
+            Encoding::PlainDictionary,
             Some(general_err!(
                 "Cannot initialize this encoding through this function"
             )),
@@ -1053,63 +1053,63 @@ mod tests {
 
         // unsupported
         create_and_check_encoder::<Int32Type>(
-            Encoding::BIT_PACKED,
+            Encoding::BitPacked,
             Some(nyi_err!("Encoding BIT_PACKED is not supported")),
         );
     }
 
     #[test]
     fn test_bool() {
-        BoolType::test(Encoding::PLAIN, TEST_SET_SIZE, -1);
-        BoolType::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, -1);
-        BoolType::test(Encoding::RLE, TEST_SET_SIZE, -1);
+        BoolType::test(Encoding::Plain, TEST_SET_SIZE, -1);
+        BoolType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
+        BoolType::test(Encoding::Rle, TEST_SET_SIZE, -1);
     }
 
     #[test]
     fn test_i32() {
-        Int32Type::test(Encoding::PLAIN, TEST_SET_SIZE, -1);
-        Int32Type::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, -1);
-        Int32Type::test(Encoding::DELTA_BINARY_PACKED, TEST_SET_SIZE, -1);
+        Int32Type::test(Encoding::Plain, TEST_SET_SIZE, -1);
+        Int32Type::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
+        Int32Type::test(Encoding::DeltaBinaryPacked, TEST_SET_SIZE, -1);
     }
 
     #[test]
     fn test_i64() {
-        Int64Type::test(Encoding::PLAIN, TEST_SET_SIZE, -1);
-        Int64Type::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, -1);
-        Int64Type::test(Encoding::DELTA_BINARY_PACKED, TEST_SET_SIZE, -1);
+        Int64Type::test(Encoding::Plain, TEST_SET_SIZE, -1);
+        Int64Type::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
+        Int64Type::test(Encoding::DeltaBinaryPacked, TEST_SET_SIZE, -1);
     }
 
     #[test]
     fn test_i96() {
-        Int96Type::test(Encoding::PLAIN, TEST_SET_SIZE, -1);
-        Int96Type::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, -1);
+        Int96Type::test(Encoding::Plain, TEST_SET_SIZE, -1);
+        Int96Type::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
     }
 
     #[test]
     fn test_float() {
-        FloatType::test(Encoding::PLAIN, TEST_SET_SIZE, -1);
-        FloatType::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, -1);
+        FloatType::test(Encoding::Plain, TEST_SET_SIZE, -1);
+        FloatType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
     }
 
     #[test]
     fn test_double() {
-        DoubleType::test(Encoding::PLAIN, TEST_SET_SIZE, -1);
-        DoubleType::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, -1);
+        DoubleType::test(Encoding::Plain, TEST_SET_SIZE, -1);
+        DoubleType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
     }
 
     #[test]
     fn test_byte_array() {
-        ByteArrayType::test(Encoding::PLAIN, TEST_SET_SIZE, -1);
-        ByteArrayType::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, -1);
-        ByteArrayType::test(Encoding::DELTA_LENGTH_BYTE_ARRAY, TEST_SET_SIZE, -1);
-        ByteArrayType::test(Encoding::DELTA_BYTE_ARRAY, TEST_SET_SIZE, -1);
+        ByteArrayType::test(Encoding::Plain, TEST_SET_SIZE, -1);
+        ByteArrayType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
+        ByteArrayType::test(Encoding::DeltaLengthByteArray, TEST_SET_SIZE, -1);
+        ByteArrayType::test(Encoding::DeltaByteArray, TEST_SET_SIZE, -1);
     }
 
     #[test]
     fn test_fixed_lenbyte_array() {
-        FixedLenByteArrayType::test(Encoding::PLAIN, TEST_SET_SIZE, 100);
-        FixedLenByteArrayType::test(Encoding::PLAIN_DICTIONARY, TEST_SET_SIZE, 100);
-        FixedLenByteArrayType::test(Encoding::DELTA_BYTE_ARRAY, TEST_SET_SIZE, 100);
+        FixedLenByteArrayType::test(Encoding::Plain, TEST_SET_SIZE, 100);
+        FixedLenByteArrayType::test(Encoding::PlainDictionary, TEST_SET_SIZE, 100);
+        FixedLenByteArrayType::test(Encoding::DeltaByteArray, TEST_SET_SIZE, 100);
     }
 
     #[test]
@@ -1163,7 +1163,7 @@ mod tests {
             flush_size: usize,
         ) {
             let mut encoder = match encoding {
-                Encoding::PLAIN_DICTIONARY | Encoding::RLE_DICTIONARY => {
+                Encoding::PlainDictionary | Encoding::RleDictionary => {
                     Box::new(create_test_dict_encoder::<T>(type_length))
                 }
                 _ => create_test_encoder::<T>(type_length, encoding),
@@ -1178,16 +1178,16 @@ mod tests {
         }
 
         // PLAIN
-        run_test::<Int32Type>(Encoding::PLAIN, -1, &vec![123; 1024], 0, 4096, 0);
+        run_test::<Int32Type>(Encoding::Plain, -1, &vec![123; 1024], 0, 4096, 0);
 
         // DICTIONARY
         // NOTE: The final size is almost the same because the dictionary entries are
         // preserved after encoded values have been written.
-        run_test::<Int32Type>(Encoding::RLE_DICTIONARY, -1, &vec![123, 1024], 11, 68, 66);
+        run_test::<Int32Type>(Encoding::RleDictionary, -1, &vec![123, 1024], 11, 68, 66);
 
-        // DELTA_BINARY_PACKED
+        // ::DeltaBinaryPacked
         run_test::<Int32Type>(
-            Encoding::DELTA_BINARY_PACKED,
+            Encoding::DeltaBinaryPacked,
             -1,
             &vec![123; 1024],
             0,
@@ -1199,11 +1199,11 @@ mod tests {
         let mut values = vec![];
         values.extend_from_slice(&vec![true; 16]);
         values.extend_from_slice(&vec![false; 16]);
-        run_test::<BoolType>(Encoding::RLE, -1, &values, 0, 2, 0);
+        run_test::<BoolType>(Encoding::Rle, -1, &values, 0, 2, 0);
 
         // DELTA_LENGTH_BYTE_ARRAY
         run_test::<ByteArrayType>(
-            Encoding::DELTA_LENGTH_BYTE_ARRAY,
+            Encoding::DeltaLengthByteArray,
             -1,
             &[ByteArray::from("ab"), ByteArray::from("abc")],
             0,
@@ -1213,7 +1213,7 @@ mod tests {
 
         // DELTA_BYTE_ARRAY
         run_test::<ByteArrayType>(
-            Encoding::DELTA_BYTE_ARRAY,
+            Encoding::DeltaByteArray,
             -1,
             &[ByteArray::from("ab"), ByteArray::from("abc")],
             0,
@@ -1226,9 +1226,9 @@ mod tests {
     #[test]
     fn test_issue_47() {
         let mut encoder =
-            create_test_encoder::<ByteArrayType>(0, Encoding::DELTA_BYTE_ARRAY);
+            create_test_encoder::<ByteArrayType>(0, Encoding::DeltaByteArray);
         let mut decoder =
-            create_test_decoder::<ByteArrayType>(0, Encoding::DELTA_BYTE_ARRAY);
+            create_test_decoder::<ByteArrayType>(0, Encoding::DeltaByteArray);
 
         let mut input = vec![];
         input.push(ByteArray::from("aa"));
@@ -1256,7 +1256,7 @@ mod tests {
     trait EncodingTester<T: DataType> {
         fn test(enc: Encoding, total: usize, type_length: i32) {
             let result = match enc {
-                Encoding::PLAIN_DICTIONARY | Encoding::RLE_DICTIONARY => {
+                Encoding::PlainDictionary | Encoding::RleDictionary => {
                     Self::test_dict_internal(total, type_length)
                 }
                 enc @ _ => Self::test_internal(enc, total, type_length),

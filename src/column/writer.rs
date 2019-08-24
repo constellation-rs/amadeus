@@ -54,42 +54,42 @@ pub fn get_column_writer(
     page_writer: Box<PageWriter>,
 ) -> ColumnWriter {
     match descr.physical_type() {
-        Type::BOOLEAN => ColumnWriter::BoolColumnWriter(ColumnWriterImpl::new(
+        Type::Boolean => ColumnWriter::BoolColumnWriter(ColumnWriterImpl::new(
             descr,
             props,
             page_writer,
         )),
-        Type::INT32 => ColumnWriter::Int32ColumnWriter(ColumnWriterImpl::new(
+        Type::Int32 => ColumnWriter::Int32ColumnWriter(ColumnWriterImpl::new(
             descr,
             props,
             page_writer,
         )),
-        Type::INT64 => ColumnWriter::Int64ColumnWriter(ColumnWriterImpl::new(
+        Type::Int64 => ColumnWriter::Int64ColumnWriter(ColumnWriterImpl::new(
             descr,
             props,
             page_writer,
         )),
-        Type::INT96 => ColumnWriter::Int96ColumnWriter(ColumnWriterImpl::new(
+        Type::Int96 => ColumnWriter::Int96ColumnWriter(ColumnWriterImpl::new(
             descr,
             props,
             page_writer,
         )),
-        Type::FLOAT => ColumnWriter::FloatColumnWriter(ColumnWriterImpl::new(
+        Type::Float => ColumnWriter::FloatColumnWriter(ColumnWriterImpl::new(
             descr,
             props,
             page_writer,
         )),
-        Type::DOUBLE => ColumnWriter::DoubleColumnWriter(ColumnWriterImpl::new(
+        Type::Double => ColumnWriter::DoubleColumnWriter(ColumnWriterImpl::new(
             descr,
             props,
             page_writer,
         )),
-        Type::BYTE_ARRAY => ColumnWriter::ByteArrayColumnWriter(ColumnWriterImpl::new(
+        Type::ByteArray => ColumnWriter::ByteArrayColumnWriter(ColumnWriterImpl::new(
             descr,
             props,
             page_writer,
         )),
-        Type::FIXED_LEN_BYTE_ARRAY => ColumnWriter::FixedLenByteArrayColumnWriter(
+        Type::FixedLenByteArray => ColumnWriter::FixedLenByteArrayColumnWriter(
             ColumnWriterImpl::new(descr, props, page_writer),
         ),
     }
@@ -468,7 +468,7 @@ impl<T: DataType> ColumnWriterImpl<T> {
                 if max_rep_level > 0 {
                     buffer.extend_from_slice(
                         &self.encode_levels_v1(
-                            Encoding::RLE,
+                            Encoding::Rle,
                             &self.rep_levels_sink[..],
                             max_rep_level,
                         )?[..],
@@ -478,7 +478,7 @@ impl<T: DataType> ColumnWriterImpl<T> {
                 if max_def_level > 0 {
                     buffer.extend_from_slice(
                         &self.encode_levels_v1(
-                            Encoding::RLE,
+                            Encoding::Rle,
                             &self.def_levels_sink[..],
                             max_def_level,
                         )?[..],
@@ -498,8 +498,8 @@ impl<T: DataType> ColumnWriterImpl<T> {
                     buf: ByteBufferPtr::new(buffer),
                     num_values: self.num_buffered_values,
                     encoding,
-                    def_level_encoding: Encoding::RLE,
-                    rep_level_encoding: Encoding::RLE,
+                    def_level_encoding: Encoding::Rle,
+                    rep_level_encoding: Encoding::Rle,
                     // TODO: process statistics
                     statistics: None,
                 };
@@ -622,7 +622,7 @@ impl<T: DataType> ColumnWriterImpl<T> {
             encodings.push(self.encoder.encoding());
         }
         // We use only RLE level encoding for data page v1 and data page v2.
-        encodings.push(Encoding::RLE);
+        encodings.push(Encoding::Rle);
 
         let metadata = ColumnChunkMetaData::builder(self.descr.clone())
             .set_compression(self.codec)
@@ -658,7 +658,7 @@ impl<T: DataType> ColumnWriterImpl<T> {
     /// Encoding is always RLE.
     #[inline]
     fn encode_levels_v2(&self, levels: &[i16], max_level: i16) -> Result<Vec<u8>> {
-        let size = max_buffer_size(Encoding::RLE, max_level, levels.len());
+        let size = max_buffer_size(Encoding::Rle, max_level, levels.len());
         let mut encoder = LevelEncoder::v2(max_level, vec![0; size]);
         encoder.put(&levels)?;
         encoder.consume()
@@ -715,12 +715,12 @@ impl<T: DataType> ColumnWriterImpl<T> {
         self.total_bytes_written += page_spec.bytes_written;
 
         match page_spec.page_type {
-            PageType::DATA_PAGE | PageType::DATA_PAGE_V2 => {
+            PageType::DataPage | PageType::DataPageV2 => {
                 if self.data_page_offset.is_none() {
                     self.data_page_offset = Some(page_spec.offset);
                 }
             }
-            PageType::DICTIONARY_PAGE => {
+            PageType::DictionaryPage => {
                 assert!(
                     self.dictionary_page_offset.is_none(),
                     "Dictionary offset is already set"
@@ -758,7 +758,7 @@ trait EncodingWriteSupport {
 // Basic implementation, always falls back to PLAIN and supports dictionary.
 impl<T: DataType> EncodingWriteSupport for ColumnWriterImpl<T> {
     default fn fallback_encoding(_props: &WriterProperties) -> Encoding {
-        Encoding::PLAIN
+        Encoding::Plain
     }
 
     default fn has_dictionary_support(_props: &WriterProperties) -> bool {
@@ -769,8 +769,8 @@ impl<T: DataType> EncodingWriteSupport for ColumnWriterImpl<T> {
 impl EncodingWriteSupport for ColumnWriterImpl<BoolType> {
     fn fallback_encoding(props: &WriterProperties) -> Encoding {
         match props.writer_version() {
-            WriterVersion::PARQUET_1_0 => Encoding::PLAIN,
-            WriterVersion::PARQUET_2_0 => Encoding::RLE,
+            WriterVersion::PARQUET_1_0 => Encoding::Plain,
+            WriterVersion::PARQUET_2_0 => Encoding::Rle,
         }
     }
 
@@ -784,8 +784,8 @@ impl EncodingWriteSupport for ColumnWriterImpl<BoolType> {
 impl EncodingWriteSupport for ColumnWriterImpl<Int32Type> {
     fn fallback_encoding(props: &WriterProperties) -> Encoding {
         match props.writer_version() {
-            WriterVersion::PARQUET_1_0 => Encoding::PLAIN,
-            WriterVersion::PARQUET_2_0 => Encoding::DELTA_BINARY_PACKED,
+            WriterVersion::PARQUET_1_0 => Encoding::Plain,
+            WriterVersion::PARQUET_2_0 => Encoding::DeltaBinaryPacked,
         }
     }
 }
@@ -793,8 +793,8 @@ impl EncodingWriteSupport for ColumnWriterImpl<Int32Type> {
 impl EncodingWriteSupport for ColumnWriterImpl<Int64Type> {
     fn fallback_encoding(props: &WriterProperties) -> Encoding {
         match props.writer_version() {
-            WriterVersion::PARQUET_1_0 => Encoding::PLAIN,
-            WriterVersion::PARQUET_2_0 => Encoding::DELTA_BINARY_PACKED,
+            WriterVersion::PARQUET_1_0 => Encoding::Plain,
+            WriterVersion::PARQUET_2_0 => Encoding::DeltaBinaryPacked,
         }
     }
 }
@@ -802,8 +802,8 @@ impl EncodingWriteSupport for ColumnWriterImpl<Int64Type> {
 impl EncodingWriteSupport for ColumnWriterImpl<ByteArrayType> {
     fn fallback_encoding(props: &WriterProperties) -> Encoding {
         match props.writer_version() {
-            WriterVersion::PARQUET_1_0 => Encoding::PLAIN,
-            WriterVersion::PARQUET_2_0 => Encoding::DELTA_BYTE_ARRAY,
+            WriterVersion::PARQUET_1_0 => Encoding::Plain,
+            WriterVersion::PARQUET_2_0 => Encoding::DeltaByteArray,
         }
     }
 }
@@ -811,8 +811,8 @@ impl EncodingWriteSupport for ColumnWriterImpl<ByteArrayType> {
 impl EncodingWriteSupport for ColumnWriterImpl<FixedLenByteArrayType> {
     fn fallback_encoding(props: &WriterProperties) -> Encoding {
         match props.writer_version() {
-            WriterVersion::PARQUET_1_0 => Encoding::PLAIN,
-            WriterVersion::PARQUET_2_0 => Encoding::DELTA_BYTE_ARRAY,
+            WriterVersion::PARQUET_1_0 => Encoding::Plain,
+            WriterVersion::PARQUET_2_0 => Encoding::DeltaByteArray,
         }
     }
 
@@ -955,7 +955,7 @@ mod tests {
         // byte.
         assert_eq!(bytes_written, 1);
         assert_eq!(rows_written, 4);
-        assert_eq!(metadata.encodings(), &vec![Encoding::PLAIN, Encoding::RLE]);
+        assert_eq!(metadata.encodings(), &vec![Encoding::Plain, Encoding::Rle]);
         assert_eq!(metadata.num_values(), 4); // just values
         assert_eq!(metadata.dictionary_page_offset(), None);
     }
@@ -967,28 +967,28 @@ mod tests {
             true,
             &[true, false],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<BoolType>(
             WriterVersion::PARQUET_1_0,
             false,
             &[true, false],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<BoolType>(
             WriterVersion::PARQUET_2_0,
             true,
             &[true, false],
             None,
-            &[Encoding::RLE, Encoding::RLE],
+            &[Encoding::Rle, Encoding::Rle],
         );
         check_encoding_write_support::<BoolType>(
             WriterVersion::PARQUET_2_0,
             false,
             &[true, false],
             None,
-            &[Encoding::RLE, Encoding::RLE],
+            &[Encoding::Rle, Encoding::Rle],
         );
     }
 
@@ -999,28 +999,28 @@ mod tests {
             true,
             &[1, 2],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int32Type>(
             WriterVersion::PARQUET_1_0,
             false,
             &[1, 2],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<Int32Type>(
             WriterVersion::PARQUET_2_0,
             true,
             &[1, 2],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int32Type>(
             WriterVersion::PARQUET_2_0,
             false,
             &[1, 2],
             None,
-            &[Encoding::DELTA_BINARY_PACKED, Encoding::RLE],
+            &[Encoding::DeltaBinaryPacked, Encoding::Rle],
         );
     }
 
@@ -1031,28 +1031,28 @@ mod tests {
             true,
             &[1, 2],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int64Type>(
             WriterVersion::PARQUET_1_0,
             false,
             &[1, 2],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<Int64Type>(
             WriterVersion::PARQUET_2_0,
             true,
             &[1, 2],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int64Type>(
             WriterVersion::PARQUET_2_0,
             false,
             &[1, 2],
             None,
-            &[Encoding::DELTA_BINARY_PACKED, Encoding::RLE],
+            &[Encoding::DeltaBinaryPacked, Encoding::Rle],
         );
     }
 
@@ -1063,28 +1063,28 @@ mod tests {
             true,
             &[Int96::from(vec![1, 2, 3])],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int96Type>(
             WriterVersion::PARQUET_1_0,
             false,
             &[Int96::from(vec![1, 2, 3])],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<Int96Type>(
             WriterVersion::PARQUET_2_0,
             true,
             &[Int96::from(vec![1, 2, 3])],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int96Type>(
             WriterVersion::PARQUET_2_0,
             false,
             &[Int96::from(vec![1, 2, 3])],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
     }
 
@@ -1095,28 +1095,28 @@ mod tests {
             true,
             &[1.0, 2.0],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<FloatType>(
             WriterVersion::PARQUET_1_0,
             false,
             &[1.0, 2.0],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<FloatType>(
             WriterVersion::PARQUET_2_0,
             true,
             &[1.0, 2.0],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<FloatType>(
             WriterVersion::PARQUET_2_0,
             false,
             &[1.0, 2.0],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
     }
 
@@ -1127,28 +1127,28 @@ mod tests {
             true,
             &[1.0, 2.0],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<DoubleType>(
             WriterVersion::PARQUET_1_0,
             false,
             &[1.0, 2.0],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<DoubleType>(
             WriterVersion::PARQUET_2_0,
             true,
             &[1.0, 2.0],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<DoubleType>(
             WriterVersion::PARQUET_2_0,
             false,
             &[1.0, 2.0],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
     }
 
@@ -1159,28 +1159,28 @@ mod tests {
             true,
             &[ByteArray::from(vec![1u8])],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<ByteArrayType>(
             WriterVersion::PARQUET_1_0,
             false,
             &[ByteArray::from(vec![1u8])],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<ByteArrayType>(
             WriterVersion::PARQUET_2_0,
             true,
             &[ByteArray::from(vec![1u8])],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<ByteArrayType>(
             WriterVersion::PARQUET_2_0,
             false,
             &[ByteArray::from(vec![1u8])],
             None,
-            &[Encoding::DELTA_BYTE_ARRAY, Encoding::RLE],
+            &[Encoding::DeltaByteArray, Encoding::Rle],
         );
     }
 
@@ -1191,28 +1191,28 @@ mod tests {
             true,
             &[ByteArray::from(vec![1u8])],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<FixedLenByteArrayType>(
             WriterVersion::PARQUET_1_0,
             false,
             &[ByteArray::from(vec![1u8])],
             None,
-            &[Encoding::PLAIN, Encoding::RLE],
+            &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<FixedLenByteArrayType>(
             WriterVersion::PARQUET_2_0,
             true,
             &[ByteArray::from(vec![1u8])],
             Some(0),
-            &[Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE],
+            &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<FixedLenByteArrayType>(
             WriterVersion::PARQUET_2_0,
             false,
             &[ByteArray::from(vec![1u8])],
             None,
-            &[Encoding::DELTA_BYTE_ARRAY, Encoding::RLE],
+            &[Encoding::DeltaByteArray, Encoding::Rle],
         );
     }
 
@@ -1228,7 +1228,7 @@ mod tests {
         assert_eq!(rows_written, 4);
         assert_eq!(
             metadata.encodings(),
-            &vec![Encoding::PLAIN, Encoding::RLE_DICTIONARY, Encoding::RLE]
+            &vec![Encoding::Plain, Encoding::RleDictionary, Encoding::Rle]
         );
         assert_eq!(metadata.num_values(), 8); // dictionary + value indexes
         assert_eq!(metadata.compressed_size(), 20);
@@ -1357,7 +1357,7 @@ mod tests {
     fn test_column_writer_compression_v1() {
         let props = WriterProperties::builder()
             .set_writer_version(WriterVersion::PARQUET_1_0)
-            .set_compression(Compression::SNAPPY)
+            .set_compression(Compression::Snappy)
             .build();
         column_roundtrip_random::<Int32Type>(
             "test_col_writer_rnd_8",
@@ -1374,7 +1374,7 @@ mod tests {
     fn test_column_writer_compression_v2() {
         let props = WriterProperties::builder()
             .set_writer_version(WriterVersion::PARQUET_2_0)
-            .set_compression(Compression::SNAPPY)
+            .set_compression(Compression::Snappy)
             .build();
         column_roundtrip_random::<Int32Type>(
             "test_col_writer_rnd_9",
@@ -1411,7 +1411,7 @@ mod tests {
             SerializedPageReader::new(
                 source,
                 data.len() as i64,
-                Compression::UNCOMPRESSED,
+                Compression::Uncompressed,
                 Int32Type::get_physical_type(),
             )
             .unwrap(),
@@ -1423,11 +1423,11 @@ mod tests {
         assert_eq!(
             res,
             vec![
-                (PageType::DICTIONARY_PAGE, 10),
-                (PageType::DATA_PAGE, 3),
-                (PageType::DATA_PAGE, 3),
-                (PageType::DATA_PAGE, 3),
-                (PageType::DATA_PAGE, 1)
+                (PageType::DictionaryPage, 10),
+                (PageType::DataPage, 3),
+                (PageType::DataPage, 3),
+                (PageType::DataPage, 3),
+                (PageType::DataPage, 1)
             ]
         );
     }

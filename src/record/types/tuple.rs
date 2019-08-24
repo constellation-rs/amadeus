@@ -113,7 +113,7 @@ macro_rules! impl_parquet_record_tuple {
             type Reader = TupleReader<($($t::Reader,)*)>;
 
             fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-                if schema.is_group() && repetition == Some(Repetition::REQUIRED) {
+                if schema.is_group() && repetition == Some(Repetition::Required) {
                     let mut fields = schema.get_fields().iter();
                     let schema_ = TupleSchema(($(fields.next().ok_or_else(|| ParquetError::General(String::from("Group missing field"))).and_then(|x|$t::parse(&**x, Some(x.get_basic_info().repetition())))?,)*));
                     if fields.next().is_none() {

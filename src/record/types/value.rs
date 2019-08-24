@@ -1505,78 +1505,76 @@ impl Record for Value {
                     schema.get_physical_type(),
                     schema.get_basic_info().logical_type(),
                 ) {
-                    (PhysicalType::BOOLEAN, LogicalType::NONE) => {
+                    (PhysicalType::Boolean, LogicalType::None) => {
                         ValueSchema::Bool(BoolSchema)
                     }
-                    (PhysicalType::INT32, LogicalType::UINT_8) => {
+                    (PhysicalType::Int32, LogicalType::Uint8) => {
                         ValueSchema::U8(U8Schema)
                     }
-                    (PhysicalType::INT32, LogicalType::INT_8) => {
-                        ValueSchema::I8(I8Schema)
-                    }
-                    (PhysicalType::INT32, LogicalType::UINT_16) => {
+                    (PhysicalType::Int32, LogicalType::Int8) => ValueSchema::I8(I8Schema),
+                    (PhysicalType::Int32, LogicalType::Uint16) => {
                         ValueSchema::U16(U16Schema)
                     }
-                    (PhysicalType::INT32, LogicalType::INT_16) => {
+                    (PhysicalType::Int32, LogicalType::Int16) => {
                         ValueSchema::I16(I16Schema)
                     }
-                    (PhysicalType::INT32, LogicalType::UINT_32) => {
+                    (PhysicalType::Int32, LogicalType::Uint32) => {
                         ValueSchema::U32(U32Schema)
                     }
-                    (PhysicalType::INT32, LogicalType::INT_32)
-                    | (PhysicalType::INT32, LogicalType::NONE) => {
+                    (PhysicalType::Int32, LogicalType::Int32)
+                    | (PhysicalType::Int32, LogicalType::None) => {
                         ValueSchema::I32(I32Schema)
                     }
-                    (PhysicalType::INT32, LogicalType::DATE) => {
+                    (PhysicalType::Int32, LogicalType::Date) => {
                         ValueSchema::Date(DateSchema)
                     }
-                    (PhysicalType::INT32, LogicalType::TIME_MILLIS) => {
+                    (PhysicalType::Int32, LogicalType::TimeMillis) => {
                         ValueSchema::Time(TimeSchema::Millis)
                     }
-                    (PhysicalType::INT32, LogicalType::DECIMAL) => {
+                    (PhysicalType::Int32, LogicalType::Decimal) => {
                         let (precision, scale) =
                             (schema.get_precision(), schema.get_scale());
                         let (precision, scale) =
                             (precision.try_into().unwrap(), scale.try_into().unwrap());
                         ValueSchema::Decimal(DecimalSchema::Int32 { precision, scale })
                     }
-                    (PhysicalType::INT64, LogicalType::UINT_64) => {
+                    (PhysicalType::Int64, LogicalType::Uint64) => {
                         ValueSchema::U64(U64Schema)
                     }
-                    (PhysicalType::INT64, LogicalType::INT_64)
-                    | (PhysicalType::INT64, LogicalType::NONE) => {
+                    (PhysicalType::Int64, LogicalType::Int64)
+                    | (PhysicalType::Int64, LogicalType::None) => {
                         ValueSchema::I64(I64Schema)
                     }
-                    (PhysicalType::INT64, LogicalType::TIME_MICROS) => {
+                    (PhysicalType::Int64, LogicalType::TimeMicros) => {
                         ValueSchema::Time(TimeSchema::Micros)
                     }
-                    (PhysicalType::INT64, LogicalType::TIMESTAMP_MILLIS) => {
+                    (PhysicalType::Int64, LogicalType::TimestampMillis) => {
                         ValueSchema::Timestamp(TimestampSchema::Millis)
                     }
-                    (PhysicalType::INT64, LogicalType::TIMESTAMP_MICROS) => {
+                    (PhysicalType::Int64, LogicalType::TimestampMicros) => {
                         ValueSchema::Timestamp(TimestampSchema::Micros)
                     }
-                    (PhysicalType::INT64, LogicalType::DECIMAL) => {
+                    (PhysicalType::Int64, LogicalType::Decimal) => {
                         let (precision, scale) =
                             (schema.get_precision(), schema.get_scale());
                         let (precision, scale) =
                             (precision.try_into().unwrap(), scale.try_into().unwrap());
                         ValueSchema::Decimal(DecimalSchema::Int64 { precision, scale })
                     }
-                    (PhysicalType::INT96, LogicalType::NONE) => {
+                    (PhysicalType::Int96, LogicalType::None) => {
                         ValueSchema::Timestamp(TimestampSchema::Int96)
                     }
-                    (PhysicalType::FLOAT, LogicalType::NONE) => {
+                    (PhysicalType::Float, LogicalType::None) => {
                         ValueSchema::F32(F32Schema)
                     }
-                    (PhysicalType::DOUBLE, LogicalType::NONE) => {
+                    (PhysicalType::Double, LogicalType::None) => {
                         ValueSchema::F64(F64Schema)
                     }
-                    (PhysicalType::BYTE_ARRAY, LogicalType::UTF8)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::UTF8) => {
+                    (PhysicalType::ByteArray, LogicalType::Utf8)
+                    | (PhysicalType::FixedLenByteArray, LogicalType::Utf8) => {
                         ValueSchema::String(StringSchema(ByteArraySchema(
                             if schema.get_physical_type()
-                                == PhysicalType::FIXED_LEN_BYTE_ARRAY
+                                == PhysicalType::FixedLenByteArray
                             {
                                 Some(schema.get_type_length().try_into().unwrap())
                             } else {
@@ -1584,11 +1582,11 @@ impl Record for Value {
                             },
                         )))
                     }
-                    (PhysicalType::BYTE_ARRAY, LogicalType::JSON)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::JSON) => {
+                    (PhysicalType::ByteArray, LogicalType::Json)
+                    | (PhysicalType::FixedLenByteArray, LogicalType::Json) => {
                         ValueSchema::Json(JsonSchema(StringSchema(ByteArraySchema(
                             if schema.get_physical_type()
-                                == PhysicalType::FIXED_LEN_BYTE_ARRAY
+                                == PhysicalType::FixedLenByteArray
                             {
                                 Some(schema.get_type_length().try_into().unwrap())
                             } else {
@@ -1596,11 +1594,11 @@ impl Record for Value {
                             },
                         ))))
                     }
-                    (PhysicalType::BYTE_ARRAY, LogicalType::ENUM)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::ENUM) => {
+                    (PhysicalType::ByteArray, LogicalType::Enum)
+                    | (PhysicalType::FixedLenByteArray, LogicalType::Enum) => {
                         ValueSchema::Enum(EnumSchema(StringSchema(ByteArraySchema(
                             if schema.get_physical_type()
-                                == PhysicalType::FIXED_LEN_BYTE_ARRAY
+                                == PhysicalType::FixedLenByteArray
                             {
                                 Some(schema.get_type_length().try_into().unwrap())
                             } else {
@@ -1608,11 +1606,11 @@ impl Record for Value {
                             },
                         ))))
                     }
-                    (PhysicalType::BYTE_ARRAY, LogicalType::NONE)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::NONE) => {
+                    (PhysicalType::ByteArray, LogicalType::None)
+                    | (PhysicalType::FixedLenByteArray, LogicalType::None) => {
                         ValueSchema::ByteArray(ByteArraySchema(
                             if schema.get_physical_type()
-                                == PhysicalType::FIXED_LEN_BYTE_ARRAY
+                                == PhysicalType::FixedLenByteArray
                             {
                                 Some(schema.get_type_length().try_into().unwrap())
                             } else {
@@ -1620,11 +1618,11 @@ impl Record for Value {
                             },
                         ))
                     }
-                    (PhysicalType::BYTE_ARRAY, LogicalType::BSON)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::BSON) => {
+                    (PhysicalType::ByteArray, LogicalType::Bson)
+                    | (PhysicalType::FixedLenByteArray, LogicalType::Bson) => {
                         ValueSchema::Bson(BsonSchema(ByteArraySchema(
                             if schema.get_physical_type()
-                                == PhysicalType::FIXED_LEN_BYTE_ARRAY
+                                == PhysicalType::FixedLenByteArray
                             {
                                 Some(schema.get_type_length().try_into().unwrap())
                             } else {
@@ -1632,11 +1630,11 @@ impl Record for Value {
                             },
                         )))
                     }
-                    (PhysicalType::BYTE_ARRAY, LogicalType::DECIMAL)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::DECIMAL) => {
+                    (PhysicalType::ByteArray, LogicalType::Decimal)
+                    | (PhysicalType::FixedLenByteArray, LogicalType::Decimal) => {
                         let byte_array_schema = ByteArraySchema(
                             if schema.get_physical_type()
-                                == PhysicalType::FIXED_LEN_BYTE_ARRAY
+                                == PhysicalType::FixedLenByteArray
                             {
                                 Some(schema.get_type_length().try_into().unwrap())
                             } else {
@@ -1653,25 +1651,25 @@ impl Record for Value {
                             scale,
                         })
                     }
-                    (PhysicalType::BYTE_ARRAY, LogicalType::INTERVAL)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, LogicalType::INTERVAL) => {
+                    (PhysicalType::ByteArray, LogicalType::Interval)
+                    | (PhysicalType::FixedLenByteArray, LogicalType::Interval) => {
                         unimplemented!("Interval logical type not yet implemented")
                     }
 
                     // Fallbacks for unrecognised LogicalType
-                    (PhysicalType::BOOLEAN, _) => ValueSchema::Bool(BoolSchema),
-                    (PhysicalType::INT32, _) => ValueSchema::I32(I32Schema),
-                    (PhysicalType::INT64, _) => ValueSchema::I64(I64Schema),
-                    (PhysicalType::INT96, _) => {
+                    (PhysicalType::Boolean, _) => ValueSchema::Bool(BoolSchema),
+                    (PhysicalType::Int32, _) => ValueSchema::I32(I32Schema),
+                    (PhysicalType::Int64, _) => ValueSchema::I64(I64Schema),
+                    (PhysicalType::Int96, _) => {
                         ValueSchema::Timestamp(TimestampSchema::Int96)
                     }
-                    (PhysicalType::FLOAT, _) => ValueSchema::F32(F32Schema),
-                    (PhysicalType::DOUBLE, _) => ValueSchema::F64(F64Schema),
-                    (PhysicalType::BYTE_ARRAY, _)
-                    | (PhysicalType::FIXED_LEN_BYTE_ARRAY, _) => {
+                    (PhysicalType::Float, _) => ValueSchema::F32(F32Schema),
+                    (PhysicalType::Double, _) => ValueSchema::F64(F64Schema),
+                    (PhysicalType::ByteArray, _)
+                    | (PhysicalType::FixedLenByteArray, _) => {
                         ValueSchema::ByteArray(ByteArraySchema(
                             if schema.get_physical_type()
-                                == PhysicalType::FIXED_LEN_BYTE_ARRAY
+                                == PhysicalType::FixedLenByteArray
                             {
                                 Some(schema.get_type_length().try_into().unwrap())
                             } else {
@@ -1727,16 +1725,16 @@ impl Record for Value {
 
         // Account for the repetition level
         match repetition.unwrap() {
-            Repetition::OPTIONAL => {
+            Repetition::Optional => {
                 value = ValueSchema::Option(Box::new(OptionSchema(value)));
             }
-            Repetition::REPEATED => {
+            Repetition::Repeated => {
                 value = ValueSchema::List(Box::new(ListSchema(
                     value,
                     ListSchemaType::Repeated,
                 )));
             }
-            Repetition::REQUIRED => (),
+            Repetition::Required => (),
         }
 
         Ok((schema.name().to_owned(), value))

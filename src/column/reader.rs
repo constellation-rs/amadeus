@@ -53,35 +53,35 @@ pub fn get_column_reader(
     col_page_reader: Box<PageReader>,
 ) -> ColumnReader {
     match col_descr.physical_type() {
-        Type::BOOLEAN => ColumnReader::BoolColumnReader(ColumnReaderImpl::new(
+        Type::Boolean => ColumnReader::BoolColumnReader(ColumnReaderImpl::new(
             col_descr,
             col_page_reader,
         )),
-        Type::INT32 => ColumnReader::Int32ColumnReader(ColumnReaderImpl::new(
+        Type::Int32 => ColumnReader::Int32ColumnReader(ColumnReaderImpl::new(
             col_descr,
             col_page_reader,
         )),
-        Type::INT64 => ColumnReader::Int64ColumnReader(ColumnReaderImpl::new(
+        Type::Int64 => ColumnReader::Int64ColumnReader(ColumnReaderImpl::new(
             col_descr,
             col_page_reader,
         )),
-        Type::INT96 => ColumnReader::Int96ColumnReader(ColumnReaderImpl::new(
+        Type::Int96 => ColumnReader::Int96ColumnReader(ColumnReaderImpl::new(
             col_descr,
             col_page_reader,
         )),
-        Type::FLOAT => ColumnReader::FloatColumnReader(ColumnReaderImpl::new(
+        Type::Float => ColumnReader::FloatColumnReader(ColumnReaderImpl::new(
             col_descr,
             col_page_reader,
         )),
-        Type::DOUBLE => ColumnReader::DoubleColumnReader(ColumnReaderImpl::new(
+        Type::Double => ColumnReader::DoubleColumnReader(ColumnReaderImpl::new(
             col_descr,
             col_page_reader,
         )),
-        Type::BYTE_ARRAY => ColumnReader::ByteArrayColumnReader(ColumnReaderImpl::new(
+        Type::ByteArray => ColumnReader::ByteArrayColumnReader(ColumnReaderImpl::new(
             col_descr,
             col_page_reader,
         )),
-        Type::FIXED_LEN_BYTE_ARRAY => ColumnReader::FixedLenByteArrayColumnReader(
+        Type::FixedLenByteArray => ColumnReader::FixedLenByteArrayColumnReader(
             ColumnReaderImpl::new(col_descr, col_page_reader),
         ),
     }
@@ -409,11 +409,11 @@ impl<T: DataType> ColumnReaderImpl<T> {
         offset: usize,
         len: usize,
     ) -> Result<()> {
-        if encoding == Encoding::PLAIN_DICTIONARY {
-            encoding = Encoding::RLE_DICTIONARY;
+        if encoding == Encoding::PlainDictionary {
+            encoding = Encoding::RleDictionary;
         }
 
-        let decoder = if encoding == Encoding::RLE_DICTIONARY {
+        let decoder = if encoding == Encoding::RleDictionary {
             self.decoders
                 .get_mut(&encoding)
                 .expect("Decoder for dict should have been set")
@@ -482,15 +482,15 @@ impl<T: DataType> ColumnReaderImpl<T> {
     #[inline]
     fn configure_dictionary(&mut self, page: Page) -> Result<bool> {
         let mut encoding = page.encoding();
-        if encoding == Encoding::PLAIN || encoding == Encoding::PLAIN_DICTIONARY {
-            encoding = Encoding::RLE_DICTIONARY
+        if encoding == Encoding::Plain || encoding == Encoding::PlainDictionary {
+            encoding = Encoding::RleDictionary
         }
 
         if self.decoders.contains_key(&encoding) {
             return Err(general_err!("Column cannot have more than one dictionary"));
         }
 
-        if encoding == Encoding::RLE_DICTIONARY {
+        if encoding == Encoding::RleDictionary {
             let mut dictionary = PlainDecoder::<T>::new(self.descr.type_length());
             let num_values = page.num_values();
             dictionary.set_data(page.buffer().clone(), num_values as usize)?;
@@ -988,7 +988,7 @@ mod tests {
         let mut tester = ColumnReaderTester::<Int32Type>::new();
         tester.test_read_batch(
             desc,
-            Encoding::RLE_DICTIONARY,
+            Encoding::RleDictionary,
             num_pages,
             num_levels,
             batch_size,
@@ -1047,9 +1047,9 @@ mod tests {
     // Returns dummy Parquet `Type` for primitive field, because most of our tests use
     // INT32 physical type.
     fn get_test_int32_type() -> SchemaType {
-        SchemaType::primitive_type_builder("a", PhysicalType::INT32)
-            .with_repetition(Repetition::REQUIRED)
-            .with_logical_type(LogicalType::INT_32)
+        SchemaType::primitive_type_builder("a", PhysicalType::Int32)
+            .with_repetition(Repetition::Required)
+            .with_logical_type(LogicalType::Int32)
             .with_length(-1)
             .build()
             .expect("build() should be OK")
@@ -1057,9 +1057,9 @@ mod tests {
 
     // Returns dummy Parquet `Type` for INT64 physical type.
     fn get_test_int64_type() -> SchemaType {
-        SchemaType::primitive_type_builder("a", PhysicalType::INT64)
-            .with_repetition(Repetition::REQUIRED)
-            .with_logical_type(LogicalType::INT_64)
+        SchemaType::primitive_type_builder("a", PhysicalType::Int64)
+            .with_repetition(Repetition::Required)
+            .with_logical_type(LogicalType::Int64)
             .with_length(-1)
             .build()
             .expect("build() should be OK")
@@ -1098,7 +1098,7 @@ mod tests {
         let mut tester = ColumnReaderTester::<Int32Type>::new();
         tester.test_read_batch(
             desc,
-            Encoding::RLE_DICTIONARY,
+            Encoding::RleDictionary,
             NUM_PAGES,
             NUM_LEVELS,
             batch_size,
@@ -1144,7 +1144,7 @@ mod tests {
         ) {
             self.test_read_batch_general(
                 desc,
-                Encoding::PLAIN,
+                Encoding::Plain,
                 num_pages,
                 num_levels,
                 batch_size,
@@ -1166,7 +1166,7 @@ mod tests {
         ) {
             self.test_read_batch_general(
                 desc,
-                Encoding::PLAIN,
+                Encoding::Plain,
                 num_pages,
                 num_levels,
                 batch_size,
@@ -1188,7 +1188,7 @@ mod tests {
         ) {
             self.test_read_batch_general(
                 desc,
-                Encoding::RLE_DICTIONARY,
+                Encoding::RleDictionary,
                 num_pages,
                 num_levels,
                 batch_size,
@@ -1210,7 +1210,7 @@ mod tests {
         ) {
             self.test_read_batch_general(
                 desc,
-                Encoding::RLE_DICTIONARY,
+                Encoding::RleDictionary,
                 num_pages,
                 num_levels,
                 batch_size,
@@ -1441,14 +1441,14 @@ mod tests {
 
             let value_range = num_values..num_values + num_values_cur_page;
             match encoding {
-                Encoding::PLAIN_DICTIONARY | Encoding::RLE_DICTIONARY => {
+                Encoding::PlainDictionary | Encoding::RleDictionary => {
                     let _ = dict_encoder.put(&values[value_range.clone()]);
                     let indices = dict_encoder
                         .write_indices()
                         .expect("write_indices() should be OK");
                     pb.add_indices(indices);
                 }
-                Encoding::PLAIN => {
+                Encoding::Plain => {
                     pb.add_values::<T>(encoding, &values[value_range]);
                 }
                 enc @ _ => panic!("Unexpected encoding {}", enc),
@@ -1459,15 +1459,14 @@ mod tests {
             num_values += num_values_cur_page;
         }
 
-        if encoding == Encoding::PLAIN_DICTIONARY || encoding == Encoding::RLE_DICTIONARY
-        {
+        if encoding == Encoding::PlainDictionary || encoding == Encoding::RleDictionary {
             let dict = dict_encoder
                 .write_dict()
                 .expect("write_dict() should be OK");
             let dict_page = Page::DictionaryPage {
                 buf: dict,
                 num_values: dict_encoder.num_entries() as u32,
-                encoding: Encoding::RLE_DICTIONARY,
+                encoding: Encoding::RleDictionary,
                 is_sorted: false,
             };
             pages.push_front(dict_page);

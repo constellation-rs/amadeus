@@ -62,7 +62,7 @@ impl Record for Group {
         schema: &Type,
         repetition: Option<Repetition>,
     ) -> Result<(String, Self::Schema)> {
-        if schema.is_group() && repetition == Some(Repetition::REQUIRED) {
+        if schema.is_group() && repetition == Some(Repetition::Required) {
             let mut map = LinkedHashMap::with_capacity_and_hasher(
                 schema.get_fields().len(),
                 Default::default(),

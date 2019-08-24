@@ -121,28 +121,28 @@ pub fn from_thrift(
             //
             // Instead of using actual decoder, we manually convert values.
             let res = match physical_type {
-                Type::BOOLEAN => Statistics::boolean(
+                Type::Boolean => Statistics::boolean(
                     min.map(|data| data[0] != 0),
                     max.map(|data| data[0] != 0),
                     distinct_count,
                     null_count,
                     old_format,
                 ),
-                Type::INT32 => Statistics::int32(
+                Type::Int32 => Statistics::int32(
                     min.map(|data| LittleEndian::read_i32(&data)),
                     max.map(|data| LittleEndian::read_i32(&data)),
                     distinct_count,
                     null_count,
                     old_format,
                 ),
-                Type::INT64 => Statistics::int64(
+                Type::Int64 => Statistics::int64(
                     min.map(|data| LittleEndian::read_i64(&data)),
                     max.map(|data| LittleEndian::read_i64(&data)),
                     distinct_count,
                     null_count,
                     old_format,
                 ),
-                Type::INT96 => {
+                Type::Int96 => {
                     // INT96 statistics may not be correct, because comparison is signed
                     // byte-wise, not actual timestamps. It is recommended to ignore
                     // min/max statistics for INT96 columns.
@@ -168,28 +168,28 @@ pub fn from_thrift(
                     });
                     Statistics::int96(min, max, distinct_count, null_count, old_format)
                 }
-                Type::FLOAT => Statistics::float(
+                Type::Float => Statistics::float(
                     min.map(|data| LittleEndian::read_f32(&data)),
                     max.map(|data| LittleEndian::read_f32(&data)),
                     distinct_count,
                     null_count,
                     old_format,
                 ),
-                Type::DOUBLE => Statistics::double(
+                Type::Double => Statistics::double(
                     min.map(|data| LittleEndian::read_f64(&data)),
                     max.map(|data| LittleEndian::read_f64(&data)),
                     distinct_count,
                     null_count,
                     old_format,
                 ),
-                Type::BYTE_ARRAY => Statistics::byte_array(
+                Type::ByteArray => Statistics::byte_array(
                     min.map(|data| ByteArray::from(data)),
                     max.map(|data| ByteArray::from(data)),
                     distinct_count,
                     null_count,
                     old_format,
                 ),
-                Type::FIXED_LEN_BYTE_ARRAY => Statistics::fixed_len_byte_array(
+                Type::FixedLenByteArray => Statistics::fixed_len_byte_array(
                     min.map(|data| ByteArray::from(data)),
                     max.map(|data| ByteArray::from(data)),
                     distinct_count,
@@ -324,14 +324,14 @@ impl Statistics {
     /// Returns physical type associated with statistics.
     pub fn physical_type(&self) -> Type {
         match self {
-            Statistics::Boolean(_) => Type::BOOLEAN,
-            Statistics::Int32(_) => Type::INT32,
-            Statistics::Int64(_) => Type::INT64,
-            Statistics::Int96(_) => Type::INT96,
-            Statistics::Float(_) => Type::FLOAT,
-            Statistics::Double(_) => Type::DOUBLE,
-            Statistics::ByteArray(_) => Type::BYTE_ARRAY,
-            Statistics::FixedLenByteArray(_) => Type::FIXED_LEN_BYTE_ARRAY,
+            Statistics::Boolean(_) => Type::Boolean,
+            Statistics::Int32(_) => Type::Int32,
+            Statistics::Int64(_) => Type::Int64,
+            Statistics::Int96(_) => Type::Int96,
+            Statistics::Float(_) => Type::Float,
+            Statistics::Double(_) => Type::Double,
+            Statistics::ByteArray(_) => Type::ByteArray,
+            Statistics::FixedLenByteArray(_) => Type::FixedLenByteArray,
         }
     }
 }
@@ -548,13 +548,13 @@ mod tests {
             min_value: None,
         };
 
-        from_thrift(Type::INT32, Some(thrift_stats));
+        from_thrift(Type::Int32, Some(thrift_stats));
     }
 
     #[test]
     fn test_statistics_thrift_none() {
-        assert_eq!(from_thrift(Type::INT32, None), None);
-        assert_eq!(from_thrift(Type::BYTE_ARRAY, None), None);
+        assert_eq!(from_thrift(Type::Int32, None), None);
+        assert_eq!(from_thrift(Type::ByteArray, None), None);
     }
 
     #[test]

@@ -46,7 +46,7 @@ pub trait TypeVisitor<R, C> {
 
                 match list_item.as_ref() {
                     Type::PrimitiveType { .. } => {
-                        if list_item.get_basic_info().repetition() == Repetition::REPEATED
+                        if list_item.get_basic_info().repetition() == Repetition::Repeated
                         {
                             self.visit_list_with_item(
                                 list_type.clone(),
@@ -101,8 +101,8 @@ pub trait TypeVisitor<R, C> {
             self.visit_primitive(cur_type, context)
         } else {
             match cur_type.get_basic_info().logical_type() {
-                LogicalType::LIST => self.visit_list(cur_type, context),
-                LogicalType::MAP | LogicalType::MAP_KEY_VALUE => {
+                LogicalType::List => self.visit_list(cur_type, context),
+                LogicalType::Map | LogicalType::MapKeyValue => {
                     self.visit_map(cur_type, context)
                 }
                 _ => self.visit_struct(cur_type, context),
@@ -182,7 +182,7 @@ mod tests {
                 list_type.as_ref()
             );
             assert_eq!("element", item_type.name());
-            assert_eq!(PhysicalType::INT32, item_type.get_physical_type());
+            assert_eq!(PhysicalType::Int32, item_type.get_physical_type());
             self.list_visited = true;
             Ok(true)
         }

@@ -50,10 +50,10 @@ where
     ) -> Result<(String, Self::Schema)> {
         assert!(repetition.is_none());
         if schema.is_schema() {
-            T::parse(schema, Some(Repetition::REQUIRED))
+            T::parse(schema, Some(Repetition::Required))
                 .map(|(name, schema_)| (String::from(""), RootSchema(name, schema_, PhantomData)))
                 .map_err(|err| {
-                    let actual_schema = Value::parse(schema, Some(Repetition::REQUIRED))
+                    let actual_schema = Value::parse(schema, Some(Repetition::Required))
                         .map(|(name, schema_)| RootSchema(name, schema_, PhantomData));
                     let actual_schema = match actual_schema {
                         Ok(actual_schema) => actual_schema,
@@ -77,12 +77,12 @@ where
                     let printed = format!("{}", schema_);
                     let schema_2 = parse_message_type(&printed).unwrap();
 
-                    let schema2 = T::parse(&schema_2, Some(Repetition::REQUIRED))
+                    let schema2 = T::parse(&schema_2, Some(Repetition::Required))
                         .map(|(name, schema_)| RootSchema::<T>(name, schema_, PhantomData)).unwrap();
                     let printed2 = format!("{}", schema2);
                     assert_eq!(printed, printed2, "{:#?}", schema);
 
-                    let schema3 = Value::parse(&schema_2, Some(Repetition::REQUIRED))
+                    let schema3 = Value::parse(&schema_2, Some(Repetition::Required))
                         .map(|(name, schema_)| RootSchema::<Value>(name, schema_, PhantomData)).unwrap();
                     let printed3 = format!("{}", schema3);
                     assert_eq!(printed, printed3, "{:#?}", schema);

@@ -409,21 +409,21 @@ macro_rules! make_type {
 
 // Generate struct definitions for all physical types
 
-make_type!(BoolType, Type::BOOLEAN, bool, 1);
-make_type!(Int32Type, Type::INT32, i32, 4);
-make_type!(Int64Type, Type::INT64, i64, 8);
-make_type!(Int96Type, Type::INT96, Int96, mem::size_of::<Int96>());
-make_type!(FloatType, Type::FLOAT, f32, 4);
-make_type!(DoubleType, Type::DOUBLE, f64, 8);
+make_type!(BoolType, Type::Boolean, bool, 1);
+make_type!(Int32Type, Type::Int32, i32, 4);
+make_type!(Int64Type, Type::Int64, i64, 8);
+make_type!(Int96Type, Type::Int96, Int96, mem::size_of::<Int96>());
+make_type!(FloatType, Type::Float, f32, 4);
+make_type!(DoubleType, Type::Double, f64, 8);
 make_type!(
     ByteArrayType,
-    Type::BYTE_ARRAY,
+    Type::ByteArray,
     ByteArray,
     mem::size_of::<ByteArray>()
 );
 make_type!(
     FixedLenByteArrayType,
-    Type::FIXED_LEN_BYTE_ARRAY,
+    Type::FixedLenByteArray,
     ByteArray,
     mem::size_of::<ByteArray>()
 );

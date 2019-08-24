@@ -46,7 +46,7 @@ use crate::data_type::{
 };
 use crate::errors::{ParquetError, Result};
 use crate::file::reader::{FileReader, RowGroupReader};
-use crate::schema::types::{ColumnPath, SchemaDescriptor, SchemaDescPtr, Type};
+use crate::schema::types::{ColumnPath, SchemaDescPtr, SchemaDescriptor, Type};
 
 /// Default batch size for a reader
 const DEFAULT_BATCH_SIZE: usize = 1024;
@@ -839,10 +839,7 @@ where
     pub fn project(self, proj: Option<Type>) -> Result<Self> {
         match self.file_reader {
             Some(ref reader) => {
-                let schema = reader
-                    .metadata()
-                    .file_metadata()
-                    .schema_descr_ptr();
+                let schema = reader.metadata().file_metadata().schema_descr_ptr();
                 let descr = Self::get_proj_descr(proj, schema)?;
 
                 let schema = descr.root_schema();

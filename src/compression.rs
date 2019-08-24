@@ -25,7 +25,7 @@
 //! ```rust
 //! use parquet::{basic::Compression, compression::create_codec};
 //!
-//! let mut codec = match create_codec(Compression::SNAPPY) {
+//! let mut codec = match create_codec(Compression::Snappy) {
 //!     Ok(Some(codec)) => codec,
 //!     _ => panic!(),
 //! };
@@ -70,12 +70,12 @@ pub trait Codec {
 /// This returns `None` if the codec type is `UNCOMPRESSED`.
 pub fn create_codec(codec: CodecType) -> Result<Option<Box<Codec>>> {
     match codec {
-        CodecType::BROTLI => Ok(Some(Box::new(BrotliCodec::new()))),
-        CodecType::GZIP => Ok(Some(Box::new(GZipCodec::new()))),
-        CodecType::SNAPPY => Ok(Some(Box::new(SnappyCodec::new()))),
-        CodecType::LZ4 => Ok(Some(Box::new(LZ4Codec::new()))),
-        CodecType::ZSTD => Ok(Some(Box::new(ZSTDCodec::new()))),
-        CodecType::UNCOMPRESSED => Ok(None),
+        CodecType::Brotli => Ok(Some(Box::new(BrotliCodec::new()))),
+        CodecType::Gzip => Ok(Some(Box::new(GZipCodec::new()))),
+        CodecType::Snappy => Ok(Some(Box::new(SnappyCodec::new()))),
+        CodecType::Lz4 => Ok(Some(Box::new(LZ4Codec::new()))),
+        CodecType::Zstd => Ok(Some(Box::new(ZSTDCodec::new()))),
+        CodecType::Uncompressed => Ok(None),
         _ => Err(nyi_err!("The codec type {} is not supported yet", codec)),
     }
 }
@@ -316,27 +316,26 @@ mod tests {
 
     #[test]
     fn test_codec_snappy() {
-        test_codec(CodecType::SNAPPY);
+        test_codec(CodecType::Snappy);
     }
 
     #[test]
     fn test_codec_gzip() {
-        test_codec(CodecType::GZIP);
+        test_codec(CodecType::Gzip);
     }
 
     #[test]
     fn test_codec_brotli() {
-        test_codec(CodecType::BROTLI);
+        test_codec(CodecType::Brotli);
     }
 
     #[test]
     fn test_codec_lz4() {
-        test_codec(CodecType::LZ4);
+        test_codec(CodecType::Lz4);
     }
 
     #[test]
     fn test_codec_zstd() {
-        test_codec(CodecType::ZSTD);
+        test_codec(CodecType::Zstd);
     }
-
 }

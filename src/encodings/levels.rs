@@ -38,11 +38,11 @@ pub fn max_buffer_size(
 ) -> usize {
     let bit_width = log2(max_level as u64 + 1) as u8;
     match encoding {
-        Encoding::RLE => {
+        Encoding::Rle => {
             RleEncoder::max_buffer_size(bit_width, num_buffered_values)
                 + RleEncoder::min_buffer_size(bit_width)
         }
-        Encoding::BIT_PACKED => {
+        Encoding::BitPacked => {
             ceil((num_buffered_values * bit_width as usize) as i64, 8) as usize
         }
         _ => panic!("Unsupported encoding type {}", encoding),
@@ -52,9 +52,9 @@ pub fn max_buffer_size(
 /// Encoder for definition/repetition levels.
 /// Currently only supports RLE and BIT_PACKED (dev/null) encoding, including v2.
 pub enum LevelEncoder {
-    RLE(RleEncoder),
-    RLE_V2(RleEncoder),
-    BIT_PACKED(u8, BitWriter),
+    Rle(RleEncoder),
+    RleV2(RleEncoder),
+    BitPacked(u8, BitWriter),
 }
 
 impl LevelEncoder {
@@ -68,16 +68,16 @@ impl LevelEncoder {
     pub fn v1(encoding: Encoding, max_level: i16, byte_buffer: Vec<u8>) -> Self {
         let bit_width = log2(max_level as u64 + 1) as u8;
         match encoding {
-            Encoding::RLE => LevelEncoder::RLE(RleEncoder::new_from_buf(
+            Encoding::Rle => LevelEncoder::Rle(RleEncoder::new_from_buf(
                 bit_width,
                 byte_buffer,
                 mem::size_of::<i32>(),
             )),
-            Encoding::BIT_PACKED => {
+            Encoding::BitPacked => {
                 // Here we set full byte buffer without adjusting for num_buffered_values,
                 // because byte buffer will already be allocated with size from
                 // `max_buffer_size()` method.
-                LevelEncoder::BIT_PACKED(
+                LevelEncoder::BitPacked(
                     bit_width,
                     BitWriter::new_from_buf(byte_buffer, 0),
                 )
@@ -90,7 +90,7 @@ impl LevelEncoder {
     /// repetition and definition levels.
     pub fn v2(max_level: i16, byte_buffer: Vec<u8>) -> Self {
         let bit_width = log2(max_level as u64 + 1) as u8;
-        LevelEncoder::RLE_V2(RleEncoder::new_from_buf(bit_width, byte_buffer, 0))
+        LevelEncoder::RleV2(RleEncoder::new_from_buf(bit_width, byte_buffer, 0))
     }
 
     /// Put/encode levels vector into this level encoder.
@@ -103,8 +103,7 @@ impl LevelEncoder {
     pub fn put(&mut self, buffer: &[i16]) -> Result<usize> {
         let mut num_encoded = 0;
         match *self {
-            LevelEncoder::RLE(ref mut encoder)
-            | LevelEncoder::RLE_V2(ref mut encoder) => {
+            LevelEncoder::Rle(ref mut encoder) | LevelEncoder::RleV2(ref mut encoder) => {
                 for value in buffer {
                     if !encoder.put(*value as u64)? {
                         return Err(general_err!("RLE buffer is full"));
@@ -113,7 +112,7 @@ impl LevelEncoder {
                 }
                 encoder.flush()?;
             }
-            LevelEncoder::BIT_PACKED(bit_width, ref mut encoder) => {
+            LevelEncoder::BitPacked(bit_width, ref mut encoder) => {
                 for value in buffer {
                     if !encoder.put_value(*value as u64, bit_width as usize) {
                         return Err(general_err!("Not enough bytes left"));
@@ -131,7 +130,7 @@ impl LevelEncoder {
     #[inline]
     pub fn consume(self) -> Result<Vec<u8>> {
         match self {
-            LevelEncoder::RLE(encoder) => {
+            LevelEncoder::Rle(encoder) => {
                 let mut encoded_data = encoder.consume()?;
                 // Account for the buffer offset
                 let encoded_len = encoded_data.len() - mem::size_of::<i32>();
@@ -140,8 +139,8 @@ impl LevelEncoder {
                 encoded_data[0..len_bytes.len()].copy_from_slice(len_bytes);
                 Ok(encoded_data)
             }
-            LevelEncoder::RLE_V2(encoder) => encoder.consume(),
-            LevelEncoder::BIT_PACKED(_, encoder) => Ok(encoder.consume()),
+            LevelEncoder::RleV2(encoder) => encoder.consume(),
+            LevelEncoder::BitPacked(_, encoder) => Ok(encoder.consume()),
         }
     }
 }
@@ -150,9 +149,9 @@ impl LevelEncoder {
 /// Currently only supports RLE and BIT_PACKED encoding for Data Page v1 and
 /// RLE for Data Page v2.
 pub enum LevelDecoder {
-    RLE(Option<usize>, RleDecoder),
-    RLE_V2(Option<usize>, RleDecoder),
-    BIT_PACKED(Option<usize>, u8, BitReader),
+    Rle(Option<usize>, RleDecoder),
+    RleV2(Option<usize>, RleDecoder),
+    BitPacked(Option<usize>, u8, BitReader),
 }
 
 impl LevelDecoder {
@@ -166,9 +165,9 @@ impl LevelDecoder {
     pub fn v1(encoding: Encoding, max_level: i16) -> Self {
         let bit_width = log2(max_level as u64 + 1) as u8;
         match encoding {
-            Encoding::RLE => LevelDecoder::RLE(None, RleDecoder::new(bit_width)),
-            Encoding::BIT_PACKED => {
-                LevelDecoder::BIT_PACKED(None, bit_width, BitReader::from(Vec::new()))
+            Encoding::Rle => LevelDecoder::Rle(None, RleDecoder::new(bit_width)),
+            Encoding::BitPacked => {
+                LevelDecoder::BitPacked(None, bit_width, BitReader::from(Vec::new()))
             }
             _ => panic!("Unsupported encoding type {}", encoding),
         }
@@ -180,7 +179,7 @@ impl LevelDecoder {
     /// To set data for this decoder, use `set_data_range` method.
     pub fn v2(max_level: i16) -> Self {
         let bit_width = log2(max_level as u64 + 1) as u8;
-        LevelDecoder::RLE_V2(None, RleDecoder::new(bit_width))
+        LevelDecoder::RleV2(None, RleDecoder::new(bit_width))
     }
 
     /// Sets data for this level decoder, and returns total number of bytes set.
@@ -194,14 +193,14 @@ impl LevelDecoder {
     #[inline]
     pub fn set_data(&mut self, num_buffered_values: usize, data: ByteBufferPtr) -> usize {
         match *self {
-            LevelDecoder::RLE(ref mut num_values, ref mut decoder) => {
+            LevelDecoder::Rle(ref mut num_values, ref mut decoder) => {
                 *num_values = Some(num_buffered_values);
                 let i32_size = mem::size_of::<i32>();
                 let data_size = read_num_bytes!(i32, i32_size, data.as_ref()) as usize;
                 decoder.set_data(data.range(i32_size, data_size));
                 i32_size + data_size
             }
-            LevelDecoder::BIT_PACKED(ref mut num_values, bit_width, ref mut decoder) => {
+            LevelDecoder::BitPacked(ref mut num_values, bit_width, ref mut decoder) => {
                 *num_values = Some(num_buffered_values);
                 // Set appropriate number of bytes: if max size is larger than buffer -
                 // set full buffer
@@ -227,7 +226,7 @@ impl LevelDecoder {
         len: usize,
     ) -> usize {
         match *self {
-            LevelDecoder::RLE_V2(ref mut num_values, ref mut decoder) => {
+            LevelDecoder::RleV2(ref mut num_values, ref mut decoder) => {
                 decoder.set_data(data.range(start, len));
                 *num_values = Some(num_buffered_values);
                 len
@@ -242,9 +241,9 @@ impl LevelDecoder {
     #[inline]
     pub fn is_data_set(&self) -> bool {
         match self {
-            LevelDecoder::RLE(ref num_values, _) => num_values.is_some(),
-            LevelDecoder::RLE_V2(ref num_values, _) => num_values.is_some(),
-            LevelDecoder::BIT_PACKED(ref num_values, ..) => num_values.is_some(),
+            LevelDecoder::Rle(ref num_values, _) => num_values.is_some(),
+            LevelDecoder::RleV2(ref num_values, _) => num_values.is_some(),
+            LevelDecoder::BitPacked(ref num_values, ..) => num_values.is_some(),
         }
     }
 
@@ -255,15 +254,15 @@ impl LevelDecoder {
     pub fn get(&mut self, buffer: &mut [i16]) -> Result<usize> {
         assert!(self.is_data_set(), "No data set for decoding");
         match *self {
-            LevelDecoder::RLE(ref mut num_values, ref mut decoder)
-            | LevelDecoder::RLE_V2(ref mut num_values, ref mut decoder) => {
+            LevelDecoder::Rle(ref mut num_values, ref mut decoder)
+            | LevelDecoder::RleV2(ref mut num_values, ref mut decoder) => {
                 // Max length we can read
                 let len = cmp::min(num_values.unwrap(), buffer.len());
                 let values_read = decoder.get_batch::<i16>(&mut buffer[0..len])?;
                 *num_values = num_values.map(|len| len - values_read);
                 Ok(values_read)
             }
-            LevelDecoder::BIT_PACKED(ref mut num_values, bit_width, ref mut decoder) => {
+            LevelDecoder::BitPacked(ref mut num_values, bit_width, ref mut decoder) => {
                 // When extracting values from bit reader, it might return more values
                 // than left because of padding to a full byte, we use
                 // num_values to track precise number of values.
@@ -426,41 +425,41 @@ mod tests {
     fn test_roundtrip_one() {
         let levels = vec![0, 1, 1, 1, 1, 0, 0, 0, 0, 1];
         let max_level = 1;
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::BIT_PACKED, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, true);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::BitPacked, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, true);
     }
 
     #[test]
     fn test_roundtrip() {
         let levels = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         let max_level = 10;
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::BIT_PACKED, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, true);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::BitPacked, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, true);
     }
 
     #[test]
     fn test_roundtrip_incremental() {
         let levels = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         let max_level = 10;
-        test_internal_roundtrip_incremental(Encoding::RLE, &levels, max_level, false);
+        test_internal_roundtrip_incremental(Encoding::Rle, &levels, max_level, false);
         test_internal_roundtrip_incremental(
-            Encoding::BIT_PACKED,
+            Encoding::BitPacked,
             &levels,
             max_level,
             false,
         );
-        test_internal_roundtrip_incremental(Encoding::RLE, &levels, max_level, true);
+        test_internal_roundtrip_incremental(Encoding::Rle, &levels, max_level, true);
     }
 
     #[test]
     fn test_roundtrip_all_zeros() {
         let levels = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let max_level = 1;
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::BIT_PACKED, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, true);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::BitPacked, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, true);
     }
 
     #[test]
@@ -469,32 +468,27 @@ mod tests {
         let mut levels = Vec::new();
         let max_level = 5;
         random_numbers_range::<i16>(120, 0, max_level, &mut levels);
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::BIT_PACKED, &levels, max_level, false);
-        test_internal_roundtrip(Encoding::RLE, &levels, max_level, true);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::BitPacked, &levels, max_level, false);
+        test_internal_roundtrip(Encoding::Rle, &levels, max_level, true);
     }
 
     #[test]
     fn test_roundtrip_underflow() {
         let levels = vec![1, 1, 2, 3, 2, 1, 1, 2, 3, 1];
         let max_level = 3;
-        test_internal_roundtrip_underflow(Encoding::RLE, &levels, max_level, false);
-        test_internal_roundtrip_underflow(
-            Encoding::BIT_PACKED,
-            &levels,
-            max_level,
-            false,
-        );
-        test_internal_roundtrip_underflow(Encoding::RLE, &levels, max_level, true);
+        test_internal_roundtrip_underflow(Encoding::Rle, &levels, max_level, false);
+        test_internal_roundtrip_underflow(Encoding::BitPacked, &levels, max_level, false);
+        test_internal_roundtrip_underflow(Encoding::Rle, &levels, max_level, true);
     }
 
     #[test]
     fn test_roundtrip_overflow() {
         let levels = vec![1, 1, 2, 3, 2, 1, 1, 2, 3, 1];
         let max_level = 3;
-        test_internal_roundtrip_overflow(Encoding::RLE, &levels, max_level, false);
-        test_internal_roundtrip_overflow(Encoding::BIT_PACKED, &levels, max_level, false);
-        test_internal_roundtrip_overflow(Encoding::RLE, &levels, max_level, true);
+        test_internal_roundtrip_overflow(Encoding::Rle, &levels, max_level, false);
+        test_internal_roundtrip_overflow(Encoding::BitPacked, &levels, max_level, false);
+        test_internal_roundtrip_overflow(Encoding::Rle, &levels, max_level, true);
     }
 
     #[test]
@@ -527,7 +521,7 @@ mod tests {
         // Buffer containing both repetition and definition levels
         let buffer = ByteBufferPtr::new(vec![1, 2, 3, 4, 5]);
         let max_level = 1;
-        let mut decoder = LevelDecoder::v1(Encoding::BIT_PACKED, max_level);
+        let mut decoder = LevelDecoder::v1(Encoding::BitPacked, max_level);
         decoder.set_data_range(10, &buffer, 0, 3);
     }
 
@@ -537,7 +531,7 @@ mod tests {
         // length
         let buffer = ByteBufferPtr::new(vec![1, 2, 3, 4, 5]);
         let max_level = 1;
-        let mut decoder = LevelDecoder::v1(Encoding::BIT_PACKED, max_level);
+        let mut decoder = LevelDecoder::v1(Encoding::BitPacked, max_level);
         // This should reset to entire buffer
         assert_eq!(decoder.set_data(1024, buffer.all()), buffer.len());
         // This should set smallest num bytes
@@ -550,7 +544,7 @@ mod tests {
         // `get()` normally panics because bit_reader is not set for RLE decoding
         // we have explicit check now in set_data
         let max_rep_level = 2;
-        let mut decoder = LevelDecoder::v1(Encoding::RLE, max_rep_level);
+        let mut decoder = LevelDecoder::v1(Encoding::Rle, max_rep_level);
         let mut buffer = vec![0; 16];
         decoder.get(&mut buffer).unwrap();
     }
@@ -559,7 +553,7 @@ mod tests {
     #[should_panic(expected = "No data set for decoding")]
     fn test_bit_packed_level_decoder_get_no_set_data() {
         let max_rep_level = 2;
-        let mut decoder = LevelDecoder::v1(Encoding::BIT_PACKED, max_rep_level);
+        let mut decoder = LevelDecoder::v1(Encoding::BitPacked, max_rep_level);
         let mut buffer = vec![0; 16];
         decoder.get(&mut buffer).unwrap();
     }

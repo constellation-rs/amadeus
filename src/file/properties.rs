@@ -32,19 +32,19 @@
 //! // Use properties builder to set certain options and assemble the configuration.
 //! let props = WriterProperties::builder()
 //!     .set_writer_version(WriterVersion::PARQUET_1_0)
-//!     .set_encoding(Encoding::PLAIN)
-//!     .set_column_encoding(ColumnPath::from("col1"), Encoding::DELTA_BINARY_PACKED)
-//!     .set_compression(Compression::SNAPPY)
+//!     .set_encoding(Encoding::Plain)
+//!     .set_column_encoding(ColumnPath::from("col1"), Encoding::DeltaBinaryPacked)
+//!     .set_compression(Compression::Snappy)
 //!     .build();
 //!
 //! assert_eq!(props.writer_version(), WriterVersion::PARQUET_1_0);
 //! assert_eq!(
 //!     props.encoding(&ColumnPath::from("col1")),
-//!     Some(Encoding::DELTA_BINARY_PACKED)
+//!     Some(Encoding::DeltaBinaryPacked)
 //! );
 //! assert_eq!(
 //!     props.encoding(&ColumnPath::from("col2")),
-//!     Some(Encoding::PLAIN)
+//!     Some(Encoding::Plain)
 //! );
 //! ```
 
@@ -56,7 +56,7 @@ use crate::schema::types::ColumnPath;
 const DEFAULT_PAGE_SIZE: usize = 1024 * 1024;
 const DEFAULT_WRITE_BATCH_SIZE: usize = 1024;
 const DEFAULT_WRITER_VERSION: WriterVersion = WriterVersion::PARQUET_1_0;
-const DEFAULT_COMPRESSION: Compression = Compression::UNCOMPRESSED;
+const DEFAULT_COMPRESSION: Compression = Compression::Uncompressed;
 const DEFAULT_DICTIONARY_ENABLED: bool = true;
 const DEFAULT_DICTIONARY_PAGE_SIZE_LIMIT: usize = DEFAULT_PAGE_SIZE;
 const DEFAULT_STATISTICS_ENABLED: bool = true;
@@ -148,7 +148,7 @@ impl WriterProperties {
     pub fn dictionary_data_page_encoding(&self) -> Encoding {
         // PLAIN_DICTIONARY encoding is deprecated in writer version 1.
         // Dictionary values are encoded using RLE_DICTIONARY encoding.
-        Encoding::RLE_DICTIONARY
+        Encoding::RleDictionary
     }
 
     /// Returns encoding for dictionary page, when dictionary encoding is enabled.
@@ -157,7 +157,7 @@ impl WriterProperties {
     pub fn dictionary_page_encoding(&self) -> Encoding {
         // PLAIN_DICTIONARY is deprecated in writer version 1.
         // Dictionary is encoded using plain encoding.
-        Encoding::PLAIN
+        Encoding::Plain
     }
 
     /// Returns encoding for a column, if set.
@@ -429,7 +429,7 @@ impl ColumnProperties {
     /// encoding flag being set. Use `set_dictionary_enabled` method to enable dictionary
     /// for a column.
     fn set_encoding(&mut self, value: Encoding) {
-        if value == Encoding::PLAIN_DICTIONARY || value == Encoding::RLE_DICTIONARY {
+        if value == Encoding::PlainDictionary || value == Encoding::RleDictionary {
             panic!("Dictionary encoding can not be used as fallback encoding");
         }
         self.encoding = Some(value);
@@ -533,10 +533,10 @@ mod tests {
             let props = WriterProperties::builder()
                 .set_writer_version(version)
                 .build();
-            assert_eq!(props.dictionary_page_encoding(), Encoding::PLAIN);
+            assert_eq!(props.dictionary_page_encoding(), Encoding::Plain);
             assert_eq!(
                 props.dictionary_data_page_encoding(),
-                Encoding::RLE_DICTIONARY
+                Encoding::RleDictionary
             );
         }
     }
@@ -546,7 +546,7 @@ mod tests {
     fn test_writer_properties_panic_when_plain_dictionary_is_fallback() {
         // Should panic when user specifies dictionary encoding as fallback encoding.
         WriterProperties::builder()
-            .set_encoding(Encoding::PLAIN_DICTIONARY)
+            .set_encoding(Encoding::PlainDictionary)
             .build();
     }
 
@@ -555,7 +555,7 @@ mod tests {
     fn test_writer_properties_panic_when_rle_dictionary_is_fallback() {
         // Should panic when user specifies dictionary encoding as fallback encoding.
         WriterProperties::builder()
-            .set_encoding(Encoding::RLE_DICTIONARY)
+            .set_encoding(Encoding::RleDictionary)
             .build();
     }
 
@@ -564,7 +564,7 @@ mod tests {
     fn test_writer_properties_panic_when_dictionary_is_enabled() {
         WriterProperties::builder()
             .set_dictionary_enabled(true)
-            .set_column_encoding(ColumnPath::from("col"), Encoding::RLE_DICTIONARY)
+            .set_column_encoding(ColumnPath::from("col"), Encoding::RleDictionary)
             .build();
     }
 
@@ -573,7 +573,7 @@ mod tests {
     fn test_writer_properties_panic_when_dictionary_is_disabled() {
         WriterProperties::builder()
             .set_dictionary_enabled(false)
-            .set_column_encoding(ColumnPath::from("col"), Encoding::RLE_DICTIONARY)
+            .set_column_encoding(ColumnPath::from("col"), Encoding::RleDictionary)
             .build();
     }
 
@@ -588,14 +588,14 @@ mod tests {
             .set_max_row_group_size(40)
             .set_created_by("default".to_owned())
             // global column settings
-            .set_encoding(Encoding::DELTA_BINARY_PACKED)
-            .set_compression(Compression::GZIP)
+            .set_encoding(Encoding::DeltaBinaryPacked)
+            .set_compression(Compression::Gzip)
             .set_dictionary_enabled(false)
             .set_statistics_enabled(false)
             .set_max_statistics_size(50)
             // specific column settings
-            .set_column_encoding(ColumnPath::from("col"), Encoding::RLE)
-            .set_column_compression(ColumnPath::from("col"), Compression::SNAPPY)
+            .set_column_encoding(ColumnPath::from("col"), Encoding::Rle)
+            .set_column_compression(ColumnPath::from("col"), Compression::Snappy)
             .set_column_dictionary_enabled(ColumnPath::from("col"), true)
             .set_column_statistics_enabled(ColumnPath::from("col"), true)
             .set_column_max_statistics_size(ColumnPath::from("col"), 123)
@@ -610,20 +610,20 @@ mod tests {
 
         assert_eq!(
             props.encoding(&ColumnPath::from("a")),
-            Some(Encoding::DELTA_BINARY_PACKED)
+            Some(Encoding::DeltaBinaryPacked)
         );
-        assert_eq!(props.compression(&ColumnPath::from("a")), Compression::GZIP);
+        assert_eq!(props.compression(&ColumnPath::from("a")), Compression::Gzip);
         assert_eq!(props.dictionary_enabled(&ColumnPath::from("a")), false);
         assert_eq!(props.statistics_enabled(&ColumnPath::from("a")), false);
         assert_eq!(props.max_statistics_size(&ColumnPath::from("a")), 50);
 
         assert_eq!(
             props.encoding(&ColumnPath::from("col")),
-            Some(Encoding::RLE)
+            Some(Encoding::Rle)
         );
         assert_eq!(
             props.compression(&ColumnPath::from("col")),
-            Compression::SNAPPY
+            Compression::Snappy
         );
         assert_eq!(props.dictionary_enabled(&ColumnPath::from("col")), true);
         assert_eq!(props.statistics_enabled(&ColumnPath::from("col")), true);
@@ -633,18 +633,18 @@ mod tests {
     #[test]
     fn test_writer_properties_builder_partial_defaults() {
         let props = WriterProperties::builder()
-            .set_encoding(Encoding::DELTA_BINARY_PACKED)
-            .set_compression(Compression::GZIP)
-            .set_column_encoding(ColumnPath::from("col"), Encoding::RLE)
+            .set_encoding(Encoding::DeltaBinaryPacked)
+            .set_compression(Compression::Gzip)
+            .set_column_encoding(ColumnPath::from("col"), Encoding::Rle)
             .build();
 
         assert_eq!(
             props.encoding(&ColumnPath::from("col")),
-            Some(Encoding::RLE)
+            Some(Encoding::Rle)
         );
         assert_eq!(
             props.compression(&ColumnPath::from("col")),
-            Compression::GZIP
+            Compression::Gzip
         );
         assert_eq!(
             props.dictionary_enabled(&ColumnPath::from("col")),

@@ -41,13 +41,13 @@ pub(super) fn parse_map<K: Record, V: Record>(
     schema: &Type,
 ) -> Result<MapSchema<K::Schema, V::Schema>> {
     if schema.is_group()
-        && (schema.get_basic_info().logical_type() == LogicalType::MAP
-            || schema.get_basic_info().logical_type() == LogicalType::MAP_KEY_VALUE)
+        && (schema.get_basic_info().logical_type() == LogicalType::Map
+            || schema.get_basic_info().logical_type() == LogicalType::MapKeyValue)
         && schema.get_fields().len() == 1
     {
         let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
         if sub_schema.is_group()
-            && sub_schema.get_basic_info().repetition() == Repetition::REPEATED
+            && sub_schema.get_basic_info().repetition() == Repetition::Repeated
             && sub_schema.get_fields().len() == 2
         {
             let mut fields = sub_schema.get_fields().into_iter();
@@ -97,7 +97,7 @@ where
         schema: &Type,
         repetition: Option<Repetition>,
     ) -> Result<(String, Self::Schema)> {
-        if repetition == Some(Repetition::REQUIRED) {
+        if repetition == Some(Repetition::Required) {
             return parse_map::<K, V>(schema)
                 .map(|schema2| (schema.name().to_owned(), schema2));
         }

@@ -39,8 +39,8 @@ where
         schema: &Type,
         repetition: Option<Repetition>,
     ) -> Result<(String, Self::Schema)> {
-        if repetition == Some(Repetition::OPTIONAL) {
-            return T::parse(&schema, Some(Repetition::REQUIRED))
+        if repetition == Some(Repetition::Optional) {
+            return T::parse(&schema, Some(Repetition::Required))
                 .map(|(name, schema)| (name, OptionSchema(schema)));
         }
         Err(ParquetError::General(String::from(

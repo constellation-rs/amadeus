@@ -142,7 +142,7 @@ impl<'a, 'b: 'a> DisplaySchemaGroup<'a, 'b> {
                 "\n{}",
                 DisplayFmt::new(|fmt| Schema::fmt(
                     value,
-                    Some(Repetition::REQUIRED),
+                    Some(Repetition::Required),
                     name,
                     fmt
                 ))

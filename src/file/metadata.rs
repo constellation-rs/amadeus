@@ -176,7 +176,7 @@ impl FileMetaData {
         self.column_orders
             .as_ref()
             .map(|data| data[i])
-            .unwrap_or(ColumnOrder::UNDEFINED)
+            .unwrap_or(ColumnOrder::Undefined)
     }
 }
 
@@ -534,7 +534,7 @@ impl ColumnChunkMetaDataBuilder {
             file_path: None,
             file_offset: 0,
             num_values: 0,
-            compression: Compression::UNCOMPRESSED,
+            compression: Compression::Uncompressed,
             total_compressed_size: 0,
             total_uncompressed_size: 0,
             data_page_offset: 0,
@@ -680,11 +680,11 @@ mod tests {
         let column_descr = get_test_schema_descr().column(0);
 
         let col_metadata = ColumnChunkMetaData::builder(column_descr.clone())
-            .set_encodings(vec![Encoding::PLAIN, Encoding::RLE])
+            .set_encodings(vec![Encoding::Plain, Encoding::Rle])
             .set_file_path("file_path".to_owned())
             .set_file_offset(100)
             .set_num_values(1000)
-            .set_compression(Compression::SNAPPY)
+            .set_compression(Compression::Snappy)
             .set_total_compressed_size(2000)
             .set_total_uncompressed_size(3000)
             .set_data_page_offset(4000)
@@ -724,12 +724,12 @@ mod tests {
         let schema = SchemaType::group_type_builder("schema")
             .with_fields(&mut vec![
                 Rc::new(
-                    SchemaType::primitive_type_builder("a", Type::INT32)
+                    SchemaType::primitive_type_builder("a", Type::Int32)
                         .build()
                         .unwrap(),
                 ),
                 Rc::new(
-                    SchemaType::primitive_type_builder("b", Type::INT32)
+                    SchemaType::primitive_type_builder("b", Type::Int32)
                         .build()
                         .unwrap(),
                 ),

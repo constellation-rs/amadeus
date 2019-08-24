@@ -500,7 +500,7 @@ impl<T: Write + Position> PageWriter for SerializedPageWriter<T> {
         spec.offset = start_pos;
         spec.bytes_written = self.sink.pos() - start_pos;
         // Number of values is incremented for data pages only
-        if page_type == PageType::DATA_PAGE || page_type == PageType::DATA_PAGE_V2 {
+        if page_type == PageType::DataPage || page_type == PageType::DataPageV2 {
             spec.num_values = num_values;
         }
 
@@ -582,7 +582,7 @@ mod tests {
         let schema = Rc::new(
             types::Type::group_type_builder("schema")
                 .with_fields(&mut vec![Rc::new(
-                    types::Type::primitive_type_builder("col1", Type::INT32)
+                    types::Type::primitive_type_builder("col1", Type::Int32)
                         .build()
                         .unwrap(),
                 )])
@@ -606,14 +606,14 @@ mod tests {
             types::Type::group_type_builder("schema")
                 .with_fields(&mut vec![
                     Rc::new(
-                        types::Type::primitive_type_builder("col1", Type::INT32)
-                            .with_repetition(Repetition::REQUIRED)
+                        types::Type::primitive_type_builder("col1", Type::Int32)
+                            .with_repetition(Repetition::Required)
                             .build()
                             .unwrap(),
                     ),
                     Rc::new(
-                        types::Type::primitive_type_builder("col2", Type::INT32)
-                            .with_repetition(Repetition::REQUIRED)
+                        types::Type::primitive_type_builder("col2", Type::Int32)
+                            .with_repetition(Repetition::Required)
                             .build()
                             .unwrap(),
                     ),
@@ -653,7 +653,7 @@ mod tests {
         let schema = Rc::new(
             types::Type::group_type_builder("schema")
                 .with_fields(&mut vec![Rc::new(
-                    types::Type::primitive_type_builder("col1", Type::INT32)
+                    types::Type::primitive_type_builder("col1", Type::Int32)
                         .build()
                         .unwrap(),
                 )])
@@ -717,15 +717,15 @@ mod tests {
             Page::DataPage {
                 buf: ByteBufferPtr::new(vec![1, 2, 3, 4, 5, 6, 7, 8]),
                 num_values: 10,
-                encoding: Encoding::DELTA_BINARY_PACKED,
-                def_level_encoding: Encoding::RLE,
-                rep_level_encoding: Encoding::RLE,
+                encoding: Encoding::DeltaBinaryPacked,
+                def_level_encoding: Encoding::Rle,
+                rep_level_encoding: Encoding::Rle,
                 statistics: Some(Statistics::int32(Some(1), Some(3), None, 7, true)),
             },
             Page::DataPageV2 {
                 buf: ByteBufferPtr::new(vec![4; 128]),
                 num_values: 10,
-                encoding: Encoding::DELTA_BINARY_PACKED,
+                encoding: Encoding::DeltaBinaryPacked,
                 num_nulls: 2,
                 num_rows: 12,
                 def_levels_byte_len: 24,
@@ -735,8 +735,8 @@ mod tests {
             },
         ];
 
-        test_page_roundtrip(&pages[..], Compression::SNAPPY, Type::INT32);
-        test_page_roundtrip(&pages[..], Compression::UNCOMPRESSED, Type::INT32);
+        test_page_roundtrip(&pages[..], Compression::Snappy, Type::Int32);
+        test_page_roundtrip(&pages[..], Compression::Uncompressed, Type::Int32);
     }
 
     #[test]
@@ -745,21 +745,21 @@ mod tests {
             Page::DictionaryPage {
                 buf: ByteBufferPtr::new(vec![1, 2, 3, 4, 5]),
                 num_values: 5,
-                encoding: Encoding::RLE_DICTIONARY,
+                encoding: Encoding::RleDictionary,
                 is_sorted: false,
             },
             Page::DataPage {
                 buf: ByteBufferPtr::new(vec![1, 2, 3, 4, 5, 6, 7, 8]),
                 num_values: 10,
-                encoding: Encoding::DELTA_BINARY_PACKED,
-                def_level_encoding: Encoding::RLE,
-                rep_level_encoding: Encoding::RLE,
+                encoding: Encoding::DeltaBinaryPacked,
+                def_level_encoding: Encoding::Rle,
+                rep_level_encoding: Encoding::Rle,
                 statistics: Some(Statistics::int32(Some(1), Some(3), None, 7, true)),
             },
             Page::DataPageV2 {
                 buf: ByteBufferPtr::new(vec![4; 128]),
                 num_values: 10,
-                encoding: Encoding::DELTA_BINARY_PACKED,
+                encoding: Encoding::DeltaBinaryPacked,
                 num_nulls: 2,
                 num_rows: 12,
                 def_levels_byte_len: 24,
@@ -769,8 +769,8 @@ mod tests {
             },
         ];
 
-        test_page_roundtrip(&pages[..], Compression::SNAPPY, Type::INT32);
-        test_page_roundtrip(&pages[..], Compression::UNCOMPRESSED, Type::INT32);
+        test_page_roundtrip(&pages[..], Compression::Snappy, Type::Int32);
+        test_page_roundtrip(&pages[..], Compression::Uncompressed, Type::Int32);
     }
 
     /// Tests writing and reading pages.
@@ -919,8 +919,8 @@ mod tests {
         let schema = Rc::new(
             types::Type::group_type_builder("schema")
                 .with_fields(&mut vec![Rc::new(
-                    types::Type::primitive_type_builder("col1", Type::INT32)
-                        .with_repetition(Repetition::REQUIRED)
+                    types::Type::primitive_type_builder("col1", Type::Int32)
+                        .with_repetition(Repetition::Required)
                         .build()
                         .unwrap(),
                 )])

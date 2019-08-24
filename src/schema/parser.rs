@@ -233,7 +233,7 @@ impl<'a> Parser<'a> {
             tpe
         } else {
             self.tokenizer.backtrack();
-            LogicalType::NONE
+            LogicalType::None
         };
 
         // Parse optional id
@@ -264,7 +264,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Type> {
         // Read type length if the type is FIXED_LEN_BYTE_ARRAY.
         let mut length: i32 = -1;
-        if physical_type == PhysicalType::FIXED_LEN_BYTE_ARRAY {
+        if physical_type == PhysicalType::FixedLenByteArray {
             assert_token(self.tokenizer.next(), "(")?;
             length = parse_i32(
                 self.tokenizer.next(),
@@ -292,7 +292,7 @@ impl<'a> Parser<'a> {
             let mut precision: i32 = -1;
             let mut scale: i32 = -1;
 
-            if tpe == LogicalType::DECIMAL {
+            if tpe == LogicalType::Decimal {
                 if let Some("(") = self.tokenizer.next() {
                     // Parse precision
                     precision = parse_i32(
@@ -324,7 +324,7 @@ impl<'a> Parser<'a> {
             (tpe, precision, scale)
         } else {
             self.tokenizer.backtrack();
-            (LogicalType::NONE, -1, -1)
+            (LogicalType::None, -1, -1)
         };
 
         // Parse optional id
@@ -593,28 +593,22 @@ mod tests {
         let expected = Type::group_type_builder("root")
             .with_fields(&mut vec![
                 Rc::new(
-                    Type::primitive_type_builder(
-                        "f1",
-                        PhysicalType::FIXED_LEN_BYTE_ARRAY,
-                    )
-                    .with_logical_type(LogicalType::DECIMAL)
-                    .with_length(5)
-                    .with_precision(9)
-                    .with_scale(3)
-                    .build()
-                    .unwrap(),
+                    Type::primitive_type_builder("f1", PhysicalType::FixedLenByteArray)
+                        .with_logical_type(LogicalType::Decimal)
+                        .with_length(5)
+                        .with_precision(9)
+                        .with_scale(3)
+                        .build()
+                        .unwrap(),
                 ),
                 Rc::new(
-                    Type::primitive_type_builder(
-                        "f2",
-                        PhysicalType::FIXED_LEN_BYTE_ARRAY,
-                    )
-                    .with_logical_type(LogicalType::DECIMAL)
-                    .with_length(16)
-                    .with_precision(38)
-                    .with_scale(18)
-                    .build()
-                    .unwrap(),
+                    Type::primitive_type_builder("f2", PhysicalType::FixedLenByteArray)
+                        .with_logical_type(LogicalType::Decimal)
+                        .with_length(16)
+                        .with_precision(38)
+                        .with_scale(18)
+                        .build()
+                        .unwrap(),
                 ),
             ])
             .build()
@@ -651,19 +645,19 @@ mod tests {
         let expected = Type::group_type_builder("root")
             .with_fields(&mut vec![Rc::new(
                 Type::group_type_builder("a0")
-                    .with_repetition(Repetition::REQUIRED)
+                    .with_repetition(Repetition::Required)
                     .with_fields(&mut vec![
                         Rc::new(
                             Type::group_type_builder("a1")
-                                .with_repetition(Repetition::OPTIONAL)
-                                .with_logical_type(LogicalType::LIST)
+                                .with_repetition(Repetition::Optional)
+                                .with_logical_type(LogicalType::List)
                                 .with_fields(&mut vec![Rc::new(
                                     Type::primitive_type_builder(
                                         "a2",
-                                        PhysicalType::BYTE_ARRAY,
+                                        PhysicalType::ByteArray,
                                     )
-                                    .with_repetition(Repetition::REPEATED)
-                                    .with_logical_type(LogicalType::UTF8)
+                                    .with_repetition(Repetition::Repeated)
+                                    .with_logical_type(LogicalType::Utf8)
                                     .build()
                                     .unwrap(),
                                 )])
@@ -672,16 +666,16 @@ mod tests {
                         ),
                         Rc::new(
                             Type::group_type_builder("b1")
-                                .with_repetition(Repetition::OPTIONAL)
-                                .with_logical_type(LogicalType::LIST)
+                                .with_repetition(Repetition::Optional)
+                                .with_logical_type(LogicalType::List)
                                 .with_fields(&mut vec![Rc::new(
                                     Type::group_type_builder("b2")
-                                        .with_repetition(Repetition::REPEATED)
+                                        .with_repetition(Repetition::Repeated)
                                         .with_fields(&mut vec![
                                             Rc::new(
                                                 Type::primitive_type_builder(
                                                     "b3",
-                                                    PhysicalType::INT32,
+                                                    PhysicalType::Int32,
                                                 )
                                                 .build()
                                                 .unwrap(),
@@ -689,7 +683,7 @@ mod tests {
                                             Rc::new(
                                                 Type::primitive_type_builder(
                                                     "b4",
-                                                    PhysicalType::DOUBLE,
+                                                    PhysicalType::Double,
                                                 )
                                                 .build()
                                                 .unwrap(),
@@ -732,40 +726,40 @@ mod tests {
 
         let mut fields = vec![
             Rc::new(
-                Type::primitive_type_builder("_1", PhysicalType::INT32)
-                    .with_repetition(Repetition::REQUIRED)
-                    .with_logical_type(LogicalType::INT_8)
+                Type::primitive_type_builder("_1", PhysicalType::Int32)
+                    .with_repetition(Repetition::Required)
+                    .with_logical_type(LogicalType::Int8)
                     .build()
                     .unwrap(),
             ),
             Rc::new(
-                Type::primitive_type_builder("_2", PhysicalType::INT32)
-                    .with_repetition(Repetition::REQUIRED)
-                    .with_logical_type(LogicalType::INT_16)
+                Type::primitive_type_builder("_2", PhysicalType::Int32)
+                    .with_repetition(Repetition::Required)
+                    .with_logical_type(LogicalType::Int16)
                     .build()
                     .unwrap(),
             ),
             Rc::new(
-                Type::primitive_type_builder("_3", PhysicalType::FLOAT)
-                    .with_repetition(Repetition::REQUIRED)
+                Type::primitive_type_builder("_3", PhysicalType::Float)
+                    .with_repetition(Repetition::Required)
                     .build()
                     .unwrap(),
             ),
             Rc::new(
-                Type::primitive_type_builder("_4", PhysicalType::DOUBLE)
-                    .with_repetition(Repetition::REQUIRED)
+                Type::primitive_type_builder("_4", PhysicalType::Double)
+                    .with_repetition(Repetition::Required)
                     .build()
                     .unwrap(),
             ),
             Rc::new(
-                Type::primitive_type_builder("_5", PhysicalType::INT32)
-                    .with_logical_type(LogicalType::DATE)
+                Type::primitive_type_builder("_5", PhysicalType::Int32)
+                    .with_logical_type(LogicalType::Date)
                     .build()
                     .unwrap(),
             ),
             Rc::new(
-                Type::primitive_type_builder("_6", PhysicalType::BYTE_ARRAY)
-                    .with_logical_type(LogicalType::UTF8)
+                Type::primitive_type_builder("_6", PhysicalType::ByteArray)
+                    .with_logical_type(LogicalType::Utf8)
                     .build()
                     .unwrap(),
             ),
