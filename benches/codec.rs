@@ -45,61 +45,61 @@ use amadeus_parquet::{basic::Compression, compression::*, file::reader::*};
 // filled with random values.
 
 fn get_rg_reader() -> amadeus_parquet::file::reader::SerializedRowGroupReader<File> {
-    let file = get_test_file("10k-v2.parquet");
-    let f_reader = SerializedFileReader::new(file).unwrap();
-    f_reader.get_row_group(0).unwrap()
+	let file = get_test_file("10k-v2.parquet");
+	let f_reader = SerializedFileReader::new(file).unwrap();
+	f_reader.get_row_group(0).unwrap()
 }
 
 fn get_pages_bytes(col_idx: usize) -> Vec<u8> {
-    let mut data: Vec<u8> = Vec::new();
-    let rg_reader = get_rg_reader();
-    let mut pg_reader = rg_reader.get_column_page_reader(col_idx).unwrap();
-    loop {
-        if let Some(p) = pg_reader.get_next_page().unwrap() {
-            data.extend_from_slice(p.buffer().data());
-        } else {
-            break;
-        }
-    }
-    data
+	let mut data: Vec<u8> = Vec::new();
+	let rg_reader = get_rg_reader();
+	let mut pg_reader = rg_reader.get_column_page_reader(col_idx).unwrap();
+	loop {
+		if let Some(p) = pg_reader.get_next_page().unwrap() {
+			data.extend_from_slice(p.buffer().data());
+		} else {
+			break;
+		}
+	}
+	data
 }
 
 macro_rules! compress {
-    ($fname:ident, $codec:expr, $col_idx:expr) => {
-        #[bench]
-        fn $fname(bench: &mut Bencher) {
-            let mut codec = create_codec($codec).unwrap().unwrap();
-            let mut v = vec![];
-            let data = get_pages_bytes($col_idx);
-            bench.bytes = data.len() as u64;
-            bench.iter(|| {
-                codec.compress(&data[..], &mut v).unwrap();
-            })
-        }
-    };
+	($fname:ident, $codec:expr, $col_idx:expr) => {
+		#[bench]
+		fn $fname(bench: &mut Bencher) {
+			let mut codec = create_codec($codec).unwrap().unwrap();
+			let mut v = vec![];
+			let data = get_pages_bytes($col_idx);
+			bench.bytes = data.len() as u64;
+			bench.iter(|| {
+				codec.compress(&data[..], &mut v).unwrap();
+			})
+		}
+	};
 }
 
 macro_rules! decompress {
-    ($fname:ident, $codec:expr, $col_idx:expr) => {
-        #[bench]
-        fn $fname(bench: &mut Bencher) {
-            let compressed_pages = {
-                let mut codec = create_codec($codec).unwrap().unwrap();
-                let raw_data = get_pages_bytes($col_idx);
-                let mut v = vec![];
-                codec.compress(&raw_data[..], &mut v).unwrap();
-                v
-            };
+	($fname:ident, $codec:expr, $col_idx:expr) => {
+		#[bench]
+		fn $fname(bench: &mut Bencher) {
+			let compressed_pages = {
+				let mut codec = create_codec($codec).unwrap().unwrap();
+				let raw_data = get_pages_bytes($col_idx);
+				let mut v = vec![];
+				codec.compress(&raw_data[..], &mut v).unwrap();
+				v
+			};
 
-            let mut codec = create_codec($codec).unwrap().unwrap();
-            let rg_reader = get_rg_reader();
-            bench.bytes = rg_reader.metadata().total_byte_size() as u64;
-            bench.iter(|| {
-                let mut v = Vec::new();
-                let _ = codec.decompress(&compressed_pages[..], &mut v).unwrap();
-            })
-        }
-    };
+			let mut codec = create_codec($codec).unwrap().unwrap();
+			let rg_reader = get_rg_reader();
+			bench.bytes = rg_reader.metadata().total_byte_size() as u64;
+			bench.iter(|| {
+				let mut v = Vec::new();
+				let _ = codec.decompress(&compressed_pages[..], &mut v).unwrap();
+			})
+		}
+	};
 }
 
 compress!(compress_brotli_binary, Compression::Brotli, 0);

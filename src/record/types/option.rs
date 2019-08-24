@@ -20,51 +20,40 @@
 use std::collections::HashMap;
 
 use crate::{
-    basic::Repetition,
-    column::reader::ColumnReader,
-    errors::{ParquetError, Result},
-    record::{reader::OptionReader, schemas::OptionSchema, Record},
-    schema::types::{ColumnPath, Type},
+	basic::Repetition, column::reader::ColumnReader, errors::{ParquetError, Result}, record::{reader::OptionReader, schemas::OptionSchema, Record}, schema::types::{ColumnPath, Type}
 };
 
 // `Option<T>` corresponds to Parquet fields marked as "optional".
 impl<T> Record for Option<T>
 where
-    T: Record,
+	T: Record,
 {
-    type Schema = OptionSchema<T::Schema>;
-    type Reader = OptionReader<T::Reader>;
+	type Schema = OptionSchema<T::Schema>;
+	type Reader = OptionReader<T::Reader>;
 
-    fn parse(
-        schema: &Type,
-        repetition: Option<Repetition>,
-    ) -> Result<(String, Self::Schema)> {
-        if repetition == Some(Repetition::Optional) {
-            return T::parse(&schema, Some(Repetition::Required))
-                .map(|(name, schema)| (name, OptionSchema(schema)));
-        }
-        Err(ParquetError::General(String::from(
-            "Couldn't parse Option<T>",
-        )))
-    }
+	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+		if repetition == Some(Repetition::Optional) {
+			return T::parse(&schema, Some(Repetition::Required))
+				.map(|(name, schema)| (name, OptionSchema(schema)));
+		}
+		Err(ParquetError::General(String::from(
+			"Couldn't parse Option<T>",
+		)))
+	}
 
-    fn reader(
-        schema: &Self::Schema,
-        path: &mut Vec<String>,
-        def_level: i16,
-        rep_level: i16,
-        paths: &mut HashMap<ColumnPath, ColumnReader>,
-        batch_size: usize,
-    ) -> Self::Reader {
-        OptionReader {
-            reader: <T as Record>::reader(
-                &schema.0,
-                path,
-                def_level + 1,
-                rep_level,
-                paths,
-                batch_size,
-            ),
-        }
-    }
+	fn reader(
+		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
+		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
+	) -> Self::Reader {
+		OptionReader {
+			reader: <T as Record>::reader(
+				&schema.0,
+				path,
+				def_level + 1,
+				rep_level,
+				paths,
+				batch_size,
+			),
+		}
+	}
 }

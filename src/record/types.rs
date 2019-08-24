@@ -36,14 +36,7 @@ use super::schemas::ValueSchema;
 use crate::errors::Result;
 
 pub use self::{
-    array::{Bson, Enum, Json},
-    group::{Group, Row},
-    list::List,
-    map::Map,
-    root::Root,
-    time::{Date, Time, Timestamp},
-    value::Value,
-    value_required::ValueRequired,
+	array::{Bson, Enum, Json}, group::{Group, Row}, list::List, map::Map, root::Root, time::{Date, Time, Timestamp}, value::Value, value_required::ValueRequired
 };
 
 /// This trait lets one downcast a generic type like [`Value`] to a specific type like
@@ -52,12 +45,12 @@ pub use self::{
 /// It exists, rather than for example using [`TryInto`](std::convert::TryInto), due to
 /// coherence issues with downcasting to foreign types like `Option<T>`.
 pub trait Downcast<T> {
-    fn downcast(self) -> Result<T>;
+	fn downcast(self) -> Result<T>;
 }
 
 fn downcast<T>((name, schema): (String, ValueSchema)) -> Result<(String, T)>
 where
-    ValueSchema: Downcast<T>,
+	ValueSchema: Downcast<T>,
 {
-    schema.downcast().map(|schema| (name, schema))
+	schema.downcast().map(|schema| (name, schema))
 }

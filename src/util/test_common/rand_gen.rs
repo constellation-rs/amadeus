@@ -16,125 +16,124 @@
 // under the License.
 
 use rand::{
-    distributions::{uniform::SampleUniform, Distribution, Standard},
-    thread_rng, Rng,
+	distributions::{uniform::SampleUniform, Distribution, Standard}, thread_rng, Rng
 };
 
 use crate::{data_type::*, util::memory::ByteBufferPtr};
 
 /// Random generator of data type `T` values and sequences.
 pub trait RandGen<T: DataType> {
-    fn gen(len: i32) -> T::Type;
+	fn gen(len: i32) -> T::Type;
 
-    fn gen_vec(len: i32, total: usize) -> Vec<T::Type> {
-        let mut result = vec![];
-        for _ in 0..total {
-            result.push(Self::gen(len))
-        }
-        result
-    }
+	fn gen_vec(len: i32, total: usize) -> Vec<T::Type> {
+		let mut result = vec![];
+		for _ in 0..total {
+			result.push(Self::gen(len))
+		}
+		result
+	}
 }
 
 impl<T: DataType> RandGen<T> for T {
-    default fn gen(_: i32) -> T::Type {
-        panic!("Unsupported data type");
-    }
+	default fn gen(_: i32) -> T::Type {
+		panic!("Unsupported data type");
+	}
 }
 
 impl RandGen<BoolType> for BoolType {
-    fn gen(_: i32) -> bool {
-        thread_rng().gen::<bool>()
-    }
+	fn gen(_: i32) -> bool {
+		thread_rng().gen::<bool>()
+	}
 }
 
 impl RandGen<Int32Type> for Int32Type {
-    fn gen(_: i32) -> i32 {
-        thread_rng().gen::<i32>()
-    }
+	fn gen(_: i32) -> i32 {
+		thread_rng().gen::<i32>()
+	}
 }
 
 impl RandGen<Int64Type> for Int64Type {
-    fn gen(_: i32) -> i64 {
-        thread_rng().gen::<i64>()
-    }
+	fn gen(_: i32) -> i64 {
+		thread_rng().gen::<i64>()
+	}
 }
 
 impl RandGen<Int96Type> for Int96Type {
-    fn gen(_: i32) -> Int96 {
-        let mut rng = thread_rng();
-        Int96::new(rng.gen::<u32>(), rng.gen::<u32>(), rng.gen::<u32>())
-    }
+	fn gen(_: i32) -> Int96 {
+		let mut rng = thread_rng();
+		Int96::new(rng.gen::<u32>(), rng.gen::<u32>(), rng.gen::<u32>())
+	}
 }
 
 impl RandGen<FloatType> for FloatType {
-    fn gen(_: i32) -> f32 {
-        thread_rng().gen::<f32>()
-    }
+	fn gen(_: i32) -> f32 {
+		thread_rng().gen::<f32>()
+	}
 }
 
 impl RandGen<DoubleType> for DoubleType {
-    fn gen(_: i32) -> f64 {
-        thread_rng().gen::<f64>()
-    }
+	fn gen(_: i32) -> f64 {
+		thread_rng().gen::<f64>()
+	}
 }
 
 impl RandGen<ByteArrayType> for ByteArrayType {
-    fn gen(_: i32) -> ByteArray {
-        let mut rng = thread_rng();
-        let mut value = vec![];
-        let len = rng.gen_range(0usize, 128);
-        for _ in 0..len {
-            value.push(rng.gen_range(0, 255) & 0xFF);
-        }
-        ByteArray::new(ByteBufferPtr::new(value))
-    }
+	fn gen(_: i32) -> ByteArray {
+		let mut rng = thread_rng();
+		let mut value = vec![];
+		let len = rng.gen_range(0usize, 128);
+		for _ in 0..len {
+			value.push(rng.gen_range(0, 255) & 0xFF);
+		}
+		ByteArray::new(ByteBufferPtr::new(value))
+	}
 }
 
 impl RandGen<FixedLenByteArrayType> for FixedLenByteArrayType {
-    fn gen(len: i32) -> ByteArray {
-        let mut rng = thread_rng();
-        let value_len = if len < 0 {
-            rng.gen_range(0usize, 128)
-        } else {
-            len as usize
-        };
-        let value = random_bytes(value_len);
-        ByteArray::from(value)
-    }
+	fn gen(len: i32) -> ByteArray {
+		let mut rng = thread_rng();
+		let value_len = if len < 0 {
+			rng.gen_range(0usize, 128)
+		} else {
+			len as usize
+		};
+		let value = random_bytes(value_len);
+		ByteArray::from(value)
+	}
 }
 
 pub fn random_bytes(n: usize) -> Vec<u8> {
-    let mut result = vec![];
-    let mut rng = thread_rng();
-    for _ in 0..n {
-        result.push(rng.gen_range(0, 255) & 0xFF);
-    }
-    result
+	let mut result = vec![];
+	let mut rng = thread_rng();
+	for _ in 0..n {
+		result.push(rng.gen_range(0, 255) & 0xFF);
+	}
+	result
 }
 
 pub fn random_bools(n: usize) -> Vec<bool> {
-    let mut result = vec![];
-    let mut rng = thread_rng();
-    for _ in 0..n {
-        result.push(rng.gen::<bool>());
-    }
-    result
+	let mut result = vec![];
+	let mut rng = thread_rng();
+	for _ in 0..n {
+		result.push(rng.gen::<bool>());
+	}
+	result
 }
 
 pub fn random_numbers<T>(n: usize) -> Vec<T>
 where
-    Standard: Distribution<T>,
+	Standard: Distribution<T>,
 {
-    let mut rng = thread_rng();
-    Standard.sample_iter(&mut rng).take(n).collect()
+	let mut rng = thread_rng();
+	Standard.sample_iter(&mut rng).take(n).collect()
 }
 
 pub fn random_numbers_range<T>(n: usize, low: T, high: T, result: &mut Vec<T>)
 where
-    T: PartialOrd + SampleUniform + Copy,
+	T: PartialOrd + SampleUniform + Copy,
 {
-    let mut rng = thread_rng();
-    for _ in 0..n {
-        result.push(rng.gen_range(low, high));
-    }
+	let mut rng = thread_rng();
+	for _ in 0..n {
+		result.push(rng.gen_range(low, high));
+	}
 }

@@ -63,15 +63,11 @@ mod triplet;
 pub mod types;
 
 use std::{
-    collections::HashMap,
-    fmt::{self, Debug},
+	collections::HashMap, fmt::{self, Debug}
 };
 
 use crate::{
-    basic::Repetition,
-    column::reader::ColumnReader,
-    errors::Result,
-    schema::types::{ColumnPath, Type},
+	basic::Repetition, column::reader::ColumnReader, errors::Result, schema::types::{ColumnPath, Type}
 };
 
 #[doc(inline)]
@@ -80,13 +76,13 @@ pub use reader::RowIter;
 pub use schemas::RootSchema;
 #[doc(hidden)]
 pub mod _private {
-    /// This is used by `#[derive(Record)]`
-    pub use super::display::DisplaySchemaGroup;
+	/// This is used by `#[derive(Record)]`
+	pub use super::display::DisplaySchemaGroup;
 }
 mod predicate {
-    /// This is for forward compatibility when Predicate pushdown and dynamic schemas are
-    /// implemented.
-    pub struct Predicate;
+	/// This is for forward compatibility when Predicate pushdown and dynamic schemas are
+	/// implemented.
+	pub struct Predicate;
 }
 pub(crate) use self::predicate::Predicate;
 
@@ -170,55 +166,45 @@ pub(crate) use self::predicate::Predicate;
 /// }
 /// ```
 pub trait Record: Sized {
-    type Schema: Schema;
-    type Reader: Reader<Item = Self>;
+	type Schema: Schema;
+	type Reader: Reader<Item = Self>;
 
-    /// Parse a [`Type`] into `Self::Schema`, using `repetition` instead of
-    /// `Type::get_basic_info().repetition()`. A `repetition` of `None` denotes a root
-    /// schema.
-    fn parse(
-        schema: &Type,
-        repetition: Option<Repetition>,
-    ) -> Result<(String, Self::Schema)>;
+	/// Parse a [`Type`] into `Self::Schema`, using `repetition` instead of
+	/// `Type::get_basic_info().repetition()`. A `repetition` of `None` denotes a root
+	/// schema.
+	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)>;
 
-    /// Builds tree of [`Reader`]s for the specified [`Schema`] recursively.
-    fn reader(
-        schema: &Self::Schema,
-        path: &mut Vec<String>,
-        def_level: i16,
-        rep_level: i16,
-        paths: &mut HashMap<ColumnPath, ColumnReader>,
-        batch_size: usize,
-    ) -> Self::Reader;
+	/// Builds tree of [`Reader`]s for the specified [`Schema`] recursively.
+	fn reader(
+		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
+		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
+	) -> Self::Reader;
 }
 
 /// This trait is implemented by Schemas so that they can be printed as Parquet schema
 /// strings.
 pub trait Schema: Debug {
-    fn fmt(
-        self_: Option<&Self>,
-        r: Option<Repetition>,
-        name: Option<&str>,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result;
+	fn fmt(
+		self_: Option<&Self>, r: Option<Repetition>, name: Option<&str>, f: &mut fmt::Formatter,
+	) -> fmt::Result;
 }
 
 /// This trait is implemented by Readers so the values of one or more columns can be read
 /// while taking into account the definition and repetition levels for optional and
 /// repeated values.
 pub trait Reader {
-    /// Type returned by the Reader.
-    type Item;
+	/// Type returned by the Reader.
+	type Item;
 
-    /// Read a value.
-    fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item>;
-    /// Advance the columns; this is used instead of `read` for optional values when
-    /// `current_def_level <= max_def_level`.
-    fn advance_columns(&mut self) -> Result<()>;
-    /// Check if there's another value readable.
-    fn has_next(&self) -> bool;
-    /// Get the current definition level.
-    fn current_def_level(&self) -> i16;
-    /// Get the current repetition level.
-    fn current_rep_level(&self) -> i16;
+	/// Read a value.
+	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item>;
+	/// Advance the columns; this is used instead of `read` for optional values when
+	/// `current_def_level <= max_def_level`.
+	fn advance_columns(&mut self) -> Result<()>;
+	/// Check if there's another value readable.
+	fn has_next(&self) -> bool;
+	/// Get the current definition level.
+	fn current_def_level(&self) -> i16;
+	/// Get the current repetition level.
+	fn current_rep_level(&self) -> i16;
 }

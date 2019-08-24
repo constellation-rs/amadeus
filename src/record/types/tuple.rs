@@ -18,22 +18,13 @@
 //! Implement [`Record`] for tuples up to length 32.
 
 use std::{
-    collections::HashMap,
-    fmt::{self, Debug},
+	collections::HashMap, fmt::{self, Debug}
 };
 
 use crate::{
-    basic::Repetition,
-    column::reader::ColumnReader,
-    errors::{ParquetError, Result},
-    record::{
-        display::DisplaySchemaGroup,
-        reader::TupleReader,
-        schemas::{TupleSchema, ValueSchema},
-        types::{group::Group, Downcast, Value},
-        Reader, Record, Schema,
-    },
-    schema::types::{ColumnPath, Type},
+	basic::Repetition, column::reader::ColumnReader, errors::{ParquetError, Result}, record::{
+		display::DisplaySchemaGroup, reader::TupleReader, schemas::{TupleSchema, ValueSchema}, types::{group::Group, Downcast, Value}, Reader, Record, Schema
+	}, schema::types::{ColumnPath, Type}
 };
 
 /// Macro to implement [`Reader`] on tuples up to length 32.

@@ -19,47 +19,47 @@ use std::{env, fs, io::Write, path::PathBuf, str::FromStr};
 
 /// Returns path to the test parquet file in 'data' directory
 pub fn get_test_path(file_name: &str) -> PathBuf {
-    let mut pathbuf = match env::var("PARQUET_TEST_DATA") {
-        Ok(path) => PathBuf::from_str(path.as_str()).unwrap(),
-        Err(_) => {
-            let mut pathbuf = env::current_dir().unwrap();
-            pathbuf.push(PathBuf::from_str("amadeus-testing/data").unwrap());
-            pathbuf
-        }
-    };
-    pathbuf.push(file_name);
-    pathbuf
+	let mut pathbuf = match env::var("PARQUET_TEST_DATA") {
+		Ok(path) => PathBuf::from_str(path.as_str()).unwrap(),
+		Err(_) => {
+			let mut pathbuf = env::current_dir().unwrap();
+			pathbuf.push(PathBuf::from_str("amadeus-testing/data").unwrap());
+			pathbuf
+		}
+	};
+	pathbuf.push(file_name);
+	pathbuf
 }
 
 /// Returns file handle for a test parquet file from 'data' directory
 pub fn get_test_file(file_name: &str) -> fs::File {
-    let file = fs::File::open(get_test_path(file_name).as_path());
-    if file.is_err() {
-        panic!("Test file {} not found", file_name)
-    }
-    file.unwrap()
+	let file = fs::File::open(get_test_path(file_name).as_path());
+	if file.is_err() {
+		panic!("Test file {} not found", file_name)
+	}
+	file.unwrap()
 }
 
 /// Returns file handle for a temp file in 'target' directory with a provided content
 pub fn get_temp_file(file_name: &str, content: &[u8]) -> fs::File {
-    // build tmp path to a file in "target/debug/testdata"
-    let mut path_buf = env::current_dir().unwrap();
-    path_buf.push("target");
-    path_buf.push("debug");
-    path_buf.push("testdata");
-    fs::create_dir_all(&path_buf).unwrap();
-    path_buf.push(file_name);
+	// build tmp path to a file in "target/debug/testdata"
+	let mut path_buf = env::current_dir().unwrap();
+	path_buf.push("target");
+	path_buf.push("debug");
+	path_buf.push("testdata");
+	fs::create_dir_all(&path_buf).unwrap();
+	path_buf.push(file_name);
 
-    // write file content
-    let mut tmp_file = fs::File::create(path_buf.as_path()).unwrap();
-    tmp_file.write_all(content).unwrap();
-    tmp_file.sync_all().unwrap();
+	// write file content
+	let mut tmp_file = fs::File::create(path_buf.as_path()).unwrap();
+	tmp_file.write_all(content).unwrap();
+	tmp_file.sync_all().unwrap();
 
-    // return file handle for both read and write
-    let file = fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(path_buf.as_path());
-    assert!(file.is_ok());
-    file.unwrap()
+	// return file handle for both read and write
+	let file = fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.open(path_buf.as_path());
+	assert!(file.is_ok());
+	file.unwrap()
 }

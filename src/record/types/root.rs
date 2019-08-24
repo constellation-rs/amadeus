@@ -22,14 +22,9 @@ use std::{collections::HashMap, marker::PhantomData};
 #[cfg(debug_assertions)]
 use crate::schema::parser::parse_message_type;
 use crate::{
-    basic::Repetition,
-    column::reader::ColumnReader,
-    errors::{ParquetError, Result},
-    record::{
-        display::DisplayFmt, reader::RootReader, schemas::RootSchema, types::Value,
-        Record, Schema,
-    },
-    schema::types::{ColumnPath, Type},
+	basic::Repetition, column::reader::ColumnReader, errors::{ParquetError, Result}, record::{
+		display::DisplayFmt, reader::RootReader, schemas::RootSchema, types::Value, Record, Schema
+	}, schema::types::{ColumnPath, Type}
 };
 
 /// `Root<T>` corresponds to the root of the schema, i.e. what is marked as "message" in a
@@ -39,18 +34,15 @@ pub struct Root<T>(pub T);
 
 impl<T> Record for Root<T>
 where
-    T: Record,
+	T: Record,
 {
-    type Schema = RootSchema<T>;
-    type Reader = RootReader<T::Reader>;
+	type Schema = RootSchema<T>;
+	type Reader = RootReader<T::Reader>;
 
-    fn parse(
-        schema: &Type,
-        repetition: Option<Repetition>,
-    ) -> Result<(String, Self::Schema)> {
-        assert!(repetition.is_none());
-        if schema.is_schema() {
-            T::parse(schema, Some(Repetition::Required))
+	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+		assert!(repetition.is_none());
+		if schema.is_schema() {
+			T::parse(schema, Some(Repetition::Required))
                 .map(|(name, schema_)| (String::from(""), RootSchema(name, schema_, PhantomData)))
                 .map_err(|err| {
                     let actual_schema = Value::parse(schema, Some(Repetition::Required))
@@ -89,24 +81,20 @@ where
                 }
                 (name, schema_)
             })
-        } else {
-            Err(ParquetError::General(format!(
-                "Not a valid root schema {:?}",
-                schema
-            )))
-        }
-    }
+		} else {
+			Err(ParquetError::General(format!(
+				"Not a valid root schema {:?}",
+				schema
+			)))
+		}
+	}
 
-    fn reader(
-        schema: &Self::Schema,
-        path: &mut Vec<String>,
-        def_level: i16,
-        rep_level: i16,
-        paths: &mut HashMap<ColumnPath, ColumnReader>,
-        batch_size: usize,
-    ) -> Self::Reader {
-        RootReader(T::reader(
-            &schema.1, path, def_level, rep_level, paths, batch_size,
-        ))
-    }
+	fn reader(
+		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
+		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
+	) -> Self::Reader {
+		RootReader(T::reader(
+			&schema.1, path, def_level, rep_level, paths, batch_size,
+		))
+	}
 }

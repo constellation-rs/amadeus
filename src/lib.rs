@@ -30,10 +30,10 @@
 	unused_import_braces,
 	unused_qualifications,
 	unused_results,
-	clippy::pedantic
+	// clippy::pedantic
 )]
 // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
-#![allow(dead_code)]
+#![allow(dead_code, clippy::all)]
 
 #[macro_use]
 pub mod errors;
@@ -42,8 +42,7 @@ pub mod data_type;
 
 // Exported for external use, such as benchmarks
 pub use self::{
-    encodings::{decoding, encoding},
-    util::memory,
+	encodings::{decoding, encoding}, util::memory
 };
 
 #[macro_use]

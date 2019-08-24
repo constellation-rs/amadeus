@@ -19,117 +19,115 @@
 //! representations.
 
 use std::{
-    fmt::{self, Debug, Display},
-    mem, slice,
+	fmt::{self, Debug, Display}, mem, slice
 };
 
 use byteorder::{BigEndian, ByteOrder};
 use num_bigint::{BigInt, Sign};
 
 use crate::{
-    basic::Type,
-    util::memory::{ByteBuffer, ByteBufferPtr},
+	basic::Type, util::memory::{ByteBuffer, ByteBufferPtr}
 };
 
 /// Rust representation for logical type INT96, value is backed by an array of `u32`.
 /// The type only takes 12 bytes, without extra padding.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
 pub struct Int96 {
-    value: [u32; 3],
+	value: [u32; 3],
 }
 
 impl Int96 {
-    /// Creates new INT96 type struct.
-    pub fn new(elem0: u32, elem1: u32, elem2: u32) -> Self {
-        Self {
-            value: [elem0, elem1, elem2],
-        }
-    }
+	/// Creates new INT96 type struct.
+	pub fn new(elem0: u32, elem1: u32, elem2: u32) -> Self {
+		Self {
+			value: [elem0, elem1, elem2],
+		}
+	}
 
-    /// Returns underlying data as slice of [`u32`].
-    pub fn data(&self) -> &[u32] {
-        &self.value
-    }
+	/// Returns underlying data as slice of [`u32`].
+	pub fn data(&self) -> &[u32] {
+		&self.value
+	}
 }
 
 /// Rust representation for BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY Parquet physical types.
 /// Value is backed by a byte buffer.
 #[derive(Clone, Debug)]
 pub struct ByteArray {
-    data: ByteBufferPtr,
+	data: ByteBufferPtr,
 }
 
 impl ByteArray {
-    /// Creates new byte array from byte buffer.
-    pub fn new(data: ByteBufferPtr) -> Self {
-        ByteArray { data }
-    }
+	/// Creates new byte array from byte buffer.
+	pub fn new(data: ByteBufferPtr) -> Self {
+		ByteArray { data }
+	}
 
-    /// Gets length of the underlying byte buffer.
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
+	/// Gets length of the underlying byte buffer.
+	pub fn len(&self) -> usize {
+		self.data.len()
+	}
 
-    /// Returns slice of data.
-    pub fn data(&self) -> &[u8] {
-        self.data.as_ref()
-    }
+	/// Returns slice of data.
+	pub fn data(&self) -> &[u8] {
+		self.data.as_ref()
+	}
 
-    /// Return the inner Vec<T>, if there is exactly one reference to it.
-    pub fn try_unwrap(self) -> Result<Vec<u8>, Self> {
-        self.data.try_unwrap().map_err(|data| Self { data })
-    }
+	/// Return the inner Vec<T>, if there is exactly one reference to it.
+	pub fn try_unwrap(self) -> Result<Vec<u8>, Self> {
+		self.data.try_unwrap().map_err(|data| Self { data })
+	}
 
-    /// Returns `ByteArray` instance with slice of values for a data.
-    pub fn slice(&self, start: usize, len: usize) -> Self {
-        Self::from(self.data.range(start, len))
-    }
+	/// Returns `ByteArray` instance with slice of values for a data.
+	pub fn slice(&self, start: usize, len: usize) -> Self {
+		Self::from(self.data.range(start, len))
+	}
 }
 
 impl From<Vec<u8>> for ByteArray {
-    fn from(buf: Vec<u8>) -> ByteArray {
-        Self {
-            data: ByteBufferPtr::new(buf),
-        }
-    }
+	fn from(buf: Vec<u8>) -> ByteArray {
+		Self {
+			data: ByteBufferPtr::new(buf),
+		}
+	}
 }
 
 impl<'a> From<&'a str> for ByteArray {
-    fn from(s: &'a str) -> ByteArray {
-        let mut v = Vec::new();
-        v.extend_from_slice(s.as_bytes());
-        Self {
-            data: ByteBufferPtr::new(v),
-        }
-    }
+	fn from(s: &'a str) -> ByteArray {
+		let mut v = Vec::new();
+		v.extend_from_slice(s.as_bytes());
+		Self {
+			data: ByteBufferPtr::new(v),
+		}
+	}
 }
 
 impl From<ByteBufferPtr> for ByteArray {
-    fn from(ptr: ByteBufferPtr) -> ByteArray {
-        Self { data: ptr }
-    }
+	fn from(ptr: ByteBufferPtr) -> ByteArray {
+		Self { data: ptr }
+	}
 }
 
 impl From<ByteBuffer> for ByteArray {
-    fn from(mut buf: ByteBuffer) -> ByteArray {
-        Self {
-            data: buf.consume(),
-        }
-    }
+	fn from(mut buf: ByteBuffer) -> ByteArray {
+		Self {
+			data: buf.consume(),
+		}
+	}
 }
 
 impl Default for ByteArray {
-    fn default() -> Self {
-        ByteArray {
-            data: ByteBufferPtr::new(vec![]),
-        }
-    }
+	fn default() -> Self {
+		ByteArray {
+			data: ByteBufferPtr::new(vec![]),
+		}
+	}
 }
 
 impl PartialEq for ByteArray {
-    fn eq(&self, other: &ByteArray) -> bool {
-        self.data.as_ref() == other.data.as_ref()
-    }
+	fn eq(&self, other: &ByteArray) -> bool {
+		self.data.as_ref() == other.data.as_ref()
+	}
 }
 
 /// Rust representation for Decimal values.
@@ -139,151 +137,151 @@ impl PartialEq for ByteArray {
 /// unscaled value in bytes, precision and scale.
 #[derive(Clone, Debug)]
 pub enum Decimal {
-    /// Decimal backed by `i32`.
-    Int32 {
-        value: [u8; 4],
-        precision: i32,
-        scale: i32,
-    },
-    /// Decimal backed by `i64`.
-    Int64 {
-        value: [u8; 8],
-        precision: i32,
-        scale: i32,
-    },
-    /// Decimal backed by byte array.
-    Bytes {
-        value: ByteArray,
-        precision: i32,
-        scale: i32,
-    },
+	/// Decimal backed by `i32`.
+	Int32 {
+		value: [u8; 4],
+		precision: i32,
+		scale: i32,
+	},
+	/// Decimal backed by `i64`.
+	Int64 {
+		value: [u8; 8],
+		precision: i32,
+		scale: i32,
+	},
+	/// Decimal backed by byte array.
+	Bytes {
+		value: ByteArray,
+		precision: i32,
+		scale: i32,
+	},
 }
 
 impl Decimal {
-    /// Creates new decimal value from `i32`.
-    pub fn from_i32(value: i32, precision: i32, scale: i32) -> Self {
-        let mut bytes = [0; 4];
-        BigEndian::write_i32(&mut bytes, value);
-        Decimal::Int32 {
-            value: bytes,
-            precision,
-            scale,
-        }
-    }
+	/// Creates new decimal value from `i32`.
+	pub fn from_i32(value: i32, precision: i32, scale: i32) -> Self {
+		let mut bytes = [0; 4];
+		BigEndian::write_i32(&mut bytes, value);
+		Decimal::Int32 {
+			value: bytes,
+			precision,
+			scale,
+		}
+	}
 
-    /// Creates new decimal value from `i64`.
-    pub fn from_i64(value: i64, precision: i32, scale: i32) -> Self {
-        let mut bytes = [0; 8];
-        BigEndian::write_i64(&mut bytes, value);
-        Decimal::Int64 {
-            value: bytes,
-            precision,
-            scale,
-        }
-    }
+	/// Creates new decimal value from `i64`.
+	pub fn from_i64(value: i64, precision: i32, scale: i32) -> Self {
+		let mut bytes = [0; 8];
+		BigEndian::write_i64(&mut bytes, value);
+		Decimal::Int64 {
+			value: bytes,
+			precision,
+			scale,
+		}
+	}
 
-    /// Creates new decimal value from `ByteArray`.
-    pub fn from_bytes(value: ByteArray, precision: i32, scale: i32) -> Self {
-        Decimal::Bytes {
-            value,
-            precision,
-            scale,
-        }
-    }
+	/// Creates new decimal value from `ByteArray`.
+	pub fn from_bytes(value: ByteArray, precision: i32, scale: i32) -> Self {
+		Decimal::Bytes {
+			value,
+			precision,
+			scale,
+		}
+	}
 
-    /// Returns bytes of unscaled value.
-    pub fn data(&self) -> &[u8] {
-        match *self {
-            Decimal::Int32 { ref value, .. } => value,
-            Decimal::Int64 { ref value, .. } => value,
-            Decimal::Bytes { ref value, .. } => value.data(),
-        }
-    }
+	/// Returns bytes of unscaled value.
+	pub fn data(&self) -> &[u8] {
+		match *self {
+			Decimal::Int32 { ref value, .. } => value,
+			Decimal::Int64 { ref value, .. } => value,
+			Decimal::Bytes { ref value, .. } => value.data(),
+		}
+	}
 
-    /// Returns decimal precision.
-    pub fn precision(&self) -> i32 {
-        match *self {
-            Decimal::Int32 { precision, .. } => precision,
-            Decimal::Int64 { precision, .. } => precision,
-            Decimal::Bytes { precision, .. } => precision,
-        }
-    }
+	/// Returns decimal precision.
+	pub fn precision(&self) -> i32 {
+		match *self {
+			Decimal::Int32 { precision, .. } => precision,
+			Decimal::Int64 { precision, .. } => precision,
+			Decimal::Bytes { precision, .. } => precision,
+		}
+	}
 
-    /// Returns decimal scale.
-    pub fn scale(&self) -> i32 {
-        match *self {
-            Decimal::Int32 { scale, .. } => scale,
-            Decimal::Int64 { scale, .. } => scale,
-            Decimal::Bytes { scale, .. } => scale,
-        }
-    }
+	/// Returns decimal scale.
+	pub fn scale(&self) -> i32 {
+		match *self {
+			Decimal::Int32 { scale, .. } => scale,
+			Decimal::Int64 { scale, .. } => scale,
+			Decimal::Bytes { scale, .. } => scale,
+		}
+	}
 }
 
 impl Display for Decimal {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // We assert that `scale >= 0` and `precision > scale`, but this will be enforced
-        // when constructing Parquet schema.
-        assert!(self.scale() >= 0 && self.precision() > self.scale());
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// We assert that `scale >= 0` and `precision > scale`, but this will be enforced
+		// when constructing Parquet schema.
+		assert!(self.scale() >= 0 && self.precision() > self.scale());
 
-        // Specify as signed bytes to resolve sign as part of conversion.
-        let num = BigInt::from_signed_bytes_be(self.data());
+		// Specify as signed bytes to resolve sign as part of conversion.
+		let num = BigInt::from_signed_bytes_be(self.data());
 
-        // Offset of the first digit in a string.
-        let negative = if num.sign() == Sign::Minus { 1 } else { 0 };
-        let mut num_str = num.to_string();
-        let mut point = num_str.len() as i32 - self.scale() - negative;
+		// Offset of the first digit in a string.
+		let negative = if num.sign() == Sign::Minus { 1 } else { 0 };
+		let mut num_str = num.to_string();
+		let mut point = num_str.len() as i32 - self.scale() - negative;
 
-        // Convert to string form without scientific notation.
-        if point <= 0 {
-            // Zeros need to be prepended to the unscaled value.
-            while point < 0 {
-                num_str.insert(negative as usize, '0');
-                point += 1;
-            }
-            num_str.insert_str(negative as usize, "0.");
-        } else {
-            // No zeroes need to be prepended to the unscaled value, simply insert decimal
-            // point.
-            num_str.insert((point + negative) as usize, '.');
-        }
+		// Convert to string form without scientific notation.
+		if point <= 0 {
+			// Zeros need to be prepended to the unscaled value.
+			while point < 0 {
+				num_str.insert(negative as usize, '0');
+				point += 1;
+			}
+			num_str.insert_str(negative as usize, "0.");
+		} else {
+			// No zeroes need to be prepended to the unscaled value, simply insert decimal
+			// point.
+			num_str.insert((point + negative) as usize, '.');
+		}
 
-        Display::fmt(&num_str, f)
-    }
+		Display::fmt(&num_str, f)
+	}
 }
 
 impl Default for Decimal {
-    fn default() -> Self {
-        Self::from_i32(0, 0, 0)
-    }
+	fn default() -> Self {
+		Self::from_i32(0, 0, 0)
+	}
 }
 
 impl PartialEq for Decimal {
-    fn eq(&self, other: &Decimal) -> bool {
-        self.precision() == other.precision()
-            && self.scale() == other.scale()
-            && self.data() == other.data()
-    }
+	fn eq(&self, other: &Decimal) -> bool {
+		self.precision() == other.precision()
+			&& self.scale() == other.scale()
+			&& self.data() == other.data()
+	}
 }
 
 /// Converts an instance of data type to a slice of bytes as `u8`.
 pub trait AsBytes {
-    /// Returns slice of bytes for this data type.
-    fn as_bytes(&self) -> &[u8];
+	/// Returns slice of bytes for this data type.
+	fn as_bytes(&self) -> &[u8];
 }
 
 macro_rules! gen_as_bytes {
-    ($source_ty:ident) => {
-        impl AsBytes for $source_ty {
-            fn as_bytes(&self) -> &[u8] {
-                unsafe {
-                    slice::from_raw_parts(
-                        self as *const $source_ty as *const u8,
-                        mem::size_of::<$source_ty>(),
-                    )
-                }
-            }
-        }
-    };
+	($source_ty:ident) => {
+		impl AsBytes for $source_ty {
+			fn as_bytes(&self) -> &[u8] {
+				unsafe {
+					slice::from_raw_parts(
+						self as *const $source_ty as *const u8,
+						mem::size_of::<$source_ty>(),
+					)
+				}
+			}
+		}
+	};
 }
 
 gen_as_bytes!(bool);
@@ -295,64 +293,62 @@ gen_as_bytes!(f32);
 gen_as_bytes!(f64);
 
 impl AsBytes for Int96 {
-    fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            ::std::slice::from_raw_parts(self.data() as *const [u32] as *const u8, 12)
-        }
-    }
+	fn as_bytes(&self) -> &[u8] {
+		unsafe { ::std::slice::from_raw_parts(self.data() as *const [u32] as *const u8, 12) }
+	}
 }
 
 impl AsBytes for ByteArray {
-    fn as_bytes(&self) -> &[u8] {
-        self.data()
-    }
+	fn as_bytes(&self) -> &[u8] {
+		self.data()
+	}
 }
 
 impl AsBytes for Decimal {
-    fn as_bytes(&self) -> &[u8] {
-        self.data()
-    }
+	fn as_bytes(&self) -> &[u8] {
+		self.data()
+	}
 }
 
 impl AsBytes for Vec<u8> {
-    fn as_bytes(&self) -> &[u8] {
-        self.as_slice()
-    }
+	fn as_bytes(&self) -> &[u8] {
+		self.as_slice()
+	}
 }
 
 impl<'a> AsBytes for &'a str {
-    fn as_bytes(&self) -> &[u8] {
-        (self as &str).as_bytes()
-    }
+	fn as_bytes(&self) -> &[u8] {
+		(self as &str).as_bytes()
+	}
 }
 
 impl AsBytes for str {
-    fn as_bytes(&self) -> &[u8] {
-        (self as &str).as_bytes()
-    }
+	fn as_bytes(&self) -> &[u8] {
+		(self as &str).as_bytes()
+	}
 }
 
 /// Contains the Parquet physical type information as well as the Rust primitive type
 /// presentation.
 pub trait DataType: 'static {
-    type Type: PartialEq + Debug + Default + Clone + AsBytes;
+	type Type: PartialEq + Debug + Default + Clone + AsBytes;
 
-    /// Returns Parquet physical type.
-    fn get_physical_type() -> Type;
+	/// Returns Parquet physical type.
+	fn get_physical_type() -> Type;
 }
 
 macro_rules! make_type {
-    ($name:ident, $physical_ty:path, $native_ty:ty) => {
-        pub struct $name {}
+	($name:ident, $physical_ty:path, $native_ty:ty) => {
+		pub struct $name {}
 
-        impl DataType for $name {
-            type Type = $native_ty;
+		impl DataType for $name {
+			type Type = $native_ty;
 
-            fn get_physical_type() -> Type {
-                $physical_ty
-            }
-        }
-    };
+			fn get_physical_type() -> Type {
+				$physical_ty
+			}
+		}
+	};
 }
 
 // Generate struct definitions for all physical types
@@ -368,118 +364,118 @@ make_type!(FixedLenByteArrayType, Type::FixedLenByteArray, ByteArray);
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 
-    #[test]
-    fn test_as_bytes() {
-        assert_eq!(false.as_bytes(), &[0]);
-        assert_eq!(true.as_bytes(), &[1]);
-        assert_eq!((7 as i32).as_bytes(), &[7, 0, 0, 0]);
-        assert_eq!((555 as i32).as_bytes(), &[43, 2, 0, 0]);
-        assert_eq!((555 as u32).as_bytes(), &[43, 2, 0, 0]);
-        assert_eq!(i32::max_value().as_bytes(), &[255, 255, 255, 127]);
-        assert_eq!(i32::min_value().as_bytes(), &[0, 0, 0, 128]);
-        assert_eq!((7 as i64).as_bytes(), &[7, 0, 0, 0, 0, 0, 0, 0]);
-        assert_eq!((555 as i64).as_bytes(), &[43, 2, 0, 0, 0, 0, 0, 0]);
-        assert_eq!(
-            (i64::max_value()).as_bytes(),
-            &[255, 255, 255, 255, 255, 255, 255, 127]
-        );
-        assert_eq!((i64::min_value()).as_bytes(), &[0, 0, 0, 0, 0, 0, 0, 128]);
-        assert_eq!((3.14 as f32).as_bytes(), &[195, 245, 72, 64]);
-        assert_eq!(
-            (3.14 as f64).as_bytes(),
-            &[31, 133, 235, 81, 184, 30, 9, 64]
-        );
-        assert_eq!("hello".as_bytes(), &[b'h', b'e', b'l', b'l', b'o']);
-        assert_eq!(
-            Vec::from("hello".as_bytes()).as_bytes(),
-            &[b'h', b'e', b'l', b'l', b'o']
-        );
+	#[test]
+	fn test_as_bytes() {
+		assert_eq!(false.as_bytes(), &[0]);
+		assert_eq!(true.as_bytes(), &[1]);
+		assert_eq!((7 as i32).as_bytes(), &[7, 0, 0, 0]);
+		assert_eq!((555 as i32).as_bytes(), &[43, 2, 0, 0]);
+		assert_eq!((555 as u32).as_bytes(), &[43, 2, 0, 0]);
+		assert_eq!(i32::max_value().as_bytes(), &[255, 255, 255, 127]);
+		assert_eq!(i32::min_value().as_bytes(), &[0, 0, 0, 128]);
+		assert_eq!((7 as i64).as_bytes(), &[7, 0, 0, 0, 0, 0, 0, 0]);
+		assert_eq!((555 as i64).as_bytes(), &[43, 2, 0, 0, 0, 0, 0, 0]);
+		assert_eq!(
+			(i64::max_value()).as_bytes(),
+			&[255, 255, 255, 255, 255, 255, 255, 127]
+		);
+		assert_eq!((i64::min_value()).as_bytes(), &[0, 0, 0, 0, 0, 0, 0, 128]);
+		assert_eq!((3.14 as f32).as_bytes(), &[195, 245, 72, 64]);
+		assert_eq!(
+			(3.14 as f64).as_bytes(),
+			&[31, 133, 235, 81, 184, 30, 9, 64]
+		);
+		assert_eq!("hello".as_bytes(), &[b'h', b'e', b'l', b'l', b'o']);
+		assert_eq!(
+			Vec::from("hello".as_bytes()).as_bytes(),
+			&[b'h', b'e', b'l', b'l', b'o']
+		);
 
-        // Test Int96
-        let i96 = Int96::new(1, 2, 3);
-        assert_eq!(i96.as_bytes(), &[1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]);
+		// Test Int96
+		let i96 = Int96::new(1, 2, 3);
+		assert_eq!(i96.as_bytes(), &[1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]);
 
-        // Test ByteArray
-        let ba = ByteArray::from(vec![1, 2, 3]);
-        assert_eq!(ba.as_bytes(), &[1, 2, 3]);
+		// Test ByteArray
+		let ba = ByteArray::from(vec![1, 2, 3]);
+		assert_eq!(ba.as_bytes(), &[1, 2, 3]);
 
-        // Test Decimal
-        let decimal = Decimal::from_i32(123, 5, 2);
-        assert_eq!(decimal.as_bytes(), &[0, 0, 0, 123]);
-        let decimal = Decimal::from_i64(123, 5, 2);
-        assert_eq!(decimal.as_bytes(), &[0, 0, 0, 0, 0, 0, 0, 123]);
-        let decimal = Decimal::from_bytes(ByteArray::from(vec![1, 2, 3]), 5, 2);
-        assert_eq!(decimal.as_bytes(), &[1, 2, 3]);
-    }
+		// Test Decimal
+		let decimal = Decimal::from_i32(123, 5, 2);
+		assert_eq!(decimal.as_bytes(), &[0, 0, 0, 123]);
+		let decimal = Decimal::from_i64(123, 5, 2);
+		assert_eq!(decimal.as_bytes(), &[0, 0, 0, 0, 0, 0, 0, 123]);
+		let decimal = Decimal::from_bytes(ByteArray::from(vec![1, 2, 3]), 5, 2);
+		assert_eq!(decimal.as_bytes(), &[1, 2, 3]);
+	}
 
-    #[test]
-    fn test_int96_from() {
-        assert_eq!(
-            Int96::new(1, 12345, 1234567890).data(),
-            &[1, 12345, 1234567890]
-        );
-    }
+	#[test]
+	fn test_int96_from() {
+		assert_eq!(
+			Int96::new(1, 12345, 1234567890).data(),
+			&[1, 12345, 1234567890]
+		);
+	}
 
-    #[test]
-    fn test_byte_array_from() {
-        assert_eq!(
-            ByteArray::from(vec![b'A', b'B', b'C']).data(),
-            &[b'A', b'B', b'C']
-        );
-        assert_eq!(ByteArray::from("ABC").data(), &[b'A', b'B', b'C']);
-        assert_eq!(
-            ByteArray::from(ByteBufferPtr::new(vec![1u8, 2u8, 3u8, 4u8, 5u8])).data(),
-            &[1u8, 2u8, 3u8, 4u8, 5u8]
-        );
-        let mut buf = ByteBuffer::new();
-        buf.set_data(vec![6u8, 7u8, 8u8, 9u8, 10u8]);
-        assert_eq!(ByteArray::from(buf).data(), &[6u8, 7u8, 8u8, 9u8, 10u8]);
-    }
+	#[test]
+	fn test_byte_array_from() {
+		assert_eq!(
+			ByteArray::from(vec![b'A', b'B', b'C']).data(),
+			&[b'A', b'B', b'C']
+		);
+		assert_eq!(ByteArray::from("ABC").data(), &[b'A', b'B', b'C']);
+		assert_eq!(
+			ByteArray::from(ByteBufferPtr::new(vec![1u8, 2u8, 3u8, 4u8, 5u8])).data(),
+			&[1u8, 2u8, 3u8, 4u8, 5u8]
+		);
+		let mut buf = ByteBuffer::new();
+		buf.set_data(vec![6u8, 7u8, 8u8, 9u8, 10u8]);
+		assert_eq!(ByteArray::from(buf).data(), &[6u8, 7u8, 8u8, 9u8, 10u8]);
+	}
 
-    #[test]
-    fn test_decimal_partial_eq() {
-        assert_eq!(Decimal::default(), Decimal::from_i32(0, 0, 0));
-        assert_eq!(Decimal::from_i32(222, 5, 2), Decimal::from_i32(222, 5, 2));
-        assert_eq!(
-            Decimal::from_bytes(ByteArray::from(vec![0, 0, 0, 3]), 5, 2),
-            Decimal::from_i32(3, 5, 2)
-        );
+	#[test]
+	fn test_decimal_partial_eq() {
+		assert_eq!(Decimal::default(), Decimal::from_i32(0, 0, 0));
+		assert_eq!(Decimal::from_i32(222, 5, 2), Decimal::from_i32(222, 5, 2));
+		assert_eq!(
+			Decimal::from_bytes(ByteArray::from(vec![0, 0, 0, 3]), 5, 2),
+			Decimal::from_i32(3, 5, 2)
+		);
 
-        assert!(Decimal::from_i32(222, 5, 2) != Decimal::from_i32(111, 5, 2));
-        assert!(Decimal::from_i32(222, 5, 2) != Decimal::from_i32(222, 6, 2));
-        assert!(Decimal::from_i32(222, 5, 2) != Decimal::from_i32(222, 5, 3));
+		assert!(Decimal::from_i32(222, 5, 2) != Decimal::from_i32(111, 5, 2));
+		assert!(Decimal::from_i32(222, 5, 2) != Decimal::from_i32(222, 6, 2));
+		assert!(Decimal::from_i32(222, 5, 2) != Decimal::from_i32(222, 5, 3));
 
-        assert!(Decimal::from_i64(222, 5, 2) != Decimal::from_i32(222, 5, 2));
-    }
+		assert!(Decimal::from_i64(222, 5, 2) != Decimal::from_i32(222, 5, 2));
+	}
 
-    #[test]
-    fn test_convert_decimal_to_string() {
-        // Helper method to compare decimal
-        fn check_decimal(bytes: Vec<u8>, precision: i32, scale: i32, res: &str) {
-            let decimal = Decimal::from_bytes(ByteArray::from(bytes), precision, scale);
-            assert_eq!(decimal.to_string(), res);
-        }
+	#[test]
+	fn test_convert_decimal_to_string() {
+		// Helper method to compare decimal
+		fn check_decimal(bytes: Vec<u8>, precision: i32, scale: i32, res: &str) {
+			let decimal = Decimal::from_bytes(ByteArray::from(bytes), precision, scale);
+			assert_eq!(decimal.to_string(), res);
+		}
 
-        // This example previously used to fail in some engines
-        check_decimal(
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
-            38,
-            18,
-            "1.000000000000000000",
-        );
-        check_decimal(
-            vec![
-                249, 233, 247, 16, 185, 192, 202, 223, 215, 165, 192, 166, 67, 72,
-            ],
-            36,
-            28,
-            "-12344.0242342304923409234234293432",
-        );
-        check_decimal(vec![0, 0, 0, 0, 0, 4, 147, 224], 17, 5, "3.00000");
-        check_decimal(vec![0, 0, 0, 0, 1, 201, 195, 140], 18, 2, "300000.12");
-        check_decimal(vec![207, 200], 10, 2, "-123.44");
-        check_decimal(vec![207, 200], 10, 8, "-0.00012344");
-    }
+		// This example previously used to fail in some engines
+		check_decimal(
+			vec![0, 0, 0, 0, 0, 0, 0, 0, 13, 224, 182, 179, 167, 100, 0, 0],
+			38,
+			18,
+			"1.000000000000000000",
+		);
+		check_decimal(
+			vec![
+				249, 233, 247, 16, 185, 192, 202, 223, 215, 165, 192, 166, 67, 72,
+			],
+			36,
+			28,
+			"-12344.0242342304923409234234293432",
+		);
+		check_decimal(vec![0, 0, 0, 0, 0, 4, 147, 224], 17, 5, "3.00000");
+		check_decimal(vec![0, 0, 0, 0, 1, 201, 195, 140], 18, 2, "300000.12");
+		check_decimal(vec![207, 200], 10, 2, "-123.44");
+		check_decimal(vec![207, 200], 10, 8, "-0.00012344");
+	}
 }

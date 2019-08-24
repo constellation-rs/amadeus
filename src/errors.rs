@@ -27,33 +27,33 @@ quick_error! {
   /// Set of errors that can be produced during different operations in Parquet.
   #[derive(Debug, PartialEq)]
   pub enum ParquetError {
-      /// General Parquet error.
-      /// Returned when code violates normal workflow of working with Parquet files.
-      General(message: String) {
-          display("Parquet error: {}", message)
-              description(message)
-              from(e: io::Error) -> (format!("underlying IO error: {}", e))
-              from(e: snap::Error) -> (format!("underlying snap error: {}", e))
-              from(e: thrift::Error) -> (format!("underlying Thrift error: {}", e))
-              from(e: cell::BorrowMutError) -> (format!("underlying borrow error: {}", e))
-      }
-      /// "Not yet implemented" Parquet error.
-      /// Returned when functionality is not yet available.
-      NYI(message: String) {
-          display("NYI: {}", message)
-              description(message)
-      }
-      /// "End of file" Parquet error.
-      /// Returned when IO related failures occur, e.g. when there are not enough bytes to
-      /// decode.
-      EOF(message: String) {
-          display("EOF: {}", message)
-              description(message)
-      }
-      IndexOutOfBound(index: usize, bound: usize) {
-          display("Index {} out of bound: {}", index, bound)
-              description("Index out of bound error")
-      }
+	  /// General Parquet error.
+	  /// Returned when code violates normal workflow of working with Parquet files.
+	  General(message: String) {
+		  display("Parquet error: {}", message)
+			  description(message)
+			  from(e: io::Error) -> (format!("underlying IO error: {}", e))
+			  from(e: snap::Error) -> (format!("underlying snap error: {}", e))
+			  from(e: thrift::Error) -> (format!("underlying Thrift error: {}", e))
+			  from(e: cell::BorrowMutError) -> (format!("underlying borrow error: {}", e))
+	  }
+	  /// "Not yet implemented" Parquet error.
+	  /// Returned when functionality is not yet available.
+	  NYI(message: String) {
+		  display("NYI: {}", message)
+			  description(message)
+	  }
+	  /// "End of file" Parquet error.
+	  /// Returned when IO related failures occur, e.g. when there are not enough bytes to
+	  /// decode.
+	  EOF(message: String) {
+		  display("EOF: {}", message)
+			  description(message)
+	  }
+	  IndexOutOfBound(index: usize, bound: usize) {
+		  display("Index {} out of bound: {}", index, bound)
+			  description("Index out of bound error")
+	  }
   }
 }
 
@@ -64,9 +64,9 @@ pub type Result<T> = result::Result<T, ParquetError>;
 // Conversion from `ParquetError` to other types of `Error`s
 
 impl From<ParquetError> for io::Error {
-    fn from(e: ParquetError) -> Self {
-        io::Error::new(io::ErrorKind::Other, e)
-    }
+	fn from(e: ParquetError) -> Self {
+		io::Error::new(io::ErrorKind::Other, e)
+	}
 }
 
 // ----------------------------------------------------------------------
