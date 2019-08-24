@@ -23,10 +23,8 @@ pub fn get_test_path(file_name: &str) -> PathBuf {
         Ok(path) => PathBuf::from_str(path.as_str()).unwrap(),
         Err(_) => {
             let mut pathbuf = env::current_dir().unwrap();
-            pathbuf.pop();
-            pathbuf.pop();
             pathbuf
-                .push(PathBuf::from_str("cpp/submodules/parquet-testing/data").unwrap());
+                .push(PathBuf::from_str("amadeus-testing/data").unwrap());
             pathbuf
         }
     };
