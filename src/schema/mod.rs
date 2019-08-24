@@ -20,7 +20,7 @@
 //! # Example
 //!
 //! ```rust
-//! use parquet::{
+//! use amadeus_parquet::{
 //!     basic::{LogicalType, Repetition, Type as PhysicalType},
 //!     schema::{parser, printer, types::Type},
 //! };

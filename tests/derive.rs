@@ -17,7 +17,7 @@
 
 use std::{collections::HashMap, env, fs, path::PathBuf, str::FromStr};
 
-use parquet::{
+use amadeus_parquet::{
     errors::ParquetError,
     file::reader::{FileReader, RowGroupReader, SerializedFileReader},
     record::{

@@ -21,7 +21,7 @@
 //! actual min and max values from statistics, see below:
 //!
 //! ```rust
-//! use parquet::file::statistics::Statistics;
+//! use amadeus_parquet::file::statistics::Statistics;
 //!
 //! let stats = Statistics::int32(Some(1), Some(10), None, 3, true);
 //! assert_eq!(stats.null_count(), 3);

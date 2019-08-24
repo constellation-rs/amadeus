@@ -547,7 +547,7 @@ impl ColumnPath {
 
     /// Returns string representation of this column path.
     /// ```rust
-    /// use parquet::schema::types::ColumnPath;
+    /// use amadeus_parquet::schema::types::ColumnPath;
     ///
     /// let path = ColumnPath::new(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
     /// assert_eq!(&path.string(), "a.b.c");

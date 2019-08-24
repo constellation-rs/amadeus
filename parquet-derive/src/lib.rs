@@ -37,7 +37,7 @@ use syn::{
 /// ## Example
 ///
 /// ```text
-/// use parquet::record::Record;
+/// use amadeus_parquet::record::Record;
 ///
 /// #[derive(Record, Debug)]
 /// struct MyRow {
@@ -190,8 +190,8 @@ fn impl_struct(
             #[allow(unknown_lints)]
             #[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
             #[allow(rust_2018_idioms)]
-            extern crate parquet;
-            pub use parquet::{
+            extern crate amadeus_parquet;
+            pub use amadeus_parquet::{
                 basic::Repetition,
                 column::reader::ColumnReader,
                 errors::{ParquetError, Result},

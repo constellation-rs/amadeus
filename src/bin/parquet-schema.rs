@@ -42,11 +42,9 @@
 //! flag that allows to print schema only, when set to `false` (default behaviour when
 //! not provided), or print full file metadata, when set to `true`.
 
-extern crate parquet;
-
 use std::{env, fs::File, path::Path, process};
 
-use parquet::{
+use amadeus_parquet::{
     file::reader::{FileReader, SerializedFileReader},
     schema::printer::{print_file_metadata, print_parquet_metadata},
 };

@@ -18,6 +18,8 @@
 use std::process::Command;
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+
     // Set Parquet version, build hash and "created by" string.
     let version = env!("CARGO_PKG_VERSION");
     let mut created_by = format!("parquet-rs version {}", version);

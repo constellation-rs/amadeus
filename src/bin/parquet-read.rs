@@ -45,11 +45,9 @@
 //! Note that `parquet-read` reads full file schema, no projection or filtering is
 //! applied.
 
-extern crate parquet;
-
 use std::{env, fs::File, path::Path, process};
 
-use parquet::{
+use amadeus_parquet::{
     file::reader::{FileReader, SerializedFileReader},
     record::types::Row,
 };

@@ -22,7 +22,7 @@
 //! # Example
 //!
 //! ```rust
-//! use parquet::schema::parser::parse_message_type;
+//! use amadeus_parquet::schema::parser::parse_message_type;
 //!
 //! let message_type = "
 //!   message spark_schema {

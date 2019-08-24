@@ -20,7 +20,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use parquet::{
+//! use amadeus_parquet::{
 //!     basic::{Compression, Encoding},
 //!     file::properties::*,
 //!     schema::types::ColumnPath,

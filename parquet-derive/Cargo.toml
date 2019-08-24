@@ -16,8 +16,8 @@
 # under the License.
 
 [package]
-name = "parquet_derive"
-version = "0.15.0-SNAPSHOT"
+name = "parquet-derive"
+version = "0.1.0"
 license = "Apache-2.0"
 description = "Apache Parquet Derive Macro implementation in Rust"
 homepage = "https://github.com/apache/arrow"

@@ -18,8 +18,8 @@
 [workspace]
 
 [package]
-name = "parquet"
-version = "0.15.0-SNAPSHOT"
+name = "amadeus-parquet"
+version = "0.1.0"
 license = "Apache-2.0"
 description = "Apache Parquet implementation in Rust"
 homepage = "https://github.com/apache/arrow"
@@ -32,7 +32,7 @@ edition = "2018"
 
 [dependencies]
 parquet-format = "2.6.0"
-parquet_derive = { version = "0.15.0-SNAPSHOT", path = "./parquet_derive" }
+parquet-derive = { version = "0.1.0", path = "./parquet-derive" }
 quick-error = "1.2.2"
 byteorder = "1.2"
 thrift = "0.12.0"

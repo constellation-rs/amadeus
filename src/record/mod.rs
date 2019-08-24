@@ -22,8 +22,8 @@
 //! ```rust,no_run
 //! use std::fs::File;
 //! use std::path::Path;
-//! use parquet::file::reader::{FileReader, SerializedFileReader};
-//! use parquet::record::types::Row;
+//! use amadeus_parquet::file::reader::{FileReader, SerializedFileReader};
+//! use amadeus_parquet::record::types::Row;
 //!
 //! let file = File::open(&Path::new("/path/to/file")).unwrap();
 //! let reader = SerializedFileReader::new(file).unwrap();
@@ -38,8 +38,8 @@
 //! ```rust,no_run
 //! use std::fs::File;
 //! use std::path::Path;
-//! use parquet::file::reader::{FileReader, SerializedFileReader};
-//! use parquet::record::{Record, types::Timestamp};
+//! use amadeus_parquet::file::reader::{FileReader, SerializedFileReader};
+//! use amadeus_parquet::record::{Record, types::Timestamp};
 //!
 //! #[derive(Record, Debug)]
 //! struct MyRow {
@@ -141,7 +141,7 @@ pub mod _private {
 /// The easiest way to implement `Record` on a new type is using `#[derive(Record)]`:
 ///
 /// ```
-/// use parquet::record::{types::Timestamp, Record};
+/// use amadeus_parquet::record::{types::Timestamp, Record};
 ///
 /// #[derive(Record, Debug)]
 /// struct MyRow {
@@ -154,7 +154,7 @@ pub mod _private {
 /// If the Rust field name and the Parquet field name differ, say if the latter is not an idiomatic or valid identifier in Rust, then an automatic rename can be made like so:
 ///
 /// ```
-/// # use parquet::record::{types::Timestamp, Record};
+/// # use amadeus_parquet::record::{types::Timestamp, Record};
 /// #[derive(Record, Debug)]
 /// struct MyRow {
 ///     #[parquet(rename = "ID")]
