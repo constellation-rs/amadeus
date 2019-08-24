@@ -290,7 +290,7 @@ where
     assert!(schema.is_none());
     let file = get_test_file(file_name);
     let file_reader: SerializedFileReader<_> = SerializedFileReader::new(file)?;
-    let iter = file_reader.get_row_iter()?;
+    let iter = file_reader.get_row_iter(None)?;
     Ok(iter.map(Result::unwrap).collect())
 }
 
@@ -306,7 +306,7 @@ where
     let file_reader: SerializedFileReader<_> = SerializedFileReader::new(file)?;
     // Check the first row group only, because files will contain only single row group
     let row_group_reader = file_reader.get_row_group(0).unwrap();
-    let iter = row_group_reader.get_row_iter()?;
+    let iter = row_group_reader.get_row_iter(None)?;
     Ok(iter.map(Result::unwrap).collect())
 }
 

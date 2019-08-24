@@ -1790,11 +1790,7 @@ where
 /// # Ok(())
 /// # }
 /// ```
-pub struct RootSchema<T>(
-    pub(crate) String,
-    pub(crate) T::Schema,
-    pub(crate) PhantomData<fn(T)>,
-)
+pub struct RootSchema<T>(pub String, pub T::Schema, pub PhantomData<fn(T)>)
 where
     T: Record;
 impl<T> Default for RootSchema<T>

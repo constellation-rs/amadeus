@@ -62,7 +62,7 @@ struct MyRow {
 
 let file = File::open(&Path::new("/path/to/file")).unwrap();
 let reader = SerializedFileReader::new(file).unwrap();
-let iter = reader.get_row_iter::<MyRow>().unwrap();
+let iter = reader.get_row_iter::<MyRow>(None).unwrap();
 for record in iter.map(Result::unwrap) {
     println!("{}: {}", record.time, record.event);
 }

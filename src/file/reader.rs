@@ -40,7 +40,7 @@ use crate::column::{
 use crate::compression::{create_codec, Codec};
 use crate::errors::{ParquetError, Result};
 use crate::file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC};
-use crate::record::{Record, RowIter};
+use crate::record::{Predicate, Record, RowIter};
 use crate::schema::types::{self, SchemaDescriptor};
 use crate::util::{io::FileSource, memory::ByteBufferPtr};
 
@@ -71,12 +71,12 @@ pub trait FileReader {
     ///
     /// Projected schema can be a subset of or equal to the file schema, when it is None,
     /// full file schema is assumed.
-    fn get_row_iter<T>(self) -> Result<RowIter<Self, T>>
+    fn get_row_iter<T>(self, projection: Option<Predicate>) -> Result<RowIter<Self, T>>
     where
         T: Record,
         Self: Sized,
     {
-        RowIter::from_file(self)
+        RowIter::from_file(projection, self)
     }
 }
 
@@ -141,7 +141,10 @@ pub trait RowGroupReader {
     ///
     /// Projected schema can be a subset of or equal to the file schema, when it is None,
     /// full file schema is assumed.
-    fn get_row_iter<T>(&self) -> Result<RowIter<SerializedFileReader<std::fs::File>, T>>
+    fn get_row_iter<T>(
+        &self,
+        projection: Option<Predicate>,
+    ) -> Result<RowIter<SerializedFileReader<std::fs::File>, T>>
     where
         T: Record,
         Self: Sized;
@@ -454,12 +457,15 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
         Ok(col_reader)
     }
 
-    fn get_row_iter<T>(&self) -> Result<RowIter<SerializedFileReader<std::fs::File>, T>>
+    fn get_row_iter<T>(
+        &self,
+        projection: Option<Predicate>,
+    ) -> Result<RowIter<SerializedFileReader<std::fs::File>, T>>
     where
         T: Record,
         Self: Sized,
     {
-        RowIter::from_row_group(self)
+        RowIter::from_row_group(projection, self)
     }
 }
 
@@ -730,8 +736,8 @@ mod tests {
     //     let read_from_file = SerializedFileReader::new(test_file).unwrap();
     //     let read_from_cursor = SerializedFileReader::new(cursor).unwrap();
 
-    //     let file_iter = read_from_file.get_row_iter::<Row>().unwrap();
-    //     let cursor_iter = read_from_cursor.get_row_iter::<Row>().unwrap();
+    //     let file_iter = read_from_file.get_row_iter::<Row>(None).unwrap();
+    //     let cursor_iter = read_from_cursor.get_row_iter::<Row>(None).unwrap();
 
     //     assert!(file_iter.eq(cursor_iter));
     // }
