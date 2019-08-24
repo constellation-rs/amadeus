@@ -1061,28 +1061,28 @@ mod tests {
         check_encoding_write_support::<Int96Type>(
             WriterVersion::PARQUET_1_0,
             true,
-            &[Int96::from(vec![1, 2, 3])],
+            &[Int96::new(1, 2, 3)],
             Some(0),
             &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int96Type>(
             WriterVersion::PARQUET_1_0,
             false,
-            &[Int96::from(vec![1, 2, 3])],
+            &[Int96::new(1, 2, 3)],
             None,
             &[Encoding::Plain, Encoding::Rle],
         );
         check_encoding_write_support::<Int96Type>(
             WriterVersion::PARQUET_2_0,
             true,
-            &[Int96::from(vec![1, 2, 3])],
+            &[Int96::new(1, 2, 3)],
             Some(0),
             &[Encoding::Plain, Encoding::RleDictionary, Encoding::Rle],
         );
         check_encoding_write_support::<Int96Type>(
             WriterVersion::PARQUET_2_0,
             false,
-            &[Int96::from(vec![1, 2, 3])],
+            &[Int96::new(1, 2, 3)],
             None,
             &[Encoding::Plain, Encoding::Rle],
         );

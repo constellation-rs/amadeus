@@ -63,9 +63,7 @@ impl RandGen<Int64Type> for Int64Type {
 impl RandGen<Int96Type> for Int96Type {
     fn gen(_: i32) -> Int96 {
         let mut rng = thread_rng();
-        let mut result = Int96::new();
-        result.set_data(rng.gen::<u32>(), rng.gen::<u32>(), rng.gen::<u32>());
-        result
+        Int96::new(rng.gen::<u32>(), rng.gen::<u32>(), rng.gen::<u32>())
     }
 }
 
@@ -84,14 +82,12 @@ impl RandGen<DoubleType> for DoubleType {
 impl RandGen<ByteArrayType> for ByteArrayType {
     fn gen(_: i32) -> ByteArray {
         let mut rng = thread_rng();
-        let mut result = ByteArray::new();
         let mut value = vec![];
         let len = rng.gen_range(0usize, 128);
         for _ in 0..len {
             value.push(rng.gen_range(0, 255) & 0xFF);
         }
-        result.set_data(ByteBufferPtr::new(value));
-        result
+        ByteArray::new(ByteBufferPtr::new(value))
     }
 }
 

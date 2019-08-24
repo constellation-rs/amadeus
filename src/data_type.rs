@@ -20,7 +20,7 @@
 
 use std::{
     fmt::{self, Display},
-    mem,
+    mem, slice,
 };
 
 use byteorder::{BigEndian, ByteOrder};
@@ -31,51 +31,22 @@ use crate::util::memory::{ByteBuffer, ByteBufferPtr};
 
 /// Rust representation for logical type INT96, value is backed by an array of `u32`.
 /// The type only takes 12 bytes, without extra padding.
-#[derive(Copy, Clone, Debug, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
 pub struct Int96 {
-    value: Option<[u32; 3]>,
+    value: [u32; 3],
 }
 
 impl Int96 {
-    /// Creates new INT96 type struct with no data set.
-    pub fn new() -> Self {
-        Self { value: None }
+    /// Creates new INT96 type struct.
+    pub fn new(elem0: u32, elem1: u32, elem2: u32) -> Self {
+        Self {
+            value: [elem0, elem1, elem2],
+        }
     }
 
     /// Returns underlying data as slice of [`u32`].
     pub fn data(&self) -> &[u32] {
-        assert!(self.value.is_some());
-        self.value.as_ref().unwrap()
-    }
-
-    /// Sets data for this INT96 type.
-    pub fn set_data(&mut self, elem0: u32, elem1: u32, elem2: u32) {
-        self.value = Some([elem0, elem1, elem2]);
-    }
-}
-
-impl Default for Int96 {
-    fn default() -> Self {
-        Self { value: None }
-    }
-}
-
-impl PartialEq for Int96 {
-    fn eq(&self, other: &Int96) -> bool {
-        match (&self.value, &other.value) {
-            (Some(v1), Some(v2)) => v1 == v2,
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
-
-impl From<Vec<u32>> for Int96 {
-    fn from(buf: Vec<u32>) -> Self {
-        assert_eq!(buf.len(), 3);
-        let mut result = Self::new();
-        result.set_data(buf[0], buf[1], buf[2]);
-        result
+        &self.value
     }
 }
 
@@ -83,52 +54,40 @@ impl From<Vec<u32>> for Int96 {
 /// Value is backed by a byte buffer.
 #[derive(Clone, Debug)]
 pub struct ByteArray {
-    data: Option<ByteBufferPtr>,
+    data: ByteBufferPtr,
 }
 
 impl ByteArray {
-    /// Creates new byte array with no data set.
-    pub fn new() -> Self {
-        ByteArray { data: None }
+    /// Creates new byte array from byte buffer.
+    pub fn new(data: ByteBufferPtr) -> Self {
+        ByteArray { data }
     }
 
     /// Gets length of the underlying byte buffer.
     pub fn len(&self) -> usize {
-        assert!(self.data.is_some());
-        self.data.as_ref().unwrap().len()
+        self.data.len()
     }
 
     /// Returns slice of data.
     pub fn data(&self) -> &[u8] {
-        assert!(self.data.is_some());
-        self.data.as_ref().unwrap().as_ref()
-    }
-
-    /// Set data from another byte buffer.
-    pub fn set_data(&mut self, data: ByteBufferPtr) {
-        self.data = Some(data);
+        self.data.as_ref()
     }
 
     /// Return the inner Vec<T>, if there is exactly one reference to it.
-    pub fn try_unwrap(mut self) -> Result<Vec<u8>, Self> {
-        self.data
-            .take()
-            .unwrap()
-            .try_unwrap()
-            .map_err(|data| Self { data: Some(data) })
+    pub fn try_unwrap(self) -> Result<Vec<u8>, Self> {
+        self.data.try_unwrap().map_err(|data| Self { data })
     }
 
     /// Returns `ByteArray` instance with slice of values for a data.
     pub fn slice(&self, start: usize, len: usize) -> Self {
-        assert!(self.data.is_some());
-        Self::from(self.data.as_ref().unwrap().range(start, len))
+        Self::from(self.data.range(start, len))
     }
 }
 
 impl From<Vec<u8>> for ByteArray {
     fn from(buf: Vec<u8>) -> ByteArray {
         Self {
-            data: Some(ByteBufferPtr::new(buf)),
+            data: ByteBufferPtr::new(buf),
         }
     }
 }
@@ -138,38 +97,36 @@ impl<'a> From<&'a str> for ByteArray {
         let mut v = Vec::new();
         v.extend_from_slice(s.as_bytes());
         Self {
-            data: Some(ByteBufferPtr::new(v)),
+            data: ByteBufferPtr::new(v),
         }
     }
 }
 
 impl From<ByteBufferPtr> for ByteArray {
     fn from(ptr: ByteBufferPtr) -> ByteArray {
-        Self { data: Some(ptr) }
+        Self { data: ptr }
     }
 }
 
 impl From<ByteBuffer> for ByteArray {
     fn from(mut buf: ByteBuffer) -> ByteArray {
         Self {
-            data: Some(buf.consume()),
+            data: buf.consume(),
         }
     }
 }
 
 impl Default for ByteArray {
     fn default() -> Self {
-        ByteArray { data: None }
+        ByteArray {
+            data: ByteBufferPtr::new(vec![]),
+        }
     }
 }
 
 impl PartialEq for ByteArray {
     fn eq(&self, other: &ByteArray) -> bool {
-        match (&self.data, &other.data) {
-            (Some(d1), Some(d2)) => d1.as_ref() == d2.as_ref(),
-            (None, None) => true,
-            _ => false,
-        }
+        self.data.as_ref() == other.data.as_ref()
     }
 }
 
@@ -317,9 +274,9 @@ macro_rules! gen_as_bytes {
         impl AsBytes for $source_ty {
             fn as_bytes(&self) -> &[u8] {
                 unsafe {
-                    ::std::slice::from_raw_parts(
+                    slice::from_raw_parts(
                         self as *const $source_ty as *const u8,
-                        ::std::mem::size_of::<$source_ty>(),
+                        mem::size_of::<$source_ty>(),
                     )
                 }
             }
@@ -384,13 +341,10 @@ pub trait DataType: 'static {
 
     /// Returns Parquet physical type.
     fn get_physical_type() -> Type;
-
-    /// Returns size in bytes for Rust representation of the physical type.
-    fn get_type_size() -> usize;
 }
 
 macro_rules! make_type {
-    ($name:ident, $physical_ty:path, $native_ty:ty, $size:expr) => {
+    ($name:ident, $physical_ty:path, $native_ty:ty) => {
         pub struct $name {}
 
         impl DataType for $name {
@@ -399,34 +353,20 @@ macro_rules! make_type {
             fn get_physical_type() -> Type {
                 $physical_ty
             }
-
-            fn get_type_size() -> usize {
-                $size
-            }
         }
     };
 }
 
 // Generate struct definitions for all physical types
 
-make_type!(BoolType, Type::Boolean, bool, 1);
-make_type!(Int32Type, Type::Int32, i32, 4);
-make_type!(Int64Type, Type::Int64, i64, 8);
-make_type!(Int96Type, Type::Int96, Int96, mem::size_of::<Int96>());
-make_type!(FloatType, Type::Float, f32, 4);
-make_type!(DoubleType, Type::Double, f64, 8);
-make_type!(
-    ByteArrayType,
-    Type::ByteArray,
-    ByteArray,
-    mem::size_of::<ByteArray>()
-);
-make_type!(
-    FixedLenByteArrayType,
-    Type::FixedLenByteArray,
-    ByteArray,
-    mem::size_of::<ByteArray>()
-);
+make_type!(BoolType, Type::Boolean, bool);
+make_type!(Int32Type, Type::Int32, i32);
+make_type!(Int64Type, Type::Int64, i64);
+make_type!(Int96Type, Type::Int96, Int96);
+make_type!(FloatType, Type::Float, f32);
+make_type!(DoubleType, Type::Double, f64);
+make_type!(ByteArrayType, Type::ByteArray, ByteArray);
+make_type!(FixedLenByteArrayType, Type::FixedLenByteArray, ByteArray);
 
 #[cfg(test)]
 mod tests {
@@ -460,7 +400,7 @@ mod tests {
         );
 
         // Test Int96
-        let i96 = Int96::from(vec![1, 2, 3]);
+        let i96 = Int96::new(1, 2, 3);
         assert_eq!(i96.as_bytes(), &[1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]);
 
         // Test ByteArray
@@ -479,7 +419,7 @@ mod tests {
     #[test]
     fn test_int96_from() {
         assert_eq!(
-            Int96::from(vec![1, 12345, 1234567890]).data(),
+            Int96::new(1, 12345, 1234567890).data(),
             &[1, 12345, 1234567890]
         );
     }

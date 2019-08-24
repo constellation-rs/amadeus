@@ -237,11 +237,11 @@ pub struct Timestamp(pub(super) Int96);
 impl Timestamp {
     /// Create a Timestamp from the number of days and nanoseconds since the Julian epoch
     pub fn from_day_nanos(days: i64, nanos: i64) -> Self {
-        Timestamp(Int96::from(vec![
+        Timestamp(Int96::new(
             (nanos & 0xffffffff).try_into().unwrap(),
             ((nanos as u64) >> 32).try_into().unwrap(),
             days.try_into().unwrap(),
-        ]))
+        ))
     }
 
     /// Create a Timestamp from the number of milliseconds since the Unix epoch
@@ -253,11 +253,11 @@ impl Timestamp {
             * MICROS_PER_MILLI
             * NANOS_PER_MICRO;
 
-        Timestamp(Int96::from(vec![
+        Timestamp(Int96::new(
             (nanoseconds & 0xffffffff).try_into().unwrap(),
             ((nanoseconds as u64) >> 32).try_into().unwrap(),
             day.try_into().unwrap(),
-        ]))
+        ))
     }
 
     /// Create a Timestamp from the number of microseconds since the Unix epoch
@@ -271,11 +271,11 @@ impl Timestamp {
                 * MICROS_PER_MILLI))
             * NANOS_PER_MICRO;
 
-        Timestamp(Int96::from(vec![
+        Timestamp(Int96::new(
             (nanoseconds & 0xffffffff).try_into().unwrap(),
             ((nanoseconds as u64) >> 32).try_into().unwrap(),
             day.try_into().unwrap(),
-        ]))
+        ))
     }
 
     /// Create a Timestamp from the number of nanoseconds since the Unix epoch
@@ -293,11 +293,11 @@ impl Timestamp {
                 * MICROS_PER_MILLI
                 * NANOS_PER_MICRO);
 
-        Timestamp(Int96::from(vec![
+        Timestamp(Int96::new(
             (nanoseconds & 0xffffffff).try_into().unwrap(),
             ((nanoseconds as u64) >> 32).try_into().unwrap(),
             day.try_into().unwrap(),
-        ]))
+        ))
     }
 
     /// Get the number of days and nanoseconds since the Julian epoch
@@ -434,13 +434,13 @@ mod tests {
 
     #[test]
     fn test_int96() {
-        let value = Timestamp(Int96::from(vec![0, 0, 2454923]));
+        let value = Timestamp(Int96::new(0, 0, 2454923));
         assert_eq!(value.as_millis().unwrap(), 1238544000000);
 
-        let value = Timestamp(Int96::from(vec![4165425152, 13, 2454923]));
+        let value = Timestamp(Int96::new(4165425152, 13, 2454923));
         assert_eq!(value.as_millis().unwrap(), 1238544060000);
 
-        let value = Timestamp(Int96::from(vec![0, 0, 0]));
+        let value = Timestamp(Int96::new(0, 0, 0));
         assert_eq!(value.as_millis().unwrap(), -210866803200000);
     }
 
