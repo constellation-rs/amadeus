@@ -17,12 +17,14 @@
 
 use std::{iter, mem};
 
-use crate::basic::Repetition;
-use crate::column::reader::{get_typed_column_reader, ColumnReader, ColumnReaderImpl};
-use crate::data_type::*;
-use crate::errors::{ParquetError, Result};
-use crate::record::{reader::ValueReader, types::Value, Reader, Record};
-use crate::schema::types::{ColumnDescPtr, ColumnPath};
+use crate::{
+    basic::Repetition,
+    column::reader::{get_typed_column_reader, ColumnReader, ColumnReaderImpl},
+    data_type::*,
+    errors::{ParquetError, Result},
+    record::{reader::ValueReader, types::Value, Reader, Record},
+    schema::types::{ColumnDescPtr, ColumnPath},
+};
 
 /// High level API wrapper on column reader.
 /// Provides per-element access for each primitive column.
@@ -121,7 +123,7 @@ pub struct TypedTripletIter<T: DataType> {
     def_level: i16,
     rep_level: i16,
     // values and levels
-    values: Vec<T::T>,
+    values: Vec<T::Type>,
     def_levels: Option<Vec<i16>>,
     rep_levels: Option<Vec<i16>>,
     // current index for the triplet (value, def, rep)
@@ -159,7 +161,7 @@ impl<T: DataType> TypedTripletIter<T> {
             batch_size,
             def_level,
             rep_level,
-            values: vec![T::T::default(); batch_size],
+            values: vec![T::Type::default(); batch_size],
             def_levels,
             rep_levels,
             curr_triplet_index: 0,
@@ -170,7 +172,7 @@ impl<T: DataType> TypedTripletIter<T> {
 
     /// Returns current value, advancing the iterator.
     #[inline]
-    pub fn read(&mut self) -> Result<T::T> {
+    pub fn read(&mut self) -> Result<T::Type> {
         debug_assert_eq!(
             self.current_def_level(),
             self.def_level,
@@ -178,8 +180,10 @@ impl<T: DataType> TypedTripletIter<T> {
             self.def_level,
             self.current_def_level()
         );
-        let ret =
-            mem::replace(&mut self.values[self.curr_triplet_index], T::T::default());
+        let ret = mem::replace(
+            &mut self.values[self.curr_triplet_index],
+            T::Type::default(),
+        );
         self.advance_columns().map(|()| ret)
     }
 
@@ -307,9 +311,11 @@ impl<T: DataType> TypedTripletIter<T> {
 mod tests {
     use super::*;
 
-    use crate::file::reader::{FileReader, RowGroupReader, SerializedFileReader};
-    use crate::schema::types::ColumnPath;
-    use crate::util::test_common::get_test_file;
+    use crate::{
+        file::reader::{FileReader, RowGroupReader, SerializedFileReader},
+        schema::types::ColumnPath,
+        util::test_common::get_test_file,
+    };
 
     #[test]
     #[should_panic(expected = "Expected positive batch size")]

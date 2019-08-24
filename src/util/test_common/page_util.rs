@@ -15,25 +15,24 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::basic::Encoding;
-use crate::column::page::Page;
-use crate::column::page::PageReader;
-use crate::data_type::DataType;
-use crate::encodings::encoding::{get_encoder, Encoder};
-use crate::encodings::levels::max_buffer_size;
-use crate::encodings::levels::LevelEncoder;
-use crate::errors::Result;
-use crate::schema::types::ColumnDescPtr;
-use crate::util::memory::ByteBufferPtr;
-use crate::util::memory::MemTracker;
-use crate::util::memory::MemTrackerPtr;
-use std::mem;
-use std::rc::Rc;
+use crate::{
+    basic::Encoding,
+    column::page::{Page, PageReader},
+    data_type::DataType,
+    encodings::{
+        encoding::{get_encoder, Encoder},
+        levels::{max_buffer_size, LevelEncoder},
+    },
+    errors::Result,
+    schema::types::ColumnDescPtr,
+    util::memory::{ByteBufferPtr, MemTracker, MemTrackerPtr},
+};
+use std::{mem, rc::Rc};
 
 pub trait DataPageBuilder {
     fn add_rep_levels(&mut self, max_level: i16, rep_levels: &[i16]);
     fn add_def_levels(&mut self, max_level: i16, def_levels: &[i16]);
-    fn add_values<T: DataType>(&mut self, encoding: Encoding, values: &[T::T]);
+    fn add_values<T: DataType>(&mut self, encoding: Encoding, values: &[T::Type]);
     fn add_indices(&mut self, indices: ByteBufferPtr);
     fn consume(self) -> Page;
 }
@@ -107,7 +106,7 @@ impl DataPageBuilder for DataPageBuilderImpl {
         self.def_levels_byte_len = self.add_levels(max_levels, def_levels);
     }
 
-    fn add_values<T: DataType>(&mut self, encoding: Encoding, values: &[T::T]) {
+    fn add_values<T: DataType>(&mut self, encoding: Encoding, values: &[T::Type]) {
         assert!(
             self.num_values >= values.len() as u32,
             "num_values: {}, values.len(): {}",
@@ -115,7 +114,7 @@ impl DataPageBuilder for DataPageBuilderImpl {
             values.len()
         );
         self.encoding = Some(encoding);
-        let mut encoder: Box<Encoder<T>> =
+        let mut encoder: Box<dyn Encoder<T>> =
             get_encoder::<T>(self.desc.clone(), encoding, self.mem_tracker.clone())
                 .expect("get_encoder() should be OK");
         encoder.put(values).expect("put() should be OK");
@@ -160,7 +159,7 @@ impl DataPageBuilder for DataPageBuilderImpl {
 
 /// A utility page reader which stores pages in memory.
 pub struct InMemoryPageReader {
-    pages: Box<Iterator<Item = Page>>,
+    pages: Box<dyn Iterator<Item = Page>>,
 }
 
 impl InMemoryPageReader {

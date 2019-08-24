@@ -24,15 +24,17 @@ use std::{
 };
 
 use super::page::{Page, PageReader};
-use crate::basic::*;
-use crate::data_type::*;
-use crate::encodings::{
-    decoding::{get_decoder, Decoder, DictDecoder, PlainDecoder},
-    levels::LevelDecoder,
+use crate::{
+    basic::*,
+    data_type::*,
+    encodings::{
+        decoding::{get_decoder, Decoder, DictDecoder, PlainDecoder},
+        levels::LevelDecoder,
+    },
+    errors::{ParquetError, Result},
+    schema::types::ColumnDescPtr,
+    util::memory::ByteBufferPtr,
 };
-use crate::errors::{ParquetError, Result};
-use crate::schema::types::ColumnDescPtr;
-use crate::util::memory::ByteBufferPtr;
 
 /// Column reader for a Parquet type.
 pub enum ColumnReader {
@@ -50,7 +52,7 @@ pub enum ColumnReader {
 /// column reader will read from pages in `col_page_reader`.
 pub fn get_column_reader(
     col_descr: ColumnDescPtr,
-    col_page_reader: Box<PageReader>,
+    col_page_reader: Box<dyn PageReader>,
 ) -> ColumnReader {
     match col_descr.physical_type() {
         Type::Boolean => ColumnReader::BoolColumnReader(ColumnReaderImpl::new(
@@ -112,7 +114,7 @@ pub struct ColumnReaderImpl<T: DataType> {
     descr: ColumnDescPtr,
     def_level_decoder: Option<LevelDecoder>,
     rep_level_decoder: Option<LevelDecoder>,
-    page_reader: Box<PageReader>,
+    page_reader: Box<dyn PageReader>,
     current_encoding: Option<Encoding>,
 
     // The total number of values stored in the data page.
@@ -123,12 +125,12 @@ pub struct ColumnReaderImpl<T: DataType> {
     num_decoded_values: u32,
 
     // Cache of decoders for existing encodings
-    decoders: HashMap<Encoding, Box<Decoder<T>>>,
+    decoders: HashMap<Encoding, Box<dyn Decoder<T>>>,
 }
 
 impl<T: DataType> ColumnReaderImpl<T> {
     /// Creates new column reader based on column descriptor and page reader.
-    pub fn new(descr: ColumnDescPtr, page_reader: Box<PageReader>) -> Self {
+    pub fn new(descr: ColumnDescPtr, page_reader: Box<dyn PageReader>) -> Self {
         Self {
             descr,
             def_level_decoder: None,
@@ -167,7 +169,7 @@ impl<T: DataType> ColumnReaderImpl<T> {
         batch_size: usize,
         mut def_levels: Option<&mut [i16]>,
         mut rep_levels: Option<&mut [i16]>,
-        values: &mut [T::T],
+        values: &mut [T::Type],
     ) -> Result<(usize, usize)> {
         let mut values_read = 0;
         let mut levels_read = 0;
@@ -276,8 +278,7 @@ impl<T: DataType> ColumnReaderImpl<T> {
     /// Reads a new page and set up the decoders for levels, values or dictionary.
     /// Returns false if there's no page left.
     fn read_new_page(&mut self) -> Result<bool> {
-        #[allow(while_true)]
-        while true {
+        loop {
             match self.page_reader.get_next_page()? {
                 // No more page to read
                 None => return Ok(false),
@@ -397,8 +398,6 @@ impl<T: DataType> ColumnReaderImpl<T> {
                 }
             }
         }
-
-        Ok(true)
     }
 
     /// Resolves and updates encoding and set decoder for the current page
@@ -422,7 +421,8 @@ impl<T: DataType> ColumnReaderImpl<T> {
             if !self.decoders.contains_key(&encoding) {
                 // Initialize decoder for this page
                 let data_decoder = get_decoder::<T>(self.descr.clone(), encoding)?;
-                self.decoders.insert(encoding, data_decoder);
+                let res = self.decoders.insert(encoding, data_decoder);
+                assert!(res.is_none());
             }
             self.decoders.get_mut(&encoding).unwrap()
         };
@@ -468,7 +468,7 @@ impl<T: DataType> ColumnReaderImpl<T> {
     }
 
     #[inline]
-    fn read_values(&mut self, buffer: &mut [T::T]) -> Result<usize> {
+    fn read_values(&mut self, buffer: &mut [T::Type]) -> Result<usize> {
         let encoding = self
             .current_encoding
             .expect("current_encoding should be set");
@@ -480,7 +480,7 @@ impl<T: DataType> ColumnReaderImpl<T> {
     }
 
     #[inline]
-    fn configure_dictionary(&mut self, page: Page) -> Result<bool> {
+    fn configure_dictionary(&mut self, page: Page) -> Result<()> {
         let mut encoding = page.encoding();
         if encoding == Encoding::Plain || encoding == Encoding::PlainDictionary {
             encoding = Encoding::RleDictionary
@@ -497,8 +497,9 @@ impl<T: DataType> ColumnReaderImpl<T> {
 
             let mut decoder = DictDecoder::new();
             decoder.set_dict(Box::new(dictionary))?;
-            self.decoders.insert(encoding, Box::new(decoder));
-            Ok(true)
+            let res = self.decoders.insert(encoding, Box::new(decoder));
+            assert!(res.is_none());
+            Ok(())
         } else {
             Err(nyi_err!(
                 "Invalid/Unsupported encoding type for dictionary: {}",
@@ -515,14 +516,18 @@ mod tests {
     use rand::distributions::uniform::SampleUniform;
     use std::{collections::VecDeque, rc::Rc, vec::IntoIter};
 
-    use crate::basic::Type as PhysicalType;
-    use crate::column::page::Page;
-    use crate::encodings::encoding::{DictEncoder, Encoder};
-    use crate::schema::types::{ColumnDescriptor, ColumnPath, Type as SchemaType};
-    use crate::util::{
-        memory::MemTracker,
-        test_common::page_util::{DataPageBuilder, DataPageBuilderImpl},
-        test_common::random_numbers_range,
+    use crate::{
+        basic::Type as PhysicalType,
+        column::page::Page,
+        encodings::encoding::{DictEncoder, Encoder},
+        schema::types::{ColumnDescriptor, ColumnPath, Type as SchemaType},
+        util::{
+            memory::MemTracker,
+            test_common::{
+                page_util::{DataPageBuilder, DataPageBuilderImpl},
+                random_numbers_range,
+            },
+        },
     };
 
     const NUM_LEVELS: usize = 128;
@@ -1113,16 +1118,16 @@ mod tests {
 
     struct ColumnReaderTester<T: DataType>
     where
-        T::T: PartialOrd + SampleUniform + Copy,
+        T::Type: PartialOrd + SampleUniform + Copy,
     {
         rep_levels: Vec<i16>,
         def_levels: Vec<i16>,
-        values: Vec<T::T>,
+        values: Vec<T::Type>,
     }
 
     impl<T: DataType> ColumnReaderTester<T>
     where
-        T::T: PartialOrd + SampleUniform + Copy,
+        T::Type: PartialOrd + SampleUniform + Copy,
     {
         pub fn new() -> Self {
             Self {
@@ -1139,8 +1144,8 @@ mod tests {
             num_pages: usize,
             num_levels: usize,
             batch_size: usize,
-            min: T::T,
-            max: T::T,
+            min: T::Type,
+            max: T::Type,
         ) {
             self.test_read_batch_general(
                 desc,
@@ -1161,8 +1166,8 @@ mod tests {
             num_pages: usize,
             num_levels: usize,
             batch_size: usize,
-            min: T::T,
-            max: T::T,
+            min: T::Type,
+            max: T::Type,
         ) {
             self.test_read_batch_general(
                 desc,
@@ -1183,8 +1188,8 @@ mod tests {
             num_pages: usize,
             num_levels: usize,
             batch_size: usize,
-            min: T::T,
-            max: T::T,
+            min: T::Type,
+            max: T::Type,
         ) {
             self.test_read_batch_general(
                 desc,
@@ -1205,8 +1210,8 @@ mod tests {
             num_pages: usize,
             num_levels: usize,
             batch_size: usize,
-            min: T::T,
-            max: T::T,
+            min: T::Type,
+            max: T::Type,
         ) {
             self.test_read_batch_general(
                 desc,
@@ -1229,13 +1234,13 @@ mod tests {
             num_pages: usize,
             num_levels: usize,
             batch_size: usize,
-            min: T::T,
-            max: T::T,
+            min: T::Type,
+            max: T::Type,
             use_v2: bool,
         ) {
             let mut def_levels = vec![0; num_levels * num_pages];
             let mut rep_levels = vec![0; num_levels * num_pages];
-            let mut values = vec![T::T::default(); num_levels * num_pages];
+            let mut values = vec![T::Type::default(); num_levels * num_pages];
             self.test_read_batch(
                 desc,
                 encoding,
@@ -1260,9 +1265,9 @@ mod tests {
             num_pages: usize,
             num_levels: usize,
             batch_size: usize,
-            min: T::T,
-            max: T::T,
-            values: &mut [T::T],
+            min: T::Type,
+            max: T::Type,
+            values: &mut [T::Type],
             mut def_levels: Option<&mut [i16]>,
             mut rep_levels: Option<&mut [i16]>,
             use_v2: bool,
@@ -1389,15 +1394,15 @@ mod tests {
         encoding: Encoding,
         num_pages: usize,
         levels_per_page: usize,
-        min: T::T,
-        max: T::T,
+        min: T::Type,
+        max: T::Type,
         def_levels: &mut Vec<i16>,
         rep_levels: &mut Vec<i16>,
-        values: &mut Vec<T::T>,
+        values: &mut Vec<T::Type>,
         pages: &mut VecDeque<Page>,
         use_v2: bool,
     ) where
-        T::T: PartialOrd + SampleUniform + Copy,
+        T::Type: PartialOrd + SampleUniform + Copy,
     {
         let mut num_values = 0;
         let max_def_level = desc.max_def_level();

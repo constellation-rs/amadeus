@@ -30,8 +30,7 @@ use test::Bencher;
 use amadeus_parquet::{
     column::reader::{get_typed_column_reader, ColumnReader},
     data_type::*,
-    file::reader::RowGroupReader,
-    file::reader::{FileReader, SerializedFileReader},
+    file::reader::{FileReader, RowGroupReader, SerializedFileReader},
     record::types::{Row, Timestamp},
     schema::types::ColumnPath,
 };

@@ -47,14 +47,14 @@ where
 
 // The following is code adapted from https://github.com/rust-lang/rust/blob/79d8a0fcefa5134db2a94739b1d18daa01fc6e9f/src/libcore/fmt/builders.rs
 
-struct PadAdapter<T: fmt::Write> {
+struct PadAdapter<T: Write> {
     fmt: T,
     on_newline: bool,
 }
 
 impl<T> PadAdapter<T>
 where
-    T: fmt::Write,
+    T: Write,
 {
     fn new(fmt: T) -> Self {
         PadAdapter {
@@ -64,9 +64,9 @@ where
     }
 }
 
-impl<T> fmt::Write for PadAdapter<T>
+impl<T> Write for PadAdapter<T>
 where
-    T: fmt::Write,
+    T: Write,
 {
     fn write_str(&mut self, mut s: &str) -> fmt::Result {
         while !s.is_empty() {

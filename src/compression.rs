@@ -48,8 +48,10 @@ use lz4;
 use snap::{decompress_len, max_compress_len, Decoder, Encoder};
 use zstd;
 
-use crate::basic::Compression as CodecType;
-use crate::errors::{ParquetError, Result};
+use crate::{
+    basic::Compression as CodecType,
+    errors::{ParquetError, Result},
+};
 
 /// Parquet compression codec interface.
 pub trait Codec {
@@ -68,7 +70,7 @@ pub trait Codec {
 /// Given the compression type `codec`, returns a codec used to compress and decompress
 /// bytes for the compression type.
 /// This returns `None` if the codec type is `UNCOMPRESSED`.
-pub fn create_codec(codec: CodecType) -> Result<Option<Box<Codec>>> {
+pub fn create_codec(codec: CodecType) -> Result<Option<Box<dyn Codec>>> {
     match codec {
         CodecType::Brotli => Ok(Some(Box::new(BrotliCodec::new()))),
         CodecType::Gzip => Ok(Some(Box::new(GZipCodec::new()))),

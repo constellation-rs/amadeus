@@ -20,14 +20,13 @@ use rand::{
     thread_rng, Rng,
 };
 
-use crate::data_type::*;
-use crate::util::memory::ByteBufferPtr;
+use crate::{data_type::*, util::memory::ByteBufferPtr};
 
 /// Random generator of data type `T` values and sequences.
 pub trait RandGen<T: DataType> {
-    fn gen(len: i32) -> T::T;
+    fn gen(len: i32) -> T::Type;
 
-    fn gen_vec(len: i32, total: usize) -> Vec<T::T> {
+    fn gen_vec(len: i32, total: usize) -> Vec<T::Type> {
         let mut result = vec![];
         for _ in 0..total {
             result.push(Self::gen(len))
@@ -37,7 +36,7 @@ pub trait RandGen<T: DataType> {
 }
 
 impl<T: DataType> RandGen<T> for T {
-    default fn gen(_: i32) -> T::T {
+    default fn gen(_: i32) -> T::Type {
         panic!("Unsupported data type");
     }
 }

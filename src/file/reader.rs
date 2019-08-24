@@ -32,17 +32,19 @@ use parquet_format::{
 };
 use thrift::protocol::TCompactInputProtocol;
 
-use crate::basic::{ColumnOrder, Compression, Encoding, Type};
-use crate::column::{
-    page::{Page, PageReader},
-    reader::{ColumnReader, ColumnReaderImpl},
+use crate::{
+    basic::{ColumnOrder, Compression, Encoding, Type},
+    column::{
+        page::{Page, PageReader},
+        reader::{ColumnReader, ColumnReaderImpl},
+    },
+    compression::{create_codec, Codec},
+    errors::{ParquetError, Result},
+    file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC},
+    record::{Predicate, Record, RowIter},
+    schema::types::{self, SchemaDescriptor},
+    util::{io::FileSource, memory::ByteBufferPtr},
 };
-use crate::compression::{create_codec, Codec};
-use crate::errors::{ParquetError, Result};
-use crate::file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC};
-use crate::record::{Predicate, Record, RowIter};
-use crate::schema::types::{self, SchemaDescriptor};
-use crate::util::{io::FileSource, memory::ByteBufferPtr};
 
 // ----------------------------------------------------------------------
 // APIs for file & row group readers
@@ -99,7 +101,7 @@ where
     }
 }
 
-impl<R> FileReader for Box<FileReader<RowGroupReader = R>>
+impl<R> FileReader for Box<dyn FileReader<RowGroupReader = R>>
 where
     R: RowGroupReader,
 {
@@ -128,7 +130,7 @@ pub trait RowGroupReader {
     fn num_columns(&self) -> usize;
 
     /// Get page reader for the `i`th column chunk.
-    fn get_column_page_reader(&self, i: usize) -> Result<Box<PageReader>>;
+    fn get_column_page_reader(&self, i: usize) -> Result<Box<dyn PageReader>>;
 
     /// Get value reader for the `i`th column chunk.
     fn get_column_reader(&self, i: usize) -> Result<ColumnReader>;
@@ -144,7 +146,7 @@ pub trait RowGroupReader {
     fn get_row_iter<T>(
         &self,
         projection: Option<Predicate>,
-    ) -> Result<RowIter<SerializedFileReader<std::fs::File>, T>>
+    ) -> Result<RowIter<SerializedFileReader<File>, T>>
     where
         T: Record,
         Self: Sized;
@@ -229,7 +231,7 @@ impl<R: ParquetReader> SerializedFileReader<R> {
             ));
         }
         let mut footer_buffer: [u8; FOOTER_SIZE] = [0; FOOTER_SIZE];
-        buf.seek(SeekFrom::End(-(FOOTER_SIZE as i64)))?;
+        let _ = buf.seek(SeekFrom::End(-(FOOTER_SIZE as i64)))?;
         buf.read_exact(&mut footer_buffer)?;
         if footer_buffer[4..] != PARQUET_MAGIC {
             return Err(general_err!("Invalid Parquet file. Corrupt footer"));
@@ -248,7 +250,7 @@ impl<R: ParquetReader> SerializedFileReader<R> {
                 metadata_start
             ));
         }
-        buf.seek(SeekFrom::Start(metadata_start as u64))?;
+        let _ = buf.seek(SeekFrom::Start(metadata_start as u64))?;
         let metadata_buf = buf.take(metadata_len as u64).into_inner();
 
         // TODO: row group filtering
@@ -400,7 +402,7 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
     }
 
     // TODO: fix PARQUET-816
-    fn get_column_page_reader(&self, i: usize) -> Result<Box<PageReader>> {
+    fn get_column_page_reader(&self, i: usize) -> Result<Box<dyn PageReader>> {
         let col = self.metadata.column(i);
         let mut col_start = col.data_page_offset();
         if col.has_dictionary_page() {
@@ -460,7 +462,7 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
     fn get_row_iter<T>(
         &self,
         projection: Option<Predicate>,
-    ) -> Result<RowIter<SerializedFileReader<std::fs::File>, T>>
+    ) -> Result<RowIter<SerializedFileReader<File>, T>>
     where
         T: Record,
         Self: Sized,
@@ -476,7 +478,7 @@ pub struct SerializedPageReader<T: Read> {
     buf: T,
 
     // The compression codec for this column chunk. Only set for non-PLAIN codec.
-    decompressor: Option<Box<Codec>>,
+    decompressor: Option<Box<dyn Codec>>,
 
     // The number of values we have seen so far.
     seen_num_values: i64,
@@ -552,10 +554,10 @@ impl<T: Read> PageReader for SerializedPageReader<T> {
                         .decompress(&buffer[offset..], &mut decompressed_buffer)?;
                     if decompressed_size != uncompressed_len {
                         return Err(general_err!(
-                            "Actual decompressed size doesn't match the expected one ({} vs {})",
-                            decompressed_size,
-                            uncompressed_len
-                        ));
+							"Actual decompressed size doesn't match the expected one ({} vs {})",
+							decompressed_size,
+							uncompressed_len
+						));
                     }
                     if offset == 0 {
                         buffer = decompressed_buffer;
@@ -832,7 +834,10 @@ mod tests {
         let t_column_orders =
             Some(vec![TColumnOrder::TYPEORDER(TypeDefinedOrder::new())]);
 
-        SerializedFileReader::<File>::parse_column_orders(t_column_orders, &schema_descr);
+        let _ = SerializedFileReader::<File>::parse_column_orders(
+            t_column_orders,
+            &schema_descr,
+        );
     }
 
     #[test]
@@ -946,9 +951,9 @@ mod tests {
         let file_metadata = metadata.file_metadata();
         assert!(file_metadata.created_by().is_some());
         assert_eq!(
-            file_metadata.created_by().as_ref().unwrap(),
-            "impala version 1.3.0-INTERNAL (build 8a48ddb1eff84592b3fc06bc6f51ec120e1fffc9)"
-        );
+			file_metadata.created_by().as_ref().unwrap(),
+			"impala version 1.3.0-INTERNAL (build 8a48ddb1eff84592b3fc06bc6f51ec120e1fffc9)"
+		);
         assert_eq!(file_metadata.num_rows(), 8);
         assert_eq!(file_metadata.version(), 1);
         assert_eq!(file_metadata.column_orders(), None);
@@ -980,7 +985,7 @@ mod tests {
         // TODO: test for every column
         let page_reader_0_result = row_group_reader.get_column_page_reader(0);
         assert!(page_reader_0_result.is_ok());
-        let mut page_reader_0: Box<PageReader> = page_reader_0_result.unwrap();
+        let mut page_reader_0: Box<dyn PageReader> = page_reader_0_result.unwrap();
         let mut page_count = 0;
         while let Ok(Some(page)) = page_reader_0.get_next_page() {
             let is_expected_page = match page {
@@ -1066,7 +1071,7 @@ mod tests {
         // TODO: test for every column
         let page_reader_0_result = row_group_reader.get_column_page_reader(0);
         assert!(page_reader_0_result.is_ok());
-        let mut page_reader_0: Box<PageReader> = page_reader_0_result.unwrap();
+        let mut page_reader_0: Box<dyn PageReader> = page_reader_0_result.unwrap();
         let mut page_count = 0;
         while let Ok(Some(page)) = page_reader_0.get_next_page() {
             let is_expected_page = match page {

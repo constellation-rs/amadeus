@@ -65,7 +65,7 @@ impl<R: ParquetReader> Read for FileSource<R> {
         let bytes_to_read = cmp::min(buf.len(), (self.end - self.start) as usize);
         let buf = &mut buf[0..bytes_to_read];
 
-        reader.seek(SeekFrom::Start(self.start as u64))?;
+        let _ = reader.seek(SeekFrom::Start(self.start as u64))?;
         let res = reader.read(buf);
         if let Ok(bytes_read) = res {
             self.start += bytes_read as u64;
@@ -160,10 +160,10 @@ mod tests {
     fn test_io_read_pos() {
         let mut src = FileSource::new(&get_test_file("alltypes_plain.parquet"), 0, 4);
 
-        src.read(&mut vec![0; 1]).unwrap();
+        let _ = src.read(&mut vec![0; 1]).unwrap();
         assert_eq!(src.pos(), 1);
 
-        src.read(&mut vec![0; 4]).unwrap();
+        let _ = src.read(&mut vec![0; 4]).unwrap();
         assert_eq!(src.pos(), 4);
     }
 
@@ -172,7 +172,7 @@ mod tests {
         let mut src = FileSource::new(&get_test_file("alltypes_plain.parquet"), 0, 4);
 
         // Read all bytes from source
-        src.read(&mut vec![0; 128]).unwrap();
+        let _ = src.read(&mut vec![0; 128]).unwrap();
         assert_eq!(src.pos(), 4);
 
         // Try reading again, should return 0 bytes.
@@ -187,7 +187,8 @@ mod tests {
         let mut file = get_test_file("alltypes_plain.parquet");
         let mut src = FileSource::new(&file, 0, 4);
 
-        file.seek(SeekFrom::Start(5 as u64))
+        let _ = file
+            .seek(SeekFrom::Start(5 as u64))
             .expect("File seek to a position");
 
         let bytes_read = src.read(&mut buf[..]).unwrap();
@@ -198,13 +199,13 @@ mod tests {
     #[test]
     fn test_io_write_with_pos() {
         let mut file = get_temp_file("file_sink_test", &[b'a', b'b', b'c']);
-        file.seek(SeekFrom::Current(3)).unwrap();
+        let _ = file.seek(SeekFrom::Current(3)).unwrap();
 
         // Write into sink
         let mut sink = FileSink::new(&file);
         assert_eq!(sink.pos(), 3);
 
-        sink.write(&[b'd', b'e', b'f', b'g']).unwrap();
+        let _ = sink.write(&[b'd', b'e', b'f', b'g']).unwrap();
         assert_eq!(sink.pos(), 7);
 
         sink.flush().unwrap();
@@ -214,7 +215,7 @@ mod tests {
         let mut res = vec![0u8; 7];
         let mut chunk =
             FileSource::new(&file, 0, file.metadata().unwrap().len() as usize);
-        chunk.read(&mut res[..]).unwrap();
+        let _ = chunk.read(&mut res[..]).unwrap();
 
         assert_eq!(res, vec![b'a', b'b', b'c', b'd', b'e', b'f', b'g']);
     }

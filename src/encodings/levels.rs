@@ -19,12 +19,14 @@ use std::{cmp, mem};
 
 use super::rle::{RleDecoder, RleEncoder};
 
-use crate::basic::Encoding;
-use crate::data_type::AsBytes;
-use crate::errors::{ParquetError, Result};
-use crate::util::{
-    bit_util::{ceil, log2, BitReader, BitWriter},
-    memory::ByteBufferPtr,
+use crate::{
+    basic::Encoding,
+    data_type::AsBytes,
+    errors::{ParquetError, Result},
+    util::{
+        bit_util::{ceil, log2, BitReader, BitWriter},
+        memory::ByteBufferPtr,
+    },
 };
 
 /// Computes max buffer size for level encoder/decoder based on encoding, max
@@ -100,29 +102,24 @@ impl LevelEncoder {
     /// RLE and BIT_PACKED level encoders return Err() when internal buffer overflows or
     /// flush fails.
     #[inline]
-    pub fn put(&mut self, buffer: &[i16]) -> Result<usize> {
-        let mut num_encoded = 0;
+    pub fn put(&mut self, buffer: &[i16]) -> Result<()> {
         match *self {
             LevelEncoder::Rle(ref mut encoder) | LevelEncoder::RleV2(ref mut encoder) => {
                 for value in buffer {
                     if !encoder.put(*value as u64)? {
                         return Err(general_err!("RLE buffer is full"));
                     }
-                    num_encoded += 1;
                 }
                 encoder.flush()?;
             }
             LevelEncoder::BitPacked(bit_width, ref mut encoder) => {
                 for value in buffer {
-                    if !encoder.put_value(*value as u64, bit_width as usize) {
-                        return Err(general_err!("Not enough bytes left"));
-                    }
-                    num_encoded += 1;
+                    encoder.put_value(*value as u64, bit_width as usize)?;
                 }
                 encoder.flush();
             }
         }
-        Ok(num_encoded)
+        Ok(())
     }
 
     /// Finalizes level encoder, flush all intermediate buffers and return resulting
@@ -296,10 +293,13 @@ mod tests {
         let mut decoder;
         if v2 {
             decoder = LevelDecoder::v2(max_level);
-            decoder.set_data_range(levels.len(), &byte_buf, 0, byte_buf.len());
+            let res = decoder.set_data_range(levels.len(), &byte_buf, 0, byte_buf.len());
+            assert_eq!(res, byte_buf.len());
         } else {
             decoder = LevelDecoder::v1(enc, max_level);
-            decoder.set_data(levels.len(), byte_buf);
+            let byte_buf_len = byte_buf.len();
+            let res = decoder.set_data(levels.len(), byte_buf);
+            assert_eq!(res, byte_buf_len)
         };
 
         let mut buffer = vec![0; levels.len()];
@@ -328,10 +328,10 @@ mod tests {
         let mut decoder;
         if v2 {
             decoder = LevelDecoder::v2(max_level);
-            decoder.set_data_range(levels.len(), &byte_buf, 0, byte_buf.len());
+            let _ = decoder.set_data_range(levels.len(), &byte_buf, 0, byte_buf.len());
         } else {
             decoder = LevelDecoder::v1(enc, max_level);
-            decoder.set_data(levels.len(), byte_buf);
+            let _ = decoder.set_data(levels.len(), byte_buf);
         }
 
         let mut buffer = vec![0; levels.len() * 2];
@@ -370,24 +370,23 @@ mod tests {
             LevelEncoder::v1(enc, max_level, vec![0; size])
         };
         // Encode only one value
-        let num_encoded = encoder.put(&levels[0..1]).expect("put() should be OK");
+        encoder.put(&levels[0..1]).expect("put() should be OK");
         let encoded_levels = encoder.consume().expect("consume() should be OK");
-        assert_eq!(num_encoded, 1);
 
         let byte_buf = ByteBufferPtr::new(encoded_levels);
         let mut decoder;
         // Set one encoded value as `num_buffered_values`
         if v2 {
             decoder = LevelDecoder::v2(max_level);
-            decoder.set_data_range(1, &byte_buf, 0, byte_buf.len());
+            let _ = decoder.set_data_range(1, &byte_buf, 0, byte_buf.len());
         } else {
             decoder = LevelDecoder::v1(enc, max_level);
-            decoder.set_data(1, byte_buf);
+            let _ = decoder.set_data(1, byte_buf);
         }
 
         let mut buffer = vec![0; levels.len()];
         let num_decoded = decoder.get(&mut buffer).expect("get() should be OK");
-        assert_eq!(num_decoded, num_encoded);
+        assert_eq!(num_decoded, 1);
         assert_eq!(buffer[0..num_decoded], levels[0..num_decoded]);
     }
 
@@ -409,7 +408,11 @@ mod tests {
         for _ in 0..100 {
             match encoder.put(&levels) {
                 Err(err) => {
-                    assert!(format!("{}", err).contains("Not enough bytes left"));
+                    assert!(
+                        format!("{}", err).contains("Not enough bytes left"),
+                        "{}",
+                        err
+                    );
                     found_err = true;
                     break;
                 }
@@ -498,7 +501,7 @@ mod tests {
 
         let max_rep_level = 1;
         let mut decoder = LevelDecoder::v2(max_rep_level);
-        assert_eq!(decoder.set_data_range(10, &buffer, 0, 3), 3);
+        let _ = decoder.set_data_range(10, &buffer, 0, 3);
         let mut result = vec![0; 10];
         let num_decoded = decoder.get(&mut result).expect("get() should be OK");
         assert_eq!(num_decoded, 10);
@@ -506,7 +509,7 @@ mod tests {
 
         let max_def_level = 2;
         let mut decoder = LevelDecoder::v2(max_def_level);
-        assert_eq!(decoder.set_data_range(10, &buffer, 3, 5), 5);
+        let _ = decoder.set_data_range(10, &buffer, 3, 5);
         let mut result = vec![0; 10];
         let num_decoded = decoder.get(&mut result).expect("get() should be OK");
         assert_eq!(num_decoded, 10);
@@ -522,7 +525,7 @@ mod tests {
         let buffer = ByteBufferPtr::new(vec![1, 2, 3, 4, 5]);
         let max_level = 1;
         let mut decoder = LevelDecoder::v1(Encoding::BitPacked, max_level);
-        decoder.set_data_range(10, &buffer, 0, 3);
+        let _ = decoder.set_data_range(10, &buffer, 0, 3);
     }
 
     #[test]
@@ -546,7 +549,7 @@ mod tests {
         let max_rep_level = 2;
         let mut decoder = LevelDecoder::v1(Encoding::Rle, max_rep_level);
         let mut buffer = vec![0; 16];
-        decoder.get(&mut buffer).unwrap();
+        let _ = decoder.get(&mut buffer).unwrap();
     }
 
     #[test]
@@ -555,6 +558,6 @@ mod tests {
         let max_rep_level = 2;
         let mut decoder = LevelDecoder::v1(Encoding::BitPacked, max_rep_level);
         let mut buffer = vec![0; 16];
-        decoder.get(&mut buffer).unwrap();
+        let _ = decoder.get(&mut buffer).unwrap();
     }
 }

@@ -20,10 +20,12 @@ use std::{
     mem::{size_of, transmute_copy},
 };
 
-use crate::errors::{ParquetError, Result};
-use crate::util::{
-    bit_util::{self, BitReader, BitWriter},
-    memory::ByteBufferPtr,
+use crate::{
+    errors::{ParquetError, Result},
+    util::{
+        bit_util::{self, BitReader, BitWriter},
+        memory::ByteBufferPtr,
+    },
 };
 
 /// Rle/Bit-Packing Hybrid Encoding
@@ -253,14 +255,15 @@ impl RleEncoder {
     fn flush_rle_run(&mut self) -> Result<()> {
         assert!(self.repeat_count > 0);
         let indicator_value = self.repeat_count << 1 | 0;
-        let mut result = self.bit_writer.put_vlq_int(indicator_value as u64);
-        result &= self.bit_writer.put_aligned(
-            self.current_value,
-            bit_util::ceil(self.bit_width as i64, 8) as usize,
-        );
-        if !result {
-            return Err(general_err!("Failed to write RLE run"));
-        }
+        self.bit_writer
+            .put_vlq_int(indicator_value as u64)
+            .map_err(|_| general_err!("Failed to write RLE run"))?;
+        self.bit_writer
+            .put_aligned(
+                self.current_value,
+                bit_util::ceil(self.bit_width as i64, 8) as usize,
+            )
+            .map_err(|_| general_err!("Failed to write RLE run"))?;
         self.num_buffered_values = 0;
         self.repeat_count = 0;
         Ok(())
@@ -274,22 +277,17 @@ impl RleEncoder {
 
         // Write all buffered values as bit-packed literals
         for i in 0..self.num_buffered_values {
-            let _ = self
-                .bit_writer
-                .put_value(self.buffered_values[i], self.bit_width as usize);
+            self.bit_writer
+                .put_value(self.buffered_values[i], self.bit_width as usize)?;
         }
         self.num_buffered_values = 0;
         if update_indicator_byte {
             // Write the indicator byte to the reserved position in `bit_writer`
             let num_groups = self.bit_packed_count / 8;
             let indicator_byte = ((num_groups << 1) | 1) as u8;
-            if !self.bit_writer.put_aligned_offset(
-                indicator_byte,
-                1,
-                self.indicator_byte_pos as usize,
-            ) {
-                return Err(general_err!("Not enough space to write indicator byte"));
-            }
+            self.bit_writer
+                .put_aligned_offset(indicator_byte, 1, self.indicator_byte_pos as usize)
+                .map_err(|_| general_err!("Not enough space to write indicator byte"))?;
             self.indicator_byte_pos = -1;
             self.bit_packed_count = 0;
         }
@@ -556,8 +554,10 @@ mod tests {
         let mut encoder1 = RleEncoder::new(3, 256);
         let mut encoder2 = RleEncoder::new(3, 256);
         for value in data {
-            encoder1.put(value as u64).unwrap();
-            encoder2.put(value as u64).unwrap();
+            let res = encoder1.put(value as u64).unwrap();
+            assert!(res);
+            let res = encoder2.put(value as u64).unwrap();
+            assert!(res);
         }
         let res1 = encoder1.flush_buffer().unwrap();
         let res2 = encoder2.consume().unwrap();
@@ -678,9 +678,10 @@ mod tests {
         // Verify batch read
         decoder.set_data(buffer);
         let mut values_read: Vec<i64> = vec![0; values.len()];
-        decoder
+        let res = decoder
             .get_batch(&mut values_read[..])
             .expect("get_batch() should be OK");
+        assert_eq!(res, values_read.len());
         assert_eq!(&values_read[..], values);
     }
 
@@ -784,9 +785,10 @@ mod tests {
         let mut decoder = RleDecoder::new(bit_width);
         decoder.set_data(ByteBufferPtr::new(buffer));
         let mut actual_values: Vec<i16> = vec![0; values.len()];
-        decoder
+        let res = decoder
             .get_batch(&mut actual_values)
             .expect("get_batch() should be OK");
+        assert_eq!(res, actual_values.len());
         assert_eq!(actual_values, values);
     }
 
@@ -816,9 +818,10 @@ mod tests {
         let mut decoder = RleDecoder::new(bit_width);
         decoder.set_data(buffer);
         let mut values_read: Vec<i32> = vec![0; values.len()];
-        decoder
+        let res = decoder
             .get_batch(&mut values_read[..])
             .expect("get_batch() should be OK");
+        assert_eq!(res, values_read.len());
         assert_eq!(&values_read[..], values);
     }
 

@@ -44,9 +44,11 @@
 
 use std::rc::Rc;
 
-use crate::basic::{LogicalType, Repetition, Type as PhysicalType};
-use crate::errors::{ParquetError, Result};
-use crate::schema::types::{Type, TypePtr};
+use crate::{
+    basic::{LogicalType, Repetition, Type as PhysicalType},
+    errors::{ParquetError, Result},
+    schema::types::{Type, TypePtr},
+};
 
 /// Parses message type as string into a Parquet [`Type`](crate::schema::types::Type)
 /// which, for example, could be used to extract individual columns. Returns Parquet

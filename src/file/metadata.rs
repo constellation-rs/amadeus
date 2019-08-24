@@ -37,12 +37,14 @@ use std::rc::Rc;
 
 use parquet_format::{ColumnChunk, ColumnMetaData, RowGroup};
 
-use crate::basic::{ColumnOrder, Compression, Encoding, Type};
-use crate::errors::{ParquetError, Result};
-use crate::file::statistics::{self, Statistics};
-use crate::schema::types::{
-    ColumnDescPtr, ColumnDescriptor, ColumnPath, SchemaDescPtr, SchemaDescriptor,
-    Type as SchemaType, TypePtr,
+use crate::{
+    basic::{ColumnOrder, Compression, Encoding, Type},
+    errors::{ParquetError, Result},
+    file::statistics::{self, Statistics},
+    schema::types::{
+        ColumnDescPtr, ColumnDescriptor, ColumnPath, SchemaDescPtr, SchemaDescriptor,
+        Type as SchemaType, TypePtr,
+    },
 };
 
 /// Reference counted pointer for [`ParquetMetaData`].

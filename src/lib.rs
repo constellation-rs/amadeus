@@ -15,12 +15,25 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![feature(specialization)]
-#![feature(type_alias_impl_trait)]
-#![feature(core_intrinsics)]
+//! An Apache Parquet implementation in Rust.
+//!
+//! **[Crates.io](https://crates.io/crates/amadeus-parquet) │ [Repo](https://github.com/alecmocatta/amadeus-parquet)**
+
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.1.0")]
+#![feature(specialization, type_alias_impl_trait)]
+#![warn(
+	// missing_copy_implementations,
+	// missing_debug_implementations,
+	// missing_docs,
+	// trivial_casts,
+	// trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	clippy::pedantic
+)]
+// from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
 #![allow(dead_code)]
-#![allow(non_camel_case_types)]
-#![allow(bare_trait_objects)]
 
 #[macro_use]
 pub mod errors;
@@ -28,8 +41,10 @@ pub mod basic;
 pub mod data_type;
 
 // Exported for external use, such as benchmarks
-pub use self::encodings::{decoding, encoding};
-pub use self::util::memory;
+pub use self::{
+    encodings::{decoding, encoding},
+    util::memory,
+};
 
 #[macro_use]
 mod util;

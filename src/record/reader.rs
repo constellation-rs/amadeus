@@ -39,14 +39,16 @@ use super::{
     },
     Predicate, Reader, Record,
 };
-use crate::column::reader::ColumnReader;
-use crate::data_type::{
-    BoolType, ByteArrayType, Decimal, DoubleType, FixedLenByteArrayType, FloatType,
-    Int32Type, Int64Type, Int96, Int96Type,
+use crate::{
+    column::reader::ColumnReader,
+    data_type::{
+        BoolType, ByteArrayType, Decimal, DoubleType, FixedLenByteArrayType, FloatType,
+        Int32Type, Int64Type, Int96, Int96Type,
+    },
+    errors::{ParquetError, Result},
+    file::reader::{FileReader, RowGroupReader},
+    schema::types::{ColumnPath, SchemaDescPtr, SchemaDescriptor, Type},
 };
-use crate::errors::{ParquetError, Result};
-use crate::file::reader::{FileReader, RowGroupReader};
-use crate::schema::types::{ColumnPath, SchemaDescPtr, SchemaDescriptor, Type};
 
 /// Default batch size for a reader
 const DEFAULT_BATCH_SIZE: usize = 1024;
@@ -775,7 +777,7 @@ where
     /// Creates row iterator for a specific row group.
     pub fn from_row_group(
         _proj: Option<Predicate>,
-        row_group_reader: &RowGroupReader,
+        row_group_reader: &dyn RowGroupReader,
     ) -> Result<Self> {
         let file_schema = row_group_reader.metadata().schema_descr_ptr();
         let file_schema = file_schema.root_schema();
@@ -796,7 +798,7 @@ where
 
     fn get_reader_iter(
         schema: &<Root<T> as Record>::Schema,
-        row_group_reader: &RowGroupReader,
+        row_group_reader: &dyn RowGroupReader,
     ) -> Result<ReaderIter<T>> {
         // Prepare lookup table of column path -> original column index
         // This allows to prune columns and map schema leaf nodes to the column readers
@@ -965,10 +967,12 @@ mod tests {
     use linked_hash_map::LinkedHashMap;
     use std::{collections::HashMap, sync::Arc};
 
-    use crate::errors::Result;
-    use crate::file::reader::{FileReader, SerializedFileReader};
-    use crate::record::types::{Row, Value};
-    use crate::util::test_common::get_test_file;
+    use crate::{
+        errors::Result,
+        file::reader::{FileReader, SerializedFileReader},
+        record::types::{Row, Value},
+        util::test_common::get_test_file,
+    };
 
     // Convenient macros to assemble row, list, map, and group.
 
@@ -980,7 +984,8 @@ mod tests {
                 #[allow(unused_mut)]
                 let mut keys = LinkedHashMap::default();
                 $(
-                    keys.insert($name, result.len());
+                    let res = keys.insert($name, result.len());
+                    assert!(res.is_none());
                     result.push($e);
                 )*
                 Group(result, Arc::new(keys))
@@ -1022,7 +1027,8 @@ mod tests {
                 #[allow(unused_mut)]
                 let mut result = HashMap::new();
                 $(
-                    result.insert($k, $v);
+                    let res = result.insert($k, $v);
+                    assert!(res.is_none());
                 )*
                 Map(result)
             }

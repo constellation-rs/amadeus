@@ -37,13 +37,12 @@
 //! }
 //! ```
 
-use std::{cmp, fmt, ptr};
+use std::{fmt, ptr};
 
 use byteorder::{ByteOrder, LittleEndian};
 use parquet_format::Statistics as TStatistics;
 
-use crate::basic::Type;
-use crate::data_type::*;
+use crate::{basic::Type, data_type::*};
 
 // Macro to generate methods create Statistics.
 macro_rules! statistics_new_func {
@@ -359,8 +358,8 @@ impl fmt::Display for Statistics {
 
 /// Typed implementation for [`Statistics`].
 pub struct TypedStatistics<T: DataType> {
-    min: Option<T::T>,
-    max: Option<T::T>,
+    min: Option<T::Type>,
+    max: Option<T::Type>,
     // Distinct count could be omitted in some cases
     distinct_count: Option<u64>,
     null_count: u64,
@@ -370,8 +369,8 @@ pub struct TypedStatistics<T: DataType> {
 impl<T: DataType> TypedStatistics<T> {
     /// Creates new typed statistics.
     pub fn new(
-        min: Option<T::T>,
-        max: Option<T::T>,
+        min: Option<T::Type>,
+        max: Option<T::Type>,
         distinct_count: Option<u64>,
         null_count: u64,
         is_min_max_deprecated: bool,
@@ -389,7 +388,7 @@ impl<T: DataType> TypedStatistics<T> {
     ///
     /// Panics if min value is not set, e.g. all values are `null`.
     /// Use `has_min_max_set` method to check that.
-    pub fn min(&self) -> &T::T {
+    pub fn min(&self) -> &T::Type {
         self.min.as_ref().unwrap()
     }
 
@@ -397,7 +396,7 @@ impl<T: DataType> TypedStatistics<T> {
     ///
     /// Panics if max value is not set, e.g. all values are `null`.
     /// Use `has_min_max_set` method to check that.
-    pub fn max(&self) -> &T::T {
+    pub fn max(&self) -> &T::Type {
         self.max.as_ref().unwrap()
     }
 
@@ -478,7 +477,7 @@ impl<T: DataType> fmt::Debug for TypedStatistics<T> {
     }
 }
 
-impl<T: DataType> cmp::PartialEq for TypedStatistics<T> {
+impl<T: DataType> PartialEq for TypedStatistics<T> {
     fn eq(&self, other: &TypedStatistics<T>) -> bool {
         self.min == other.min
             && self.max == other.max
@@ -492,11 +491,11 @@ impl<T: DataType> cmp::PartialEq for TypedStatistics<T> {
 /// For example, we should display vector slices for byte array types, and original
 /// values for other types.
 trait ValueDisplay<T: DataType> {
-    fn value_fmt(&self, f: &mut fmt::Formatter, value: &T::T) -> fmt::Result;
+    fn value_fmt(&self, f: &mut fmt::Formatter, value: &T::Type) -> fmt::Result;
 }
 
 impl<T: DataType> ValueDisplay<T> for TypedStatistics<T> {
-    default fn value_fmt(&self, f: &mut fmt::Formatter, value: &T::T) -> fmt::Result {
+    default fn value_fmt(&self, f: &mut fmt::Formatter, value: &T::Type) -> fmt::Result {
         write!(f, "{:?}", value)
     }
 }
@@ -554,7 +553,7 @@ mod tests {
             min_value: None,
         };
 
-        from_thrift(Type::Int32, Some(thrift_stats));
+        let _ = from_thrift(Type::Int32, Some(thrift_stats));
     }
 
     #[test]
@@ -584,16 +583,16 @@ mod tests {
     fn test_statistics_display() {
         let stats = Statistics::int32(Some(1), Some(12), None, 12, true);
         assert_eq!(
-            format!("{}", stats),
-            "{min: 1, max: 12, distinct_count: N/A, null_count: 12, min_max_deprecated: true}"
-        );
+			format!("{}", stats),
+			"{min: 1, max: 12, distinct_count: N/A, null_count: 12, min_max_deprecated: true}"
+		);
 
         let stats = Statistics::int64(None, None, None, 7, false);
         assert_eq!(
-            format!("{}", stats),
-            "{min: N/A, max: N/A, distinct_count: N/A, null_count: 7, min_max_deprecated: \
-             false}"
-        );
+			format!("{}", stats),
+			"{min: N/A, max: N/A, distinct_count: N/A, null_count: 7, min_max_deprecated: \
+			 false}"
+		);
 
         let stats = Statistics::int96(
             Some(Int96::new(1, 0, 0)),
@@ -616,9 +615,9 @@ mod tests {
             false,
         );
         assert_eq!(
-            format!("{}", stats),
-            "{min: [1], max: [2], distinct_count: 5, null_count: 7, min_max_deprecated: false}"
-        );
+			format!("{}", stats),
+			"{min: [1], max: [2], distinct_count: 5, null_count: 7, min_max_deprecated: false}"
+		);
     }
 
     #[test]

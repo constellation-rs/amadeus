@@ -49,7 +49,7 @@ macro_rules! impl_parquet_record_tuple {
                     let $t = (self.0).$i.read(def_level, rep_level);
                 )*
                 if $($t.is_err() ||)* false { // TODO: unlikely
-                    $($t?;)*
+                    $(let _ = $t?;)*
                     unreachable!()
                 }
                 Ok((
@@ -101,11 +101,11 @@ macro_rules! impl_parquet_record_tuple {
         impl<$($t,)*> Schema for TupleSchema<($((String,$t,),)*)> where $($t: Schema,)* {
             #[allow(unused_variables)]
             fn fmt(self_: Option<&Self>, r: Option<Repetition>, name: Option<&str>, f: &mut fmt::Formatter) -> fmt::Result {
-                let mut printer = DisplaySchemaGroup::new(r, name, None, f);
+                DisplaySchemaGroup::new(r, name, None, f)
                 $(
-                    printer.field(self_.map(|self_|&*(self_.0).$i.0), self_.map(|self_|&(self_.0).$i.1));
+                    .field(self_.map(|self_|&*(self_.0).$i.0), self_.map(|self_|&(self_.0).$i.1))
                 )*
-                printer.finish()
+                .finish()
             }
         }
         impl<$($t,)*> Record for ($($t,)*) where $($t: Record,)* {
@@ -128,7 +128,7 @@ macro_rules! impl_parquet_record_tuple {
                     path.push((schema.0).$i.0.to_owned());
                     #[allow(non_snake_case)]
                     let $t = <$t as Record>::reader(&(schema.0).$i.1, path, def_level, rep_level, paths, batch_size);
-                    path.pop().unwrap();
+                    let _ = path.pop().unwrap();
                 )*
                 TupleReader(($($t,)*))
             }
@@ -140,7 +140,7 @@ macro_rules! impl_parquet_record_tuple {
                 if fields.len() != $len {
                     return Err(ParquetError::General(format!("Can't downcast group of length {} to tuple of length {}", fields.len(), $len)));
                 }
-                Ok(($({$i;fields.next().unwrap().downcast()?},)*))
+                Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
             }
         }
         impl<$($t,)*> Downcast<($($t,)*)> for Group where Value: $(Downcast<$t> +)* {
@@ -150,7 +150,7 @@ macro_rules! impl_parquet_record_tuple {
                 if fields.len() != $len {
                     return Err(ParquetError::General(format!("Can't downcast group of length {} to tuple of length {}", fields.len(), $len)));
                 }
-                Ok(($({$i;fields.next().unwrap().downcast()?},)*))
+                Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
             }
         }
         impl<$($t,)*> PartialEq<($($t,)*)> for Value where Value: $(PartialEq<$t> +)* {

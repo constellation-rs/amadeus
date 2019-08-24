@@ -112,7 +112,7 @@ fn bench_decoding<T: DataType>(
         decoder
             .set_data(buffer.clone(), num_values)
             .expect("set_data() should be OK");
-        let mut values = vec![T::T::default(); batch_size];
+        let mut values = vec![T::Type::default(); batch_size];
         loop {
             if decoder.get(&mut values[..]).expect("get() should be OK") < batch_size {
                 break;

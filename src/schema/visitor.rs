@@ -15,10 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::basic::{LogicalType, Repetition};
-use crate::errors::ParquetError::General;
-use crate::errors::Result;
-use crate::schema::types::{Type, TypePtr};
+use crate::{
+    basic::{LogicalType, Repetition},
+    errors::{ParquetError::General, Result},
+    schema::types::{Type, TypePtr},
+};
 
 /// A utility trait to help user to traverse against parquet type.
 pub trait TypeVisitor<R, C> {
@@ -122,10 +123,14 @@ pub trait TypeVisitor<R, C> {
 #[cfg(test)]
 mod tests {
     use super::TypeVisitor;
-    use crate::basic::Type as PhysicalType;
-    use crate::errors::Result;
-    use crate::schema::parser::parse_message_type;
-    use crate::schema::types::{Type, TypePtr};
+    use crate::{
+        basic::Type as PhysicalType,
+        errors::Result,
+        schema::{
+            parser::parse_message_type,
+            types::{Type, TypePtr},
+        },
+    };
     use std::rc::Rc;
 
     struct TestVisitorContext {}

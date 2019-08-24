@@ -20,8 +20,10 @@ use std::{
     mem::{size_of, transmute_copy},
 };
 
-use crate::errors::{ParquetError, Result};
-use crate::util::{bit_packing::unpack32, memory::ByteBufferPtr};
+use crate::{
+    errors::{ParquetError, Result},
+    util::{bit_packing::unpack32, memory::ByteBufferPtr},
+};
 
 /// Reads `$size` of bytes from `$src`, and reinterprets them as type `$ty`, in
 /// little-endian order. `$ty` must implement the `Default` trait. Otherwise this won't
@@ -285,13 +287,13 @@ impl BitWriter {
     ///
     /// Returns false if there's not enough room left. True otherwise.
     #[inline]
-    pub fn put_value(&mut self, v: u64, num_bits: usize) -> bool {
+    pub fn put_value(&mut self, v: u64, num_bits: usize) -> Result<()> {
         assert!(num_bits <= 64);
         assert_eq!(v.checked_shr(num_bits as u32).unwrap_or(0), 0); // covers case v >> 64
 
         if self.byte_offset * 8 + self.bit_offset + num_bits > self.max_bytes as usize * 8
         {
-            return false;
+            return Err(general_err!("Not enough bytes left"));
         }
 
         self.buffered_values |= v << self.bit_offset;
@@ -312,7 +314,7 @@ impl BitWriter {
                 .unwrap_or(0);
         }
         assert!(self.bit_offset < 64);
-        true
+        Ok(())
     }
 
     /// Writes `val` of `num_bytes` bytes to the next aligned byte. If size of `T` is
@@ -320,15 +322,10 @@ impl BitWriter {
     ///
     /// Returns false if there's not enough room left. True otherwise.
     #[inline]
-    pub fn put_aligned<T: Copy>(&mut self, val: T, num_bytes: usize) -> bool {
-        let result = self.get_next_byte_ptr(num_bytes);
-        if result.is_err() {
-            // TODO: should we return `Result` for this func?
-            return false;
-        }
-        let mut ptr = result.unwrap();
+    pub fn put_aligned<T: Copy>(&mut self, val: T, num_bytes: usize) -> Result<()> {
+        let mut ptr = self.get_next_byte_ptr(num_bytes)?;
         memcpy_value(&val, num_bytes, &mut ptr);
-        true
+        Ok(())
     }
 
     /// Writes `val` of `num_bytes` bytes at the designated `offset`. The `offset` is the
@@ -345,30 +342,28 @@ impl BitWriter {
         val: T,
         num_bytes: usize,
         offset: usize,
-    ) -> bool {
+    ) -> Result<()> {
         if num_bytes + offset > self.max_bytes {
-            return false;
+            return Err(general_err!("Not enough bytes left"));
         }
         memcpy_value(
             &val,
             num_bytes,
             &mut self.buffer[offset..offset + num_bytes],
         );
-        true
+        Ok(())
     }
 
     /// Writes a VLQ encoded integer `v` to this buffer. The value is byte aligned.
     ///
     /// Returns false if there's not enough room left. True otherwise.
     #[inline]
-    pub fn put_vlq_int(&mut self, mut v: u64) -> bool {
-        let mut result = true;
+    pub fn put_vlq_int(&mut self, mut v: u64) -> Result<()> {
         while v & 0xFFFFFFFFFFFFFF80 != 0 {
-            result &= self.put_aligned::<u8>(((v & 0x7F) | 0x80) as u8, 1);
+            self.put_aligned::<u8>(((v & 0x7F) | 0x80) as u8, 1)?;
             v >>= 7;
         }
-        result &= self.put_aligned::<u8>((v & 0x7F) as u8, 1);
-        result
+        self.put_aligned::<u8>((v & 0x7F) as u8, 1)
     }
 
     /// Writes a zigzag-VLQ encoded (in little endian order) int `v` to this buffer.
@@ -378,7 +373,7 @@ impl BitWriter {
     ///
     /// Returns false if there's not enough room left. True otherwise.
     #[inline]
-    pub fn put_zigzag_vlq_int(&mut self, v: i64) -> bool {
+    pub fn put_zigzag_vlq_int(&mut self, v: i64) -> Result<()> {
         let u: u64 = ((v << 1) ^ (v >> 63)) as u64;
         self.put_vlq_int(u)
     }
@@ -638,8 +633,7 @@ impl From<Vec<u8>> for BitReader {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_common::*;
-    use super::*;
+    use super::{super::test_common::*, *};
 
     use rand::distributions::{Distribution, Standard};
     use std::fmt::Debug;
@@ -664,13 +658,13 @@ mod tests {
         let buffer = vec![255; 10];
         let mut bit_reader = BitReader::from(buffer);
         assert_eq!(bit_reader.get_byte_offset(), 0); // offset (0 bytes, 0 bits)
-        bit_reader.get_value::<i32>(6);
+        let _ = bit_reader.get_value::<i32>(6).unwrap();
         assert_eq!(bit_reader.get_byte_offset(), 1); // offset (0 bytes, 6 bits)
-        bit_reader.get_value::<i32>(10);
+        let _ = bit_reader.get_value::<i32>(10).unwrap();
         assert_eq!(bit_reader.get_byte_offset(), 2); // offset (0 bytes, 16 bits)
-        bit_reader.get_value::<i32>(20);
+        let _ = bit_reader.get_value::<i32>(20).unwrap();
         assert_eq!(bit_reader.get_byte_offset(), 5); // offset (0 bytes, 36 bits)
-        bit_reader.get_value::<i32>(30);
+        let _ = bit_reader.get_value::<i32>(30).unwrap();
         assert_eq!(bit_reader.get_byte_offset(), 9); // offset (8 bytes, 2 bits)
     }
 
@@ -801,8 +795,8 @@ mod tests {
     fn test_skip() {
         let mut writer = BitWriter::new(5);
         let old_offset = writer.skip(1).expect("skip() should return OK");
-        writer.put_aligned(42, 4);
-        writer.put_aligned_offset(0x10, 1, old_offset);
+        writer.put_aligned(42, 4).unwrap();
+        writer.put_aligned_offset(0x10, 1, old_offset).unwrap();
         let result = writer.consume();
         assert_eq!(result.as_ref(), [0x10, 42, 0, 0, 0]);
 
@@ -820,7 +814,7 @@ mod tests {
                 .expect("get_next_byte_ptr() should return OK");
             first_byte[0] = 0x10;
         }
-        writer.put_aligned(42, 4);
+        writer.put_aligned(42, 4).unwrap();
         let result = writer.consume();
         assert_eq!(result.as_ref(), [0x10, 42, 0, 0, 0]);
     }
@@ -830,8 +824,8 @@ mod tests {
         let mut writer1 = BitWriter::new(3);
         let mut writer2 = BitWriter::new(3);
         for i in 1..10 {
-            writer1.put_value(i, 4);
-            writer2.put_value(i, 4);
+            let _ = writer1.put_value(i, 4);
+            let _ = writer2.put_value(i, 4);
         }
         let res1 = writer1.flush_buffer();
         let res2 = writer2.consume();
@@ -844,8 +838,7 @@ mod tests {
         let mut writer = BitWriter::new(len);
 
         for i in 0..8 {
-            let result = writer.put_value(i % 2, 1);
-            assert!(result);
+            writer.put_value(i % 2, 1).unwrap();
         }
 
         writer.flush();
@@ -856,11 +849,15 @@ mod tests {
 
         // Write 00110011
         for i in 0..8 {
-            let result = match i {
-                0 | 1 | 4 | 5 => writer.put_value(false as u64, 1),
-                _ => writer.put_value(true as u64, 1),
-            };
-            assert!(result);
+            writer
+                .put_value(
+                    match i {
+                        0 | 1 | 4 | 5 => false,
+                        _ => true,
+                    } as u64,
+                    1,
+                )
+                .unwrap();
         }
         writer.flush();
         {
@@ -913,7 +910,7 @@ mod tests {
             .collect();
         for i in 0..total {
             assert!(
-                writer.put_value(values[i] as u64, num_bits),
+                writer.put_value(values[i] as u64, num_bits).is_ok(),
                 "[{}]: put_value() failed",
                 i
             );
@@ -966,7 +963,7 @@ mod tests {
             .collect();
 
         for i in 0..total {
-            assert!(writer.put_value(values[i] as u64, num_bits));
+            writer.put_value(values[i] as u64, num_bits).unwrap();
         }
 
         let buf = writer.consume();
@@ -1017,13 +1014,15 @@ mod tests {
             let j = i / 2;
             if i % 2 == 0 {
                 assert!(
-                    writer.put_value(values[j] as u64, num_bits),
+                    writer.put_value(values[j] as u64, num_bits).is_ok(),
                     "[{}]: put_value() failed",
                     i
                 );
             } else {
                 assert!(
-                    writer.put_aligned::<T>(aligned_values[j], aligned_value_byte_width),
+                    writer
+                        .put_aligned::<T>(aligned_values[j], aligned_value_byte_width)
+                        .is_ok(),
                     "[{}]: put_aligned() failed",
                     i
                 );
@@ -1062,7 +1061,7 @@ mod tests {
         let values = random_numbers::<u32>(total);
         for i in 0..total {
             assert!(
-                writer.put_vlq_int(values[i] as u64),
+                writer.put_vlq_int(values[i] as u64).is_ok(),
                 "[{}]; put_vlq_int() failed",
                 i
             );
@@ -1088,7 +1087,7 @@ mod tests {
         let values = random_numbers::<i32>(total);
         for i in 0..total {
             assert!(
-                writer.put_zigzag_vlq_int(values[i] as i64),
+                writer.put_zigzag_vlq_int(values[i] as i64).is_ok(),
                 "[{}]; put_zigzag_vlq_int() failed",
                 i
             );

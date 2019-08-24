@@ -69,7 +69,7 @@ macro_rules! delta_bit_pack {
 fn bench_encoding<T: DataType>(
     bench: &mut Bencher,
     bytes: usize,
-    values: Vec<T::T>,
+    values: Vec<T::Type>,
     mut encoder: Box<dyn Encoder<T>>,
 ) {
     bench.bytes = bytes as u64;

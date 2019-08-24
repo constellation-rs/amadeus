@@ -128,7 +128,7 @@ where
             paths,
             batch_size,
         );
-        path.pop().unwrap();
+        let _ = path.pop().unwrap();
         path.push(value_name.to_owned());
         let values_reader = V::reader(
             &schema.1,
@@ -138,8 +138,8 @@ where
             paths,
             batch_size,
         );
-        path.pop().unwrap();
-        path.pop().unwrap();
+        let _ = path.pop().unwrap();
+        let _ = path.pop().unwrap();
 
         MapReader(
             KeyValueReader {

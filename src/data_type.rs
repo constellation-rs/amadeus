@@ -19,15 +19,17 @@
 //! representations.
 
 use std::{
-    fmt::{self, Display},
+    fmt::{self, Debug, Display},
     mem, slice,
 };
 
 use byteorder::{BigEndian, ByteOrder};
 use num_bigint::{BigInt, Sign};
 
-use crate::basic::Type;
-use crate::util::memory::{ByteBuffer, ByteBufferPtr};
+use crate::{
+    basic::Type,
+    util::memory::{ByteBuffer, ByteBufferPtr},
+};
 
 /// Rust representation for logical type INT96, value is backed by an array of `u32`.
 /// The type only takes 12 bytes, without extra padding.
@@ -245,7 +247,7 @@ impl Display for Decimal {
             num_str.insert((point + negative) as usize, '.');
         }
 
-        num_str.fmt(f)
+        Display::fmt(&num_str, f)
     }
 }
 
@@ -333,11 +335,7 @@ impl AsBytes for str {
 /// Contains the Parquet physical type information as well as the Rust primitive type
 /// presentation.
 pub trait DataType: 'static {
-    type T: ::std::cmp::PartialEq
-        + ::std::fmt::Debug
-        + ::std::default::Default
-        + ::std::clone::Clone
-        + AsBytes;
+    type Type: PartialEq + Debug + Default + Clone + AsBytes;
 
     /// Returns Parquet physical type.
     fn get_physical_type() -> Type;
@@ -348,7 +346,7 @@ macro_rules! make_type {
         pub struct $name {}
 
         impl DataType for $name {
-            type T = $native_ty;
+            type Type = $native_ty;
 
             fn get_physical_type() -> Type {
                 $physical_ty

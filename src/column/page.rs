@@ -17,11 +17,13 @@
 
 //! Contains Parquet Page definitions and page reader interface.
 
-use crate::basic::{Encoding, PageType};
-use crate::errors::Result;
-use crate::file::{metadata::ColumnChunkMetaData, statistics::Statistics};
-use crate::schema::types::{ColumnDescPtr, SchemaDescPtr};
-use crate::util::memory::ByteBufferPtr;
+use crate::{
+    basic::{Encoding, PageType},
+    errors::Result,
+    file::{metadata::ColumnChunkMetaData, statistics::Statistics},
+    schema::types::{ColumnDescPtr, SchemaDescPtr},
+    util::memory::ByteBufferPtr,
+};
 
 /// Parquet Page definition.
 ///
@@ -219,7 +221,7 @@ pub trait PageWriter {
 }
 
 /// An iterator over pages of some specific column in a parquet file.
-pub trait PageIterator: Iterator<Item = Result<Box<PageReader>>> {
+pub trait PageIterator: Iterator<Item = Result<Box<dyn PageReader>>> {
     /// Get schema of parquet file.
     fn schema(&mut self) -> Result<SchemaDescPtr>;
 

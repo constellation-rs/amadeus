@@ -148,8 +148,8 @@ where
                         paths,
                         batch_size,
                     );
-                    path.pop().unwrap();
-                    path.pop().unwrap();
+                    let _ = path.pop().unwrap();
+                    let _ = path.pop().unwrap();
 
                     RepeatedReader { reader }
                 }
@@ -163,7 +163,7 @@ where
                         paths,
                         batch_size,
                     );
-                    path.pop().unwrap();
+                    let _ = path.pop().unwrap();
 
                     RepeatedReader { reader }
                 }

@@ -31,13 +31,13 @@
 //!
 //! // Use properties builder to set certain options and assemble the configuration.
 //! let props = WriterProperties::builder()
-//!     .set_writer_version(WriterVersion::PARQUET_1_0)
+//!     .set_writer_version(WriterVersion::Parquet1_0)
 //!     .set_encoding(Encoding::Plain)
 //!     .set_column_encoding(ColumnPath::from("col1"), Encoding::DeltaBinaryPacked)
 //!     .set_compression(Compression::Snappy)
 //!     .build();
 //!
-//! assert_eq!(props.writer_version(), WriterVersion::PARQUET_1_0);
+//! assert_eq!(props.writer_version(), WriterVersion::Parquet1_0);
 //! assert_eq!(
 //!     props.encoding(&ColumnPath::from("col1")),
 //!     Some(Encoding::DeltaBinaryPacked)
@@ -50,12 +50,14 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use crate::basic::{Compression, Encoding};
-use crate::schema::types::ColumnPath;
+use crate::{
+    basic::{Compression, Encoding},
+    schema::types::ColumnPath,
+};
 
 const DEFAULT_PAGE_SIZE: usize = 1024 * 1024;
 const DEFAULT_WRITE_BATCH_SIZE: usize = 1024;
-const DEFAULT_WRITER_VERSION: WriterVersion = WriterVersion::PARQUET_1_0;
+const DEFAULT_WRITER_VERSION: WriterVersion = WriterVersion::Parquet1_0;
 const DEFAULT_COMPRESSION: Compression = Compression::Uncompressed;
 const DEFAULT_DICTIONARY_ENABLED: bool = true;
 const DEFAULT_DICTIONARY_PAGE_SIZE_LIMIT: usize = DEFAULT_PAGE_SIZE;
@@ -69,16 +71,16 @@ const DEFAULT_CREATED_BY: &str = env!("PARQUET_CREATED_BY");
 /// Basic constant, which is not part of the Thrift definition.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WriterVersion {
-    PARQUET_1_0,
-    PARQUET_2_0,
+    Parquet1_0,
+    Parquet2_0,
 }
 
 impl WriterVersion {
     /// Returns writer version as `i32`.
     pub fn as_num(&self) -> i32 {
         match self {
-            WriterVersion::PARQUET_1_0 => 1,
-            WriterVersion::PARQUET_2_0 => 2,
+            WriterVersion::Parquet1_0 => 1,
+            WriterVersion::Parquet2_0 => 2,
         }
     }
 }
@@ -490,8 +492,8 @@ mod tests {
 
     #[test]
     fn test_writer_version() {
-        assert_eq!(WriterVersion::PARQUET_1_0.as_num(), 1);
-        assert_eq!(WriterVersion::PARQUET_2_0.as_num(), 2);
+        assert_eq!(WriterVersion::Parquet1_0.as_num(), 1);
+        assert_eq!(WriterVersion::Parquet2_0.as_num(), 2);
     }
 
     #[test]
@@ -529,7 +531,7 @@ mod tests {
     fn test_writer_properties_dictionary_encoding() {
         // dictionary encoding is not configurable, and it should be the same for both
         // writer version 1 and 2.
-        for version in vec![WriterVersion::PARQUET_1_0, WriterVersion::PARQUET_2_0] {
+        for version in vec![WriterVersion::Parquet1_0, WriterVersion::Parquet2_0] {
             let props = WriterProperties::builder()
                 .set_writer_version(version)
                 .build();
@@ -545,7 +547,7 @@ mod tests {
     #[should_panic(expected = "Dictionary encoding can not be used as fallback encoding")]
     fn test_writer_properties_panic_when_plain_dictionary_is_fallback() {
         // Should panic when user specifies dictionary encoding as fallback encoding.
-        WriterProperties::builder()
+        let _ = WriterProperties::builder()
             .set_encoding(Encoding::PlainDictionary)
             .build();
     }
@@ -554,7 +556,7 @@ mod tests {
     #[should_panic(expected = "Dictionary encoding can not be used as fallback encoding")]
     fn test_writer_properties_panic_when_rle_dictionary_is_fallback() {
         // Should panic when user specifies dictionary encoding as fallback encoding.
-        WriterProperties::builder()
+        let _ = WriterProperties::builder()
             .set_encoding(Encoding::RleDictionary)
             .build();
     }
@@ -562,7 +564,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Dictionary encoding can not be used as fallback encoding")]
     fn test_writer_properties_panic_when_dictionary_is_enabled() {
-        WriterProperties::builder()
+        let _ = WriterProperties::builder()
             .set_dictionary_enabled(true)
             .set_column_encoding(ColumnPath::from("col"), Encoding::RleDictionary)
             .build();
@@ -571,7 +573,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Dictionary encoding can not be used as fallback encoding")]
     fn test_writer_properties_panic_when_dictionary_is_disabled() {
-        WriterProperties::builder()
+        let _ = WriterProperties::builder()
             .set_dictionary_enabled(false)
             .set_column_encoding(ColumnPath::from("col"), Encoding::RleDictionary)
             .build();
@@ -581,7 +583,7 @@ mod tests {
     fn test_writer_properties_builder() {
         let props = WriterProperties::builder()
             // file settings
-            .set_writer_version(WriterVersion::PARQUET_2_0)
+            .set_writer_version(WriterVersion::Parquet2_0)
             .set_data_pagesize_limit(10)
             .set_dictionary_pagesize_limit(20)
             .set_write_batch_size(30)
@@ -601,7 +603,7 @@ mod tests {
             .set_column_max_statistics_size(ColumnPath::from("col"), 123)
             .build();
 
-        assert_eq!(props.writer_version(), WriterVersion::PARQUET_2_0);
+        assert_eq!(props.writer_version(), WriterVersion::Parquet2_0);
         assert_eq!(props.data_pagesize_limit(), 10);
         assert_eq!(props.dictionary_pagesize_limit(), 20);
         assert_eq!(props.write_batch_size(), 30);

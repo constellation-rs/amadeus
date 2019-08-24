@@ -17,18 +17,21 @@
   under the License.
 -->
 
-# An Apache Parquet implementation in Rust
+# amadeus-parquet
+
+[![Crates.io](https://img.shields.io/crates/v/amadeus-parquet.svg?maxAge=86400)](https://crates.io/crates/amadeus-parquet)
+[![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/amadeus-parquet.svg?maxAge=2592000)](#License)
+[![Build Status](https://dev.azure.com/alecmocatta/amadeus-parquet/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/amadeus-parquet/_build/latest?branchName=master)
+
+[Docs](https://docs.rs/amadeus-parquet/0.1.0)
+
+An Apache Parquet implementation in Rust.
 
 ## Usage
 Add this to your Cargo.toml:
 ```toml
 [dependencies]
-parquet = "0.15.0-SNAPSHOT"
-```
-
-and this to your crate root:
-```rust
-extern crate parquet;
+amadeus-parquet = "0.1.0"
 ```
 
 Example usage of reading data untyped:
@@ -134,4 +137,11 @@ To build documentation, run `cargo doc --no-deps`.
 To compile and view in the browser, run `cargo doc --no-deps --open`.
 
 ## License
-Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0.
+Licensed under either of
+
+ * Apache License, Version 2.0, ([LICENSE-APACHE.txt](LICENSE-APACHE.txt) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT.txt](LICENSE-MIT.txt) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

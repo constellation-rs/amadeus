@@ -21,8 +21,10 @@ use std::{collections::HashMap, convert::From, fmt, rc::Rc};
 
 use parquet_format::SchemaElement;
 
-use crate::basic::{LogicalType, Repetition, Type as PhysicalType};
-use crate::errors::{ParquetError, Result};
+use crate::{
+    basic::{LogicalType, Repetition, Type as PhysicalType},
+    errors::{ParquetError, Result},
+};
 
 // ----------------------------------------------------------------------
 // Parquet Type definitions
@@ -146,7 +148,8 @@ impl Type {
                 // build hashmap of name -> TypePtr
                 let mut field_map = HashMap::new();
                 for field in self.get_fields() {
-                    field_map.insert(field.name(), field);
+                    let res = field_map.insert(field.name(), field);
+                    assert!(res.is_none());
                 }
 
                 for field in sub_type.get_fields() {
@@ -295,8 +298,8 @@ impl<'a> PrimitiveTypeBuilder<'a> {
                     | PhysicalType::FixedLenByteArray => (),
                     _ => {
                         return Err(general_err!(
-                            "DECIMAL can only annotate INT32, INT64, BYTE_ARRAY and FIXED"
-                        ));
+							"DECIMAL can only annotate INT32, INT64, BYTE_ARRAY and FIXED"
+						));
                     }
                 }
 
@@ -315,11 +318,11 @@ impl<'a> PrimitiveTypeBuilder<'a> {
 
                 if self.scale >= self.precision {
                     return Err(general_err!(
-                        "Invalid DECIMAL: scale ({}) cannot be greater than or equal to precision \
-                         ({})",
-                        self.scale,
-                        self.precision
-                    ));
+						"Invalid DECIMAL: scale ({}) cannot be greater than or equal to precision \
+						 ({})",
+						self.scale,
+						self.precision
+					));
                 }
 
                 // Check precision and scale based on physical type limitations.
@@ -856,7 +859,8 @@ fn build_tree(
                 max_rep_level,
                 ColumnPath::new(path),
             )));
-            leaf_to_base.insert(leaves.len() - 1, base_tp);
+            let res = leaf_to_base.insert(leaves.len() - 1, base_tp);
+            assert!(res.is_none());
         }
         &Type::GroupType { ref fields, .. } => {
             for f in fields {
@@ -871,7 +875,7 @@ fn build_tree(
                     path_so_far,
                 );
                 let idx = path_so_far.len() - 1;
-                path_so_far.remove(idx);
+                let _ = path_so_far.remove(idx);
             }
         }
     }
@@ -1162,9 +1166,9 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(
-                e.description(),
-                "Invalid DECIMAL: scale (2) cannot be greater than or equal to precision (1)"
-            );
+				e.description(),
+				"Invalid DECIMAL: scale (2) cannot be greater than or equal to precision (1)"
+			);
         }
 
         result = Type::primitive_type_builder("foo", PhysicalType::Int32)
@@ -1205,9 +1209,9 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(
-                e.description(),
-                "Cannot represent FIXED_LEN_BYTE_ARRAY as DECIMAL with length 5 and precision 12"
-            );
+				e.description(),
+				"Cannot represent FIXED_LEN_BYTE_ARRAY as DECIMAL with length 5 and precision 12"
+			);
         }
 
         result = Type::primitive_type_builder("foo", PhysicalType::Int64)
@@ -1493,7 +1497,7 @@ mod tests {
             .with_repetition(Repetition::Repeated)
             .build()
             .unwrap();
-        list.get_physical_type();
+        let _ = list.get_physical_type();
     }
 
     #[test]

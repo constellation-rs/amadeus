@@ -223,11 +223,11 @@ fn impl_struct(
         #[automatically_derived]
         impl #impl_generics __::Schema for #schema_name #ty_generics #where_clause {
             fn fmt(self_: __::Option<&Self>, r: __::Option<__::Repetition>, name: __::Option<&str>, f: &mut __::fmt::Formatter) -> __::fmt::Result {
-                let mut printer = __::DisplaySchemaGroup::new(r, name, None, f);
+                __::DisplaySchemaGroup::new(r, name, None, f)
                 #(
-                    printer.field(__::Some(#field_renames1), self_.map(|self_|&self_.#field_names1));
+                    .field(__::Some(#field_renames1), self_.map(|self_|&self_.#field_names1))
                 )*
-                printer.finish()
+                .finish()
             }
         }
 
@@ -360,9 +360,9 @@ fn impl_enum(ast: &DeriveInput, data: &DataEnum) -> Result<TokenStream, Error> {
     for v in data.variants.iter() {
         if v.fields.iter().len() == 0 {
             return Err(Error::new_spanned(
-                v,
-                "#[derive(Record)] cannot be implemented for enums with non-unit variants",
-            ));
+				v,
+				"#[derive(Record)] cannot be implemented for enums with non-unit variants",
+			));
         }
     }
 

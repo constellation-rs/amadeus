@@ -440,7 +440,7 @@ mod tests {
         buffer.reserve(40);
         assert_eq!(mem_tracker.memory_usage(), buffer.capacity() as i64);
 
-        buffer.consume();
+        let _ = buffer.consume();
         assert_eq!(mem_tracker.memory_usage(), buffer.capacity() as i64);
     }
 

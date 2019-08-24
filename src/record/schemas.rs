@@ -60,9 +60,11 @@ use super::{
     types::{Downcast, Root},
     Record, Schema,
 };
-use crate::basic::{LogicalType, Repetition};
-use crate::errors::{ParquetError, Result};
-use crate::schema::parser::parse_message_type;
+use crate::{
+    basic::{LogicalType, Repetition},
+    errors::{ParquetError, Result},
+    schema::parser::parse_message_type,
+};
 
 #[derive(Default, Debug)]
 pub struct BoolSchema;
@@ -616,31 +618,30 @@ where
                 f: &mut fmt::Formatter,
             ) -> fmt::Result {
                 let self_ = self_.unwrap();
-                let mut printer =
-                    DisplaySchemaGroup::new(Some(Repetition::Repeated), name, None, f);
-                printer.field(Some(&self_.1), self_.0.map(|(k, _v)| k));
-                printer.field(Some(&self_.2), self_.0.map(|(_k, v)| v));
-                printer.finish()
+                DisplaySchemaGroup::new(Some(Repetition::Repeated), name, None, f)
+                    .field(Some(&self_.1), self_.0.map(|(k, _v)| k))
+                    .field(Some(&self_.2), self_.0.map(|(_k, v)| v))
+                    .finish()
             }
         }
-        let mut printer = DisplaySchemaGroup::new(r, name, Some(LogicalType::Map), f);
-        printer.field(
-            Some(
-                &self_
-                    .and_then(|self_| self_.2.clone())
-                    .unwrap_or_else(|| String::from("key_value")),
-            ),
-            Some(&KeyValue(
-                self_.map(|self_| (&self_.0, &self_.1)),
-                self_
-                    .and_then(|self_| self_.3.clone())
-                    .unwrap_or_else(|| String::from("key")),
-                self_
-                    .and_then(|self_| self_.4.clone())
-                    .unwrap_or_else(|| String::from("value")),
-            )),
-        );
-        printer.finish()
+        DisplaySchemaGroup::new(r, name, Some(LogicalType::Map), f)
+            .field(
+                Some(
+                    &self_
+                        .and_then(|self_| self_.2.clone())
+                        .unwrap_or_else(|| String::from("key_value")),
+                ),
+                Some(&KeyValue(
+                    self_.map(|self_| (&self_.0, &self_.1)),
+                    self_
+                        .and_then(|self_| self_.3.clone())
+                        .unwrap_or_else(|| String::from("key")),
+                    self_
+                        .and_then(|self_| self_.4.clone())
+                        .unwrap_or_else(|| String::from("value")),
+                )),
+            )
+            .finish()
     }
 }
 
@@ -723,14 +724,9 @@ where
                         f: &mut fmt::Formatter,
                     ) -> fmt::Result {
                         let self_ = self_.unwrap();
-                        let mut printer = DisplaySchemaGroup::new(
-                            Some(Repetition::Repeated),
-                            name,
-                            None,
-                            f,
-                        );
-                        printer.field(Some(&self_.1), self_.0);
-                        printer.finish()
+                        DisplaySchemaGroup::new(Some(Repetition::Repeated), name, None, f)
+                            .field(Some(&self_.1), self_.0)
+                            .finish()
                     }
                 }
 
@@ -744,24 +740,22 @@ where
                     _ => unreachable!(),
                 };
 
-                let mut printer =
-                    DisplaySchemaGroup::new(r, name, Some(LogicalType::List), f);
-                printer.field(
-                    Some(&list_name.clone().unwrap_or_else(|| String::from("list"))),
-                    Some(&List(
-                        self_,
-                        element_name
-                            .clone()
-                            .unwrap_or_else(|| String::from("element")),
-                    )),
-                );
-                printer.finish()
+                DisplaySchemaGroup::new(r, name, Some(LogicalType::List), f)
+                    .field(
+                        Some(&list_name.clone().unwrap_or_else(|| String::from("list"))),
+                        Some(&List(
+                            self_,
+                            element_name
+                                .clone()
+                                .unwrap_or_else(|| String::from("element")),
+                        )),
+                    )
+                    .finish()
             }
             Some(ListSchema(self_, ListSchemaType::ListCompat(element_name))) => {
-                let mut printer =
-                    DisplaySchemaGroup::new(r, name, Some(LogicalType::List), f);
-                printer.field(Some(&element_name.clone()), Some(self_));
-                printer.finish()
+                DisplaySchemaGroup::new(r, name, Some(LogicalType::List), f)
+                    .field(Some(&element_name.clone()), Some(self_))
+                    .finish()
             }
             Some(ListSchema(self_, ListSchemaType::Repeated)) => {
                 assert_eq!(r, Some(Repetition::Required));
@@ -794,7 +788,7 @@ impl Schema for GroupSchema {
                 .map(|(name, _index)| name)
                 .zip(self_.0.iter())
             {
-                printer.field(Some(name), Some(field));
+                let _ = printer.field(Some(name), Some(field));
             }
         }
         printer.finish()

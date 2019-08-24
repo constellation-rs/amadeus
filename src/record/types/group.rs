@@ -107,7 +107,7 @@ impl Record for Group {
                 path.push(name.clone());
                 let ret =
                     Value::reader(field, path, def_level, rep_level, paths, batch_size);
-                path.pop().unwrap();
+                let _ = path.pop().unwrap();
                 ret
             })
             .collect();
@@ -174,7 +174,7 @@ impl Debug for Group {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut printer = f.debug_struct("Group");
         for (name, field) in self.1.iter().map(|(name, _index)| name).zip(self.0.iter()) {
-            printer.field(name, field);
+            let _ = printer.field(name, field);
         }
         printer.finish()
     }
@@ -187,7 +187,8 @@ impl From<LinkedHashMap<String, Value, FxBuildHasher>> for Group {
             hashmap
                 .into_iter()
                 .map(|(key, value)| {
-                    keys.insert(key, keys.len());
+                    let res = keys.insert(key, keys.len());
+                    assert!(res.is_none());
                     value
                 })
                 .collect(),
