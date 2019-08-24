@@ -831,7 +831,7 @@ mod tests {
 
     use std::error::Error;
 
-    use rand::distributions::range::SampleRange;
+    use rand::distributions::uniform::SampleUniform;
 
     use crate::column::{
         page::PageReader,
@@ -1444,7 +1444,7 @@ mod tests {
         max_def_level: i16,
         max_rep_level: i16,
     ) where
-        T::T: PartialOrd + SampleRange + Copy,
+        T::T: PartialOrd + SampleUniform + Copy,
     {
         let mut num_values: usize = 0;
 

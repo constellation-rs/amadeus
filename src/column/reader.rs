@@ -512,7 +512,7 @@ impl<T: DataType> ColumnReaderImpl<T> {
 mod tests {
     use super::*;
 
-    use rand::distributions::range::SampleRange;
+    use rand::distributions::uniform::SampleUniform;
     use std::{collections::VecDeque, rc::Rc, vec::IntoIter};
 
     use crate::basic::Type as PhysicalType;
@@ -1113,7 +1113,7 @@ mod tests {
 
     struct ColumnReaderTester<T: DataType>
     where
-        T::T: PartialOrd + SampleRange + Copy,
+        T::T: PartialOrd + SampleUniform + Copy,
     {
         rep_levels: Vec<i16>,
         def_levels: Vec<i16>,
@@ -1122,7 +1122,7 @@ mod tests {
 
     impl<T: DataType> ColumnReaderTester<T>
     where
-        T::T: PartialOrd + SampleRange + Copy,
+        T::T: PartialOrd + SampleUniform + Copy,
     {
         pub fn new() -> Self {
             Self {
@@ -1397,7 +1397,7 @@ mod tests {
         pages: &mut VecDeque<Page>,
         use_v2: bool,
     ) where
-        T::T: PartialOrd + SampleRange + Copy,
+        T::T: PartialOrd + SampleUniform + Copy,
     {
         let mut num_values = 0;
         let max_def_level = desc.max_def_level();
