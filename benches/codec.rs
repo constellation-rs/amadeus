@@ -54,12 +54,8 @@ fn get_pages_bytes(col_idx: usize) -> Vec<u8> {
 	let mut data: Vec<u8> = Vec::new();
 	let rg_reader = get_rg_reader();
 	let mut pg_reader = rg_reader.get_column_page_reader(col_idx).unwrap();
-	loop {
-		if let Some(p) = pg_reader.get_next_page().unwrap() {
-			data.extend_from_slice(p.buffer().data());
-		} else {
-			break;
-		}
+	while let Some(p) = pg_reader.get_next_page().unwrap() {
+		data.extend_from_slice(p.buffer().data());
 	}
 	data
 }

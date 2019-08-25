@@ -22,7 +22,7 @@ maintenance = { status = "actively-maintained" }
 
 [dependencies]
 parquet-format = "2.6.0"
-parquet-derive = { version = "0.1.0", path = "./parquet-derive" }
+amadeus-parquet-derive = { version = "0.1.0", path = "amadeus-parquet-derive" }
 quick-error = "1.2.2"
 byteorder = "1.2"
 thrift = "0.12.0"

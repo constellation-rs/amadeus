@@ -15,6 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#![allow(clippy::type_complexity)]
+
 use std::{collections::HashMap, env, fs, path::PathBuf, str::FromStr};
 
 use amadeus_parquet::{

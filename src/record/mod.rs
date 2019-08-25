@@ -71,7 +71,7 @@ use crate::{
 };
 
 #[doc(inline)]
-pub use parquet_derive::Record;
+pub use amadeus_parquet_derive::Record;
 pub use reader::RowIter;
 pub use schemas::RootSchema;
 #[doc(hidden)]
