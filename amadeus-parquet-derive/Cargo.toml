@@ -2,7 +2,7 @@
 name = "amadeus-parquet-derive"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
-authors = ["Apache Arrow <dev@arrow.apache.org>","Alec Mocatta <alec@mocatta.net>"]
+authors = ["Apache Arrow <dev@arrow.apache.org>", "Alec Mocatta <alec@mocatta.net>"]
 categories = []
 keywords = ["arrow", "parquet", "hadoop"]
 description = """
@@ -16,7 +16,7 @@ edition = "2018"
 
 [badges]
 azure-devops = { project = "alecmocatta/amadeus-parquet", pipeline = "tests" }
-maintenance = { status = "actively-maintained" }
+maintenance = { status = "actively-developed" }
 
 [lib]
 proc-macro = true
