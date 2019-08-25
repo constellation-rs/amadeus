@@ -12,10 +12,10 @@ use std::{
 use super::{
 	super::{Data, SerdeDeserialize, SerdeSerialize}, IntoReader, SchemaIncomplete, Value
 };
-use parquet::{
+use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
-// use parquet::{
+// use amadeus_parquet::{
 //     basic::Repetition,
 //     column::reader::ColumnReader,
 //     errors::{ParquetError, Result},
@@ -75,9 +75,12 @@ impl<'de> Deserialize<'de> for Group {
 }
 
 impl Data for Group {
-	type ParquetSchema = <parquet::record::types::Group as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::record::types::Group as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::record::types::Group as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::record::types::Group as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -168,27 +171,29 @@ impl Data for Group {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Group as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::Group as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::record::types::Group as parquet::record::Record>::reader(
+			<amadeus_parquet::record::types::Group as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-// impl From<Group> for parquet::record::types::Group {
+// impl From<Group> for amadeus_parquet::record::types::Group {
 // 	fn from(group: Group) -> Self {
 // 		let field_names = group.field_names();
 // 		Self::new(group.into_fields().into_iter().map(Into::into).collect(), field_names)
 // 	}
 // }
-impl From<parquet::record::types::Group> for Group {
-	fn from(group: parquet::record::types::Group) -> Self {
+impl From<amadeus_parquet::record::types::Group> for Group {
+	fn from(group: amadeus_parquet::record::types::Group) -> Self {
 		let field_names = group.field_names();
 		Self::new(
 			group.into_fields().into_iter().map(Into::into).collect(),

@@ -1,10 +1,10 @@
 //! Implement [`Record`] for [`Value`] – an enum representing any valid Parquet value.
 
-use fxhash::FxBuildHasher;
-use linked_hash_map::LinkedHashMap;
-use parquet::{
+use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, record::Record, schema::types::{ColumnPath, Type}
 };
+use fxhash::FxBuildHasher;
+use linked_hash_map::LinkedHashMap;
 use serde::{
 	de::{MapAccess, SeqAccess, Visitor}, Deserialize, Deserializer, Serialize, Serializer
 };
@@ -1618,8 +1618,8 @@ where
 // }
 
 impl Data for Value {
-	type ParquetReader = ValueReader<<parquet::record::types::Value as Record>::Reader>;
-	type ParquetSchema = <parquet::record::types::Value as Record>::Schema;
+	type ParquetReader = ValueReader<<amadeus_parquet::record::types::Value as Record>::Reader>;
+	type ParquetSchema = <amadeus_parquet::record::types::Value as Record>::Schema;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -1844,93 +1844,117 @@ impl Data for Value {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		parquet::record::types::Value::parse(schema, repetition)
+		amadeus_parquet::record::types::Value::parse(schema, repetition)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
-		ValueReader(parquet::record::types::Value::reader(
+		ValueReader(amadeus_parquet::record::types::Value::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
 }
 
-impl From<parquet::record::types::Value> for Value {
-	fn from(value: parquet::record::types::Value) -> Self {
+impl From<amadeus_parquet::record::types::Value> for Value {
+	fn from(value: amadeus_parquet::record::types::Value) -> Self {
 		match value {
-			parquet::record::types::Value::Bool(value) => Value::Bool(value),
-			parquet::record::types::Value::U8(value) => Value::U8(value),
-			parquet::record::types::Value::I8(value) => Value::I8(value),
-			parquet::record::types::Value::U16(value) => Value::U16(value),
-			parquet::record::types::Value::I16(value) => Value::I16(value),
-			parquet::record::types::Value::U32(value) => Value::U32(value),
-			parquet::record::types::Value::I32(value) => Value::I32(value),
-			parquet::record::types::Value::U64(value) => Value::U64(value),
-			parquet::record::types::Value::I64(value) => Value::I64(value),
-			parquet::record::types::Value::F32(value) => Value::F32(value),
-			parquet::record::types::Value::F64(value) => Value::F64(value),
-			parquet::record::types::Value::Date(value) => Value::Date(value.into()),
-			parquet::record::types::Value::Time(value) => Value::Time(value.into()),
-			parquet::record::types::Value::Timestamp(value) => Value::Timestamp(value.into()),
-			parquet::record::types::Value::Decimal(value) => Value::Decimal(value.into()),
-			parquet::record::types::Value::ByteArray(value) => Value::ByteArray(value.into()),
-			parquet::record::types::Value::Bson(value) => Value::Bson(value.into()),
-			parquet::record::types::Value::String(value) => Value::String(value.into()),
-			parquet::record::types::Value::Json(value) => Value::Json(value.into()),
-			parquet::record::types::Value::Enum(value) => Value::Enum(value.into()),
-			parquet::record::types::Value::List(value) => Value::List(value.into()),
-			parquet::record::types::Value::Map(value) => Value::Map(value.into()),
-			parquet::record::types::Value::Group(value) => Value::Group(value.into()),
-			parquet::record::types::Value::Option(value) => {
+			amadeus_parquet::record::types::Value::Bool(value) => Value::Bool(value),
+			amadeus_parquet::record::types::Value::U8(value) => Value::U8(value),
+			amadeus_parquet::record::types::Value::I8(value) => Value::I8(value),
+			amadeus_parquet::record::types::Value::U16(value) => Value::U16(value),
+			amadeus_parquet::record::types::Value::I16(value) => Value::I16(value),
+			amadeus_parquet::record::types::Value::U32(value) => Value::U32(value),
+			amadeus_parquet::record::types::Value::I32(value) => Value::I32(value),
+			amadeus_parquet::record::types::Value::U64(value) => Value::U64(value),
+			amadeus_parquet::record::types::Value::I64(value) => Value::I64(value),
+			amadeus_parquet::record::types::Value::F32(value) => Value::F32(value),
+			amadeus_parquet::record::types::Value::F64(value) => Value::F64(value),
+			amadeus_parquet::record::types::Value::Date(value) => Value::Date(value.into()),
+			amadeus_parquet::record::types::Value::Time(value) => Value::Time(value.into()),
+			amadeus_parquet::record::types::Value::Timestamp(value) => {
+				Value::Timestamp(value.into())
+			}
+			amadeus_parquet::record::types::Value::Decimal(value) => Value::Decimal(value.into()),
+			amadeus_parquet::record::types::Value::ByteArray(value) => {
+				Value::ByteArray(value.into())
+			}
+			amadeus_parquet::record::types::Value::Bson(value) => Value::Bson(value.into()),
+			amadeus_parquet::record::types::Value::String(value) => Value::String(value.into()),
+			amadeus_parquet::record::types::Value::Json(value) => Value::Json(value.into()),
+			amadeus_parquet::record::types::Value::Enum(value) => Value::Enum(value.into()),
+			amadeus_parquet::record::types::Value::List(value) => Value::List(value.into()),
+			amadeus_parquet::record::types::Value::Map(value) => Value::Map(value.into()),
+			amadeus_parquet::record::types::Value::Group(value) => Value::Group(value.into()),
+			amadeus_parquet::record::types::Value::Option(value) => {
 				Value::Option(value.map(|value| match value {
-					parquet::record::types::ValueRequired::Bool(value) => {
+					amadeus_parquet::record::types::ValueRequired::Bool(value) => {
 						ValueRequired::Bool(value)
 					}
-					parquet::record::types::ValueRequired::U8(value) => ValueRequired::U8(value),
-					parquet::record::types::ValueRequired::I8(value) => ValueRequired::I8(value),
-					parquet::record::types::ValueRequired::U16(value) => ValueRequired::U16(value),
-					parquet::record::types::ValueRequired::I16(value) => ValueRequired::I16(value),
-					parquet::record::types::ValueRequired::U32(value) => ValueRequired::U32(value),
-					parquet::record::types::ValueRequired::I32(value) => ValueRequired::I32(value),
-					parquet::record::types::ValueRequired::U64(value) => ValueRequired::U64(value),
-					parquet::record::types::ValueRequired::I64(value) => ValueRequired::I64(value),
-					parquet::record::types::ValueRequired::F32(value) => ValueRequired::F32(value),
-					parquet::record::types::ValueRequired::F64(value) => ValueRequired::F64(value),
-					parquet::record::types::ValueRequired::Date(value) => {
+					amadeus_parquet::record::types::ValueRequired::U8(value) => {
+						ValueRequired::U8(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::I8(value) => {
+						ValueRequired::I8(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::U16(value) => {
+						ValueRequired::U16(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::I16(value) => {
+						ValueRequired::I16(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::U32(value) => {
+						ValueRequired::U32(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::I32(value) => {
+						ValueRequired::I32(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::U64(value) => {
+						ValueRequired::U64(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::I64(value) => {
+						ValueRequired::I64(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::F32(value) => {
+						ValueRequired::F32(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::F64(value) => {
+						ValueRequired::F64(value)
+					}
+					amadeus_parquet::record::types::ValueRequired::Date(value) => {
 						ValueRequired::Date(value.into())
 					}
-					parquet::record::types::ValueRequired::Time(value) => {
+					amadeus_parquet::record::types::ValueRequired::Time(value) => {
 						ValueRequired::Time(value.into())
 					}
-					parquet::record::types::ValueRequired::Timestamp(value) => {
+					amadeus_parquet::record::types::ValueRequired::Timestamp(value) => {
 						ValueRequired::Timestamp(value.into())
 					}
-					parquet::record::types::ValueRequired::Decimal(value) => {
+					amadeus_parquet::record::types::ValueRequired::Decimal(value) => {
 						ValueRequired::Decimal(value.into())
 					}
-					parquet::record::types::ValueRequired::ByteArray(value) => {
+					amadeus_parquet::record::types::ValueRequired::ByteArray(value) => {
 						ValueRequired::ByteArray(value.into())
 					}
-					parquet::record::types::ValueRequired::Bson(value) => {
+					amadeus_parquet::record::types::ValueRequired::Bson(value) => {
 						ValueRequired::Bson(value.into())
 					}
-					parquet::record::types::ValueRequired::String(value) => {
+					amadeus_parquet::record::types::ValueRequired::String(value) => {
 						ValueRequired::String(value.into())
 					}
-					parquet::record::types::ValueRequired::Json(value) => {
+					amadeus_parquet::record::types::ValueRequired::Json(value) => {
 						ValueRequired::Json(value.into())
 					}
-					parquet::record::types::ValueRequired::Enum(value) => {
+					amadeus_parquet::record::types::ValueRequired::Enum(value) => {
 						ValueRequired::Enum(value.into())
 					}
-					parquet::record::types::ValueRequired::List(value) => {
+					amadeus_parquet::record::types::ValueRequired::List(value) => {
 						ValueRequired::List(value.into())
 					}
-					parquet::record::types::ValueRequired::Map(value) => {
+					amadeus_parquet::record::types::ValueRequired::Map(value) => {
 						ValueRequired::Map(value.into())
 					}
-					parquet::record::types::ValueRequired::Group(value) => {
+					amadeus_parquet::record::types::ValueRequired::Group(value) => {
 						ValueRequired::Group(value.into())
 					}
 				}))
@@ -1941,9 +1965,9 @@ impl From<parquet::record::types::Value> for Value {
 
 /// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 pub struct ValueReader<T>(T);
-impl<T> parquet::record::Reader for ValueReader<T>
+impl<T> amadeus_parquet::record::Reader for ValueReader<T>
 where
-	T: parquet::record::Reader<Item = parquet::record::types::Value>,
+	T: amadeus_parquet::record::Reader<Item = amadeus_parquet::record::types::Value>,
 {
 	type Item = Value;
 

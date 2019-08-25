@@ -7,11 +7,11 @@ use std::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{super::Data, IntoReader, SchemaIncomplete};
-use parquet::{
+use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
 
-// use parquet::{
+// use amadeus_parquet::{
 //     basic::Repetition,
 //     column::reader::ColumnReader,
 //     // data_type::{Vec<u8>, Decimal},
@@ -114,9 +114,12 @@ impl Decimal {
 }
 
 impl Data for Decimal {
-	type ParquetSchema = <parquet::data_type::Decimal as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::data_type::Decimal as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::data_type::Decimal as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::data_type::Decimal as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -147,26 +150,28 @@ impl Data for Decimal {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::data_type::Decimal as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::data_type::Decimal as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::data_type::Decimal as parquet::record::Record>::reader(
+			<amadeus_parquet::data_type::Decimal as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-impl From<Decimal> for parquet::data_type::Decimal {
+impl From<Decimal> for amadeus_parquet::data_type::Decimal {
 	fn from(decimal: Decimal) -> Self {
 		unimplemented!()
 	}
 }
-impl From<parquet::data_type::Decimal> for Decimal {
-	fn from(decimal: parquet::data_type::Decimal) -> Self {
+impl From<amadeus_parquet::data_type::Decimal> for Decimal {
+	fn from(decimal: amadeus_parquet::data_type::Decimal) -> Self {
 		unimplemented!()
 	}
 }

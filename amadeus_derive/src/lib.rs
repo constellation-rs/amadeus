@@ -228,11 +228,11 @@ fn impl_struct(
 		#[automatically_derived]
 		impl #impl_generics __::ParquetSchema for #schema_name #ty_generics #where_clause_with_data {
 			fn fmt(self_: __::Option<&Self>, r: __::Option<__::Repetition>, name: __::Option<&str>, f: &mut __::fmt::Formatter) -> __::fmt::Result {
-				let mut printer = __::DisplaySchemaGroup::new(r, name, None, f);
+				__::DisplaySchemaGroup::new(r, name, None, f)
 				#(
-					printer.field(__::Some(#field_renames1), self_.map(|self_|&self_.#field_names1));
+					.field(__::Some(#field_renames1), self_.map(|self_|&self_.#field_names1))
 				)*
-				printer.finish()
+					.finish()
 			}
 		}
 		struct #reader_name #impl_generics #where_clause_with_data {
@@ -342,7 +342,7 @@ fn impl_struct(
 			}
 
 			fn parquet_parse(schema: &__::Type, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::ParquetSchema)> {
-				if schema.is_group() && repetition == __::Some(__::Repetition::REQUIRED) {
+				if schema.is_group() && repetition == __::Some(__::Repetition::Required) {
 					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<__::HashMap<_,_>>();
 					let name = stringify!(#name);
 					let schema_ = #schema_name{

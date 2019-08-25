@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use super::super::Data;
-use parquet::{
+use amadeus_parquet::{
     basic::Repetition,
     column::reader::ColumnReader,
     errors::{ParquetError, Result},

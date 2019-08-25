@@ -200,7 +200,7 @@ pub trait DistributedIterator {
 	{
 		struct Connect<A, B>(A, B);
 		impl<A: DistributedIterator, B: DistributedIteratorMulti<A::Item>> DistributedIterator
-			for Connect<A, B> where
+			for Connect<A, B>
 		{
 			type Item = B::Item;
 			type Task = ConnectConsumer<A::Task, B::Task>;
@@ -254,7 +254,7 @@ pub trait DistributedIterator {
 				C: for<'a> DistributedIteratorMulti<&'a A::Item>,
 				CTask: Serialize + DeserializeOwned + 'static,
 				CItem: 'static,
-			> DistributedIterator for Connect<A, B, C, CTask, CItem> where
+			> DistributedIterator for Connect<A, B, C, CTask, CItem>
 		{
 			type Item = Sum2<B::Item, CItem>;
 			type Task = ConnectConsumer<A::Task, B::Task, CTask, CItem>;

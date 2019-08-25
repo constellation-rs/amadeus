@@ -51,21 +51,23 @@ fn main() {
 		4
 	);
 
-	let rows = Postgres::<Value>::new(vec![(
-		"postgres://postgres:a@localhost/alec".parse().unwrap(),
-		vec![amadeus::source::postgres::Source::Table(
-			"weather".parse().unwrap(),
-		)],
-	)]);
-	assert_eq!(
-		rows.unwrap()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
-				let value = row.unwrap();
-				// println!("{:?}", value);
-				// let _: GameDerived = value.clone().downcast().unwrap();
-				value
-			}))
-			.count(&pool),
-		4
-	);
+	// TODO
+
+	// let rows = Postgres::<Value>::new(vec![(
+	// 	"postgres://postgres:a@localhost/alec".parse().unwrap(),
+	// 	vec![amadeus::source::postgres::Source::Table(
+	// 		"weather".parse().unwrap(),
+	// 	)],
+	// )]);
+	// assert_eq!(
+	// 	rows.unwrap()
+	// 		.map(FnMut!(|row: Result<Value, _>| -> Value {
+	// 			let value = row.unwrap();
+	// 			// println!("{:?}", value);
+	// 			// let _: GameDerived = value.clone().downcast().unwrap();
+	// 			value
+	// 		}))
+	// 		.count(&pool),
+	// 	4
+	// );
 }

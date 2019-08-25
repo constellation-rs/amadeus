@@ -8,15 +8,15 @@ use std::{
 };
 
 use super::{super::Data, IntoReader, SchemaIncomplete};
-use parquet::{
+use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
 
 // `Vec<u8>` corresponds to the `binary`/`byte_array` and `fixed_len_byte_array` physical
 // types.
 impl Data for Vec<u8> {
-	type ParquetSchema = <Vec<u8> as parquet::record::Record>::Schema;
-	type ParquetReader = <Vec<u8> as parquet::record::Record>::Reader;
+	type ParquetSchema = <Vec<u8> as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = <Vec<u8> as amadeus_parquet::record::Record>::Reader;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -25,7 +25,7 @@ impl Data for Vec<u8> {
 	}
 	fn postgres_decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -47,13 +47,13 @@ impl Data for Vec<u8> {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<Vec<u8> as parquet::record::Record>::parse(schema, repetition)
+		<Vec<u8> as amadeus_parquet::record::Record>::parse(schema, repetition)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
-		<Vec<u8> as parquet::record::Record>::reader(
+		<Vec<u8> as amadeus_parquet::record::Record>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		)
 	}
@@ -63,9 +63,12 @@ impl Data for Vec<u8> {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Bson(Vec<u8>);
 impl Data for Bson {
-	type ParquetSchema = <parquet::record::types::Bson as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::record::types::Bson as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::record::types::Bson as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::record::types::Bson as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -74,7 +77,7 @@ impl Data for Bson {
 	}
 	fn postgres_decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -96,26 +99,28 @@ impl Data for Bson {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Bson as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::Bson as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::record::types::Bson as parquet::record::Record>::reader(
+			<amadeus_parquet::record::types::Bson as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-impl From<Bson> for parquet::record::types::Bson {
+impl From<Bson> for amadeus_parquet::record::types::Bson {
 	fn from(bson: Bson) -> Self {
 		bson.0.into()
 	}
 }
-impl From<parquet::record::types::Bson> for Bson {
-	fn from(bson: parquet::record::types::Bson) -> Self {
+impl From<amadeus_parquet::record::types::Bson> for Bson {
+	fn from(bson: amadeus_parquet::record::types::Bson) -> Self {
 		Bson(bson.into())
 	}
 }
@@ -136,9 +141,12 @@ impl From<Vec<u8>> for Bson {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Json(String);
 impl Data for Json {
-	type ParquetSchema = <parquet::record::types::Json as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::record::types::Json as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::record::types::Json as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::record::types::Json as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -147,7 +155,7 @@ impl Data for Json {
 	}
 	fn postgres_decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -169,26 +177,28 @@ impl Data for Json {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Json as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::Json as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::record::types::Json as parquet::record::Record>::reader(
+			<amadeus_parquet::record::types::Json as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-impl From<Json> for parquet::record::types::Json {
+impl From<Json> for amadeus_parquet::record::types::Json {
 	fn from(json: Json) -> Self {
 		json.0.into()
 	}
 }
-impl From<parquet::record::types::Json> for Json {
-	fn from(json: parquet::record::types::Json) -> Self {
+impl From<amadeus_parquet::record::types::Json> for Json {
+	fn from(json: amadeus_parquet::record::types::Json) -> Self {
 		Json(json.into())
 	}
 }
@@ -212,9 +222,12 @@ impl From<String> for Json {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Enum(String);
 impl Data for Enum {
-	type ParquetSchema = <parquet::record::types::Enum as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::record::types::Enum as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::record::types::Enum as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::record::types::Enum as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -223,7 +236,7 @@ impl Data for Enum {
 	}
 	fn postgres_decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -245,26 +258,28 @@ impl Data for Enum {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Enum as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::Enum as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::record::types::Enum as parquet::record::Record>::reader(
+			<amadeus_parquet::record::types::Enum as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-impl From<Enum> for parquet::record::types::Enum {
+impl From<Enum> for amadeus_parquet::record::types::Enum {
 	fn from(enum_: Enum) -> Self {
 		enum_.0.into()
 	}
 }
-impl From<parquet::record::types::Enum> for Enum {
-	fn from(enum_: parquet::record::types::Enum) -> Self {
+impl From<amadeus_parquet::record::types::Enum> for Enum {
+	fn from(enum_: amadeus_parquet::record::types::Enum) -> Self {
 		Enum(enum_.into())
 	}
 }
@@ -287,8 +302,8 @@ impl From<String> for Enum {
 macro_rules! impl_parquet_record_array {
 	($i:tt) => {
 		impl Data for [u8; $i] {
-			type ParquetReader = <Self as parquet::record::Record>::Reader;
-			type ParquetSchema = <Self as parquet::record::Record>::Schema;
+			type ParquetReader = <Self as amadeus_parquet::record::Record>::Reader;
+			type ParquetSchema = <Self as amadeus_parquet::record::Record>::Schema;
 
 			fn postgres_query(
 				f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -297,7 +312,7 @@ macro_rules! impl_parquet_record_array {
 			}
 			fn postgres_decode(
 				type_: &::postgres::types::Type, buf: Option<&[u8]>,
-			) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+			) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 				unimplemented!()
 			}
 
@@ -319,14 +334,14 @@ macro_rules! impl_parquet_record_array {
 			fn parquet_parse(
 				schema: &Type, repetition: Option<Repetition>,
 			) -> Result<(String, Self::ParquetSchema), ParquetError> {
-				<Self as parquet::record::Record>::parse(schema, repetition)
+				<Self as amadeus_parquet::record::Record>::parse(schema, repetition)
 			}
 
 			fn parquet_reader(
 				schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16,
 				rep_level: i16, paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 			) -> Self::ParquetReader {
-				<Self as parquet::record::Record>::reader(
+				<Self as amadeus_parquet::record::Record>::reader(
 					schema, path, def_level, rep_level, paths, batch_size,
 				)
 			}
@@ -335,8 +350,8 @@ macro_rules! impl_parquet_record_array {
 		// Specialize the implementation to avoid passing a potentially large array around
 		// on the stack.
 		impl Data for Box<[u8; $i]> {
-			type ParquetReader = <Self as parquet::record::Record>::Reader;
-			type ParquetSchema = <Self as parquet::record::Record>::Schema;
+			type ParquetReader = <Self as amadeus_parquet::record::Record>::Reader;
+			type ParquetSchema = <Self as amadeus_parquet::record::Record>::Schema;
 
 			fn postgres_query(
 				f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -345,7 +360,7 @@ macro_rules! impl_parquet_record_array {
 			}
 			fn postgres_decode(
 				type_: &::postgres::types::Type, buf: Option<&[u8]>,
-			) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+			) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 				unimplemented!()
 			}
 
@@ -367,14 +382,14 @@ macro_rules! impl_parquet_record_array {
 			fn parquet_parse(
 				schema: &Type, repetition: Option<Repetition>,
 			) -> Result<(String, Self::ParquetSchema), ParquetError> {
-				<Self as parquet::record::Record>::parse(schema, repetition)
+				<Self as amadeus_parquet::record::Record>::parse(schema, repetition)
 			}
 
 			fn parquet_reader(
 				schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16,
 				rep_level: i16, paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 			) -> Self::ParquetReader {
-				<Self as parquet::record::Record>::reader(
+				<Self as amadeus_parquet::record::Record>::reader(
 					schema, path, def_level, rep_level, paths, batch_size,
 				)
 			}

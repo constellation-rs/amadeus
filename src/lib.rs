@@ -7,14 +7,12 @@
 #![doc(html_root_url = "https://docs.rs/amadeus/0.1.1")]
 #![feature(
 	unboxed_closures,
-	fnbox,
 	never_type,
 	specialization,
 	core_intrinsics,
-	try_from,
 	step_trait,
 	test,
-	existential_type,
+	type_alias_impl_trait,
 	bind_by_move_pattern_guards
 )]
 #![warn(

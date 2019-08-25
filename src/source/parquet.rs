@@ -2,7 +2,7 @@ use super::ResultExpand;
 use crate::{
 	data::Data, dist_iter::Consumer, into_dist_iter::IntoDistributedIterator, DistributedIterator, IteratorExt
 };
-use parquet::{
+use amadeus_parquet::{
 	errors::ParquetError, file::reader::{FileReader, SerializedFileReader}, record::RowIter
 };
 use std::{
@@ -10,7 +10,7 @@ use std::{
 };
 use walkdir::WalkDir;
 
-pub use parquet as _internal;
+pub use amadeus_parquet as _internal;
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
@@ -67,7 +67,7 @@ type ParquetInner<Row> = crate::dist_iter::FlatMap<
 
 mod wrap {
 	use crate::data::Data;
-	use parquet::{
+	use amadeus_parquet::{
 		basic::Repetition, column::reader::ColumnReader, errors::Result, schema::types::{ColumnPath, Type}
 	};
 	use std::collections::HashMap;
@@ -77,7 +77,7 @@ mod wrap {
 	pub struct Record<T>(pub T)
 	where
 		T: Data;
-	impl<T> parquet::record::Record for Record<T>
+	impl<T> amadeus_parquet::record::Record for Record<T>
 	where
 		T: Data,
 	{
@@ -102,9 +102,9 @@ mod wrap {
 
 	/// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 	pub struct RecordReader<T>(T);
-	impl<T> parquet::record::Reader for RecordReader<T>
+	impl<T> amadeus_parquet::record::Reader for RecordReader<T>
 	where
-		T: parquet::record::Reader,
+		T: amadeus_parquet::record::Reader,
 		T::Item: Data,
 	{
 		type Item = Record<T::Item>;
@@ -165,7 +165,7 @@ where
 					.flat_map(FnMut!(|file: Result<PathBuf, _>| ResultExpand(
 						file.and_then(|file| Ok(File::open(file)?))
 							.and_then(|file| Ok(SerializedFileReader::new(file)?
-								.get_row_iter()?
+								.get_row_iter(None)?
 								.map(FnMut!(|x: Result<Record<Row>, ParquetError>| Ok(x?.0)))))
 					)))
 					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
@@ -229,7 +229,7 @@ fn get_parquet_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Err
 }
 
 mod misc_serde {
-	use parquet::errors::ParquetError;
+	use amadeus_parquet::errors::ParquetError;
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
 	use std::{io, sync::Arc};
 

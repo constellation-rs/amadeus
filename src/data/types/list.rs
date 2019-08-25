@@ -6,10 +6,10 @@ use std::{
 };
 
 use super::{super::Data, MapReader, SchemaIncomplete, Value};
-use parquet::{
+use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
-// use parquet::{
+// use amadeus_parquet::{
 //     basic::{LogicalType, Repetition},
 //     column::reader::ColumnReader,
 //     errors::{ParquetError, Result},
@@ -40,10 +40,10 @@ impl<T> Data for List<T>
 where
 	T: Data,
 {
-	type ParquetSchema = <parquet::record::types::List<crate::source::parquet::Record<T>> as parquet::record::Record>::Schema;
-	existential type ParquetReader: parquet::record::Reader<Item = Self>;
+	type ParquetSchema = <amadeus_parquet::record::types::List<crate::source::parquet::Record<T>> as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = impl amadeus_parquet::record::Reader<Item = Self>;
 	// type ParquetReader =
-	//     IntoReader<<parquet::record::types::List<crate::source::parquet::Record<T>> as parquet::record::Record>::Reader, Self>;
+	//     IntoReader<<amadeus_parquet::record::types::List<crate::source::parquet::Record<T>> as amadeus_parquet::record::Record>::Reader, Self>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -76,31 +76,31 @@ where
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::List<crate::source::parquet::Record<T>> as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::List<crate::source::parquet::Record<T>> as amadeus_parquet::record::Record>::parse(schema, repetition)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		MapReader::new(
-            <parquet::record::types::List<crate::source::parquet::Record<T>> as parquet::record::Record>::reader(
+            <amadeus_parquet::record::types::List<crate::source::parquet::Record<T>> as amadeus_parquet::record::Record>::reader(
                 schema, path, def_level, rep_level, paths, batch_size,
             ),
-            |list| Ok(unsafe{transmute::<parquet::record::types::List<crate::source::parquet::Record<T>>,parquet::record::types::List<T>>(list).into()})
+            |list| Ok(unsafe{transmute::<amadeus_parquet::record::types::List<crate::source::parquet::Record<T>>,amadeus_parquet::record::types::List<T>>(list).into()})
         )
 	}
 }
-// impl From<List> for parquet::record::types::List {
+// impl From<List> for amadeus_parquet::record::types::List {
 //     fn from(list: List) -> Self {
 //         unimplemented!()
 //     }
 // }
-impl<T, U> From<parquet::record::types::List<U>> for List<T>
+impl<T, U> From<amadeus_parquet::record::types::List<U>> for List<T>
 where
 	T: Data,
 	U: Into<T>,
 {
-	fn from(list: parquet::record::types::List<U>) -> Self {
+	fn from(list: amadeus_parquet::record::types::List<U>) -> Self {
 		<_ as Into<Vec<U>>>::into(list)
 			.into_iter()
 			.map(Into::into)

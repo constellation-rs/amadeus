@@ -6,10 +6,10 @@ use std::{
 };
 
 use super::{super::Data, MapReader, SchemaIncomplete, Value};
-use parquet::{
+use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
-// use parquet::{
+// use amadeus_parquet::{
 //     basic::{LogicalType, Repetition},
 //     column::reader::ColumnReader,
 //     errors::{ParquetError, Result},
@@ -53,13 +53,13 @@ where
 	K: Hash + Eq + Data,
 	V: Data,
 {
-	type ParquetSchema = <parquet::record::types::Map<
+	type ParquetSchema = <amadeus_parquet::record::types::Map<
 		crate::source::parquet::Record<K>,
 		crate::source::parquet::Record<V>,
-	> as parquet::record::Record>::Schema;
-	existential type ParquetReader: parquet::record::Reader<Item = Self>;
+	> as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = impl amadeus_parquet::record::Reader<Item = Self>;
 	// type ParquetReader =
-	//     IntoReader<<parquet::record::types::Map<crate::source::parquet::Record<K>,crate::source::parquet::Record<V>> as parquet::record::Record>::Reader, Self>;
+	//     IntoReader<<amadeus_parquet::record::types::Map<crate::source::parquet::Record<K>,crate::source::parquet::Record<V>> as amadeus_parquet::record::Record>::Reader, Self>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -92,30 +92,30 @@ where
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Map<
+		<amadeus_parquet::record::types::Map<
 			crate::source::parquet::Record<K>,
 			crate::source::parquet::Record<V>,
-		> as parquet::record::Record>::parse(schema, repetition)
+		> as amadeus_parquet::record::Record>::parse(schema, repetition)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		MapReader::new(
-			<parquet::record::types::Map<
+			<amadeus_parquet::record::types::Map<
 				crate::source::parquet::Record<K>,
 				crate::source::parquet::Record<V>,
-			> as parquet::record::Record>::reader(
-				schema, path, def_level, rep_level, paths, batch_size
+			> as amadeus_parquet::record::Record>::reader(
+				schema, path, def_level, rep_level, paths, batch_size,
 			),
 			|map| {
 				Ok(unsafe {
 					transmute::<
-						parquet::record::types::Map<
+						amadeus_parquet::record::types::Map<
 							crate::source::parquet::Record<K>,
 							crate::source::parquet::Record<V>,
 						>,
-						parquet::record::types::Map<K, V>,
+						amadeus_parquet::record::types::Map<K, V>,
 					>(map)
 					.into()
 				})
@@ -123,18 +123,18 @@ where
 		)
 	}
 }
-// impl From<Map> for parquet::record::types::Map {
+// impl From<Map> for amadeus_parquet::record::types::Map {
 //     fn from(map: Map) -> Self {
 //         unimplemented!()
 //     }
 // }
-impl<K, V, K1, V1> From<parquet::record::types::Map<K1, V1>> for Map<K, V>
+impl<K, V, K1, V1> From<amadeus_parquet::record::types::Map<K1, V1>> for Map<K, V>
 where
 	K: Hash + Eq,
 	K1: Hash + Eq + Into<K>,
 	V1: Into<V>,
 {
-	fn from(map: parquet::record::types::Map<K1, V1>) -> Self {
+	fn from(map: amadeus_parquet::record::types::Map<K1, V1>) -> Self {
 		<_ as Into<HashMap<K1, V1>>>::into(map)
 			.into_iter()
 			.map(|(k, v)| (k.into(), v.into()))

@@ -1,7 +1,7 @@
 // TODO: Is 'static or Any friendlier in user-facing API?
 
 use std::{
-	any::Any, boxed::FnBox, collections::VecDeque, fmt, io, marker::PhantomData, mem, panic, sync::{atomic, Arc, Mutex, RwLock}, thread
+	any::Any, collections::VecDeque, fmt, io, marker::PhantomData, mem, panic, sync::{atomic, Arc, Mutex, RwLock}, thread
 };
 
 #[derive(Debug)]
@@ -19,7 +19,7 @@ impl RoundRobin {
 	}
 }
 
-type Request = dyn FnBox() -> Box<Response> + Send;
+type Request = dyn FnOnce() -> Box<Response> + Send;
 type Response = dyn Any + Send;
 
 #[derive(Debug)]

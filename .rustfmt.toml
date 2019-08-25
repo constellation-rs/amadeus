@@ -1,4 +1,4 @@
-fn_args_density = "Compressed"
+fn_args_layout = "Compressed"
 hard_tabs = true
 imports_layout = "Horizontal"
 merge_imports = true

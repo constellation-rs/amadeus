@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use parquet::{
+use amadeus_parquet::{
     basic::Repetition,
     column::reader::ColumnReader,
     errors::Result,

@@ -22,7 +22,7 @@ impl RoundRobin {
 	}
 }
 
-type Request = dyn st::FnBox() -> st::Box<Response>;
+type Request = dyn st::FnOnce() -> st::Box<Response>;
 type Response = dyn st::Any + Send;
 
 #[derive(Debug)]
@@ -77,7 +77,7 @@ struct ProcessPoolInner {
 	i: RoundRobin,
 }
 impl ProcessPoolInner {
-	fn new(processes: usize, resources: Resources) -> Result<Self, ()> {
+	fn new(processes: usize, resources: Resources) -> Result<Self, SpawnError> {
 		let mut processes_vec = Vec::with_capacity(processes);
 		for _ in 0..processes {
 			let child = spawn(
@@ -86,16 +86,17 @@ impl ProcessPoolInner {
 					let receiver = Receiver::<Option<st::Box<Request>>>::new(parent);
 					let sender = Sender::<Option<st::Box<Response>>>::new(parent);
 
-					while let Some(work) = receiver.recv().unwrap() {
+					while let Some(work) = receiver.recv().block().unwrap() {
 						let ret = panic::catch_unwind(panic::AssertUnwindSafe(work));
-						sender.send(ret.ok());
+						sender.send(ret.ok()).block();
 					}
 				}),
-			);
+			)
+			.block();
 			if let Err(err) = child {
 				for Process { sender, .. } in processes_vec {
 					// TODO: select
-					sender.send(None);
+					sender.send(None).block();
 				}
 				return Err(err);
 			}
@@ -139,7 +140,8 @@ impl ProcessPoolInner {
 			.send(Some(st::Box::new(FnOnce!([work] move || {
 				let work: F = work;
 				st::Box::new(work()) as st::Box<Response>
-			})) as st::Box<Request>));
+			})) as st::Box<Request>))
+			.block();
 		let mut process_inner = process.inner.write().unwrap();
 		process_inner.queue.push_back(Queued::Awaiting);
 		JoinHandleInner(
@@ -161,7 +163,7 @@ impl ProcessPoolInner {
 				// run(vec![Box::new(process.receiver.selectable_recv(|t| {
 				// 	z = Some(t.unwrap());
 				// }))]);
-				let z = process.receiver.recv();
+				let z = process.receiver.recv().block();
 				// println!("{:?} /recv", thread::current().name().unwrap());
 				let t = z.unwrap();
 				// let x = Box::<any::Any>::downcast::<String>(unsafe{std::ptr::read(&t)}.into_any_send_sync()).unwrap();
@@ -202,7 +204,7 @@ impl Drop for ProcessPoolInner {
 	fn drop(&mut self) {
 		for Process { sender, .. } in &self.processes {
 			// TODO: select, incl recv
-			sender.send(None);
+			sender.send(None).block();
 		}
 	}
 }
@@ -215,7 +217,7 @@ struct JoinHandleInner<T: any::Any>(usize, usize, PhantomData<fn() -> T>);
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);
 impl ProcessPool {
-	pub fn new(processes: usize, resources: Resources) -> Result<Self, ()> {
+	pub fn new(processes: usize, resources: Resources) -> Result<Self, SpawnError> {
 		Ok(ProcessPool(Arc::new(ProcessPoolInner::new(
 			processes, resources,
 		)?)))

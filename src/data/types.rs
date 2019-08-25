@@ -48,13 +48,13 @@ impl Display for DowncastError {
 }
 
 /// A convenience Reader that maps the read value using [`TryInto`].
-pub struct IntoReader<R: parquet::record::Reader, T>(R, PhantomData<fn(T)>);
-impl<R: parquet::record::Reader, T> IntoReader<R, T> {
+pub struct IntoReader<R: amadeus_parquet::record::Reader, T>(R, PhantomData<fn(T)>);
+impl<R: amadeus_parquet::record::Reader, T> IntoReader<R, T> {
 	fn new(reader: R) -> Self {
 		IntoReader(reader, PhantomData)
 	}
 }
-impl<R: parquet::record::Reader, T> parquet::record::Reader for IntoReader<R, T>
+impl<R: amadeus_parquet::record::Reader, T> amadeus_parquet::record::Reader for IntoReader<R, T>
 where
 	R::Item: Into<T>,
 {
@@ -63,12 +63,12 @@ where
 	#[inline]
 	fn read(
 		&mut self, def_level: i16, rep_level: i16,
-	) -> Result<Self::Item, parquet::errors::ParquetError> {
+	) -> Result<Self::Item, amadeus_parquet::errors::ParquetError> {
 		self.0.read(def_level, rep_level).map(Into::into)
 	}
 
 	#[inline]
-	fn advance_columns(&mut self) -> Result<(), parquet::errors::ParquetError> {
+	fn advance_columns(&mut self) -> Result<(), amadeus_parquet::errors::ParquetError> {
 		self.0.advance_columns()
 	}
 
@@ -89,27 +89,27 @@ where
 }
 
 /// A convenience Reader that maps the read value using the supplied closure.
-pub struct MapReader<R: parquet::record::Reader, F>(R, F);
-impl<R: parquet::record::Reader, F> MapReader<R, F> {
+pub struct MapReader<R: amadeus_parquet::record::Reader, F>(R, F);
+impl<R: amadeus_parquet::record::Reader, F> MapReader<R, F> {
 	fn new(reader: R, f: F) -> Self {
 		MapReader(reader, f)
 	}
 }
-impl<R: parquet::record::Reader, F, T> parquet::record::Reader for MapReader<R, F>
+impl<R: amadeus_parquet::record::Reader, F, T> amadeus_parquet::record::Reader for MapReader<R, F>
 where
-	F: FnMut(R::Item) -> Result<T, parquet::errors::ParquetError>,
+	F: FnMut(R::Item) -> Result<T, amadeus_parquet::errors::ParquetError>,
 {
 	type Item = T;
 
 	#[inline]
 	fn read(
 		&mut self, def_level: i16, rep_level: i16,
-	) -> Result<Self::Item, parquet::errors::ParquetError> {
+	) -> Result<Self::Item, amadeus_parquet::errors::ParquetError> {
 		self.0.read(def_level, rep_level).and_then(&mut self.1)
 	}
 
 	#[inline]
-	fn advance_columns(&mut self) -> Result<(), parquet::errors::ParquetError> {
+	fn advance_columns(&mut self) -> Result<(), amadeus_parquet::errors::ParquetError> {
 		self.0.advance_columns()
 	}
 
@@ -130,13 +130,13 @@ where
 }
 
 // /// A convenience Reader that maps the read value using [`TryInto`].
-// pub struct TryIntoReader<R: parquet::record::Reader, T>(R, PhantomData<fn(T)>);
-// impl<R: parquet::record::Reader, T> TryIntoReader<R, T> {
+// pub struct TryIntoReader<R: amadeus_parquet::record::Reader, T>(R, PhantomData<fn(T)>);
+// impl<R: amadeus_parquet::record::Reader, T> TryIntoReader<R, T> {
 //     fn new(reader: R) -> Self {
 //         TryIntoReader(reader, PhantomData)
 //     }
 // }
-// impl<R: parquet::record::Reader, T> parquet::record::Reader for TryIntoReader<R, T>
+// impl<R: amadeus_parquet::record::Reader, T> amadeus_parquet::record::Reader for TryIntoReader<R, T>
 // where
 //     R::Item: TryInto<T>,
 //     <R::Item as TryInto<T>>::Error: Error,
@@ -144,7 +144,7 @@ where
 //     type Item = T;
 
 //     #[inline]
-//     fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item, parquet::errors::ParquetError> {
+//     fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item, amadeus_parquet::errors::ParquetError> {
 //         self.0.read(def_level, rep_level).and_then(|x| {
 //             x.try_into()
 //                 .map_err(|err| ParquetError::General(err.description().to_owned()))
@@ -152,7 +152,7 @@ where
 //     }
 
 //     #[inline]
-//     fn advance_columns(&mut self) -> Result<(), parquet::errors::ParquetError> {
+//     fn advance_columns(&mut self) -> Result<(), amadeus_parquet::errors::ParquetError> {
 //         self.0.advance_columns()
 //     }
 

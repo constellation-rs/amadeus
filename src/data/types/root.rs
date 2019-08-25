@@ -3,8 +3,8 @@
 use std::{collections::HashMap, marker::PhantomData};
 
 #[cfg(debug_assertions)]
-use parquet::schema::parser::parse_message_type;
-use parquet::{
+use amadeus_parquet::schema::parser::parse_message_type;
+use amadeus_parquet::{
     basic::Repetition,
     column::reader::ColumnReader,
     errors::{ParquetError, Result},

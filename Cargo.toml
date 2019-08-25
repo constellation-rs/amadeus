@@ -1,3 +1,5 @@
+[workspace]
+
 [package]
 name = "amadeus"
 version = "0.1.1"
@@ -23,55 +25,50 @@ travis-ci = { repository = "alecmocatta/amadeus" }
 
 maintenance = { status = "actively-developed" }
 
-[workspace]
-members = [
-    "./",
-    "amadeus_derive",
-]
-
 [dependencies]
 amadeus_derive = { version = "0.1.0", path = "amadeus_derive" }
-serde_derive = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-rand = "0.5"
-either = "1.5"
-serde_closure = { version = "0.1" } #, path = "../serde_closure" }
-serde_traitobject = { version = "0.1.3" } #, path = "../serde_traitobject" }
-# constellation-rs = { version = "0.1", git = "https://github.com/alecmocatta/constellation.git" } #, path = "../constellation" }
-constellation-rs = { version = "0.1", path = "../deploy" }
-streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms" }#, path = "../streaming_algorithms" }
-sum = { version = "0.1", features = ["serde"] }
-replace_with = "0.1"
-reqwest = "0.8"
-reqwest_resume = "0.1"
-flate2 = "1.0"
-nom = "2.2"
-warc_parser = { path = "../../warc_nom_parser" }# git = "https://github.com/alecmocatta/warc_nom_parser" }
-url = "*"
-url_serde = "*"
-rusoto_s3 = "0.36"
-rusoto_core = "0.36"
-futures = "*"
-chrono = "*"
-http = "*"
-walkdir = "2.2"
-linked-hash-map = "0.5"
-fxhash = "0.2"
-csv = "1.0"
-serde_json = "1.0"
-owned_chars = "0.3"
+chrono = "0.4"
+constellation-rs = { version = "0.1", git = "https://github.com/alecmocatta/constellation" }
+# constellation-rs = { version = "0.1", path = "../deploy" }
 crossbeam-channel = "0.3"
+csv = "1.0"
+either = "1.5"
+flate2 = "1.0"
+futures = "0.1"
+fxhash = "0.2"
+http = "0.1"
+linked-hash-map = "0.5"
+nom = "5.0"
+owned_chars = "0.3"
+amadeus-parquet = { git = "https://github.com/alecmocatta/amadeus-parquet", branch = "initial" } # parquet = { path = "../arrow/rust/parquet" }
 postgres = { version = "0.15", features = ["with-chrono"] }
 postgres-binary-copy = "0.5"
 postgres-derive = "0.3"
-# parquet = { git = "https://github.com/alecmocatta/arrow" }
-parquet = { path = "../arrow/rust/parquet" }
+rand = "0.7"
+replace_with = "0.1"
+reqwest = "0.9"
+reqwest_resume = "0.2"
+rusoto_core = "0.40"
+rusoto_s3 = "0.40"
+serde = { version = "1.0", features = ["derive"] }
+serde_closure = { version = "0.1" } #, path = "../serde_closure" }
+serde_derive = "1.0"
+serde_json = "1.0"
+serde_traitobject = { version = "0.1.3" } #, path = "../serde_traitobject" }
+streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms" }#, path = "../streaming_algorithms" }
+sum = { version = "0.1", features = ["serde"] }
+url = { version = "2.1", features = ["serde"] }
+walkdir = "2.2"
+warc_parser = { path = "../../warc_nom_parser" }# git = "https://github.com/alecmocatta/warc_nom_parser" }
+
+# pin; broken for some reason
+bincode = "=1.0.1"
 
 [dev-dependencies]
 select = "0.4"
 
 [profile.release]
-# debug = 2
+debug = 2
 
 [[test]]
 name = "into_dist_iter"
@@ -80,6 +77,7 @@ harness = false
 [[test]]
 name = "panic"
 harness = false
+test = false # TODO
 
 [[test]]
 name = "threads"

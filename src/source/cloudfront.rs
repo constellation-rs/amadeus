@@ -271,33 +271,56 @@ impl Consumer for CloudfrontConsumer {
 	}
 }
 
-#[derive(Clone, Debug)]
-pub struct CredentialsError(String);
-
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 #[allow(clippy::pub_enum_variant_names)]
 pub enum Error {
 	NoSuchBucket(String),
 	NoSuchKey(String),
-	HttpDispatch(Arc<rusoto_core::request::HttpDispatchError>),
-	Credentials(CredentialsError),
+	HttpDispatch(rusoto_core::request::HttpDispatchError),
+	Credentials(rusoto_core::CredentialsError),
 	Validation(String),
 	ParseError(String),
-	Unknown(Arc<rusoto_core::request::BufferedHttpResponse>),
+	Unknown(rusoto_core::request::BufferedHttpResponse),
 	Io(Arc<io::Error>),
+}
+impl Clone for Error {
+	fn clone(&self) -> Self {
+		match self {
+			Self::NoSuchBucket(err) => Self::NoSuchBucket(err.clone()),
+			Self::NoSuchKey(err) => Self::NoSuchKey(err.clone()),
+			Self::HttpDispatch(err) => Self::HttpDispatch(err.clone()),
+			Self::Credentials(rusoto_core::CredentialsError { message }) => {
+				Self::Credentials(rusoto_core::CredentialsError {
+					message: message.clone(),
+				})
+			}
+			Self::Validation(err) => Self::Validation(err.clone()),
+			Self::ParseError(err) => Self::ParseError(err.clone()),
+			Self::Unknown(rusoto_core::request::BufferedHttpResponse {
+				status,
+				body,
+				headers,
+			}) => Self::Unknown(rusoto_core::request::BufferedHttpResponse {
+				status: *status,
+				body: body.clone(),
+				headers: headers.clone(),
+			}),
+			Self::Io(err) => Self::Io(err.clone()),
+		}
+	}
 }
 impl error::Error for Error {}
 impl Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Error::NoSuchBucket(err) => err.fmt(f),
-			Error::NoSuchKey(err) => err.fmt(f),
-			Error::HttpDispatch(err) => err.fmt(f),
-			Error::Credentials(err) => fmt::Debug::fmt(err, f),
-			Error::Validation(err) => err.fmt(f),
-			Error::ParseError(err) => err.fmt(f),
-			Error::Unknown(err) => fmt::Debug::fmt(err, f),
-			Error::Io(err) => err.fmt(f),
+			Self::NoSuchBucket(err) => err.fmt(f),
+			Self::NoSuchKey(err) => err.fmt(f),
+			Self::HttpDispatch(err) => err.fmt(f),
+			Self::Credentials(err) => err.fmt(f),
+			Self::Validation(err) => err.fmt(f),
+			Self::ParseError(err) => err.fmt(f),
+			Self::Unknown(err) => fmt::Debug::fmt(err, f),
+			Self::Io(err) => err.fmt(f),
 		}
 	}
 }
@@ -306,17 +329,31 @@ impl From<io::Error> for Error {
 		Error::Io(Arc::new(err))
 	}
 }
+impl<E> From<rusoto_core::RusotoError<E>> for Error
+where
+	Error: From<E>,
+{
+	fn from(err: rusoto_core::RusotoError<E>) -> Self {
+		match err {
+			rusoto_core::RusotoError::Service(e) => e.into(),
+			rusoto_core::RusotoError::HttpDispatch(http_dispatch_error) => {
+				Error::HttpDispatch(http_dispatch_error)
+			}
+			rusoto_core::RusotoError::Credentials(credentials_error) => {
+				Error::Credentials(credentials_error)
+			}
+			rusoto_core::RusotoError::Validation(string) => Error::Validation(string),
+			rusoto_core::RusotoError::ParseError(string) => Error::ParseError(string),
+			rusoto_core::RusotoError::Unknown(buffered_http_response) => {
+				Error::Unknown(buffered_http_response)
+			}
+		}
+	}
+}
 impl From<rusoto_s3::ListObjectsV2Error> for Error {
 	fn from(err: rusoto_s3::ListObjectsV2Error) -> Self {
 		match err {
 			rusoto_s3::ListObjectsV2Error::NoSuchBucket(err) => Error::NoSuchBucket(err),
-			rusoto_s3::ListObjectsV2Error::HttpDispatch(err) => Error::HttpDispatch(Arc::new(err)),
-			rusoto_s3::ListObjectsV2Error::Credentials(err) => {
-				Error::Credentials(CredentialsError(error::Error::description(&err).to_owned()))
-			}
-			rusoto_s3::ListObjectsV2Error::Validation(err) => Error::Validation(err),
-			rusoto_s3::ListObjectsV2Error::ParseError(err) => Error::ParseError(err),
-			rusoto_s3::ListObjectsV2Error::Unknown(err) => Error::Unknown(Arc::new(err)),
 		}
 	}
 }
@@ -324,13 +361,6 @@ impl From<rusoto_s3::GetObjectError> for Error {
 	fn from(err: rusoto_s3::GetObjectError) -> Self {
 		match err {
 			rusoto_s3::GetObjectError::NoSuchKey(err) => Error::NoSuchKey(err),
-			rusoto_s3::GetObjectError::HttpDispatch(err) => Error::HttpDispatch(Arc::new(err)),
-			rusoto_s3::GetObjectError::Credentials(err) => {
-				Error::Credentials(CredentialsError(error::Error::description(&err).to_owned()))
-			}
-			rusoto_s3::GetObjectError::Validation(err) => Error::Validation(err),
-			rusoto_s3::GetObjectError::ParseError(err) => Error::ParseError(err),
-			rusoto_s3::GetObjectError::Unknown(err) => Error::Unknown(Arc::new(err)),
 		}
 	}
 }
@@ -344,7 +374,6 @@ pub struct Row {
 	#[serde(with = "http_serde")]
 	pub method: Method,
 	pub host: String,
-	#[serde(with = "url_serde")]
 	pub url: Url,
 	#[serde(with = "http_serde")]
 	pub status: Option<StatusCode>,

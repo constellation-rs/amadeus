@@ -4,7 +4,7 @@ pub mod types;
 
 mod data {
 	use super::types::SchemaIncomplete;
-	use parquet::{
+	use amadeus_parquet::{
 		basic::Repetition, column::reader::ColumnReader, errors::ParquetError, record::{Reader as ParquetReader, Record as ParquetRecord, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
 	};
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -206,9 +206,9 @@ mod data {
 
 	/// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 	pub struct XxxReader<T>(T);
-	impl<T, U> parquet::record::Reader for XxxReader<T>
+	impl<T, U> amadeus_parquet::record::Reader for XxxReader<T>
 	where
-		T: parquet::record::Reader<Item = Option<crate::source::parquet::Record<U>>>,
+		T: amadeus_parquet::record::Reader<Item = Option<crate::source::parquet::Record<U>>>,
 		U: Data,
 	{
 		type Item = Option<U>;
@@ -293,7 +293,7 @@ mod tuple {
 		collections::HashMap, fmt::{self, Debug}, marker::PhantomData, vec
 	};
 
-	use parquet::{
+	use amadeus_parquet::{
 		basic::Repetition, column::reader::ColumnReader, errors::{ParquetError, Result as ParquetResult}, record::{
 			_private::DisplaySchemaGroup, types::{Downcast, Group, Value}, Reader as ParquetReader, Record as ParquetRecord, Schema as ParquetSchema
 		}, schema::types::{ColumnPath, Type}
@@ -303,9 +303,9 @@ mod tuple {
 	/// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 	pub struct TupleXxxReader<T, U>(U, PhantomData<fn(T)>);
 
-	// impl<T, U> parquet::record::Reader for TupleXxxReader<T>
+	// impl<T, U> amadeus_parquet::record::Reader for TupleXxxReader<T>
 	// where
-	// 	T: parquet::record::Reader<Item = (U,)>,
+	// 	T: amadeus_parquet::record::Reader<Item = (U,)>,
 	// 	U: Data,
 	// {
 	// 	type Item = (U,);
@@ -335,9 +335,9 @@ mod tuple {
 	// 		self.0.current_rep_level()
 	// 	}
 	// }
-	// impl<T, U, V> parquet::record::Reader for TupleXxxReader<T>
+	// impl<T, U, V> amadeus_parquet::record::Reader for TupleXxxReader<T>
 	// where
-	// 	T: parquet::record::Reader<Item = (U,V,)>,
+	// 	T: amadeus_parquet::record::Reader<Item = (U,V,)>,
 	// 	U: Data,
 	// 	V: Data,
 	// {
@@ -442,7 +442,7 @@ mod tuple {
 			// 	}
 			// }
 
-			impl<$($t,)*> parquet::record::Reader for TupleXxxReader<($($t,)*),<($(crate::source::parquet::Record<$t>,)*) as ParquetRecord>::Reader>
+			impl<$($t,)*> amadeus_parquet::record::Reader for TupleXxxReader<($($t,)*),<($(crate::source::parquet::Record<$t>,)*) as ParquetRecord>::Reader>
 			where
 				$($t: Data,)*
 			{
@@ -512,7 +512,7 @@ mod tuple {
 					if fields.len() != $len {
 						return Err(super::types::DowncastError{from:"group",to:concat!("tuple of length ", $len)});
 					}
-					Ok(($({$i;fields.next().unwrap().downcast()?},)*))
+					Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
 				}
 			}
 			// impl<$($t,)*> Downcast<($($t,)*)> for Group where Value: $(Downcast<$t> +)* {
@@ -522,7 +522,7 @@ mod tuple {
 			// 		if fields.len() != $len {
 			// 			return Err(ParquetError::General(format!("Can't downcast group of length {} to tuple of length {}", fields.len(), $len)));
 			// 		}
-			// 		Ok(($({$i;fields.next().unwrap().downcast()?},)*))
+			// 		Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
 			// 	}
 			// }
 			// impl<$($t,)*> PartialEq<($($t,)*)> for Value where Value: $(PartialEq<$t> +)* {

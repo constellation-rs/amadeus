@@ -1,9 +1,9 @@
 //! Implement [`Record`] for [`Time`], [`Date`], and [`Timestamp`].
 
-use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
-use parquet::{
+use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
+use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
 	collections::HashMap, convert::{TryFrom, TryInto}, fmt::{self, Display}
@@ -41,9 +41,12 @@ impl Date {
 	}
 }
 impl Data for Date {
-	type ParquetSchema = <parquet::record::types::Date as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::record::types::Date as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::record::types::Date as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::record::types::Date as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -83,21 +86,23 @@ impl Data for Date {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Date as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::Date as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::record::types::Date as parquet::record::Record>::reader(
+			<amadeus_parquet::record::types::Date as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-impl From<parquet::record::types::Date> for Date {
-	fn from(date: parquet::record::types::Date) -> Self {
+impl From<amadeus_parquet::record::types::Date> for Date {
+	fn from(date: amadeus_parquet::record::types::Date) -> Self {
 		Date::from_days(date.as_days().into()).unwrap()
 	}
 }
@@ -106,11 +111,11 @@ impl From<chrono::NaiveDate> for Date {
 		Date::from_days(i64::from(date.num_days_from_ce()) - GREGORIAN_DAY_OF_EPOCH).unwrap()
 	}
 }
-impl TryFrom<Date> for parquet::record::types::Date {
+impl TryFrom<Date> for amadeus_parquet::record::types::Date {
 	type Error = ();
 
 	fn try_from(date: Date) -> Result<Self, ()> {
-		Ok(parquet::record::types::Date::from_days(
+		Ok(amadeus_parquet::record::types::Date::from_days(
 			date.0.try_into().map_err(|_| ())?,
 		))
 	}
@@ -198,9 +203,12 @@ impl Time {
 	}
 }
 impl Data for Time {
-	type ParquetSchema = <parquet::record::types::Time as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::record::types::Time as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::record::types::Time as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::record::types::Time as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -233,21 +241,23 @@ impl Data for Time {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Time as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::Time as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::record::types::Time as parquet::record::Record>::reader(
+			<amadeus_parquet::record::types::Time as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-impl From<parquet::record::types::Time> for Time {
-	fn from(time: parquet::record::types::Time) -> Self {
+impl From<amadeus_parquet::record::types::Time> for Time {
+	fn from(time: amadeus_parquet::record::types::Time) -> Self {
 		Time::from_nanos(time.as_micros() * NANOS_PER_MICRO as u64).unwrap()
 	}
 }
@@ -261,11 +271,14 @@ impl From<NaiveTime> for Time {
 		.unwrap()
 	}
 }
-impl TryFrom<Time> for parquet::record::types::Time {
+impl TryFrom<Time> for amadeus_parquet::record::types::Time {
 	type Error = ();
 
 	fn try_from(time: Time) -> Result<Self, Self::Error> {
-		Ok(parquet::record::types::Time::from_micros(time.0 / NANOS_PER_MICRO as u64).unwrap())
+		Ok(
+			amadeus_parquet::record::types::Time::from_micros(time.0 / NANOS_PER_MICRO as u64)
+				.unwrap(),
+		)
 	}
 }
 impl TryFrom<Time> for NaiveTime {
@@ -501,9 +514,12 @@ impl Timestamp {
 	}
 }
 impl Data for Timestamp {
-	type ParquetSchema = <parquet::record::types::Timestamp as parquet::record::Record>::Schema;
-	type ParquetReader =
-		IntoReader<<parquet::record::types::Timestamp as parquet::record::Record>::Reader, Self>;
+	type ParquetSchema =
+		<amadeus_parquet::record::types::Timestamp as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = IntoReader<
+		<amadeus_parquet::record::types::Timestamp as amadeus_parquet::record::Record>::Reader,
+		Self,
+	>;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -536,21 +552,23 @@ impl Data for Timestamp {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<parquet::record::types::Timestamp as parquet::record::Record>::parse(schema, repetition)
+		<amadeus_parquet::record::types::Timestamp as amadeus_parquet::record::Record>::parse(
+			schema, repetition,
+		)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
 		IntoReader::new(
-			<parquet::record::types::Timestamp as parquet::record::Record>::reader(
+			<amadeus_parquet::record::types::Timestamp as amadeus_parquet::record::Record>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
 	}
 }
-impl From<parquet::record::types::Timestamp> for Timestamp {
-	fn from(timestamp: parquet::record::types::Timestamp) -> Self {
+impl From<amadeus_parquet::record::types::Timestamp> for Timestamp {
+	fn from(timestamp: amadeus_parquet::record::types::Timestamp) -> Self {
 		// Self::from_day_nanos(timestamp.as_nanos().unwrap())
 		let (date, time) = timestamp.as_day_nanos();
 		let date = Date::from_days(date - JULIAN_DAY_OF_EPOCH).unwrap();
@@ -563,11 +581,11 @@ impl From<chrono::NaiveDateTime> for Timestamp {
 		Timestamp::from_nanos(timestamp.timestamp_nanos())
 	}
 }
-impl TryFrom<Timestamp> for parquet::record::types::Timestamp {
+impl TryFrom<Timestamp> for amadeus_parquet::record::types::Timestamp {
 	type Error = ();
 
 	fn try_from(timestamp: Timestamp) -> Result<Self, Self::Error> {
-		// parquet::record::types::Timestamp::from_days(timestamp.0)
+		// amadeus_parquet::record::types::Timestamp::from_days(timestamp.0)
 		unimplemented!()
 	}
 }
