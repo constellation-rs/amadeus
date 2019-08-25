@@ -315,6 +315,7 @@ fn impl_tuple_struct(
 
 	for field in fields.iter() {
 		for meta_items in field.attrs.iter().filter_map(get_parquet_meta_items) {
+			#[allow(clippy::never_loop)]
 			for meta_item in meta_items {
 				match meta_item {
 					NestedMeta::Meta(ref meta_item) => {
