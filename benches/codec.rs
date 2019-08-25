@@ -65,11 +65,12 @@ macro_rules! compress {
 		#[bench]
 		fn $fname(bench: &mut Bencher) {
 			let mut codec = create_codec($codec).unwrap().unwrap();
-			let mut v = vec![];
 			let data = get_pages_bytes($col_idx);
 			bench.bytes = data.len() as u64;
+			let mut v = Vec::new();
 			bench.iter(|| {
 				codec.compress(&data[..], &mut v).unwrap();
+				v.clear();
 			})
 		}
 	};
@@ -82,7 +83,7 @@ macro_rules! decompress {
 			let compressed_pages = {
 				let mut codec = create_codec($codec).unwrap().unwrap();
 				let raw_data = get_pages_bytes($col_idx);
-				let mut v = vec![];
+				let mut v = Vec::new();
 				codec.compress(&raw_data[..], &mut v).unwrap();
 				v
 			};
@@ -90,9 +91,10 @@ macro_rules! decompress {
 			let mut codec = create_codec($codec).unwrap().unwrap();
 			let rg_reader = get_rg_reader();
 			bench.bytes = rg_reader.metadata().total_byte_size() as u64;
+			let mut v = Vec::new();
 			bench.iter(|| {
-				let mut v = Vec::new();
 				let _ = codec.decompress(&compressed_pages[..], &mut v).unwrap();
+				v.clear();
 			})
 		}
 	};
