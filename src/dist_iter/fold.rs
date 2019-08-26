@@ -109,7 +109,7 @@ where
 	F: Clone,
 {
 	fn clone(&self) -> Self {
-		FoldReducerB(
+		Self(
 			Either::Left(self.0.as_ref().left().unwrap().clone()),
 			self.1.clone(),
 			PhantomData,

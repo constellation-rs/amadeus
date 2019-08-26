@@ -8,7 +8,7 @@ use std::{
 struct RoundRobin(atomic::AtomicUsize, usize);
 impl RoundRobin {
 	fn new(start: usize, limit: usize) -> Self {
-		RoundRobin(atomic::AtomicUsize::new(start), limit)
+		Self(atomic::AtomicUsize::new(start), limit)
 	}
 	fn get(&self) -> usize {
 		let i = self.0.fetch_add(1, atomic::Ordering::Relaxed);
@@ -52,19 +52,19 @@ enum Queued<T> {
 }
 impl<T> Queued<T> {
 	fn received(&mut self, t: T) {
-		if let Queued::Awaiting = self {
-			*self = Queued::Got(t);
+		if let Self::Awaiting = self {
+			*self = Self::Got(t);
 		}
 	}
 	fn take(&mut self) -> T {
-		if let Queued::Got(t) = mem::replace(self, Queued::Taken) {
+		if let Self::Got(t) = mem::replace(self, Self::Taken) {
 			t
 		} else {
 			panic!()
 		}
 	}
 	fn drop_(&mut self) {
-		*self = Queued::Taken;
+		*self = Self::Taken;
 	}
 }
 
@@ -92,7 +92,7 @@ impl ThreadPoolInner {
 				}
 				return Err(err);
 			}
-			let child = child.unwrap();
+			let _child = child.unwrap();
 
 			let (queue, received, tail) = (VecDeque::new(), 0, 0);
 
@@ -150,7 +150,7 @@ impl ThreadPoolInner {
 				let z = process.receiver.recv();
 				// println!("{:?} /recv", thread::current().name().unwrap());
 				let t = z.unwrap();
-				// let x = Box::<Any>::downcast::<String>(unsafe{std::ptr::read(&t)}.into_any_send_sync()).unwrap();
+				// let x = Box::<dyn Any>::downcast::<String>(unsafe{std::ptr::read(&t)}.into_any_send_sync()).unwrap();
 				// println!("{}: got {}", thread::current().name().unwrap(), x);
 				let process_inner = &mut *process.inner.write().unwrap();
 				process_inner.queue[process_inner.received - process_inner.tail].received(t);
@@ -169,7 +169,7 @@ impl ThreadPoolInner {
 		}
 		// println!("{:?} /process lock", thread::current().name().unwrap());
 		boxed
-			.map(|boxed| *Box::<Any>::downcast::<T>(boxed).unwrap())
+			.map(|boxed| *Box::<dyn Any>::downcast::<T>(boxed).unwrap())
 			.ok_or(())
 	}
 	fn drop_<T: Any>(&self, key: JoinHandleInner<T>) {
@@ -202,7 +202,7 @@ struct JoinHandleInner<T: Any>(usize, usize, PhantomData<fn() -> T>);
 pub struct ThreadPool(Arc<ThreadPoolInner>);
 impl ThreadPool {
 	pub fn new(processes: usize) -> Result<Self, io::Error> {
-		Ok(ThreadPool(Arc::new(ThreadPoolInner::new(processes)?)))
+		Ok(Self(Arc::new(ThreadPoolInner::new(processes)?)))
 	}
 	pub fn processes(&self) -> usize {
 		self.0.processes()

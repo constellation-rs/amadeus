@@ -326,7 +326,7 @@ impl Display for Error {
 }
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		Error::Io(Arc::new(err))
+		Self::Io(Arc::new(err))
 	}
 }
 impl<E> From<rusoto_core::RusotoError<E>> for Error
@@ -337,15 +337,15 @@ where
 		match err {
 			rusoto_core::RusotoError::Service(e) => e.into(),
 			rusoto_core::RusotoError::HttpDispatch(http_dispatch_error) => {
-				Error::HttpDispatch(http_dispatch_error)
+				Self::HttpDispatch(http_dispatch_error)
 			}
 			rusoto_core::RusotoError::Credentials(credentials_error) => {
-				Error::Credentials(credentials_error)
+				Self::Credentials(credentials_error)
 			}
-			rusoto_core::RusotoError::Validation(string) => Error::Validation(string),
-			rusoto_core::RusotoError::ParseError(string) => Error::ParseError(string),
+			rusoto_core::RusotoError::Validation(string) => Self::Validation(string),
+			rusoto_core::RusotoError::ParseError(string) => Self::ParseError(string),
 			rusoto_core::RusotoError::Unknown(buffered_http_response) => {
-				Error::Unknown(buffered_http_response)
+				Self::Unknown(buffered_http_response)
 			}
 		}
 	}
@@ -353,14 +353,14 @@ where
 impl From<rusoto_s3::ListObjectsV2Error> for Error {
 	fn from(err: rusoto_s3::ListObjectsV2Error) -> Self {
 		match err {
-			rusoto_s3::ListObjectsV2Error::NoSuchBucket(err) => Error::NoSuchBucket(err),
+			rusoto_s3::ListObjectsV2Error::NoSuchBucket(err) => Self::NoSuchBucket(err),
 		}
 	}
 }
 impl From<rusoto_s3::GetObjectError> for Error {
 	fn from(err: rusoto_s3::GetObjectError) -> Self {
 		match err {
-			rusoto_s3::GetObjectError::NoSuchKey(err) => Error::NoSuchKey(err),
+			rusoto_s3::GetObjectError::NoSuchKey(err) => Self::NoSuchKey(err),
 		}
 	}
 }
@@ -425,7 +425,7 @@ mod http_serde {
 					x.parse::<Method>()
 						.map_err(|err| serde::de::Error::custom(err.description()))
 				})
-				.map(Serde)
+				.map(Self)
 		}
 	}
 	impl<'de> Deserialize<'de> for Serde<Option<StatusCode>> {
@@ -441,7 +441,7 @@ mod http_serde {
 					})
 					.transpose()
 				})
-				.map(Serde)
+				.map(Self)
 		}
 	}
 

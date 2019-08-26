@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 use crate::dist_iter::{Consumer, DistributedIterator};
 
 mod collections;

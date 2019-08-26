@@ -51,7 +51,7 @@ impl Display for DowncastError {
 pub struct IntoReader<R: amadeus_parquet::record::Reader, T>(R, PhantomData<fn(T)>);
 impl<R: amadeus_parquet::record::Reader, T> IntoReader<R, T> {
 	fn new(reader: R) -> Self {
-		IntoReader(reader, PhantomData)
+		Self(reader, PhantomData)
 	}
 }
 impl<R: amadeus_parquet::record::Reader, T> amadeus_parquet::record::Reader for IntoReader<R, T>
@@ -92,7 +92,7 @@ where
 pub struct MapReader<R: amadeus_parquet::record::Reader, F>(R, F);
 impl<R: amadeus_parquet::record::Reader, F> MapReader<R, F> {
 	fn new(reader: R, f: F) -> Self {
-		MapReader(reader, f)
+		Self(reader, f)
 	}
 }
 impl<R: amadeus_parquet::record::Reader, F, T> amadeus_parquet::record::Reader for MapReader<R, F>

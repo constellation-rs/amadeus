@@ -3,7 +3,7 @@
 use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
-use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
 	collections::HashMap, convert::{TryFrom, TryInto}, fmt::{self, Display}
@@ -28,9 +28,10 @@ pub struct Date(i64);
 impl Date {
 	/// Create a Date from the number of days since the Unix epoch
 	pub fn from_days(days: i64) -> Option<Self> {
-		if JULIAN_DAY_OF_EPOCH + i32::min_value() as i64 <= days && days <= i32::max_value() as i64
+		if JULIAN_DAY_OF_EPOCH + i64::from(i32::min_value()) <= days
+			&& days <= i64::from(i32::max_value())
 		{
-			Some(Date(days))
+			Some(Self(days))
 		} else {
 			None
 		}
@@ -55,7 +56,7 @@ impl Data for Date {
 	}
 	fn postgres_decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		if !<NaiveDate as ::postgres::types::FromSql>::accepts(type_) {
 			return Err(Into::into("invalid type"));
 		}
@@ -70,17 +71,17 @@ impl Data for Date {
 	where
 		S: Serializer,
 	{
-		chrono::NaiveDate::try_from(*self)
+		NaiveDate::try_from(*self)
 			.expect("not implemented yet")
 			.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		chrono::NaiveDate::deserialize(deserializer).map(Into::into)
+		NaiveDate::deserialize(deserializer).map(Into::into)
 	}
 
 	fn parquet_parse(
@@ -103,28 +104,26 @@ impl Data for Date {
 }
 impl From<amadeus_parquet::record::types::Date> for Date {
 	fn from(date: amadeus_parquet::record::types::Date) -> Self {
-		Date::from_days(date.as_days().into()).unwrap()
+		Self::from_days(date.as_days().into()).unwrap()
 	}
 }
-impl From<chrono::NaiveDate> for Date {
-	fn from(date: chrono::NaiveDate) -> Self {
-		Date::from_days(i64::from(date.num_days_from_ce()) - GREGORIAN_DAY_OF_EPOCH).unwrap()
+impl From<NaiveDate> for Date {
+	fn from(date: NaiveDate) -> Self {
+		Self::from_days(i64::from(date.num_days_from_ce()) - GREGORIAN_DAY_OF_EPOCH).unwrap()
 	}
 }
 impl TryFrom<Date> for amadeus_parquet::record::types::Date {
 	type Error = ();
 
 	fn try_from(date: Date) -> Result<Self, ()> {
-		Ok(amadeus_parquet::record::types::Date::from_days(
-			date.0.try_into().map_err(|_| ())?,
-		))
+		Ok(Self::from_days(date.0.try_into().map_err(|_| ())?))
 	}
 }
-impl TryFrom<Date> for chrono::NaiveDate {
+impl TryFrom<Date> for NaiveDate {
 	type Error = ();
 
 	fn try_from(date: Date) -> Result<Self, ()> {
-		NaiveDate::from_num_days_from_ce_opt(
+		Self::from_num_days_from_ce_opt(
 			(date.0 + GREGORIAN_DAY_OF_EPOCH)
 				.try_into()
 				.map_err(|_| ())?,
@@ -150,7 +149,7 @@ impl<'de> Deserialize<'de> for Date {
 }
 impl Display for Date {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		chrono::NaiveDate::try_from(*self)
+		NaiveDate::try_from(*self)
 			.expect("not implemented yet")
 			.fmt(f)
 	}
@@ -164,9 +163,11 @@ pub struct Time(u64);
 impl Time {
 	/// Create a Time from the number of milliseconds since midnight
 	pub fn from_millis(millis: u32) -> Option<Self> {
-		if millis < (SECONDS_PER_DAY * MILLIS_PER_SECOND) as u32 {
-			Some(Time(
-				millis as u64 * MICROS_PER_MILLI as u64 * NANOS_PER_MICRO as u64,
+		if millis < u32::try_from(SECONDS_PER_DAY * MILLIS_PER_SECOND).unwrap() {
+			Some(Self(
+				u64::from(millis)
+					* u64::try_from(MICROS_PER_MILLI).unwrap()
+					* u64::try_from(NANOS_PER_MICRO).unwrap(),
 			))
 		} else {
 			None
@@ -174,28 +175,36 @@ impl Time {
 	}
 	/// Create a Time from the number of microseconds since midnight
 	pub fn from_micros(micros: u64) -> Option<Self> {
-		if micros < (SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI) as u64 {
-			Some(Time(micros as u64 * NANOS_PER_MICRO as u64))
+		if micros < u64::try_from(SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI).unwrap() {
+			Some(Self(micros * u64::try_from(NANOS_PER_MICRO).unwrap()))
 		} else {
 			None
 		}
 	}
 	/// Create a Time from the number of nanoseconds since midnight
 	pub fn from_nanos(nanos: u64) -> Option<Self> {
-		if nanos < (SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI * NANOS_PER_MICRO) as u64
+		if nanos
+			< u64::try_from(
+				SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI * NANOS_PER_MICRO,
+			)
+			.unwrap()
 		{
-			Some(Time(nanos as u64))
+			Some(Self(nanos))
 		} else {
 			None
 		}
 	}
 	/// Get the number of milliseconds since midnight
 	pub fn as_millis(&self) -> u32 {
-		(self.0 / NANOS_PER_MICRO as u64 / MICROS_PER_MILLI as u64) as u32
+		(self.0
+			/ u64::try_from(NANOS_PER_MICRO).unwrap()
+			/ u64::try_from(MICROS_PER_MILLI).unwrap())
+		.try_into()
+		.unwrap()
 	}
 	/// Get the number of microseconds since midnight
 	pub fn as_micros(&self) -> u64 {
-		self.0 / NANOS_PER_MICRO as u64
+		self.0 / u64::try_from(NANOS_PER_MICRO).unwrap()
 	}
 	/// Get the number of microseconds since midnight
 	pub fn as_nanos(&self) -> u64 {
@@ -216,8 +225,8 @@ impl Data for Time {
 		name.unwrap().fmt(f)
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -230,7 +239,7 @@ impl Data for Time {
 			.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -258,15 +267,15 @@ impl Data for Time {
 }
 impl From<amadeus_parquet::record::types::Time> for Time {
 	fn from(time: amadeus_parquet::record::types::Time) -> Self {
-		Time::from_nanos(time.as_micros() * NANOS_PER_MICRO as u64).unwrap()
+		Self::from_nanos(time.as_micros() * u64::try_from(NANOS_PER_MICRO).unwrap()).unwrap()
 	}
 }
 impl From<NaiveTime> for Time {
 	fn from(time: NaiveTime) -> Self {
-		Time::from_nanos(
-			time.num_seconds_from_midnight() as u64
-				* (MILLIS_PER_SECOND * MICROS_PER_MILLI * NANOS_PER_MICRO) as u64
-				+ time.nanosecond() as u64,
+		Self::from_nanos(
+			u64::try_from(time.num_seconds_from_midnight()).unwrap()
+				* u64::try_from(MILLIS_PER_SECOND * MICROS_PER_MILLI * NANOS_PER_MICRO).unwrap()
+				+ u64::from(time.nanosecond()),
 		)
 		.unwrap()
 	}
@@ -275,21 +284,22 @@ impl TryFrom<Time> for amadeus_parquet::record::types::Time {
 	type Error = ();
 
 	fn try_from(time: Time) -> Result<Self, Self::Error> {
-		Ok(
-			amadeus_parquet::record::types::Time::from_micros(time.0 / NANOS_PER_MICRO as u64)
-				.unwrap(),
-		)
+		Ok(Self::from_micros(time.0 / u64::try_from(NANOS_PER_MICRO).unwrap()).unwrap())
 	}
 }
 impl TryFrom<Time> for NaiveTime {
 	type Error = ();
 
 	fn try_from(time: Time) -> Result<Self, Self::Error> {
-		Ok(NaiveTime::from_num_seconds_from_midnight(
-			(time.as_nanos() / (NANOS_PER_MICRO * MICROS_PER_MILLI * MILLIS_PER_SECOND) as u64)
-				as u32,
-			(time.as_nanos() % (NANOS_PER_MICRO * MICROS_PER_MILLI * MILLIS_PER_SECOND) as u64)
-				as u32,
+		Ok(Self::from_num_seconds_from_midnight(
+			(time.as_nanos()
+				/ u64::try_from(NANOS_PER_MICRO * MICROS_PER_MILLI * MILLIS_PER_SECOND).unwrap())
+			.try_into()
+			.unwrap(),
+			(time.as_nanos()
+				% u64::try_from(NANOS_PER_MICRO * MICROS_PER_MILLI * MILLIS_PER_SECOND).unwrap())
+			.try_into()
+			.unwrap(),
 		))
 	}
 }
@@ -349,7 +359,7 @@ impl Timestamp {
 		}
 		Self::from_date_time(
 			Date::from_days(days).unwrap(),
-			Time::from_millis(millis as u32).unwrap(),
+			Time::from_millis(millis.try_into().unwrap()).unwrap(),
 		)
 		.unwrap()
 		// let day: i64 =
@@ -376,7 +386,7 @@ impl Timestamp {
 		}
 		Self::from_date_time(
 			Date::from_days(days).unwrap(),
-			Time::from_micros(micros as u64).unwrap(),
+			Time::from_micros(micros.try_into().unwrap()).unwrap(),
 		)
 		.unwrap()
 		// let day: i64 = JULIAN_DAY_OF_EPOCH
@@ -407,7 +417,7 @@ impl Timestamp {
 		}
 		Self::from_date_time(
 			Date::from_days(days).unwrap(),
-			Time::from_nanos(nanos as u64).unwrap(),
+			Time::from_nanos(nanos.try_into().unwrap()).unwrap(),
 		)
 		.unwrap()
 		// let day: i64 = JULIAN_DAY_OF_EPOCH
@@ -449,7 +459,7 @@ impl Timestamp {
 			self.date
 				.as_days()
 				.checked_mul(SECONDS_PER_DAY * MILLIS_PER_SECOND)?
-				.checked_add(self.time.as_millis() as i64)?,
+				.checked_add(i64::try_from(self.time.as_millis()).unwrap())?,
 		)
 		// let day = i64::from(self.0.data()[2]);
 		// let nanoseconds =
@@ -472,7 +482,7 @@ impl Timestamp {
 			self.date
 				.as_days()
 				.checked_mul(SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI)?
-				.checked_add(self.time.as_micros() as i64)?,
+				.checked_add(i64::try_from(self.time.as_micros()).unwrap())?,
 		)
 		// let day = i64::from(self.0.data()[2]);
 		// let nanoseconds =
@@ -496,7 +506,7 @@ impl Timestamp {
 				.checked_mul(
 					SECONDS_PER_DAY * MILLIS_PER_SECOND * MICROS_PER_MILLI * NANOS_PER_MICRO,
 				)?
-				.checked_add(self.time.as_nanos() as i64)?,
+				.checked_add(i64::try_from(self.time.as_nanos()).unwrap())?,
 		)
 		// let day = i64::from(self.0.data()[2]);
 		// let nanoseconds =
@@ -527,8 +537,8 @@ impl Data for Timestamp {
 		name.unwrap().fmt(f)
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -536,17 +546,17 @@ impl Data for Timestamp {
 	where
 		S: Serializer,
 	{
-		chrono::NaiveDateTime::try_from(*self)
+		NaiveDateTime::try_from(*self)
 			.expect("not implemented yet")
 			.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		chrono::NaiveDateTime::deserialize(deserializer).map(Into::into)
+		NaiveDateTime::deserialize(deserializer).map(Into::into)
 	}
 
 	fn parquet_parse(
@@ -573,23 +583,23 @@ impl From<amadeus_parquet::record::types::Timestamp> for Timestamp {
 		let (date, time) = timestamp.as_day_nanos();
 		let date = Date::from_days(date - JULIAN_DAY_OF_EPOCH).unwrap();
 		let time = Time::from_nanos(time.try_into().unwrap()).unwrap();
-		Timestamp::from_date_time(date, time).unwrap()
+		Self::from_date_time(date, time).unwrap()
 	}
 }
-impl From<chrono::NaiveDateTime> for Timestamp {
-	fn from(timestamp: chrono::NaiveDateTime) -> Self {
-		Timestamp::from_nanos(timestamp.timestamp_nanos())
+impl From<NaiveDateTime> for Timestamp {
+	fn from(timestamp: NaiveDateTime) -> Self {
+		Self::from_nanos(timestamp.timestamp_nanos())
 	}
 }
 impl TryFrom<Timestamp> for amadeus_parquet::record::types::Timestamp {
 	type Error = ();
 
-	fn try_from(timestamp: Timestamp) -> Result<Self, Self::Error> {
+	fn try_from(_timestamp: Timestamp) -> Result<Self, Self::Error> {
 		// amadeus_parquet::record::types::Timestamp::from_days(timestamp.0)
 		unimplemented!()
 	}
 }
-impl TryFrom<Timestamp> for chrono::NaiveDateTime {
+impl TryFrom<Timestamp> for NaiveDateTime {
 	type Error = ();
 
 	fn try_from(timestamp: Timestamp) -> Result<Self, Self::Error> {
@@ -633,7 +643,7 @@ impl Display for Timestamp {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// let dt = Local.timestamp(self.as_millis().unwrap() / MILLIS_PER_SECOND, 0);
 		// dt.format("%Y-%m-%d %H:%M:%S %:z").fmt(f)
-		chrono::NaiveDateTime::try_from(*self)
+		NaiveDateTime::try_from(*self)
 			.expect("not implemented yet")
 			.fmt(f)
 	}
@@ -665,18 +675,18 @@ mod tests {
 			assert_eq!(chrono_datetime.timestamp() % SECONDS_PER_DAY, 0);
 			let date = Date::from_days(chrono_datetime.timestamp() / SECONDS_PER_DAY).unwrap();
 			assert_eq!(date.to_string(), chrono_date.to_string());
-			let date2 = Date::from(chrono::NaiveDate::try_from(date).unwrap());
+			let date2 = Date::from(NaiveDate::try_from(date).unwrap());
 			assert_eq!(date, date2);
 		}
 
-		check_date_conversion(-262144, 01, 01);
+		check_date_conversion(-262144, 1, 1);
 		check_date_conversion(1969, 12, 31);
-		check_date_conversion(1970, 01, 01);
-		check_date_conversion(2010, 01, 02);
-		check_date_conversion(2014, 05, 01);
-		check_date_conversion(2016, 02, 29);
-		check_date_conversion(2017, 09, 12);
-		check_date_conversion(2018, 03, 31);
+		check_date_conversion(1970, 1, 1);
+		check_date_conversion(2010, 1, 2);
+		check_date_conversion(2014, 5, 1);
+		check_date_conversion(2016, 2, 29);
+		check_date_conversion(2017, 9, 12);
+		check_date_conversion(2018, 3, 31);
 		check_date_conversion(262143, 12, 31);
 	}
 
@@ -689,14 +699,15 @@ mod tests {
 		}
 
 		check_time_conversion(13, 12, 54);
-		check_time_conversion(08, 23, 01);
-		check_time_conversion(11, 06, 32);
-		check_time_conversion(16, 38, 00);
+		check_time_conversion(8, 23, 1);
+		check_time_conversion(11, 6, 32);
+		check_time_conversion(16, 38, 0);
 		check_time_conversion(21, 15, 12);
 	}
 
 	#[test]
 	fn test_convert_timestamp_to_string() {
+		#[allow(clippy::many_single_char_names)]
 		fn check_datetime_conversion(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) {
 			let dt = NaiveDate::from_ymd(y, m, d).and_hms(h, mi, s);
 			// let dt = Local.from_utc_datetime(&datetime);
@@ -705,10 +716,10 @@ mod tests {
 			assert_eq!(res, exp);
 		}
 
-		check_datetime_conversion(2010, 01, 02, 13, 12, 54);
-		check_datetime_conversion(2011, 01, 03, 08, 23, 01);
-		check_datetime_conversion(2012, 04, 05, 11, 06, 32);
-		check_datetime_conversion(2013, 05, 12, 16, 38, 00);
+		check_datetime_conversion(2010, 1, 2, 13, 12, 54);
+		check_datetime_conversion(2011, 1, 3, 8, 23, 1);
+		check_datetime_conversion(2012, 4, 5, 11, 6, 32);
+		check_datetime_conversion(2013, 5, 12, 16, 38, 0);
 		check_datetime_conversion(2014, 11, 28, 21, 15, 12);
 	}
 }

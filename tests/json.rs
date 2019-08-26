@@ -1,6 +1,6 @@
 use amadeus::{
 	data::{
-		types::{Date, Downcast, List, Map, Timestamp, Value}, Data
+		types::{Date, Value}, Data
 	}, source::{Json, Source}, DistributedIterator, ProcessPool
 };
 use constellation::*;
@@ -77,11 +77,13 @@ fn main() {
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
-				// println!("{:?}", value);
+				println!("{:?}", value);
 				// let _: GameDerived = value.clone().downcast().unwrap();
 				value
 			}))
 			.count(&pool),
 		3_605 * tasks
 	);
+
+	println!("in {:?}", start.elapsed().unwrap());
 }

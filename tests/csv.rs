@@ -1,7 +1,5 @@
 use amadeus::{
-	data::{
-		types::{Downcast, List, Map, Timestamp, Value}, Data
-	}, source::Csv, DistributedIterator, ProcessPool
+	data::{types::Value, Data}, source::Csv, DistributedIterator, ProcessPool
 };
 use constellation::*;
 use serde_closure::FnMut;
@@ -50,4 +48,6 @@ fn main() {
 			.count(&pool),
 		100_000
 	);
+
+	println!("in {:?}", start.elapsed().unwrap());
 }

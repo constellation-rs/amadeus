@@ -9,14 +9,14 @@ impl<A: DistributedIterator, B: DistributedIterator<Item = A::Item>> Distributed
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match self {
-			Sum2::A(i) => i.size_hint(),
-			Sum2::B(i) => i.size_hint(),
+			Self::A(i) => i.size_hint(),
+			Self::B(i) => i.size_hint(),
 		}
 	}
 	fn next_task(&mut self) -> Option<Self::Task> {
 		match self {
-			Sum2::A(i) => i.next_task().map(Sum2::A),
-			Sum2::B(i) => i.next_task().map(Sum2::B),
+			Self::A(i) => i.next_task().map(Sum2::A),
+			Self::B(i) => i.next_task().map(Sum2::B),
 		}
 	}
 }
@@ -32,8 +32,8 @@ impl<
 
 	fn task(&self) -> Self::Task {
 		match self {
-			Sum2::A(i) => Sum2::A(i.task()),
-			Sum2::B(i) => Sum2::B(i.task()),
+			Self::A(i) => Sum2::A(i.task()),
+			Self::B(i) => Sum2::B(i.task()),
 		}
 	}
 }
@@ -43,8 +43,8 @@ impl<A: Consumer, B: Consumer<Item = A::Item>> Consumer for Sum2<A, B> {
 
 	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		match self {
-			Sum2::A(task) => task.run(i),
-			Sum2::B(task) => task.run(i),
+			Self::A(task) => task.run(i),
+			Self::B(task) => task.run(i),
 		}
 	}
 }
@@ -56,8 +56,8 @@ impl<A: ConsumerMulti<Source>, B: ConsumerMulti<Source, Item = A::Item>, Source>
 
 	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		match self {
-			Sum2::A(task) => task.run(source, i),
-			Sum2::B(task) => task.run(source, i),
+			Self::A(task) => task.run(source, i),
+			Self::B(task) => task.run(source, i),
 		}
 	}
 }

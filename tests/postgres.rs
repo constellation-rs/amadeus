@@ -1,11 +1,9 @@
 use amadeus::{
-	data::{
-		types::{Date, Downcast, List, Map, Timestamp, Value}, Data
-	}, source::Postgres, DistributedIterator, ProcessPool
+	data::{types::Date, Data}, source::Postgres, DistributedIterator, ProcessPool
 };
 use constellation::*;
 use serde_closure::FnMut;
-use std::{env, path::PathBuf, time::SystemTime};
+use std::{env, time::SystemTime};
 
 fn main() {
 	init(Resources::default());
@@ -70,4 +68,6 @@ fn main() {
 	// 		.count(&pool),
 	// 	4
 	// );
+
+	println!("in {:?}", start.elapsed().unwrap());
 }

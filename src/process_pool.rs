@@ -11,7 +11,7 @@ use std::{
 struct RoundRobin(atomic::AtomicUsize, usize);
 impl RoundRobin {
 	fn new(start: usize, limit: usize) -> Self {
-		RoundRobin(atomic::AtomicUsize::new(start), limit)
+		Self(atomic::AtomicUsize::new(start), limit)
 	}
 	fn get(&self) -> usize {
 		let i = self.0.fetch_add(1, atomic::Ordering::Relaxed);
@@ -55,19 +55,19 @@ enum Queued<T> {
 }
 impl<T> Queued<T> {
 	fn received(&mut self, t: T) {
-		if let Queued::Awaiting = self {
-			*self = Queued::Got(t);
+		if let Self::Awaiting = self {
+			*self = Self::Got(t);
 		}
 	}
 	fn take(&mut self) -> T {
-		if let Queued::Got(t) = mem::replace(self, Queued::Taken) {
+		if let Self::Got(t) = mem::replace(self, Self::Taken) {
 			t
 		} else {
 			panic!()
 		}
 	}
 	fn drop_(&mut self) {
-		*self = Queued::Taken;
+		*self = Self::Taken;
 	}
 }
 
@@ -166,7 +166,7 @@ impl ProcessPoolInner {
 				let z = process.receiver.recv().block();
 				// println!("{:?} /recv", thread::current().name().unwrap());
 				let t = z.unwrap();
-				// let x = Box::<any::Any>::downcast::<String>(unsafe{std::ptr::read(&t)}.into_any_send_sync()).unwrap();
+				// let x = Box::<dyn any::Any>::downcast::<String>(unsafe{std::ptr::read(&t)}.into_any_send_sync()).unwrap();
 				// println!("{}: got {}", thread::current().name().unwrap(), x);
 				let process_inner = &mut *process.inner.write().unwrap();
 				process_inner.queue[process_inner.received - process_inner.tail].received(t);
@@ -185,7 +185,7 @@ impl ProcessPoolInner {
 		}
 		// println!("{:?} /process lock", thread::current().name().unwrap());
 		boxed
-			.map(|boxed| *Box::<any::Any>::downcast::<T>(boxed.into_any_send()).unwrap())
+			.map(|boxed| *Box::<dyn any::Any>::downcast::<T>(boxed.into_any_send()).unwrap())
 			.ok_or(())
 	}
 	fn drop_<T: any::Any>(&self, key: JoinHandleInner<T>) {
@@ -218,9 +218,7 @@ struct JoinHandleInner<T: any::Any>(usize, usize, PhantomData<fn() -> T>);
 pub struct ProcessPool(Arc<ProcessPoolInner>);
 impl ProcessPool {
 	pub fn new(processes: usize, resources: Resources) -> Result<Self, SpawnError> {
-		Ok(ProcessPool(Arc::new(ProcessPoolInner::new(
-			processes, resources,
-		)?)))
+		Ok(Self(Arc::new(ProcessPoolInner::new(processes, resources)?)))
 	}
 	pub fn processes(&self) -> usize {
 		self.0.processes()

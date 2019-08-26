@@ -1,11 +1,8 @@
 //! Implement [`Record`] for [`ValueRequired`] – an enum representing any valid required
 //! Parquet value.
 
-use serde::{
-	de::{MapAccess, SeqAccess, Visitor}, Deserialize, Deserializer, Serialize, Serializer
-};
 use std::{
-	cmp::Ordering, collections::HashMap, fmt, hash::{Hash, Hasher}, mem::ManuallyDrop
+	cmp::Ordering, hash::{Hash, Hasher}
 };
 
 use super::{Bson, Date, Decimal, Enum, Group, Json, List, Map, Time, Timestamp, Value};
@@ -70,91 +67,91 @@ pub enum ValueRequired {
 impl Hash for ValueRequired {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		match self {
-			ValueRequired::Bool(value) => {
+			Self::Bool(value) => {
 				0u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::U8(value) => {
+			Self::U8(value) => {
 				1u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::I8(value) => {
+			Self::I8(value) => {
 				2u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::U16(value) => {
+			Self::U16(value) => {
 				3u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::I16(value) => {
+			Self::I16(value) => {
 				4u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::U32(value) => {
+			Self::U32(value) => {
 				5u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::I32(value) => {
+			Self::I32(value) => {
 				6u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::U64(value) => {
+			Self::U64(value) => {
 				7u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::I64(value) => {
+			Self::I64(value) => {
 				8u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::F32(_value) => {
+			Self::F32(_value) => {
 				9u8.hash(state);
 			}
-			ValueRequired::F64(_value) => {
+			Self::F64(_value) => {
 				10u8.hash(state);
 			}
-			ValueRequired::Date(value) => {
+			Self::Date(value) => {
 				11u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::Time(value) => {
+			Self::Time(value) => {
 				12u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::Timestamp(value) => {
+			Self::Timestamp(value) => {
 				13u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::Decimal(_value) => {
+			Self::Decimal(_value) => {
 				14u8.hash(state);
 			}
-			ValueRequired::ByteArray(value) => {
+			Self::ByteArray(value) => {
 				15u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::Bson(value) => {
+			Self::Bson(value) => {
 				16u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::String(value) => {
+			Self::String(value) => {
 				17u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::Json(value) => {
+			Self::Json(value) => {
 				18u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::Enum(value) => {
+			Self::Enum(value) => {
 				19u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::List(value) => {
+			Self::List(value) => {
 				20u8.hash(state);
 				value.hash(state);
 			}
-			ValueRequired::Map(_value) => {
+			Self::Map(_value) => {
 				21u8.hash(state);
 			}
-			ValueRequired::Group(_value) => {
+			Self::Group(_value) => {
 				22u8.hash(state);
 			}
 		}
@@ -162,8 +159,33 @@ impl Hash for ValueRequired {
 }
 impl Eq for ValueRequired {}
 impl PartialOrd for ValueRequired {
-	fn partial_cmp(&self, other: &ValueRequired) -> Option<Ordering> {
-		None
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		match (self, other) {
+			(Self::Bool(a), Self::Bool(b)) => a.partial_cmp(b),
+			(Self::U8(a), Self::U8(b)) => a.partial_cmp(b),
+			(Self::I8(a), Self::I8(b)) => a.partial_cmp(b),
+			(Self::U16(a), Self::U16(b)) => a.partial_cmp(b),
+			(Self::I16(a), Self::I16(b)) => a.partial_cmp(b),
+			(Self::U32(a), Self::U32(b)) => a.partial_cmp(b),
+			(Self::I32(a), Self::I32(b)) => a.partial_cmp(b),
+			(Self::U64(a), Self::U64(b)) => a.partial_cmp(b),
+			(Self::I64(a), Self::I64(b)) => a.partial_cmp(b),
+			(Self::F32(a), Self::F32(b)) => a.partial_cmp(b),
+			(Self::F64(a), Self::F64(b)) => a.partial_cmp(b),
+			(Self::Date(a), Self::Date(b)) => a.partial_cmp(b),
+			(Self::Time(a), Self::Time(b)) => a.partial_cmp(b),
+			(Self::Timestamp(a), Self::Timestamp(b)) => a.partial_cmp(b),
+			(Self::Decimal(a), Self::Decimal(b)) => a.partial_cmp(b),
+			(Self::ByteArray(a), Self::ByteArray(b)) => a.partial_cmp(b),
+			(Self::Bson(a), Self::Bson(b)) => a.partial_cmp(b),
+			(Self::String(a), Self::String(b)) => a.partial_cmp(b),
+			(Self::Json(a), Self::Json(b)) => a.partial_cmp(b),
+			(Self::Enum(a), Self::Enum(b)) => a.partial_cmp(b),
+			(Self::List(a), Self::List(b)) => a.partial_cmp(b),
+			(Self::Map(_a), Self::Map(_b)) => None, // TODO?
+			(Self::Group(a), Self::Group(b)) => a.partial_cmp(b),
+			_ => None,
+		}
 	}
 }
 
@@ -178,42 +200,42 @@ impl ValueRequired {
 		std::mem::forget(self_);
 		ret
 	}
-	pub(in super::super) fn as_value<F, O>(&self, f: F) -> O
-	where
-		F: FnOnce(&Value) -> O,
-	{
-		let self_ = unsafe { std::ptr::read(self) };
-		let self_: ManuallyDrop<Value> = ManuallyDrop::new(self_.into());
-		f(&self_)
-	}
+	// pub(in super::super) fn as_value<F, O>(&self, f: F) -> O
+	// where
+	// 	F: FnOnce(&Value) -> O,
+	// {
+	// 	let self_ = unsafe { std::ptr::read(self) };
+	// 	let self_: ManuallyDrop<Value> = ManuallyDrop::new(self_.into());
+	// 	f(&self_)
+	// }
 }
 
 impl From<ValueRequired> for Value {
 	fn from(value: ValueRequired) -> Self {
 		match value {
-			ValueRequired::Bool(value) => Value::Bool(value),
-			ValueRequired::U8(value) => Value::U8(value),
-			ValueRequired::I8(value) => Value::I8(value),
-			ValueRequired::U16(value) => Value::U16(value),
-			ValueRequired::I16(value) => Value::I16(value),
-			ValueRequired::U32(value) => Value::U32(value),
-			ValueRequired::I32(value) => Value::I32(value),
-			ValueRequired::U64(value) => Value::U64(value),
-			ValueRequired::I64(value) => Value::I64(value),
-			ValueRequired::F32(value) => Value::F32(value),
-			ValueRequired::F64(value) => Value::F64(value),
-			ValueRequired::Date(value) => Value::Date(value),
-			ValueRequired::Time(value) => Value::Time(value),
-			ValueRequired::Timestamp(value) => Value::Timestamp(value),
-			ValueRequired::Decimal(value) => Value::Decimal(value),
-			ValueRequired::ByteArray(value) => Value::ByteArray(value),
-			ValueRequired::Bson(value) => Value::Bson(value),
-			ValueRequired::String(value) => Value::String(value),
-			ValueRequired::Json(value) => Value::Json(value),
-			ValueRequired::Enum(value) => Value::Enum(value),
-			ValueRequired::List(value) => Value::List(value),
-			ValueRequired::Map(value) => Value::Map(value),
-			ValueRequired::Group(value) => Value::Group(value),
+			ValueRequired::Bool(value) => Self::Bool(value),
+			ValueRequired::U8(value) => Self::U8(value),
+			ValueRequired::I8(value) => Self::I8(value),
+			ValueRequired::U16(value) => Self::U16(value),
+			ValueRequired::I16(value) => Self::I16(value),
+			ValueRequired::U32(value) => Self::U32(value),
+			ValueRequired::I32(value) => Self::I32(value),
+			ValueRequired::U64(value) => Self::U64(value),
+			ValueRequired::I64(value) => Self::I64(value),
+			ValueRequired::F32(value) => Self::F32(value),
+			ValueRequired::F64(value) => Self::F64(value),
+			ValueRequired::Date(value) => Self::Date(value),
+			ValueRequired::Time(value) => Self::Time(value),
+			ValueRequired::Timestamp(value) => Self::Timestamp(value),
+			ValueRequired::Decimal(value) => Self::Decimal(value),
+			ValueRequired::ByteArray(value) => Self::ByteArray(value),
+			ValueRequired::Bson(value) => Self::Bson(value),
+			ValueRequired::String(value) => Self::String(value),
+			ValueRequired::Json(value) => Self::Json(value),
+			ValueRequired::Enum(value) => Self::Enum(value),
+			ValueRequired::List(value) => Self::List(value),
+			ValueRequired::Map(value) => Self::Map(value),
+			ValueRequired::Group(value) => Self::Group(value),
 		}
 	}
 }

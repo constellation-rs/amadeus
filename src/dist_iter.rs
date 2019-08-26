@@ -155,7 +155,7 @@ pub trait DistributedIterator {
 				task.len(),
 				count,
 				"alloc: {:#?}",
-				tasks.iter().map(|x| x.len()).collect::<Vec<_>>()
+				tasks.iter().map(Vec::len).collect::<Vec<_>>()
 			);
 		}
 		let handles = tasks
@@ -492,10 +492,9 @@ pub trait DistributedIterator {
 		self, pool: &Pool, n: usize, probability: f64, tolerance: f64, error_rate: f64,
 	) -> ::streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>
 	where
-		Self: DistributedIterator<Item = (A, B)>,
+		Self: DistributedIterator<Item = (A, B)> + Sized,
 		A: Hash + Eq + Clone + Serialize + DeserializeOwned + Send + 'static,
 		B: Hash + 'static,
-		Self: Sized,
 	{
 		self.single(
 			pool,
@@ -760,10 +759,9 @@ pub trait DistributedIteratorMulti<Source> {
 		self, n: usize, probability: f64, tolerance: f64, error_rate: f64,
 	) -> MostDistinct<Self>
 	where
-		Self: DistributedIteratorMulti<Source, Item = (A, B)>,
+		Self: DistributedIteratorMulti<Source, Item = (A, B)> + Sized,
 		A: Hash + Eq + Clone + Send + Serialize + DeserializeOwned + 'static,
 		B: Hash + 'static,
-		Self: Sized,
 	{
 		_assert_distributed_reducer(MostDistinct::new(
 			self,
@@ -817,8 +815,7 @@ pub trait DistributedIteratorMulti<Source> {
 	where
 		T: Clone + 'a,
 		Source: 'a,
-		Self: DistributedIteratorMulti<&'a Source, Item = &'a T>,
-		Self: Sized,
+		Self: DistributedIteratorMulti<&'a Source, Item = &'a T> + Sized,
 	{
 		_assert_distributed_iterator_multi::<T, _, _>(Cloned::new(self))
 	}

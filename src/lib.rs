@@ -20,30 +20,32 @@
 	// missing_debug_implementations,
 	// missing_docs,
 	trivial_numeric_casts,
-	unused_extern_crates,
 	unused_import_braces,
 	unused_qualifications,
-	unused_results
+	unused_results,
+	// unreachable_pub,
+	clippy::pedantic,
 )]
-// from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
-#![warn(clippy::pedantic)]
 #![allow(
 	where_clauses_object_safety,
 	clippy::inline_always,
-	clippy::stutter,
+	clippy::module_name_repetitions,
 	clippy::similar_names,
 	clippy::needless_pass_by_value,
 	clippy::trivially_copy_pass_by_ref,
-	clippy::unit_arg,
 	clippy::if_not_else,
-	clippy::type_complexity
+	clippy::type_complexity,
+	clippy::unseparated_literal_suffix,
+	clippy::doc_markdown,
+	clippy::use_self,
+	clippy::module_inception,
+	clippy::unreadable_literal,
+	clippy::default_trait_access,
+	clippy::match_same_arms
 )]
 
 #[macro_use]
 extern crate serde_closure;
-#[macro_use]
-extern crate serde_derive;
-// extern crate test;
 
 pub mod data;
 pub mod dist_iter;

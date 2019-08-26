@@ -5,7 +5,7 @@ use std::{
 	collections::HashMap, fmt::{self, Debug}, mem::transmute, ops::Index, slice::{self, SliceIndex}, vec
 };
 
-use super::{super::Data, MapReader, SchemaIncomplete, Value};
+use super::{super::Data, MapReader, SchemaIncomplete};
 use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
@@ -30,9 +30,13 @@ impl<T> List<T> {
 	pub fn iter(&self) -> slice::Iter<'_, T> {
 		self.0.iter()
 	}
+}
+impl<T> IntoIterator for List<T> {
+	type Item = T;
+	type IntoIter = vec::IntoIter<T>;
 
 	/// Creates an iterator over the elements of the List.
-	pub fn into_iter(self) -> vec::IntoIter<T> {
+	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
 	}
 }
@@ -46,17 +50,17 @@ where
 	//     IntoReader<<amadeus_parquet::record::types::List<crate::source::parquet::Record<T>> as amadeus_parquet::record::Record>::Reader, Self>;
 
 	fn postgres_query(
-		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+		_f: &mut fmt::Formatter, _name: Option<&crate::source::postgres::Names<'_>>,
 	) -> fmt::Result {
 		unimplemented!()
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
-	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	fn serde_serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
@@ -64,7 +68,7 @@ where
 		unimplemented!()
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		_deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -111,7 +115,7 @@ where
 
 impl<T> From<Vec<T>> for List<T> {
 	fn from(vec: Vec<T>) -> Self {
-		List(vec)
+		Self(vec)
 	}
 }
 impl<T> Into<Vec<T>> for List<T> {

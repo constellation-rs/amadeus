@@ -60,7 +60,7 @@ impl<'de> Deserialize<'de> for Serde<io::ErrorKind> {
 				17 => io::ErrorKind::UnexpectedEof,
 				_ => io::ErrorKind::Other,
 			})
-			.map(Serde)
+			.map(Self)
 	}
 }
 
@@ -82,12 +82,12 @@ impl<'de> Deserialize<'de> for Serde<Arc<io::Error>> {
 	{
 		<(Serde<io::ErrorKind>, String)>::deserialize(deserializer)
 			.map(|(kind, message)| Arc::new(io::Error::new(kind.0, message)))
-			.map(Serde)
+			.map(Self)
 	}
 }
 
 impl Serialize for Serde<&JsonError> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
@@ -95,7 +95,7 @@ impl Serialize for Serde<&JsonError> {
 	}
 }
 impl<'de> Deserialize<'de> for Serde<JsonError> {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{

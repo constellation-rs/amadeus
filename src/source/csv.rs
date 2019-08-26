@@ -1,10 +1,10 @@
 use super::ResultExpand;
 use crate::{
-	data::Data, dist_iter::Consumer, into_dist_iter::IntoDistributedIterator, DistributedIterator, IteratorExt
+	data::Data, dist_iter::Consumer, into_dist_iter::IntoDistributedIterator, DistributedIterator
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use std::{
-	borrow::Cow, convert::identity, error, fmt::{self, Display}, fs::File, io::{self, BufRead, BufReader}, iter, marker::PhantomData, path::PathBuf, sync::Arc, time, vec
+	error, fmt::{self, Display}, fs::File, io, iter, marker::PhantomData, path::PathBuf, sync::Arc, vec
 };
 use walkdir::WalkDir;
 
@@ -70,7 +70,7 @@ where
 {
 	pub fn new<I>(files: I) -> Result<Self, ()>
 	where
-		I: iter::IntoIterator<Item = PathBuf>,
+		I: IntoIterator<Item = PathBuf>,
 	{
 		let i = files
 			.into_iter()
@@ -96,7 +96,7 @@ where
 					)))
 					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
 			}));
-		Ok(Csv { i })
+		Ok(Self { i })
 	}
 }
 
@@ -111,34 +111,29 @@ fn get_csv_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>>
 			let is_dir = e.file_type().is_dir();
 			let path = e.path();
 			let extension = path.extension();
-			let file_name = path
-				.file_name()
-				.map(|file_name| file_name.to_string_lossy())
-				.unwrap_or(Cow::from(""));
+			let file_name = path.file_name().unwrap().to_string_lossy();
 			let skip = file_name.starts_with('.')
-				|| match is_dir {
-					true => {
-						file_name.starts_with('_') && !file_name.contains('=') // ARROW-1079: Filter out "private" directories starting with underscore
-					}
-					false => {
-						// || (extension.is_some() && extension.unwrap() == "_COPYING_") // File copy in progress; TODO: Emit error on this.
-						(extension.is_some() && extension.unwrap() == "crc") // Checksums
+				|| if is_dir {
+					file_name.starts_with('_') && !file_name.contains('=') // ARROW-1079: Filter out "private" directories starting with underscore
+				} else {
+					// || (extension.is_some() && extension.unwrap() == "_COPYING_") // File copy in progress; TODO: Emit error on this.
+					(extension.is_some() && extension.unwrap() == "crc") // Checksums
 						|| file_name == "_SUCCESS" // Spark success marker
-					}
 				};
-			skip
+			!skip
 		})
 		.filter_map(|e| match e {
 			Ok(e) if e.file_type().is_dir() => {
 				let path = e.path();
-				let file_name = path
-					.file_name()
-					.map(|file_name| file_name.to_string_lossy())
-					.unwrap_or(Cow::from(""));
-				if !file_name.contains('=') {
+				let directory_name = path.file_name().unwrap();
+				let valid = directory_name.to_string_lossy().contains('=');
+				if !valid {
 					Some(Err(io::Error::new(
 						io::ErrorKind::Other,
-						format!("Invalid directory name \"{}\"", file_name),
+						format!(
+							"Invalid directory name \"{}\"",
+							directory_name.to_string_lossy()
+						),
 					)))
 				} else {
 					None
@@ -214,7 +209,7 @@ mod misc_serde {
 					17 => io::ErrorKind::UnexpectedEof,
 					_ => io::ErrorKind::Other,
 				})
-				.map(Serde)
+				.map(Self)
 		}
 	}
 
@@ -236,12 +231,12 @@ mod misc_serde {
 		{
 			<(Serde<io::ErrorKind>, String)>::deserialize(deserializer)
 				.map(|(kind, message)| Arc::new(io::Error::new(kind.0, message)))
-				.map(Serde)
+				.map(Self)
 		}
 	}
 
 	impl Serialize for Serde<&CsvError> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 		where
 			S: Serializer,
 		{
@@ -249,7 +244,7 @@ mod misc_serde {
 		}
 	}
 	impl<'de> Deserialize<'de> for Serde<CsvError> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+		fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>,
 		{
@@ -281,8 +276,8 @@ pub enum Error {
 impl PartialEq for Error {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Error::Io(a), Error::Io(b)) => a.to_string() == b.to_string(),
-			(Error::Csv(a), Error::Csv(b)) => a.to_string() == b.to_string(),
+			(Self::Io(a), Self::Io(b)) => a.to_string() == b.to_string(),
+			(Self::Csv(a), Self::Csv(b)) => a.to_string() == b.to_string(),
 			_ => false,
 		}
 	}
@@ -291,19 +286,19 @@ impl error::Error for Error {}
 impl Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Error::Io(err) => err.fmt(f),
-			Error::Csv(err) => err.fmt(f),
+			Self::Io(err) => err.fmt(f),
+			Self::Csv(err) => err.fmt(f),
 		}
 	}
 }
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		Error::Io(Arc::new(err))
+		Self::Io(Arc::new(err))
 	}
 }
 impl From<CsvError> for Error {
 	fn from(err: CsvError) -> Self {
-		Error::Csv(err)
+		Self::Csv(err)
 	}
 }
 

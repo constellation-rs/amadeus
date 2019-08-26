@@ -1,16 +1,11 @@
-use super::ResultExpand;
 use crate::{
-	data::Data, dist_iter::Consumer, into_dist_iter::IntoDistributedIterator, DistributedIterator, IteratorExt
+	data::Data, dist_iter::Consumer, into_dist_iter::IntoDistributedIterator, DistributedIterator
 };
-use serde::{de::DeserializeOwned, Serialize};
+use postgres::{params::IntoConnectParams, Error as PostgresError};
+use serde::Serialize;
 use std::{
-	borrow::Cow, convert::identity, error, fmt::{self, Display}, fs::File, io::{self, BufRead, BufReader}, iter, marker::PhantomData, path::PathBuf, str, sync::Arc, time, vec
+	convert::TryFrom, error, fmt::{self, Display}, io, iter, marker::PhantomData, path::PathBuf, str, sync::Arc, vec
 };
-use walkdir::WalkDir;
-
-use postgres::Error as PostgresError;
-
-use crate::data::SerdeDeserialize;
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
@@ -41,11 +36,11 @@ pub struct Table {
 }
 impl Table {
 	pub fn new(schema: Option<String>, table: String) -> Self {
-		Table { schema, table }
+		Self { schema, table }
 	}
 }
 
-impl fmt::Display for Table {
+impl Display for Table {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		if let Some(ref schema) = self.schema {
 			EscapeIdentifier(schema).fmt(f)?;
@@ -70,8 +65,6 @@ impl str::FromStr for Table {
 	}
 }
 
-use postgres::params::IntoConnectParams;
-
 // postgres::params::ConnectParams
 #[derive(Serialize, Deserialize)]
 pub struct ConnectParams {
@@ -84,27 +77,28 @@ pub struct ConnectParams {
 	options: Vec<(String, String)>,
 	connect_timeout: Option<std::time::Duration>,
 }
-impl postgres::params::IntoConnectParams for ConnectParams {
+impl IntoConnectParams for ConnectParams {
 	fn into_connect_params(
 		self,
-	) -> Result<postgres::params::ConnectParams, Box<std::error::Error + 'static + Send + Sync>> {
+	) -> Result<postgres::params::ConnectParams, Box<dyn std::error::Error + 'static + Send + Sync>>
+	{
 		let mut builder = postgres::params::ConnectParams::builder();
-		builder.port(self.port);
+		let _ = builder.port(self.port);
 		if let Some(user) = self.user {
-			builder.user(user.name(), user.password());
+			let _ = builder.user(user.name(), user.password());
 		}
 		if let Some(database) = self.database {
-			builder.database(&database);
+			let _ = builder.database(&database);
 		}
 		for (name, value) in self.options {
-			builder.option(&name, &value);
+			let _ = builder.option(&name, &value);
 		}
-		builder.connect_timeout(self.connect_timeout);
+		let _ = builder.connect_timeout(self.connect_timeout);
 		Ok(builder.build(self.host))
 	}
 }
 impl str::FromStr for ConnectParams {
-	type Err = Box<std::error::Error + 'static + Send + Sync>;
+	type Err = Box<dyn std::error::Error + 'static + Send + Sync>;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let params = s.into_connect_params()?;
@@ -138,7 +132,7 @@ where
 {
 	pub fn new<I>(files: I) -> Result<Self, ()>
 	where
-		I: iter::IntoIterator<Item = (ConnectParams, Vec<Source>)>,
+		I: IntoIterator<Item = (ConnectParams, Vec<Source>)>,
 	{
 		let i = files
 			.into_iter()
@@ -168,26 +162,6 @@ where
 
 					let mut writer = postgres_binary_copy::BinaryCopyWriter::new(writer);
 
-					pub struct DisplayFmt<F>(F)
-					where
-						F: Fn(&mut fmt::Formatter) -> fmt::Result;
-					impl<F> DisplayFmt<F>
-					where
-						F: Fn(&mut fmt::Formatter) -> fmt::Result,
-					{
-						pub fn new(f: F) -> Self {
-							Self(f)
-						}
-					}
-					impl<F> Display for DisplayFmt<F>
-					where
-						F: Fn(&mut fmt::Formatter) -> fmt::Result,
-					{
-						fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-							self.0(f)
-						}
-					}
-
 					let table = match table {
 						Source::Table(table) => table.to_string(),
 						Source::Query(query) => format!("({}) _", query),
@@ -195,11 +169,11 @@ where
 					let query = format!("COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)", DisplayFmt::new(|f| Row::postgres_query(f, None)), table);
 					println!("{}", query);
 					let stmt = connection.prepare(&query).unwrap();
-					stmt.copy_out(&[], &mut writer).unwrap();
+					let _ = stmt.copy_out(&[], &mut writer).unwrap();
 					vec.into_iter()
 				}))
 			}));
-		Ok(Postgres { i })
+		Ok(Self { i })
 	}
 }
 
@@ -207,16 +181,16 @@ use std::io::Read;
 pub fn read_be_i32(buf: &mut &[u8]) -> ::std::io::Result<i32> {
 	let mut bytes = [0; 4];
 	buf.read_exact(&mut bytes)?;
-	let num = ((bytes[0] as i32) << 24)
-		| ((bytes[1] as i32) << 16)
-		| ((bytes[2] as i32) << 8)
-		| (bytes[3] as i32);
+	let num = ((i32::from(bytes[0])) << 24)
+		| ((i32::from(bytes[1])) << 16)
+		| ((i32::from(bytes[2])) << 8)
+		| (i32::from(bytes[3]));
 	Ok(num)
 }
 
 pub fn read_value<T>(
 	type_: &::postgres::types::Type, buf: &mut &[u8],
-) -> Result<T, Box<::std::error::Error + Sync + Send>>
+) -> Result<T, Box<dyn std::error::Error + Sync + Send>>
 where
 	T: Data,
 {
@@ -224,10 +198,11 @@ where
 	let value = if len < 0 {
 		None
 	} else {
-		if len as usize > buf.len() {
+		let len = usize::try_from(len)?;
+		if len > buf.len() {
 			return Err(Into::into("invalid buffer size"));
 		}
-		let (head, tail) = buf.split_at(len as usize);
+		let (head, tail) = buf.split_at(len);
 		*buf = tail;
 		Some(&head[..])
 	};
@@ -236,7 +211,7 @@ where
 
 // https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
 struct EscapeIdentifier<T>(T);
-impl<T: Display> fmt::Display for EscapeIdentifier<T> {
+impl<T: Display> Display for EscapeIdentifier<T> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.write_str("\"")
 			.and_then(|()| f.write_str(&self.0.to_string().replace('"', "\"\"")))
@@ -245,7 +220,7 @@ impl<T: Display> fmt::Display for EscapeIdentifier<T> {
 }
 
 pub struct Names<'a>(pub Option<&'a Names<'a>>, pub &'static str);
-impl<'a> fmt::Display for Names<'a> {
+impl<'a> Display for Names<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		if let Some(prev) = self.0 {
 			f.write_str("(")
@@ -280,7 +255,7 @@ mod misc_serde {
 			D: Deserializer<'de>,
 		{
 			<(String, Option<String>)>::deserialize(deserializer).map(|(name, password)| {
-				Serde(
+				Self(
 					postgres::params::ConnectParams::builder()
 						.user(&name, password.as_ref().map(|x| &**x))
 						.build(postgres::params::Host::Tcp(String::new()))
@@ -306,7 +281,7 @@ mod misc_serde {
 			D: Deserializer<'de>,
 		{
 			<Option<Serde<postgres::params::User>>>::deserialize(deserializer)
-				.map(|x| Serde(x.map(|x| x.0)))
+				.map(|x| Self(x.map(|x| x.0)))
 		}
 	}
 
@@ -366,7 +341,7 @@ mod misc_serde {
 					17 => io::ErrorKind::UnexpectedEof,
 					_ => io::ErrorKind::Other,
 				})
-				.map(Serde)
+				.map(Self)
 		}
 	}
 
@@ -388,12 +363,12 @@ mod misc_serde {
 		{
 			<(Serde<io::ErrorKind>, String)>::deserialize(deserializer)
 				.map(|(kind, message)| Arc::new(io::Error::new(kind.0, message)))
-				.map(Serde)
+				.map(Self)
 		}
 	}
 
 	impl Serialize for Serde<&PostgresError> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 		where
 			S: Serializer,
 		{
@@ -401,7 +376,7 @@ mod misc_serde {
 		}
 	}
 	impl<'de> Deserialize<'de> for Serde<PostgresError> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+		fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>,
 		{
@@ -433,8 +408,8 @@ pub enum Error {
 impl PartialEq for Error {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Error::Io(a), Error::Io(b)) => a.to_string() == b.to_string(),
-			(Error::Postgres(a), Error::Postgres(b)) => a.to_string() == b.to_string(),
+			(Self::Io(a), Self::Io(b)) => a.to_string() == b.to_string(),
+			(Self::Postgres(a), Self::Postgres(b)) => a.to_string() == b.to_string(),
 			_ => false,
 		}
 	}
@@ -443,19 +418,19 @@ impl error::Error for Error {}
 impl Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Error::Io(err) => err.fmt(f),
-			Error::Postgres(err) => err.fmt(f),
+			Self::Io(err) => err.fmt(f),
+			Self::Postgres(err) => err.fmt(f),
 		}
 	}
 }
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		Error::Io(Arc::new(err))
+		Self::Io(Arc::new(err))
 	}
 }
 impl From<PostgresError> for Error {
 	fn from(err: PostgresError) -> Self {
-		Error::Postgres(err)
+		Self::Postgres(err)
 	}
 }
 
@@ -495,5 +470,25 @@ where
 
 	fn run(self, i: &mut impl FnMut(Result<Row, Error>) -> bool) -> bool {
 		self.task.run(i)
+	}
+}
+
+struct DisplayFmt<F>(F)
+where
+	F: Fn(&mut fmt::Formatter) -> fmt::Result;
+impl<F> DisplayFmt<F>
+where
+	F: Fn(&mut fmt::Formatter) -> fmt::Result,
+{
+	pub fn new(f: F) -> Self {
+		Self(f)
+	}
+}
+impl<F> Display for DisplayFmt<F>
+where
+	F: Fn(&mut fmt::Formatter) -> fmt::Result,
+{
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		self.0(f)
 	}
 }

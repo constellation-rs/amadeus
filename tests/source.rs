@@ -31,7 +31,7 @@ fn main() {
 		}),
 	);
 
-	DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity);
+	let _ = DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity);
 
 	println!(
 		"{:?}",

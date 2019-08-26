@@ -3,10 +3,10 @@
 use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
 use serde::{
-	de::{MapAccess, SeqAccess, Visitor}, ser::{SerializeStruct, SerializeTupleStruct}, Deserialize, Deserializer, Serialize, Serializer
+	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeStruct, SerializeTupleStruct}, Deserialize, Deserializer, Serialize, Serializer
 };
 use std::{
-	cmp, collections::HashMap, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc, vec
+	cmp, collections::HashMap, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc
 };
 
 use super::{
@@ -40,7 +40,7 @@ impl Group {
 	pub fn new(
 		fields: Vec<Value>, field_names: Option<Arc<LinkedHashMap<String, usize, FxBuildHasher>>>,
 	) -> Self {
-		Group(fields, field_names)
+		Self(fields, field_names)
 	}
 	/// Get a reference to the value belonging to a particular field name. Returns `None`
 	/// if the field name doesn't exist.
@@ -83,13 +83,13 @@ impl Data for Group {
 	>;
 
 	fn postgres_query(
-		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+		_f: &mut fmt::Formatter, _name: Option<&crate::source::postgres::Names<'_>>,
 	) -> fmt::Result {
 		unimplemented!()
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -112,14 +112,14 @@ impl Data for Group {
 			struct_serializer.end()
 		} else {
 			let mut tuple_serializer = serializer.serialize_tuple_struct("Group", self.0.len())?;
-			for field in self.0.iter() {
+			for field in &self.0 {
 				tuple_serializer.serialize_field(&SerdeSerialize(field))?;
 			}
 			tuple_serializer.end()
 		}
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -157,7 +157,9 @@ impl Data for Group {
 				while let Some((key, value)) =
 					visitor.next_entry::<String, SerdeDeserialize<Value>>()?
 				{
-					keys.insert(key, values.len());
+					if keys.insert(key, values.len()).is_some() {
+						return Err(de::Error::duplicate_field(""));
+					}
 					values.push(value.0);
 				}
 
@@ -233,13 +235,13 @@ impl Debug for Group {
 				.map(|(name, _index)| name)
 				.zip(self.0.iter())
 			{
-				printer.field(name, field);
+				let _ = printer.field(name, field);
 			}
 			printer.finish()
 		} else {
 			let mut printer = f.debug_tuple("Group");
-			for field in self.0.iter() {
-				printer.field(field);
+			for field in &self.0 {
+				let _ = printer.field(field);
 			}
 			printer.finish()
 		}
@@ -252,7 +254,9 @@ impl From<LinkedHashMap<String, Value, FxBuildHasher>> for Group {
 			hashmap
 				.into_iter()
 				.map(|(key, value)| {
-					keys.insert(key, keys.len());
+					if keys.insert(key, keys.len()).is_some() {
+						panic!("duplicate key");
+					}
 					value
 				})
 				.collect(),

@@ -58,7 +58,7 @@ impl Decimal {
 	// pub fn from_i32(value: i32, precision: i32, scale: i32) -> Self {
 	//     let mut bytes = [0; 4];
 	//     BigEndian::write_i32(&mut bytes, value);
-	//     Decimal::Int32 {
+	//     Self::Int32 {
 	//         value: bytes,
 	//         precision,
 	//         scale,
@@ -69,7 +69,7 @@ impl Decimal {
 	// pub fn from_i64(value: i64, precision: i32, scale: i32) -> Self {
 	//     let mut bytes = [0; 8];
 	//     BigEndian::write_i64(&mut bytes, value);
-	//     Decimal::Int64 {
+	//     Self::Int64 {
 	//         value: bytes,
 	//         precision,
 	//         scale,
@@ -78,7 +78,7 @@ impl Decimal {
 
 	/// Creates new decimal value from `Vec<u8>`.
 	pub fn from_bytes(value: Vec<u8>, precision: i32, scale: i32) -> Self {
-		Decimal::Bytes {
+		Self::Bytes {
 			value,
 			precision,
 			scale,
@@ -88,27 +88,27 @@ impl Decimal {
 	/// Returns bytes of unscaled value.
 	pub fn data(&self) -> &[u8] {
 		match *self {
-			Decimal::Int32 { ref value, .. } => value,
-			Decimal::Int64 { ref value, .. } => value,
-			Decimal::Bytes { ref value, .. } => value,
+			Self::Int32 { ref value, .. } => value,
+			Self::Int64 { ref value, .. } => value,
+			Self::Bytes { ref value, .. } => value,
 		}
 	}
 
 	/// Returns decimal precision.
 	pub fn precision(&self) -> i32 {
 		match *self {
-			Decimal::Int32 { precision, .. } => precision,
-			Decimal::Int64 { precision, .. } => precision,
-			Decimal::Bytes { precision, .. } => precision,
+			Self::Int32 { precision, .. }
+			| Self::Int64 { precision, .. }
+			| Self::Bytes { precision, .. } => precision,
 		}
 	}
 
 	/// Returns decimal scale.
 	pub fn scale(&self) -> i32 {
 		match *self {
-			Decimal::Int32 { scale, .. } => scale,
-			Decimal::Int64 { scale, .. } => scale,
-			Decimal::Bytes { scale, .. } => scale,
+			Self::Int32 { scale, .. } | Self::Int64 { scale, .. } | Self::Bytes { scale, .. } => {
+				scale
+			}
 		}
 	}
 }
@@ -127,8 +127,8 @@ impl Data for Decimal {
 		name.unwrap().fmt(f)
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -139,7 +139,7 @@ impl Data for Decimal {
 		self.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -166,12 +166,12 @@ impl Data for Decimal {
 	}
 }
 impl From<Decimal> for amadeus_parquet::data_type::Decimal {
-	fn from(decimal: Decimal) -> Self {
+	fn from(_decimal: Decimal) -> Self {
 		unimplemented!()
 	}
 }
 impl From<amadeus_parquet::data_type::Decimal> for Decimal {
-	fn from(decimal: amadeus_parquet::data_type::Decimal) -> Self {
+	fn from(_decimal: amadeus_parquet::data_type::Decimal) -> Self {
 		unimplemented!()
 	}
 }

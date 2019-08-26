@@ -481,7 +481,7 @@ fn wrap_in_const(trait_: &str, ty: &Ident, code: TokenStream) -> TokenStream {
 	);
 
 	quote! {
-		#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+		#[allow(non_upper_case_globals, unused_attributes, unused_qualifications, clippy::type_complexity)]
 		const #dummy_const: () = {
 			#code
 		};

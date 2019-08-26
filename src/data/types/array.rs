@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-	collections::HashMap, fmt::{self, Display}, marker::PhantomData, string::FromUtf8Error
+	collections::HashMap, error::Error, fmt::{self, Display}
 };
 
 use super::{super::Data, IntoReader, SchemaIncomplete};
@@ -15,8 +15,8 @@ use amadeus_parquet::{
 // `Vec<u8>` corresponds to the `binary`/`byte_array` and `fixed_len_byte_array` physical
 // types.
 impl Data for Vec<u8> {
-	type ParquetSchema = <Vec<u8> as amadeus_parquet::record::Record>::Schema;
-	type ParquetReader = <Vec<u8> as amadeus_parquet::record::Record>::Reader;
+	type ParquetSchema = <Self as amadeus_parquet::record::Record>::Schema;
+	type ParquetReader = <Self as amadeus_parquet::record::Record>::Reader;
 
 	fn postgres_query(
 		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
@@ -24,8 +24,8 @@ impl Data for Vec<u8> {
 		name.unwrap().fmt(f)
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -36,7 +36,7 @@ impl Data for Vec<u8> {
 		self.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -47,13 +47,13 @@ impl Data for Vec<u8> {
 	fn parquet_parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::ParquetSchema), ParquetError> {
-		<Vec<u8> as amadeus_parquet::record::Record>::parse(schema, repetition)
+		<Self as amadeus_parquet::record::Record>::parse(schema, repetition)
 	}
 	fn parquet_reader(
 		schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::ParquetReader {
-		<Vec<u8> as amadeus_parquet::record::Record>::reader(
+		<Self as amadeus_parquet::record::Record>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		)
 	}
@@ -76,8 +76,8 @@ impl Data for Bson {
 		name.unwrap().fmt(f)
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -88,7 +88,7 @@ impl Data for Bson {
 		self.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -121,7 +121,7 @@ impl From<Bson> for amadeus_parquet::record::types::Bson {
 }
 impl From<amadeus_parquet::record::types::Bson> for Bson {
 	fn from(bson: amadeus_parquet::record::types::Bson) -> Self {
-		Bson(bson.into())
+		Self(bson.into())
 	}
 }
 impl From<Bson> for Vec<u8> {
@@ -131,7 +131,7 @@ impl From<Bson> for Vec<u8> {
 }
 impl From<Vec<u8>> for Bson {
 	fn from(string: Vec<u8>) -> Self {
-		Bson(string)
+		Self(string)
 	}
 }
 
@@ -154,8 +154,8 @@ impl Data for Json {
 		name.unwrap().fmt(f)
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -166,7 +166,7 @@ impl Data for Json {
 		self.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -199,7 +199,7 @@ impl From<Json> for amadeus_parquet::record::types::Json {
 }
 impl From<amadeus_parquet::record::types::Json> for Json {
 	fn from(json: amadeus_parquet::record::types::Json) -> Self {
-		Json(json.into())
+		Self(json.into())
 	}
 }
 impl Display for Json {
@@ -214,7 +214,7 @@ impl From<Json> for String {
 }
 impl From<String> for Json {
 	fn from(string: String) -> Self {
-		Json(string)
+		Self(string)
 	}
 }
 
@@ -235,8 +235,8 @@ impl Data for Enum {
 		name.unwrap().fmt(f)
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -247,7 +247,7 @@ impl Data for Enum {
 		self.serialize(serializer)
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -280,7 +280,7 @@ impl From<Enum> for amadeus_parquet::record::types::Enum {
 }
 impl From<amadeus_parquet::record::types::Enum> for Enum {
 	fn from(enum_: amadeus_parquet::record::types::Enum) -> Self {
-		Enum(enum_.into())
+		Self(enum_.into())
 	}
 }
 impl Display for Enum {
@@ -295,7 +295,7 @@ impl From<Enum> for String {
 }
 impl From<String> for Enum {
 	fn from(string: String) -> Self {
-		Enum(string)
+		Self(string)
 	}
 }
 
@@ -311,8 +311,8 @@ macro_rules! impl_parquet_record_array {
 				name.unwrap().fmt(f)
 			}
 			fn postgres_decode(
-				type_: &::postgres::types::Type, buf: Option<&[u8]>,
-			) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+				_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+			) -> Result<Self, Box<dyn Error + Sync + Send>> {
 				unimplemented!()
 			}
 
@@ -323,7 +323,7 @@ macro_rules! impl_parquet_record_array {
 				self.serialize(serializer)
 			}
 			fn serde_deserialize<'de, D>(
-				deserializer: D, schema: Option<SchemaIncomplete>,
+				deserializer: D, _schema: Option<SchemaIncomplete>,
 			) -> Result<Self, D::Error>
 			where
 				D: Deserializer<'de>,
@@ -359,8 +359,8 @@ macro_rules! impl_parquet_record_array {
 				name.unwrap().fmt(f)
 			}
 			fn postgres_decode(
-				type_: &::postgres::types::Type, buf: Option<&[u8]>,
-			) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+				_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+			) -> Result<Self, Box<dyn Error + Sync + Send>> {
 				unimplemented!()
 			}
 
@@ -371,7 +371,7 @@ macro_rules! impl_parquet_record_array {
 				self.serialize(serializer)
 			}
 			fn serde_deserialize<'de, D>(
-				deserializer: D, schema: Option<SchemaIncomplete>,
+				deserializer: D, _schema: Option<SchemaIncomplete>,
 			) -> Result<Self, D::Error>
 			where
 				D: Deserializer<'de>,

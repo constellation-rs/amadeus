@@ -1,10 +1,8 @@
 use super::ResultExpand;
-use crate::{
-	data::Data, dist_iter::Consumer, into_dist_iter::IntoDistributedIterator, DistributedIterator, IteratorExt
-};
+use crate::{data::Data, into_dist_iter::IntoDistributedIterator, DistributedIterator};
 use serde::{Deserialize, Serialize};
 use std::{
-	borrow::Cow, convert::identity, error, fmt::{self, Display}, fs::File, io::{self, BufRead, BufReader}, iter, marker::PhantomData, path::PathBuf, sync::Arc, time, vec
+	error, fmt::{self, Display}, fs::File, io, iter, marker::PhantomData, path::PathBuf, sync::Arc, vec
 };
 use walkdir::WalkDir;
 
@@ -159,34 +157,29 @@ fn get_json_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>
 			let is_dir = e.file_type().is_dir();
 			let path = e.path();
 			let extension = path.extension();
-			let file_name = path
-				.file_name()
-				.map(|file_name| file_name.to_string_lossy())
-				.unwrap_or(Cow::from(""));
+			let file_name = path.file_name().unwrap().to_string_lossy();
 			let skip = file_name.starts_with('.')
-				|| match is_dir {
-					true => {
-						file_name.starts_with('_') && !file_name.contains('=') // ARROW-1079: Filter out "private" directories starting with underscore
-					}
-					false => {
-						// || (extension.is_some() && extension.unwrap() == "_COPYING_") // File copy in progress; TODO: Emit error on this.
-						(extension.is_some() && extension.unwrap() == "crc") // Checksums
+				|| if is_dir {
+					file_name.starts_with('_') && !file_name.contains('=') // ARROW-1079: Filter out "private" directories starting with underscore
+				} else {
+					// || (extension.is_some() && extension.unwrap() == "_COPYING_") // File copy in progress; TODO: Emit error on this.
+					(extension.is_some() && extension.unwrap() == "crc") // Checksums
 						|| file_name == "_SUCCESS" // Spark success marker
-					}
 				};
-			skip
+			!skip
 		})
 		.filter_map(|e| match e {
 			Ok(e) if e.file_type().is_dir() => {
 				let path = e.path();
-				let file_name = path
-					.file_name()
-					.map(|file_name| file_name.to_string_lossy())
-					.unwrap_or(Cow::from(""));
-				if !file_name.contains('=') {
+				let directory_name = path.file_name().unwrap();
+				let valid = directory_name.to_string_lossy().contains('=');
+				if !valid {
 					Some(Err(io::Error::new(
 						io::ErrorKind::Other,
-						format!("Invalid directory name \"{}\"", file_name),
+						format!(
+							"Invalid directory name \"{}\"",
+							directory_name.to_string_lossy()
+						),
 					)))
 				} else {
 					None
@@ -207,8 +200,8 @@ pub enum Error {
 impl PartialEq for Error {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Error::Io(a), Error::Io(b)) => a.to_string() == b.to_string(),
-			(Error::Json(a), Error::Json(b)) => a.to_string() == b.to_string(),
+			(Self::Io(a), Self::Io(b)) => a.to_string() == b.to_string(),
+			(Self::Json(a), Self::Json(b)) => a.to_string() == b.to_string(),
 			_ => false,
 		}
 	}
@@ -217,18 +210,18 @@ impl error::Error for Error {}
 impl Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Error::Io(err) => err.fmt(f),
-			Error::Json(err) => err.fmt(f),
+			Self::Io(err) => err.fmt(f),
+			Self::Json(err) => err.fmt(f),
 		}
 	}
 }
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		Error::Io(Arc::new(err))
+		Self::Io(Arc::new(err))
 	}
 }
 impl From<JsonError> for Error {
 	fn from(err: JsonError) -> Self {
-		Error::Json(err)
+		Self::Json(err)
 	}
 }

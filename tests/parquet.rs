@@ -2,6 +2,8 @@
 
 // extern crate test;
 
+#![allow(clippy::cognitive_complexity, clippy::type_complexity)]
+
 // use amadeus::prelude::*;
 use amadeus::{
 	data::{
@@ -381,6 +383,8 @@ fn main() {
 			.count(&pool),
 		2
 	);
+
+	// TODO
 
 	// type NationDictMalformed = (Option<i32>, Option<Vec<u8>>, Option<i32>, Option<Vec<u8>>);
 
@@ -819,6 +823,8 @@ fn main() {
 			.count(&pool),
 		14_444
 	);
+
+	println!("in {:?}", start.elapsed().unwrap());
 }
 
 // #[bench]

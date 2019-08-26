@@ -31,7 +31,7 @@ mod data {
 		) -> fmt::Result;
 		fn postgres_decode(
 			type_: &::postgres::types::Type, buf: Option<&[u8]>,
-		) -> Result<Self, Box<std::error::Error + Sync + Send>>;
+		) -> Result<Self, Box<dyn std::error::Error + Sync + Send>>;
 
 		fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where
@@ -53,17 +53,20 @@ mod data {
 
 	macro_rules! impl_data_for_record {
 		($($t:ty : $pt:ty),*) => (
-			$(impl Data for $t {
-				type ParquetSchema = <$t as ParquetRecord>::Schema;
-				type ParquetReader = <$t as ParquetRecord>::Reader;
+			$(
+			#[allow(clippy::use_self)]
+			impl Data for $t {
+				type ParquetSchema = <Self as ParquetRecord>::Schema;
+				type ParquetReader = <Self as ParquetRecord>::Reader;
 
 				fn postgres_query(f: &mut fmt::Formatter, name: Option<&super::super::source::postgres::Names<'_>>) -> fmt::Result {
 					name.unwrap().fmt(f)
 				}
-				fn postgres_decode(type_: &::postgres::types::Type, buf: Option<&[u8]>) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+				fn postgres_decode(type_: &::postgres::types::Type, buf: Option<&[u8]>) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 					if !<$pt as ::postgres::types::FromSql>::accepts(type_) {
 						return Err(Into::into("invalid type"));
 					}
+					#[allow(trivial_numeric_casts)]
 					<$pt as ::postgres::types::FromSql>::from_sql(type_, buf.ok_or_else(||Box::new(::postgres::types::WasNull))?).map(|x|x as Self)
 				}
 
@@ -72,7 +75,7 @@ mod data {
 					S: Serializer {
 					self.serialize(serializer)
 				}
-				fn serde_deserialize<'de, D>(deserializer: D, schema: Option<SchemaIncomplete>) -> Result<Self, D::Error>
+				fn serde_deserialize<'de, D>(deserializer: D, _schema: Option<SchemaIncomplete>) -> Result<Self, D::Error>
 				where
 					D: Deserializer<'de> {
 					Self::deserialize(deserializer)
@@ -81,15 +84,16 @@ mod data {
 				fn parquet_parse(
 					schema: &Type, repetition: Option<Repetition>,
 				) -> Result<(String, Self::ParquetSchema), ParquetError> {
-					<$t as ParquetRecord>::parse(schema, repetition)
+					<Self as ParquetRecord>::parse(schema, repetition)
 				}
 				fn parquet_reader(
 					schema: &Self::ParquetSchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 					paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 				) -> Self::ParquetReader {
-					<$t as ParquetRecord>::reader(schema, path, def_level, rep_level, paths, batch_size)
+					<Self as ParquetRecord>::reader(schema, path, def_level, rep_level, paths, batch_size)
 				}
-			})*
+			}
+			)*
 		);
 	}
 	impl_data_for_record!(
@@ -123,7 +127,7 @@ mod data {
 		}
 		fn postgres_decode(
 			type_: &::postgres::types::Type, buf: Option<&[u8]>,
-		) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 			match buf {
 				Some(buf) => T::postgres_decode(type_, Some(buf)).map(Some),
 				None => Ok(None),
@@ -137,7 +141,7 @@ mod data {
 			self.as_ref().map(SerdeSerialize).serialize(serializer)
 		}
 		fn serde_deserialize<'de, D>(
-			deserializer: D, schema: Option<SchemaIncomplete>,
+			deserializer: D, _schema: Option<SchemaIncomplete>,
 		) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>,
@@ -186,7 +190,7 @@ mod data {
 		where
 			D: Deserializer<'de>,
 		{
-			T::serde_deserialize(deserializer, None).map(SerdeDeserialize)
+			T::serde_deserialize(deserializer, None).map(Self)
 		}
 	}
 	#[repr(transparent)]
@@ -199,8 +203,7 @@ mod data {
 		where
 			D: Deserializer<'de>,
 		{
-			T::serde_deserialize(deserializer, Some(SchemaIncomplete::Group(None)))
-				.map(SerdeDeserializeGroup)
+			T::serde_deserialize(deserializer, Some(SchemaIncomplete::Group(None))).map(Self)
 		}
 	}
 
@@ -244,7 +247,7 @@ pub use data::{Data, SerdeDeserialize, SerdeDeserializeGroup, SerdeSerialize};
 
 pub mod serde_data {
 	use super::Data;
-	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+	use serde::{Deserializer, Serializer};
 
 	pub fn serialize<T, S>(self_: &T, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -289,14 +292,10 @@ mod tuple {
 	use super::{
 		data::{SerdeDeserialize, SerdeSerialize}, types::SchemaIncomplete, Data
 	};
-	use std::{
-		collections::HashMap, fmt::{self, Debug}, marker::PhantomData, vec
-	};
+	use std::{collections::HashMap, fmt, marker::PhantomData};
 
 	use amadeus_parquet::{
-		basic::Repetition, column::reader::ColumnReader, errors::{ParquetError, Result as ParquetResult}, record::{
-			_private::DisplaySchemaGroup, types::{Downcast, Group, Value}, Reader as ParquetReader, Record as ParquetRecord, Schema as ParquetSchema
-		}, schema::types::{ColumnPath, Type}
+		basic::Repetition, column::reader::ColumnReader, errors::Result as ParquetResult, record::Record as ParquetRecord, schema::types::{ColumnPath, Type}
 	};
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -448,9 +447,9 @@ mod tuple {
 			{
 				type Item = ($($t,)*);
 
+				#[allow(unused_variables)]
 				#[inline]
 				fn read(&mut self, def_level: i16, rep_level: i16) -> ParquetResult<Self::Item> {
-					// panic!()
 					self.0.read(def_level, rep_level).map(|self_|($((self_.$i).0,)*))
 				}
 
@@ -479,10 +478,10 @@ mod tuple {
 				type ParquetSchema = <($(crate::source::parquet::Record<$t>,)*) as ParquetRecord>::Schema; //TupleSchema<($((String,$t::Schema,),)*)>;
 				type ParquetReader = TupleXxxReader<($($t,)*),<($(crate::source::parquet::Record<$t>,)*) as ParquetRecord>::Reader>; //TupleReader<($($t::Reader,)*)>;
 
-				fn postgres_query(f: &mut fmt::Formatter, name: Option<&super::super::source::postgres::Names<'_>>) -> fmt::Result {
+				fn postgres_query(_f: &mut fmt::Formatter, _name: Option<&super::super::source::postgres::Names<'_>>) -> fmt::Result {
 					unimplemented!()
 				}
-				fn postgres_decode(type_: &::postgres::types::Type, buf: Option<&[u8]>) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+				fn postgres_decode(_type_: &::postgres::types::Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 					unimplemented!()
 				}
 
@@ -491,7 +490,8 @@ mod tuple {
 					S_: Serializer {
 					($(SerdeSerialize(&self.$i),)*).serialize(serializer)
 				}
-				fn serde_deserialize<'de,D_>(deserializer: D_, schema: Option<SchemaIncomplete>) -> Result<Self, D_::Error>
+				#[allow(unused_variables)]
+				fn serde_deserialize<'de,D_>(deserializer: D_, _schema: Option<SchemaIncomplete>) -> Result<Self, D_::Error>
 				where
 					D_: Deserializer<'de> {
 					<($(SerdeDeserialize<$t>,)*)>::deserialize(deserializer).map(|self_|($((self_.$i).0,)*))

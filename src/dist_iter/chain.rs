@@ -47,8 +47,8 @@ impl<A: Consumer, B: Consumer<Item = A::Item>> Consumer for ChainConsumer<A, B> 
 
 	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		match self {
-			ChainConsumer::A(a) => a.run(i),
-			ChainConsumer::B(b) => b.run(i),
+			Self::A(a) => a.run(i),
+			Self::B(b) => b.run(i),
 		}
 	}
 }

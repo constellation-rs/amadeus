@@ -5,7 +5,7 @@ use std::{
 	borrow::Borrow, collections::{hash_map, HashMap}, fmt::{self, Debug}, hash::Hash, mem::transmute
 };
 
-use super::{super::Data, MapReader, SchemaIncomplete, Value};
+use super::{super::Data, MapReader, SchemaIncomplete};
 use amadeus_parquet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, schema::types::{ColumnPath, Type}
 };
@@ -42,9 +42,16 @@ where
 	pub fn iter(&self) -> hash_map::Iter<'_, K, V> {
 		self.0.iter()
 	}
+}
+impl<K, V> IntoIterator for Map<K, V>
+where
+	K: Hash + Eq,
+{
+	type Item = (K, V);
+	type IntoIter = hash_map::IntoIter<K, V>;
 
 	/// Creates an iterator over the `(key, value)` pairs of the Map.
-	pub fn into_iter(self) -> hash_map::IntoIter<K, V> {
+	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
 	}
 }
@@ -62,17 +69,17 @@ where
 	//     IntoReader<<amadeus_parquet::record::types::Map<crate::source::parquet::Record<K>,crate::source::parquet::Record<V>> as amadeus_parquet::record::Record>::Reader, Self>;
 
 	fn postgres_query(
-		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+		_f: &mut fmt::Formatter, _name: Option<&crate::source::postgres::Names<'_>>,
 	) -> fmt::Result {
 		unimplemented!()
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
-	fn serde_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	fn serde_serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
@@ -80,7 +87,7 @@ where
 		unimplemented!()
 	}
 	fn serde_deserialize<'de, D>(
-		deserializer: D, schema: Option<SchemaIncomplete>,
+		_deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -147,7 +154,7 @@ where
 	K: Hash + Eq,
 {
 	fn from(hashmap: HashMap<K, V>) -> Self {
-		Map(hashmap)
+		Self(hashmap)
 	}
 }
 impl<K, V> Into<HashMap<K, V>> for Map<K, V>

@@ -226,7 +226,7 @@ mod combine {
 	pub struct MaxByKey<F, B>(pub F, pub PhantomData<fn(B)>);
 	impl<F: Clone, B> Clone for MaxByKey<F, B> {
 		fn clone(&self) -> Self {
-			MaxByKey(self.0.clone(), PhantomData)
+			Self(self.0.clone(), PhantomData)
 		}
 	}
 	impl<F: Copy, B> Copy for MaxByKey<F, B> {}
@@ -273,7 +273,7 @@ mod combine {
 	pub struct MinByKey<F, B>(pub F, pub PhantomData<fn(B)>);
 	impl<F: Clone, B> Clone for MinByKey<F, B> {
 		fn clone(&self) -> Self {
-			MinByKey(self.0.clone(), PhantomData)
+			Self(self.0.clone(), PhantomData)
 		}
 	}
 	impl<F: Copy, B> Copy for MinByKey<F, B> {}

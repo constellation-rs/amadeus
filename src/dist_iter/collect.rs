@@ -43,7 +43,7 @@ pub trait FromDistributedIterator<T>: Sized {
 pub struct DefaultReduceFactory<T>(PhantomData<fn(T)>);
 impl<T> Default for DefaultReduceFactory<T> {
 	fn default() -> Self {
-		DefaultReduceFactory(PhantomData)
+		Self(PhantomData)
 	}
 }
 impl<T: Default + Reducer> ReduceFactory for DefaultReduceFactory<T> {
@@ -139,7 +139,7 @@ where
 	T: Default,
 {
 	fn default() -> Self {
-		PushReducer(T::default(), PhantomData)
+		Self(T::default(), PhantomData)
 	}
 }
 impl<A, T: Push<A>> Reducer for PushReducer<A, T> {
@@ -169,7 +169,7 @@ where
 	T: Default,
 {
 	fn default() -> Self {
-		ExtendReducer(T::default(), PhantomData)
+		Self(T::default(), PhantomData)
 	}
 }
 impl<A: IntoIterator<Item = B>, T: Extend<B>, B> Reducer for ExtendReducer<A, T> {
@@ -195,7 +195,7 @@ where
 	R::Output: Into<T>,
 {
 	fn default() -> Self {
-		IntoReducer(R::default(), PhantomData)
+		Self(R::default(), PhantomData)
 	}
 }
 impl<R: Reducer, T> Reducer for IntoReducer<R, T>
@@ -229,7 +229,7 @@ where
 	R: Default,
 {
 	fn default() -> Self {
-		OptionReducer(Some(R::default()))
+		Self(Some(R::default()))
 	}
 }
 impl<R: Reducer> Reducer for OptionReducer<R> {
@@ -273,7 +273,7 @@ where
 	R: Default,
 {
 	fn default() -> Self {
-		ResultReducer(Ok(R::default()))
+		Self(Ok(R::default()))
 	}
 }
 impl<R: Reducer, E> Reducer for ResultReducer<R, E> {
@@ -455,7 +455,6 @@ impl<T, C: FromDistributedIterator<T>> FromDistributedIterator<Option<T>> for Op
 
 impl<T, C: FromDistributedIterator<T>, E> FromDistributedIterator<Result<T, E>> for Result<C, E>
 where
-	E: Serialize + for<'de> Deserialize<'de> + 'static,
 	E: Serialize + for<'de> Deserialize<'de> + Send + 'static,
 {
 	type ReduceAFactory = ResultReduceFactory<C::ReduceAFactory, E>;

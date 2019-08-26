@@ -6,10 +6,10 @@ use amadeus_parquet::{
 use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
 use serde::{
-	de::{MapAccess, SeqAccess, Visitor}, Deserialize, Deserializer, Serialize, Serializer
+	de::{self, MapAccess, SeqAccess, Visitor}, Deserialize, Deserializer, Serialize, Serializer
 };
 use std::{
-	cmp::Ordering, collections::HashMap, convert::TryInto, fmt, hash::{Hash, Hasher}, sync::Arc
+	cmp::Ordering, collections::HashMap, fmt, hash::{Hash, Hasher}, sync::Arc
 };
 
 use super::{
@@ -141,7 +141,7 @@ pub enum Value {
 
 mod optional_value {
 	use super::{Value, ValueRequired};
-	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+	use serde::{Deserialize, Deserializer, Serializer};
 
 	pub fn serialize<S>(t: &Option<ValueRequired>, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -188,94 +188,94 @@ mod optional_value {
 impl Hash for Value {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		match self {
-			Value::Bool(value) => {
+			Self::Bool(value) => {
 				0u8.hash(state);
 				value.hash(state);
 			}
-			Value::U8(value) => {
+			Self::U8(value) => {
 				1u8.hash(state);
 				value.hash(state);
 			}
-			Value::I8(value) => {
+			Self::I8(value) => {
 				2u8.hash(state);
 				value.hash(state);
 			}
-			Value::U16(value) => {
+			Self::U16(value) => {
 				3u8.hash(state);
 				value.hash(state);
 			}
-			Value::I16(value) => {
+			Self::I16(value) => {
 				4u8.hash(state);
 				value.hash(state);
 			}
-			Value::U32(value) => {
+			Self::U32(value) => {
 				5u8.hash(state);
 				value.hash(state);
 			}
-			Value::I32(value) => {
+			Self::I32(value) => {
 				6u8.hash(state);
 				value.hash(state);
 			}
-			Value::U64(value) => {
+			Self::U64(value) => {
 				7u8.hash(state);
 				value.hash(state);
 			}
-			Value::I64(value) => {
+			Self::I64(value) => {
 				8u8.hash(state);
 				value.hash(state);
 			}
-			Value::F32(_value) => {
+			Self::F32(_value) => {
 				9u8.hash(state);
 			}
-			Value::F64(_value) => {
+			Self::F64(_value) => {
 				10u8.hash(state);
 			}
-			Value::Date(value) => {
+			Self::Date(value) => {
 				11u8.hash(state);
 				value.hash(state);
 			}
-			Value::Time(value) => {
+			Self::Time(value) => {
 				12u8.hash(state);
 				value.hash(state);
 			}
-			Value::Timestamp(value) => {
+			Self::Timestamp(value) => {
 				13u8.hash(state);
 				value.hash(state);
 			}
-			Value::Decimal(_value) => {
+			Self::Decimal(_value) => {
 				14u8.hash(state);
 			}
-			Value::ByteArray(value) => {
+			Self::ByteArray(value) => {
 				15u8.hash(state);
 				value.hash(state);
 			}
-			Value::Bson(value) => {
+			Self::Bson(value) => {
 				16u8.hash(state);
 				value.hash(state);
 			}
-			Value::String(value) => {
+			Self::String(value) => {
 				17u8.hash(state);
 				value.hash(state);
 			}
-			Value::Json(value) => {
+			Self::Json(value) => {
 				18u8.hash(state);
 				value.hash(state);
 			}
-			Value::Enum(value) => {
+			Self::Enum(value) => {
 				19u8.hash(state);
 				value.hash(state);
 			}
-			Value::List(value) => {
+			Self::List(value) => {
 				20u8.hash(state);
 				value.hash(state);
 			}
-			Value::Map(_value) => {
+			Self::Map(_value) => {
 				21u8.hash(state);
 			}
-			Value::Group(_value) => {
+			Self::Group(_value) => {
 				22u8.hash(state);
 			}
-			Value::Option(value) => {
+			Self::Option(value) => {
 				23u8.hash(state);
 				value.hash(state);
 			}
@@ -284,44 +284,70 @@ impl Hash for Value {
 }
 impl Eq for Value {}
 impl PartialOrd for Value {
-	fn partial_cmp(&self, other: &Value) -> Option<Ordering> {
-		None
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		match (self, other) {
+			(Self::Bool(a), Self::Bool(b)) => a.partial_cmp(b),
+			(Self::U8(a), Self::U8(b)) => a.partial_cmp(b),
+			(Self::I8(a), Self::I8(b)) => a.partial_cmp(b),
+			(Self::U16(a), Self::U16(b)) => a.partial_cmp(b),
+			(Self::I16(a), Self::I16(b)) => a.partial_cmp(b),
+			(Self::U32(a), Self::U32(b)) => a.partial_cmp(b),
+			(Self::I32(a), Self::I32(b)) => a.partial_cmp(b),
+			(Self::U64(a), Self::U64(b)) => a.partial_cmp(b),
+			(Self::I64(a), Self::I64(b)) => a.partial_cmp(b),
+			(Self::F32(a), Self::F32(b)) => a.partial_cmp(b),
+			(Self::F64(a), Self::F64(b)) => a.partial_cmp(b),
+			(Self::Date(a), Self::Date(b)) => a.partial_cmp(b),
+			(Self::Time(a), Self::Time(b)) => a.partial_cmp(b),
+			(Self::Timestamp(a), Self::Timestamp(b)) => a.partial_cmp(b),
+			(Self::Decimal(a), Self::Decimal(b)) => a.partial_cmp(b),
+			(Self::ByteArray(a), Self::ByteArray(b)) => a.partial_cmp(b),
+			(Self::Bson(a), Self::Bson(b)) => a.partial_cmp(b),
+			(Self::String(a), Self::String(b)) => a.partial_cmp(b),
+			(Self::Json(a), Self::Json(b)) => a.partial_cmp(b),
+			(Self::Enum(a), Self::Enum(b)) => a.partial_cmp(b),
+			(Self::List(a), Self::List(b)) => a.partial_cmp(b),
+			(Self::Map(_a), Self::Map(_b)) => None, // TODO?
+			(Self::Group(a), Self::Group(b)) => a.partial_cmp(b),
+			(Self::Option(a), Self::Option(b)) => a.partial_cmp(b),
+			_ => None,
+		}
 	}
 }
 
 impl Value {
 	fn type_name(&self) -> &'static str {
 		match self {
-			Value::Bool(value) => "bool",
-			Value::U8(value) => "u8",
-			Value::I8(value) => "i8",
-			Value::U16(value) => "u16",
-			Value::I16(value) => "i16",
-			Value::U32(value) => "u32",
-			Value::I32(value) => "i32",
-			Value::U64(value) => "u64",
-			Value::I64(value) => "i64",
-			Value::F32(_value) => "f32",
-			Value::F64(_value) => "f64",
-			Value::Date(value) => "date",
-			Value::Time(value) => "time",
-			Value::Timestamp(value) => "timestamp",
-			Value::Decimal(_value) => "decimal",
-			Value::ByteArray(value) => "byte_array",
-			Value::Bson(value) => "bson",
-			Value::String(value) => "string",
-			Value::Json(value) => "json",
-			Value::Enum(value) => "enum",
-			Value::List(value) => "list",
-			Value::Map(_value) => "map",
-			Value::Group(_value) => "group",
-			Value::Option(value) => "option",
+			Self::Bool(_value) => "bool",
+			Self::U8(_value) => "u8",
+			Self::I8(_value) => "i8",
+			Self::U16(_value) => "u16",
+			Self::I16(_value) => "i16",
+			Self::U32(_value) => "u32",
+			Self::I32(_value) => "i32",
+			Self::U64(_value) => "u64",
+			Self::I64(_value) => "i64",
+			Self::F32(_value) => "f32",
+			Self::F64(_value) => "f64",
+			Self::Date(_value) => "date",
+			Self::Time(_value) => "time",
+			Self::Timestamp(_value) => "timestamp",
+			Self::Decimal(_value) => "decimal",
+			Self::ByteArray(_value) => "byte_array",
+			Self::Bson(_value) => "bson",
+			Self::String(_value) => "string",
+			Self::Json(_value) => "json",
+			Self::Enum(_value) => "enum",
+			Self::List(_value) => "list",
+			Self::Map(_value) => "map",
+			Self::Group(_value) => "group",
+			Self::Option(_value) => "option",
 		}
 	}
 
 	/// Returns true if the `Value` is an Bool. Returns false otherwise.
 	pub fn is_bool(&self) -> bool {
-		if let Value::Bool(_) = self {
+		if let Self::Bool(_) = self {
 			true
 		} else {
 			false
@@ -330,7 +356,7 @@ impl Value {
 
 	/// If the `Value` is an Bool, return a reference to it. Returns Err otherwise.
 	pub fn as_bool(&self) -> Result<bool, DowncastError> {
-		if let Value::Bool(ret) = self {
+		if let Self::Bool(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -342,7 +368,7 @@ impl Value {
 
 	/// If the `Value` is an Bool, return it. Returns Err otherwise.
 	pub fn into_bool(self) -> Result<bool, DowncastError> {
-		if let Value::Bool(ret) = self {
+		if let Self::Bool(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -354,7 +380,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U8. Returns false otherwise.
 	pub fn is_u8(&self) -> bool {
-		if let Value::U8(_) = self {
+		if let Self::U8(_) = self {
 			true
 		} else {
 			false
@@ -363,7 +389,7 @@ impl Value {
 
 	/// If the `Value` is an U8, return a reference to it. Returns Err otherwise.
 	pub fn as_u8(&self) -> Result<u8, DowncastError> {
-		if let Value::U8(ret) = self {
+		if let Self::U8(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -375,7 +401,7 @@ impl Value {
 
 	/// If the `Value` is an U8, return it. Returns Err otherwise.
 	pub fn into_u8(self) -> Result<u8, DowncastError> {
-		if let Value::U8(ret) = self {
+		if let Self::U8(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -387,7 +413,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I8. Returns false otherwise.
 	pub fn is_i8(&self) -> bool {
-		if let Value::I8(_) = self {
+		if let Self::I8(_) = self {
 			true
 		} else {
 			false
@@ -396,7 +422,7 @@ impl Value {
 
 	/// If the `Value` is an I8, return a reference to it. Returns Err otherwise.
 	pub fn as_i8(&self) -> Result<i8, DowncastError> {
-		if let Value::I8(ret) = self {
+		if let Self::I8(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -408,7 +434,7 @@ impl Value {
 
 	/// If the `Value` is an I8, return it. Returns Err otherwise.
 	pub fn into_i8(self) -> Result<i8, DowncastError> {
-		if let Value::I8(ret) = self {
+		if let Self::I8(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -420,7 +446,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U16. Returns false otherwise.
 	pub fn is_u16(&self) -> bool {
-		if let Value::U16(_) = self {
+		if let Self::U16(_) = self {
 			true
 		} else {
 			false
@@ -429,7 +455,7 @@ impl Value {
 
 	/// If the `Value` is an U16, return a reference to it. Returns Err otherwise.
 	pub fn as_u16(&self) -> Result<u16, DowncastError> {
-		if let Value::U16(ret) = self {
+		if let Self::U16(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -441,7 +467,7 @@ impl Value {
 
 	/// If the `Value` is an U16, return it. Returns Err otherwise.
 	pub fn into_u16(self) -> Result<u16, DowncastError> {
-		if let Value::U16(ret) = self {
+		if let Self::U16(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -453,7 +479,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I16. Returns false otherwise.
 	pub fn is_i16(&self) -> bool {
-		if let Value::I16(_) = self {
+		if let Self::I16(_) = self {
 			true
 		} else {
 			false
@@ -462,7 +488,7 @@ impl Value {
 
 	/// If the `Value` is an I16, return a reference to it. Returns Err otherwise.
 	pub fn as_i16(&self) -> Result<i16, DowncastError> {
-		if let Value::I16(ret) = self {
+		if let Self::I16(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -474,7 +500,7 @@ impl Value {
 
 	/// If the `Value` is an I16, return it. Returns Err otherwise.
 	pub fn into_i16(self) -> Result<i16, DowncastError> {
-		if let Value::I16(ret) = self {
+		if let Self::I16(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -486,7 +512,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U32. Returns false otherwise.
 	pub fn is_u32(&self) -> bool {
-		if let Value::U32(_) = self {
+		if let Self::U32(_) = self {
 			true
 		} else {
 			false
@@ -495,7 +521,7 @@ impl Value {
 
 	/// If the `Value` is an U32, return a reference to it. Returns Err otherwise.
 	pub fn as_u32(&self) -> Result<u32, DowncastError> {
-		if let Value::U32(ret) = self {
+		if let Self::U32(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -507,7 +533,7 @@ impl Value {
 
 	/// If the `Value` is an U32, return it. Returns Err otherwise.
 	pub fn into_u32(self) -> Result<u32, DowncastError> {
-		if let Value::U32(ret) = self {
+		if let Self::U32(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -519,7 +545,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I32. Returns false otherwise.
 	pub fn is_i32(&self) -> bool {
-		if let Value::I32(_) = self {
+		if let Self::I32(_) = self {
 			true
 		} else {
 			false
@@ -528,7 +554,7 @@ impl Value {
 
 	/// If the `Value` is an I32, return a reference to it. Returns Err otherwise.
 	pub fn as_i32(&self) -> Result<i32, DowncastError> {
-		if let Value::I32(ret) = self {
+		if let Self::I32(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -540,7 +566,7 @@ impl Value {
 
 	/// If the `Value` is an I32, return it. Returns Err otherwise.
 	pub fn into_i32(self) -> Result<i32, DowncastError> {
-		if let Value::I32(ret) = self {
+		if let Self::I32(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -552,7 +578,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U64. Returns false otherwise.
 	pub fn is_u64(&self) -> bool {
-		if let Value::U64(_) = self {
+		if let Self::U64(_) = self {
 			true
 		} else {
 			false
@@ -561,7 +587,7 @@ impl Value {
 
 	/// If the `Value` is an U64, return a reference to it. Returns Err otherwise.
 	pub fn as_u64(&self) -> Result<u64, DowncastError> {
-		if let Value::U64(ret) = self {
+		if let Self::U64(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -573,7 +599,7 @@ impl Value {
 
 	/// If the `Value` is an U64, return it. Returns Err otherwise.
 	pub fn into_u64(self) -> Result<u64, DowncastError> {
-		if let Value::U64(ret) = self {
+		if let Self::U64(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -585,7 +611,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I64. Returns false otherwise.
 	pub fn is_i64(&self) -> bool {
-		if let Value::I64(_) = self {
+		if let Self::I64(_) = self {
 			true
 		} else {
 			false
@@ -594,7 +620,7 @@ impl Value {
 
 	/// If the `Value` is an I64, return a reference to it. Returns Err otherwise.
 	pub fn as_i64(&self) -> Result<i64, DowncastError> {
-		if let Value::I64(ret) = self {
+		if let Self::I64(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -606,7 +632,7 @@ impl Value {
 
 	/// If the `Value` is an I64, return it. Returns Err otherwise.
 	pub fn into_i64(self) -> Result<i64, DowncastError> {
-		if let Value::I64(ret) = self {
+		if let Self::I64(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -618,7 +644,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an F32. Returns false otherwise.
 	pub fn is_f32(&self) -> bool {
-		if let Value::F32(_) = self {
+		if let Self::F32(_) = self {
 			true
 		} else {
 			false
@@ -627,7 +653,7 @@ impl Value {
 
 	/// If the `Value` is an F32, return a reference to it. Returns Err otherwise.
 	pub fn as_f32(&self) -> Result<f32, DowncastError> {
-		if let Value::F32(ret) = self {
+		if let Self::F32(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -639,7 +665,7 @@ impl Value {
 
 	/// If the `Value` is an F32, return it. Returns Err otherwise.
 	pub fn into_f32(self) -> Result<f32, DowncastError> {
-		if let Value::F32(ret) = self {
+		if let Self::F32(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -651,7 +677,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an F64. Returns false otherwise.
 	pub fn is_f64(&self) -> bool {
-		if let Value::F64(_) = self {
+		if let Self::F64(_) = self {
 			true
 		} else {
 			false
@@ -660,7 +686,7 @@ impl Value {
 
 	/// If the `Value` is an F64, return a reference to it. Returns Err otherwise.
 	pub fn as_f64(&self) -> Result<f64, DowncastError> {
-		if let Value::F64(ret) = self {
+		if let Self::F64(ret) = self {
 			Ok(*ret)
 		} else {
 			Err(DowncastError {
@@ -672,7 +698,7 @@ impl Value {
 
 	/// If the `Value` is an F64, return it. Returns Err otherwise.
 	pub fn into_f64(self) -> Result<f64, DowncastError> {
-		if let Value::F64(ret) = self {
+		if let Self::F64(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -684,7 +710,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Date. Returns false otherwise.
 	pub fn is_date(&self) -> bool {
-		if let Value::Date(_) = self {
+		if let Self::Date(_) = self {
 			true
 		} else {
 			false
@@ -693,7 +719,7 @@ impl Value {
 
 	/// If the `Value` is an Date, return a reference to it. Returns Err otherwise.
 	pub fn as_date(&self) -> Result<&Date, DowncastError> {
-		if let Value::Date(ret) = self {
+		if let Self::Date(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -705,7 +731,7 @@ impl Value {
 
 	/// If the `Value` is an Date, return it. Returns Err otherwise.
 	pub fn into_date(self) -> Result<Date, DowncastError> {
-		if let Value::Date(ret) = self {
+		if let Self::Date(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -717,7 +743,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Time. Returns false otherwise.
 	pub fn is_time(&self) -> bool {
-		if let Value::Time(_) = self {
+		if let Self::Time(_) = self {
 			true
 		} else {
 			false
@@ -726,7 +752,7 @@ impl Value {
 
 	/// If the `Value` is an Time, return a reference to it. Returns Err otherwise.
 	pub fn as_time(&self) -> Result<&Time, DowncastError> {
-		if let Value::Time(ret) = self {
+		if let Self::Time(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -738,7 +764,7 @@ impl Value {
 
 	/// If the `Value` is an Time, return it. Returns Err otherwise.
 	pub fn into_time(self) -> Result<Time, DowncastError> {
-		if let Value::Time(ret) = self {
+		if let Self::Time(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -750,7 +776,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Timestamp. Returns false otherwise.
 	pub fn is_timestamp(&self) -> bool {
-		if let Value::Timestamp(_) = self {
+		if let Self::Timestamp(_) = self {
 			true
 		} else {
 			false
@@ -759,7 +785,7 @@ impl Value {
 
 	/// If the `Value` is an Timestamp, return a reference to it. Returns Err otherwise.
 	pub fn as_timestamp(&self) -> Result<&Timestamp, DowncastError> {
-		if let Value::Timestamp(ret) = self {
+		if let Self::Timestamp(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -771,7 +797,7 @@ impl Value {
 
 	/// If the `Value` is an Timestamp, return it. Returns Err otherwise.
 	pub fn into_timestamp(self) -> Result<Timestamp, DowncastError> {
-		if let Value::Timestamp(ret) = self {
+		if let Self::Timestamp(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -783,7 +809,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Decimal. Returns false otherwise.
 	pub fn is_decimal(&self) -> bool {
-		if let Value::Decimal(_) = self {
+		if let Self::Decimal(_) = self {
 			true
 		} else {
 			false
@@ -792,7 +818,7 @@ impl Value {
 
 	/// If the `Value` is an Decimal, return a reference to it. Returns Err otherwise.
 	pub fn as_decimal(&self) -> Result<&Decimal, DowncastError> {
-		if let Value::Decimal(ret) = self {
+		if let Self::Decimal(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -804,7 +830,7 @@ impl Value {
 
 	/// If the `Value` is an Decimal, return it. Returns Err otherwise.
 	pub fn into_decimal(self) -> Result<Decimal, DowncastError> {
-		if let Value::Decimal(ret) = self {
+		if let Self::Decimal(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -816,7 +842,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an ByteArray. Returns false otherwise.
 	pub fn is_byte_array(&self) -> bool {
-		if let Value::ByteArray(_) = self {
+		if let Self::ByteArray(_) = self {
 			true
 		} else {
 			false
@@ -825,7 +851,7 @@ impl Value {
 
 	/// If the `Value` is an ByteArray, return a reference to it. Returns Err otherwise.
 	pub fn as_byte_array(&self) -> Result<&Vec<u8>, DowncastError> {
-		if let Value::ByteArray(ret) = self {
+		if let Self::ByteArray(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -837,7 +863,7 @@ impl Value {
 
 	/// If the `Value` is an ByteArray, return it. Returns Err otherwise.
 	pub fn into_byte_array(self) -> Result<Vec<u8>, DowncastError> {
-		if let Value::ByteArray(ret) = self {
+		if let Self::ByteArray(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -849,7 +875,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Bson. Returns false otherwise.
 	pub fn is_bson(&self) -> bool {
-		if let Value::Bson(_) = self {
+		if let Self::Bson(_) = self {
 			true
 		} else {
 			false
@@ -858,7 +884,7 @@ impl Value {
 
 	/// If the `Value` is an Bson, return a reference to it. Returns Err otherwise.
 	pub fn as_bson(&self) -> Result<&Bson, DowncastError> {
-		if let Value::Bson(ret) = self {
+		if let Self::Bson(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -870,7 +896,7 @@ impl Value {
 
 	/// If the `Value` is an Bson, return it. Returns Err otherwise.
 	pub fn into_bson(self) -> Result<Bson, DowncastError> {
-		if let Value::Bson(ret) = self {
+		if let Self::Bson(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -882,7 +908,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an String. Returns false otherwise.
 	pub fn is_string(&self) -> bool {
-		if let Value::String(_) = self {
+		if let Self::String(_) = self {
 			true
 		} else {
 			false
@@ -891,7 +917,7 @@ impl Value {
 
 	/// If the `Value` is an String, return a reference to it. Returns Err otherwise.
 	pub fn as_string(&self) -> Result<&String, DowncastError> {
-		if let Value::String(ret) = self {
+		if let Self::String(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -903,7 +929,7 @@ impl Value {
 
 	/// If the `Value` is an String, return it. Returns Err otherwise.
 	pub fn into_string(self) -> Result<String, DowncastError> {
-		if let Value::String(ret) = self {
+		if let Self::String(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -915,7 +941,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Json. Returns false otherwise.
 	pub fn is_json(&self) -> bool {
-		if let Value::Json(_) = self {
+		if let Self::Json(_) = self {
 			true
 		} else {
 			false
@@ -924,7 +950,7 @@ impl Value {
 
 	/// If the `Value` is an Json, return a reference to it. Returns Err otherwise.
 	pub fn as_json(&self) -> Result<&Json, DowncastError> {
-		if let Value::Json(ret) = self {
+		if let Self::Json(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -936,7 +962,7 @@ impl Value {
 
 	/// If the `Value` is an Json, return it. Returns Err otherwise.
 	pub fn into_json(self) -> Result<Json, DowncastError> {
-		if let Value::Json(ret) = self {
+		if let Self::Json(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -948,7 +974,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Enum. Returns false otherwise.
 	pub fn is_enum(&self) -> bool {
-		if let Value::Enum(_) = self {
+		if let Self::Enum(_) = self {
 			true
 		} else {
 			false
@@ -957,7 +983,7 @@ impl Value {
 
 	/// If the `Value` is an Enum, return a reference to it. Returns Err otherwise.
 	pub fn as_enum(&self) -> Result<&Enum, DowncastError> {
-		if let Value::Enum(ret) = self {
+		if let Self::Enum(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -969,7 +995,7 @@ impl Value {
 
 	/// If the `Value` is an Enum, return it. Returns Err otherwise.
 	pub fn into_enum(self) -> Result<Enum, DowncastError> {
-		if let Value::Enum(ret) = self {
+		if let Self::Enum(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -981,7 +1007,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an List. Returns false otherwise.
 	pub fn is_list(&self) -> bool {
-		if let Value::List(_) = self {
+		if let Self::List(_) = self {
 			true
 		} else {
 			false
@@ -989,8 +1015,8 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return a reference to it. Returns Err otherwise.
-	pub fn as_list(&self) -> Result<&List<Value>, DowncastError> {
-		if let Value::List(ret) = self {
+	pub fn as_list(&self) -> Result<&List<Self>, DowncastError> {
+		if let Self::List(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -1001,8 +1027,8 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return it. Returns Err otherwise.
-	pub fn into_list(self) -> Result<List<Value>, DowncastError> {
-		if let Value::List(ret) = self {
+	pub fn into_list(self) -> Result<List<Self>, DowncastError> {
+		if let Self::List(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -1014,7 +1040,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Map. Returns false otherwise.
 	pub fn is_map(&self) -> bool {
-		if let Value::Map(_) = self {
+		if let Self::Map(_) = self {
 			true
 		} else {
 			false
@@ -1022,8 +1048,8 @@ impl Value {
 	}
 
 	/// If the `Value` is an Map, return a reference to it. Returns Err otherwise.
-	pub fn as_map(&self) -> Result<&Map<Value, Value>, DowncastError> {
-		if let Value::Map(ret) = self {
+	pub fn as_map(&self) -> Result<&Map<Self, Self>, DowncastError> {
+		if let Self::Map(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -1034,8 +1060,8 @@ impl Value {
 	}
 
 	/// If the `Value` is an Map, return it. Returns Err otherwise.
-	pub fn into_map(self) -> Result<Map<Value, Value>, DowncastError> {
-		if let Value::Map(ret) = self {
+	pub fn into_map(self) -> Result<Map<Self, Self>, DowncastError> {
+		if let Self::Map(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -1047,7 +1073,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Group. Returns false otherwise.
 	pub fn is_group(&self) -> bool {
-		if let Value::Group(_) = self {
+		if let Self::Group(_) = self {
 			true
 		} else {
 			false
@@ -1056,7 +1082,7 @@ impl Value {
 
 	/// If the `Value` is an Group, return a reference to it. Returns Err otherwise.
 	pub fn as_group(&self) -> Result<&Group, DowncastError> {
-		if let Value::Group(ret) = self {
+		if let Self::Group(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -1068,7 +1094,7 @@ impl Value {
 
 	/// If the `Value` is an Group, return it. Returns Err otherwise.
 	pub fn into_group(self) -> Result<Group, DowncastError> {
-		if let Value::Group(ret) = self {
+		if let Self::Group(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -1080,7 +1106,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Option. Returns false otherwise.
 	pub fn is_option(&self) -> bool {
-		if let Value::Option(_) = self {
+		if let Self::Option(_) = self {
 			true
 		} else {
 			false
@@ -1089,7 +1115,7 @@ impl Value {
 
 	/// If the `Value` is an Option, return a reference to it. Returns Err otherwise.
 	fn as_option(&self) -> Result<&Option<ValueRequired>, DowncastError> {
-		if let Value::Option(ret) = self {
+		if let Self::Option(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
@@ -1100,8 +1126,8 @@ impl Value {
 	}
 
 	/// If the `Value` is an Option, return it. Returns Err otherwise.
-	pub fn into_option(self) -> Result<Option<Value>, DowncastError> {
-		if let Value::Option(ret) = self {
+	pub fn into_option(self) -> Result<Option<Self>, DowncastError> {
+		if let Self::Option(ret) = self {
 			Ok(ret.map(Into::into))
 		} else {
 			Err(DowncastError {
@@ -1114,163 +1140,163 @@ impl Value {
 
 impl From<bool> for Value {
 	fn from(value: bool) -> Self {
-		Value::Bool(value)
+		Self::Bool(value)
 	}
 }
 impl From<u8> for Value {
 	fn from(value: u8) -> Self {
-		Value::U8(value)
+		Self::U8(value)
 	}
 }
 impl From<i8> for Value {
 	fn from(value: i8) -> Self {
-		Value::I8(value)
+		Self::I8(value)
 	}
 }
 impl From<u16> for Value {
 	fn from(value: u16) -> Self {
-		Value::U16(value)
+		Self::U16(value)
 	}
 }
 impl From<i16> for Value {
 	fn from(value: i16) -> Self {
-		Value::I16(value)
+		Self::I16(value)
 	}
 }
 impl From<u32> for Value {
 	fn from(value: u32) -> Self {
-		Value::U32(value)
+		Self::U32(value)
 	}
 }
 impl From<i32> for Value {
 	fn from(value: i32) -> Self {
-		Value::I32(value)
+		Self::I32(value)
 	}
 }
 impl From<u64> for Value {
 	fn from(value: u64) -> Self {
-		Value::U64(value)
+		Self::U64(value)
 	}
 }
 impl From<i64> for Value {
 	fn from(value: i64) -> Self {
-		Value::I64(value)
+		Self::I64(value)
 	}
 }
 impl From<f32> for Value {
 	fn from(value: f32) -> Self {
-		Value::F32(value)
+		Self::F32(value)
 	}
 }
 impl From<f64> for Value {
 	fn from(value: f64) -> Self {
-		Value::F64(value)
+		Self::F64(value)
 	}
 }
 impl From<Date> for Value {
 	fn from(value: Date) -> Self {
-		Value::Date(value)
+		Self::Date(value)
 	}
 }
 impl From<Time> for Value {
 	fn from(value: Time) -> Self {
-		Value::Time(value)
+		Self::Time(value)
 	}
 }
 impl From<Timestamp> for Value {
 	fn from(value: Timestamp) -> Self {
-		Value::Timestamp(value)
+		Self::Timestamp(value)
 	}
 }
 impl From<Decimal> for Value {
 	fn from(value: Decimal) -> Self {
-		Value::Decimal(value)
+		Self::Decimal(value)
 	}
 }
 impl From<Vec<u8>> for Value {
 	fn from(value: Vec<u8>) -> Self {
-		Value::ByteArray(value)
+		Self::ByteArray(value)
 	}
 }
 impl From<Bson> for Value {
 	fn from(value: Bson) -> Self {
-		Value::Bson(value)
+		Self::Bson(value)
 	}
 }
 impl From<String> for Value {
 	fn from(value: String) -> Self {
-		Value::String(value)
+		Self::String(value)
 	}
 }
 impl From<Json> for Value {
 	fn from(value: Json) -> Self {
-		Value::Json(value)
+		Self::Json(value)
 	}
 }
 impl From<Enum> for Value {
 	fn from(value: Enum) -> Self {
-		Value::Enum(value)
+		Self::Enum(value)
 	}
 }
 impl<T> From<List<T>> for Value
 where
-	Value: From<T>,
+	Self: From<T>,
 {
 	default fn from(value: List<T>) -> Self {
-		Value::List(List(value.0.into_iter().map(Into::into).collect()))
+		Self::List(List(value.0.into_iter().map(Into::into).collect()))
 	}
 }
-impl From<List<Value>> for Value {
-	fn from(value: List<Value>) -> Self {
-		Value::List(value)
+impl From<List<Self>> for Value {
+	fn from(value: List<Self>) -> Self {
+		Self::List(value)
 	}
 }
 impl<K, V> From<Map<K, V>> for Value
 where
-	Value: From<K> + From<V>,
+	Self: From<K> + From<V>,
 	K: Hash + Eq,
 {
 	default fn from(value: Map<K, V>) -> Self {
-		Value::Map(Map(value
+		Self::Map(Map(value
 			.0
 			.into_iter()
 			.map(|(k, v)| (k.into(), v.into()))
 			.collect()))
 	}
 }
-impl From<Map<Value, Value>> for Value {
-	fn from(value: Map<Value, Value>) -> Self {
-		Value::Map(value)
+impl From<Map<Self, Self>> for Value {
+	fn from(value: Map<Self, Self>) -> Self {
+		Self::Map(value)
 	}
 }
 impl From<Group> for Value {
 	fn from(value: Group) -> Self {
-		Value::Group(value)
+		Self::Group(value)
 	}
 }
 impl<T> From<Option<T>> for Value
 where
-	Value: From<T>,
+	Self: From<T>,
 {
 	default fn from(value: Option<T>) -> Self {
-		Value::Option(
+		Self::Option(
 			value
 				.map(Into::into)
-				.map(|x| <Option<ValueRequired> as From<Value>>::from(x).unwrap()),
+				.map(|x| <Option<ValueRequired> as From<Self>>::from(x).unwrap()),
 		)
 	}
 }
-impl From<Option<Value>> for Value {
-	fn from(value: Option<Value>) -> Self {
-		Value::Option(value.map(|x| <Option<ValueRequired>>::from(x).unwrap()))
+impl From<Option<Self>> for Value {
+	fn from(value: Option<Self>) -> Self {
+		Self::Option(value.map(|x| <Option<ValueRequired>>::from(x).unwrap()))
 	}
 }
 
 // Downcast implementations for Value so we can try downcasting it to a specific type if
 // we know it.
 
-impl Downcast<Value> for Value {
-	fn downcast(self) -> Result<Value, DowncastError> {
+impl Downcast<Self> for Value {
+	fn downcast(self) -> Result<Self, DowncastError> {
 		Ok(self)
 	}
 }
@@ -1376,7 +1402,7 @@ impl Downcast<Enum> for Value {
 }
 impl<T> Downcast<List<T>> for Value
 where
-	Value: Downcast<T>,
+	Self: Downcast<T>,
 {
 	default fn downcast(self) -> Result<List<T>, DowncastError> {
 		self.into_list().and_then(|list| {
@@ -1388,14 +1414,14 @@ where
 		})
 	}
 }
-impl Downcast<List<Value>> for Value {
-	fn downcast(self) -> Result<List<Value>, DowncastError> {
+impl Downcast<List<Self>> for Value {
+	fn downcast(self) -> Result<List<Self>, DowncastError> {
 		self.into_list()
 	}
 }
 impl<K, V> Downcast<Map<K, V>> for Value
 where
-	Value: Downcast<K> + Downcast<V>,
+	Self: Downcast<K> + Downcast<V>,
 	K: Hash + Eq,
 {
 	default fn downcast(self) -> Result<Map<K, V>, DowncastError> {
@@ -1408,8 +1434,8 @@ where
 		})
 	}
 }
-impl Downcast<Map<Value, Value>> for Value {
-	fn downcast(self) -> Result<Map<Value, Value>, DowncastError> {
+impl Downcast<Map<Self, Self>> for Value {
+	fn downcast(self) -> Result<Map<Self, Self>, DowncastError> {
 		self.into_map()
 	}
 }
@@ -1420,7 +1446,7 @@ impl Downcast<Group> for Value {
 }
 impl<T> Downcast<Option<T>> for Value
 where
-	Value: Downcast<T>,
+	Self: Downcast<T>,
 {
 	default fn downcast(self) -> Result<Option<T>, DowncastError> {
 		match self.into_option()? {
@@ -1429,8 +1455,8 @@ where
 		}
 	}
 }
-impl Downcast<Option<Value>> for Value {
-	fn downcast(self) -> Result<Option<Value>, DowncastError> {
+impl Downcast<Option<Self>> for Value {
+	fn downcast(self) -> Result<Option<Self>, DowncastError> {
 		self.into_option()
 	}
 }
@@ -1571,7 +1597,7 @@ where
 					.0
 					.iter()
 					.map(|(k, v)| (k.clone().into(), v))
-					.collect::<HashMap<Value, _>>();
+					.collect::<HashMap<Self, _>>();
 
 				map.0
 					.iter()
@@ -1622,13 +1648,13 @@ impl Data for Value {
 	type ParquetSchema = <amadeus_parquet::record::types::Value as Record>::Schema;
 
 	fn postgres_query(
-		f: &mut fmt::Formatter, name: Option<&crate::source::postgres::Names<'_>>,
+		_f: &mut fmt::Formatter, _name: Option<&crate::source::postgres::Names<'_>>,
 	) -> fmt::Result {
 		unimplemented!()
 	}
 	fn postgres_decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<std::error::Error + Sync + Send>> {
+		_type_: &::postgres::types::Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
 		unimplemented!()
 	}
 
@@ -1637,30 +1663,30 @@ impl Data for Value {
 		S: Serializer,
 	{
 		match self {
-			Value::Bool(value) => value.serde_serialize(serializer),
-			Value::U8(value) => value.serde_serialize(serializer),
-			Value::I8(value) => value.serde_serialize(serializer),
-			Value::U16(value) => value.serde_serialize(serializer),
-			Value::I16(value) => value.serde_serialize(serializer),
-			Value::U32(value) => value.serde_serialize(serializer),
-			Value::I32(value) => value.serde_serialize(serializer),
-			Value::U64(value) => value.serde_serialize(serializer),
-			Value::I64(value) => value.serde_serialize(serializer),
-			Value::F32(value) => value.serde_serialize(serializer),
-			Value::F64(value) => value.serde_serialize(serializer),
-			Value::Date(value) => value.serde_serialize(serializer),
-			Value::Time(value) => value.serde_serialize(serializer),
-			Value::Timestamp(value) => value.serde_serialize(serializer),
-			Value::Decimal(value) => value.serde_serialize(serializer),
-			Value::ByteArray(value) => value.serde_serialize(serializer),
-			Value::Bson(value) => value.serde_serialize(serializer),
-			Value::String(value) => value.serde_serialize(serializer),
-			Value::Json(value) => value.serde_serialize(serializer),
-			Value::Enum(value) => value.serde_serialize(serializer),
-			Value::List(value) => value.serde_serialize(serializer),
-			Value::Map(value) => value.serde_serialize(serializer),
-			Value::Group(value) => value.serde_serialize(serializer),
-			Value::Option(value) => match value {
+			Self::Bool(value) => value.serde_serialize(serializer),
+			Self::U8(value) => value.serde_serialize(serializer),
+			Self::I8(value) => value.serde_serialize(serializer),
+			Self::U16(value) => value.serde_serialize(serializer),
+			Self::I16(value) => value.serde_serialize(serializer),
+			Self::U32(value) => value.serde_serialize(serializer),
+			Self::I32(value) => value.serde_serialize(serializer),
+			Self::U64(value) => value.serde_serialize(serializer),
+			Self::I64(value) => value.serde_serialize(serializer),
+			Self::F32(value) => value.serde_serialize(serializer),
+			Self::F64(value) => value.serde_serialize(serializer),
+			Self::Date(value) => value.serde_serialize(serializer),
+			Self::Time(value) => value.serde_serialize(serializer),
+			Self::Timestamp(value) => value.serde_serialize(serializer),
+			Self::Decimal(value) => value.serde_serialize(serializer),
+			Self::ByteArray(value) => value.serde_serialize(serializer),
+			Self::Bson(value) => value.serde_serialize(serializer),
+			Self::String(value) => value.serde_serialize(serializer),
+			Self::Json(value) => value.serde_serialize(serializer),
+			Self::Enum(value) => value.serde_serialize(serializer),
+			Self::List(value) => value.serde_serialize(serializer),
+			Self::Map(value) => value.serde_serialize(serializer),
+			Self::Group(value) => value.serde_serialize(serializer),
+			Self::Option(value) => match value {
 				Some(value) => match value {
 					ValueRequired::Bool(value) => serializer.serialize_some(&SerdeSerialize(value)),
 					ValueRequired::U8(value) => serializer.serialize_some(&SerdeSerialize(value)),
@@ -1706,10 +1732,6 @@ impl Data for Value {
 	where
 		D: Deserializer<'de>,
 	{
-		if let Some(schema) = schema {
-			assert_eq!(schema, SchemaIncomplete::Group(None)); // TODO
-			return Group::serde_deserialize(deserializer, Some(schema)).map(Value::Group);
-		}
 		struct ValueVisitor;
 
 		impl<'de> Visitor<'de> for ValueVisitor {
@@ -1769,7 +1791,7 @@ impl Data for Value {
 			#[inline]
 			fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
 				self.visit_string(String::from(value))
 			}
@@ -1802,7 +1824,7 @@ impl Data for Value {
 			#[inline]
 			fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
 			where
-				D: serde::Deserializer<'de>,
+				D: Deserializer<'de>,
 			{
 				Deserialize::deserialize(deserializer).map(|value: SerdeDeserialize<Value>| {
 					Value::Option(Some(<Option<ValueRequired>>::from(value.0).unwrap()))
@@ -1831,13 +1853,19 @@ impl Data for Value {
 				while let Some((key, value)) =
 					visitor.next_entry::<SerdeDeserialize<Value>, SerdeDeserialize<Value>>()?
 				{
-					values.insert(key.0, value.0);
+					if values.insert(key.0, value.0).is_some() {
+						return Err(de::Error::duplicate_field(""));
+					}
 				}
 
 				Ok(Value::Map(Map(values)))
 			}
 		}
 
+		if let Some(schema) = schema {
+			assert_eq!(schema, SchemaIncomplete::Group(None)); // TODO
+			return Group::serde_deserialize(deserializer, Some(schema)).map(Self::Group);
+		}
 		deserializer.deserialize_any(ValueVisitor)
 	}
 
@@ -1859,35 +1887,33 @@ impl Data for Value {
 impl From<amadeus_parquet::record::types::Value> for Value {
 	fn from(value: amadeus_parquet::record::types::Value) -> Self {
 		match value {
-			amadeus_parquet::record::types::Value::Bool(value) => Value::Bool(value),
-			amadeus_parquet::record::types::Value::U8(value) => Value::U8(value),
-			amadeus_parquet::record::types::Value::I8(value) => Value::I8(value),
-			amadeus_parquet::record::types::Value::U16(value) => Value::U16(value),
-			amadeus_parquet::record::types::Value::I16(value) => Value::I16(value),
-			amadeus_parquet::record::types::Value::U32(value) => Value::U32(value),
-			amadeus_parquet::record::types::Value::I32(value) => Value::I32(value),
-			amadeus_parquet::record::types::Value::U64(value) => Value::U64(value),
-			amadeus_parquet::record::types::Value::I64(value) => Value::I64(value),
-			amadeus_parquet::record::types::Value::F32(value) => Value::F32(value),
-			amadeus_parquet::record::types::Value::F64(value) => Value::F64(value),
-			amadeus_parquet::record::types::Value::Date(value) => Value::Date(value.into()),
-			amadeus_parquet::record::types::Value::Time(value) => Value::Time(value.into()),
+			amadeus_parquet::record::types::Value::Bool(value) => Self::Bool(value),
+			amadeus_parquet::record::types::Value::U8(value) => Self::U8(value),
+			amadeus_parquet::record::types::Value::I8(value) => Self::I8(value),
+			amadeus_parquet::record::types::Value::U16(value) => Self::U16(value),
+			amadeus_parquet::record::types::Value::I16(value) => Self::I16(value),
+			amadeus_parquet::record::types::Value::U32(value) => Self::U32(value),
+			amadeus_parquet::record::types::Value::I32(value) => Self::I32(value),
+			amadeus_parquet::record::types::Value::U64(value) => Self::U64(value),
+			amadeus_parquet::record::types::Value::I64(value) => Self::I64(value),
+			amadeus_parquet::record::types::Value::F32(value) => Self::F32(value),
+			amadeus_parquet::record::types::Value::F64(value) => Self::F64(value),
+			amadeus_parquet::record::types::Value::Date(value) => Self::Date(value.into()),
+			amadeus_parquet::record::types::Value::Time(value) => Self::Time(value.into()),
 			amadeus_parquet::record::types::Value::Timestamp(value) => {
-				Value::Timestamp(value.into())
+				Self::Timestamp(value.into())
 			}
-			amadeus_parquet::record::types::Value::Decimal(value) => Value::Decimal(value.into()),
-			amadeus_parquet::record::types::Value::ByteArray(value) => {
-				Value::ByteArray(value.into())
-			}
-			amadeus_parquet::record::types::Value::Bson(value) => Value::Bson(value.into()),
-			amadeus_parquet::record::types::Value::String(value) => Value::String(value.into()),
-			amadeus_parquet::record::types::Value::Json(value) => Value::Json(value.into()),
-			amadeus_parquet::record::types::Value::Enum(value) => Value::Enum(value.into()),
-			amadeus_parquet::record::types::Value::List(value) => Value::List(value.into()),
-			amadeus_parquet::record::types::Value::Map(value) => Value::Map(value.into()),
-			amadeus_parquet::record::types::Value::Group(value) => Value::Group(value.into()),
+			amadeus_parquet::record::types::Value::Decimal(value) => Self::Decimal(value.into()),
+			amadeus_parquet::record::types::Value::ByteArray(value) => Self::ByteArray(value),
+			amadeus_parquet::record::types::Value::Bson(value) => Self::Bson(value.into()),
+			amadeus_parquet::record::types::Value::String(value) => Self::String(value),
+			amadeus_parquet::record::types::Value::Json(value) => Self::Json(value.into()),
+			amadeus_parquet::record::types::Value::Enum(value) => Self::Enum(value.into()),
+			amadeus_parquet::record::types::Value::List(value) => Self::List(value.into()),
+			amadeus_parquet::record::types::Value::Map(value) => Self::Map(value.into()),
+			amadeus_parquet::record::types::Value::Group(value) => Self::Group(value.into()),
 			amadeus_parquet::record::types::Value::Option(value) => {
-				Value::Option(value.map(|value| match value {
+				Self::Option(value.map(|value| match value {
 					amadeus_parquet::record::types::ValueRequired::Bool(value) => {
 						ValueRequired::Bool(value)
 					}
@@ -1934,13 +1960,13 @@ impl From<amadeus_parquet::record::types::Value> for Value {
 						ValueRequired::Decimal(value.into())
 					}
 					amadeus_parquet::record::types::ValueRequired::ByteArray(value) => {
-						ValueRequired::ByteArray(value.into())
+						ValueRequired::ByteArray(value)
 					}
 					amadeus_parquet::record::types::ValueRequired::Bson(value) => {
 						ValueRequired::Bson(value.into())
 					}
 					amadeus_parquet::record::types::ValueRequired::String(value) => {
-						ValueRequired::String(value.into())
+						ValueRequired::String(value)
 					}
 					amadeus_parquet::record::types::ValueRequired::Json(value) => {
 						ValueRequired::Json(value.into())
