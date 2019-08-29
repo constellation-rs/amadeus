@@ -75,7 +75,7 @@ impl<I> WarcParser<I>
 where
     I: Read,
 {
-    pub fn next<'a>(&'a mut self) -> Result<Option<Webpage<'a>>, io::Error> {
+    pub fn next_borrowed<'a>(&'a mut self) -> Result<Option<Webpage<'a>>, io::Error> {
         if let WarcParserState::Done = self.state {
             return Ok(None);
         }
@@ -150,5 +150,16 @@ where
                 }
             }
         }
+    }
+}
+impl<I> Iterator for WarcParser<I>
+where
+    I: Read,
+{
+    type Item = Result<WebpageOwned, io::Error>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_borrowed()
+            .transpose()
+            .map(|x| x.map(|x| x.to_owned()))
     }
 }
