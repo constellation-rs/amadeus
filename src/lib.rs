@@ -104,7 +104,7 @@ where
                     continue 'chomp;
                 }
                 let record = match nom_parser::record(&self.res[self.offset..]) {
-                    nom::IResult::Done(rem, record) => {
+                    Ok((rem, record)) => {
                         let record_len = self.res.len() - self.offset - rem.len() + 4; // 4 is \r\n\r\n
                         if self.offset + record_len > self.res.len() {
                             continue 'chomp;
@@ -112,7 +112,7 @@ where
                         self.offset += record_len;
                         record
                     }
-                    nom::IResult::Incomplete(_) => {
+                    Err(nom::Err::Incomplete(_)) => {
                         continue 'chomp;
                     }
                     _ => panic!(),

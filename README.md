@@ -2,7 +2,7 @@
 Status](https://travis-ci.org/sbeckeriv/warc_nom_parser.svg?branch=master)](https://travis-ci.org/sbeckeriv/warc_nom_parser)
 
 # warc_nom_parser
-Parcing Web Archive file using nom lib
+Parsing Web Archive file using nom lib
 
 ## Parser
 The parser is just for the file format. Nothing to do with processing

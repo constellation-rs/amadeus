@@ -1,12 +1,10 @@
 //! Web ARChive format parser
 //!
 //! Takes data and separates records in headers and content.
-use nom::{
-    space, Consumer, ConsumerState, FileProducer, IResult, Input, Move, Needed, Offset, Producer,
-};
 use std::collections::HashMap;
 use std::fmt;
 use std::str;
+use nom::{Offset, space, Needed, IResult, Err};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RecordType {
@@ -56,109 +54,6 @@ pub enum State {
     Error,
 }
 
-// pub struct WarcConsumer {
-//     pub c_state: ConsumerState<usize, (), Move>,
-//     pub state: State,
-//     // bad design should not be pub
-//     pub counter: usize,
-//     pub last_record: Option<Record>,
-// }
-
-// impl WarcConsumer {
-//     pub fn new() -> Self {
-//         WarcConsumer {
-//             state: State::Beginning,
-//             c_state: ConsumerState::Continue(Move::Consume(0)),
-//             counter: 0,
-//             last_record: None,
-//         }
-//     }
-// }
-
-// pub struct WarcStreamer {
-//     file_producer: FileProducer,
-//     consumer: WarcConsumer,
-// }
-
-// impl WarcStreamer {
-//     pub fn new(file: &str) -> Result<Self, String> {
-//         match FileProducer::new(file, 5000) {
-//             Ok(producer) => {
-//                 Ok(WarcStreamer {
-//                     file_producer: producer,
-//                     consumer: WarcConsumer::new(),
-//                 })
-//             }
-//             Err(_) => Err(format!("Could not create FileProducer for {:?}", file)),
-//         }
-//     }
-// }
-// impl Iterator for WarcStreamer {
-//     type Item = Record;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.file_producer.apply(&mut self.consumer);
-//         match self.consumer.state {
-//             State::Error => None,
-//             _ => {
-//                 let result = self.consumer.last_record.clone();
-//                 result
-//             }
-//         }
-//     }
-// }
-
-// impl<'a> Consumer<&'a [u8], usize, (), Move> for WarcConsumer {
-//     fn state(&self) -> &ConsumerState<usize, (), Move> {
-//         &self.c_state
-//     }
-
-//     fn handle(&mut self, input: Input<&'a [u8]>) -> &ConsumerState<usize, (), Move> {
-//         match self.state {
-//             State::Beginning => {
-//                 let end_of_file = match input {
-//                     Input::Eof(_) => true,
-//                     _ => false,
-//                 };
-//                 match input {
-//                     Input::Empty | Input::Eof(None) => {
-//                         self.state = State::Done;
-//                         self.c_state = ConsumerState::Error(());
-//                     }
-//                     Input::Element(sl) | Input::Eof(Some(sl)) => {
-//                         match record_complete(sl) {
-//                             IResult::Error(_) => {
-//                                 self.state = State::End;
-//                             }
-//                             IResult::Incomplete(n) => {
-//                                 if !end_of_file {
-//                                     self.c_state = ConsumerState::Continue(Move::Await(n));
-//                                 } else {
-//                                     self.state = State::End;
-//                                 }
-//                             }
-//                             IResult::Done(i, entry) => {
-//                                 self.last_record = Some(entry);
-//                                 self.counter = self.counter + 1;
-//                                 self.state = State::Beginning;
-//                                 self.c_state = ConsumerState::Continue(Move::Consume(sl.offset(i)));
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//             State::End => {
-//                 self.state = State::Done;
-//             }
-//             State::Done | State::Error => {
-//                 self.state = State::Error;
-//                 self.c_state = ConsumerState::Error(())
-//             }
-//         };
-//         &self.c_state
-//     }
-// }
-
 impl<'a> fmt::Debug for Record<'a> {
     fn fmt(&self, form: &mut fmt::Formatter) -> fmt::Result {
         write!(form, "\nHeaders:\n").unwrap();
@@ -182,68 +77,68 @@ fn version_number(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
             46 | 48...57 => continue,
-            _ => return IResult::Done(&input[idx..], &input[..idx]),
+            _ => return Ok((&input[idx..], &input[..idx])),
         }
     }
-    IResult::Incomplete(Needed::Size(1))
+    Err(Err::Incomplete(Needed::Size(1)))
 }
 
 fn utf8_allowed(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
-            0...31 => return IResult::Done(&input[idx..], &input[..idx]),
+            0...31 => return Ok((&input[idx..], &input[..idx])),
             _ => continue,
         }
     }
-    IResult::Incomplete(Needed::Size(1))
+    Err(Err::Incomplete(Needed::Size(1)))
 }
 
 fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
     for (idx, chr) in input.iter().enumerate() {
         match *chr {
             33 | 35...39 | 42 | 43 | 45 | 48...57 | 65...90 | 94...122 | 124 => continue,
-            _ => return IResult::Done(&input[idx..], &input[..idx]),
+            _ => return Ok((&input[idx..], &input[..idx])),
         }
     }
-    IResult::Incomplete(Needed::Size(1))
+    Err(Err::Incomplete(Needed::Size(1)))
 }
 
 named!(init_line <&[u8], (&str, &str)>,
-    chain!(
-        tag!("\r")?                 ~
-        tag!("\n")?                 ~
-        tag!("WARC")                ~
-        tag!("/")                   ~
-        space?                      ~
-        version: map_res!(version_number, str::from_utf8)~
-        tag!("\r")?                 ~
-        tag!("\n")                  ,
-        || {("WARCVERSION", version)}
+    do_parse!(
+        opt!(tag!("\r"))            >>
+        opt!(tag!("\n"))            >>
+        tag!("WARC")                >>
+        tag!("/")                   >>
+        opt!(space)                 >>
+        version: map_res!(version_number, str::from_utf8) >>
+        opt!(tag!("\r"))            >>
+        tag!("\n")                  >>
+        (("WARCVERSION", version))
     )
 );
 
 named!(header_match <&[u8], (&str, &str)>,
-    chain!(
-        name: map_res!(token, str::from_utf8)~
-        space?                      ~
-        tag!(":")                   ~
-        space?                      ~
-        value: map_res!(utf8_allowed, str::from_utf8)~
-        tag!("\r")?                 ~
-        tag!("\n")                  ,
-        || {(name, value)}
+    do_parse!(
+        name: map_res!(token, str::from_utf8) >>
+        opt!(space)                 >>
+        tag!(":")                   >>
+        opt!(space)                 >>
+        value: map_res!(utf8_allowed, str::from_utf8) >>
+        opt!(tag!("\r"))            >>
+        tag!("\n")                  >>
+        ((name, value))
     )
 );
 
 named!(header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
 
 named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
-    chain!(
-        version: init_line          ~
-        headers: header_aggregator  ~
-        tag!("\r")?                 ~
-        tag!("\n")                  ,
-        move ||{(version, headers)}
+    do_parse!(
+        version: init_line          >>
+        headers: header_aggregator  >>
+        opt!(tag!("\r"))            >>
+        tag!("\n")                  >>
+        ((version, headers))
     )
 );
 
@@ -261,8 +156,8 @@ named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
 ///  let parsed = warc_parser::record(&bbc);
 ///  match parsed{
 ///      IResult::Error(_) => assert!(false),
-///      IResult::Incomplete(_) => assert!(false),
-///      IResult::Done(i, entry) => {
+///      Err::Incomplete(_) => assert!(false),
+///      Ok((i, entry)) => {
 ///          let empty: Vec<u8> =  Vec::new();
 ///          assert_eq!(empty, i);
 ///          assert_eq!(13, entry.headers.len());
@@ -274,8 +169,7 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
     // let mut h: HashMap<String, String> = HashMap::new();
     // TODO if the stream parser does not get all the header it fails .
     // like a default size of 10 doesnt for for a producer
-    match warc_header(input) {
-        IResult::Done(mut i, tuple_vec) => {
+    warc_header(input).and_then(|(mut i, tuple_vec)| {
             let (name, version) = tuple_vec.0;
             // h.insert(name.to_string(), version.to_string());
             let headers = tuple_vec.1; // not need figure it out
@@ -329,24 +223,23 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
                         ip_address,
                         content: content,
                     };
-                    IResult::Done(i, entry)
+                    Ok((i, entry))
                 }
-                None => IResult::Incomplete(Needed::Size(bytes_needed)),
+                None => Err(Err::Incomplete(Needed::Size(bytes_needed))),
             }
-        }
-        IResult::Incomplete(a) => IResult::Incomplete(a),
-        IResult::Error(a) => IResult::Error(a),
-    }
+    })
 }
 
 named!(record_complete <&[u8], Record >,
-    chain!(
-        entry: record              ~
-        tag!("\r")?                 ~
-        tag!("\n")                  ~
-        tag!("\r")?                 ~
-        tag!("\n")                  ,
-        move ||{entry}
+    complete!(
+        do_parse!(
+            entry: record              >>
+            opt!(tag!("\r"))           >>
+            tag!("\n")                 >>
+            opt!(tag!("\r"))           >>
+            tag!("\n")                 >>
+            (entry)
+        )
     )
 );
 
