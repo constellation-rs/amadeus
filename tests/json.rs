@@ -1,6 +1,6 @@
 use amadeus::{
 	data::{
-		types::{Date, Value}, Data
+		types::{Date, Downcast, Value}, Data
 	}, source::{Json, Source}, DistributedIterator, ProcessPool
 };
 use constellation::*;
@@ -23,7 +23,7 @@ fn main() {
 
 	let tasks = processes * 2;
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct BitcoinDerived {
 		date: Date,
 		#[amadeus(name = "txVolume(USD)")]
@@ -77,8 +77,8 @@ fn main() {
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
-				println!("{:?}", value);
-				// let _: GameDerived = value.clone().downcast().unwrap();
+				// println!("{:?}", value);
+				let _: Result<BitcoinDerived, _> = value.clone().downcast();
 				value
 			}))
 			.count(&pool),

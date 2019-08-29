@@ -48,12 +48,43 @@
 extern crate serde_closure;
 
 pub mod data;
-pub mod dist_iter;
-pub mod into_dist_iter;
 pub mod no_pool;
 pub mod process_pool;
 pub mod source;
 pub mod thread_pool;
+
+mod impls {
+	use super::process_pool;
+	use serde::{de::DeserializeOwned, Serialize};
+	impl amadeus_core::dist_iter::ProcessPool for process_pool::ProcessPool {
+		type JoinHandle = process_pool::JoinHandle<Box<dyn serde_traitobject::Any + Send>>;
+
+		fn processes(&self) -> usize {
+			process_pool::ProcessPool::processes(self)
+		}
+		fn spawn<F, T>(&self, work: F) -> Self::JoinHandle
+		where
+			F: FnOnce() -> T + Serialize + DeserializeOwned + 'static,
+			T: Send + Serialize + DeserializeOwned + 'static,
+		{
+			process_pool::ProcessPool::spawn(
+				self,
+				FnOnce!([work] move || Box::new(work()) as Box<dyn serde_traitobject::Any + Send>),
+			)
+		}
+	}
+	impl amadeus_core::dist_iter::JoinHandle
+		for process_pool::JoinHandle<Box<dyn serde_traitobject::Any + Send>>
+	{
+		fn join<T>(self) -> Result<T, ()>
+		where
+			T: Send + Serialize + DeserializeOwned + 'static,
+		{
+			process_pool::JoinHandle::join(self).map(|x| *x.into_any_send().downcast().unwrap())
+		}
+	}
+}
+pub use amadeus_core::{dist_iter, into_dist_iter};
 
 #[doc(inline)]
 pub use crate::dist_iter::{DistributedIterator, FromDistributedIterator};

@@ -1,0 +1,22 @@
+[package]
+name = "amadeus-aws"
+version = "0.1.0"
+license = "Apache-2.0"
+description = "Derive Macro TODO"
+homepage = "https://github.com/alecmocatta/amadeus"
+repository = "https://github.com/alecmocatta/amadeus"
+authors = ["..."]
+keywords = [ "arrow", "parquet", "hadoop" ]
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+amadeus-core = { version = "0.1", path = "../amadeus-core" }
+chrono = "0.4"
+flate2 = "1.0"
+http = "0.1"
+rusoto_core = "0.40"
+rusoto_s3 = "0.40"
+serde_closure = { version = "0.1" } #, path = "../serde_closure" }
+serde = { version = "1.0", features = ["derive"] }
+url = { version = "2.1", features = ["serde"] }

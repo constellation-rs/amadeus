@@ -1,5 +1,7 @@
 use amadeus::{
-	data::{types::Value, Data}, source::Csv, DistributedIterator, ProcessPool
+	data::{
+		types::{Downcast, Value}, Data
+	}, source::Csv, DistributedIterator, ProcessPool
 };
 use constellation::*;
 use serde_closure::FnMut;
@@ -18,7 +20,7 @@ fn main() {
 
 	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct GameDerived {
 		a: String,
 		b: String,
@@ -36,13 +38,23 @@ fn main() {
 		100_000
 	);
 
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	struct GameDerived2 {
+		a: String,
+		b: String,
+		c: String,
+		d: String,
+		e: u64,
+		f: String,
+	}
+
 	let rows = Csv::<Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]);
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
-				println!("{:?}", value);
-				// let _: GameDerived = value.clone().downcast().unwrap();
+				// println!("{:?}", value);
+				let _: GameDerived2 = value.clone().downcast().unwrap();
 				value
 			}))
 			.count(&pool),

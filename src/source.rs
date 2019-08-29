@@ -1,19 +1,36 @@
-mod cloudfront;
-mod common_crawl;
-pub mod csv;
-pub mod json;
-mod misc_serde;
-pub mod parquet;
-pub mod postgres;
-pub use self::{
-	cloudfront::*, common_crawl::*, csv::Csv, json::Json, parquet::Parquet, postgres::Postgres
-};
+#[doc(inline)]
+pub use amadeus_aws::{self as aws, Cloudfront};
+#[doc(inline)]
+pub use amadeus_commoncrawl::{self as commoncrawl, CommonCrawl};
+#[doc(inline)]
+pub use amadeus_parquet::{self as parquet, Parquet};
+#[doc(inline)]
+pub use amadeus_postgres::{self as postgres, Postgres};
+#[doc(inline)]
+pub use amadeus_serde::{self as serde, Csv, Json};
 
+impl<Row> Source for Json<Row>
+where
+	Row: super::data::Data,
+{
+	type Item = <Self as amadeus_core::Source>::Item;
+	type Error = <Self as amadeus_core::Source>::Error;
+
+	type DistIter = <Self as amadeus_core::Source>::DistIter;
+	type Iter = <Self as amadeus_core::Source>::Iter;
+
+	fn dist_iter(self) -> Self::DistIter {
+		<Self as amadeus_core::Source>::dist_iter(self)
+	}
+	fn iter(self) -> Self::Iter {
+		<Self as amadeus_core::Source>::iter(self)
+	}
+}
 pub trait Source {
-	type Item: super::data::Data;
+	type Item: crate::data::Data;
 	type Error: std::error::Error;
 
-	type DistIter: super::DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistIter: crate::dist_iter::DistributedIterator<Item = Result<Self::Item, Self::Error>>;
 	// type ParIter: ParallelIterator;
 	type Iter: Iterator<Item = Result<Self::Item, Self::Error>>;
 
@@ -22,41 +39,15 @@ pub trait Source {
 	fn iter(self) -> Self::Iter;
 }
 
+// impl Source for Parquet {
+// 	type Item =
+
 pub trait Sink<I>
 where
-	I: super::dist_iter::DistributedIteratorMulti<Self::Item>,
+	I: crate::dist_iter::DistributedIteratorMulti<Self::Item>,
 {
-	type Item: super::data::Data;
+	type Item: crate::data::Data;
 	type Error: std::error::Error;
 
-	type DistDest: super::dist_iter::DistributedReducer<I, Self::Item, Result<(), Self::Error>>;
-}
-
-pub struct ResultExpand<T, E>(Result<T, E>); // TODO: unpub
-impl<T, E> IntoIterator for ResultExpand<T, E>
-where
-	T: IntoIterator,
-{
-	type Item = Result<T::Item, E>;
-	type IntoIter = ResultExpandIter<T::IntoIter, E>;
-	fn into_iter(self) -> Self::IntoIter {
-		ResultExpandIter(self.0.map(IntoIterator::into_iter).map_err(Some))
-	}
-}
-pub struct ResultExpandIter<T, E>(Result<T, Option<E>>);
-impl<T, E> Iterator for ResultExpandIter<T, E>
-where
-	T: Iterator,
-{
-	type Item = Result<T::Item, E>;
-	fn next(&mut self) -> Option<Self::Item> {
-		transpose(self.0.as_mut().map(Iterator::next).map_err(Option::take))
-	}
-}
-fn transpose<T, E>(result: Result<Option<T>, Option<E>>) -> Option<Result<T, E>> {
-	match result {
-		Ok(Some(x)) => Some(Ok(x)),
-		Err(Some(e)) => Some(Err(e)),
-		Ok(None) | Err(None) => None,
-	}
+	type DistDest: crate::dist_iter::DistributedReducer<I, Self::Item, Result<(), Self::Error>>;
 }

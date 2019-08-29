@@ -1,0 +1,21 @@
+[package]
+name = "amadeus-postgres"
+version = "0.1.0"
+license = "Apache-2.0"
+description = "Derive Macro TODO"
+homepage = "https://github.com/alecmocatta/amadeus"
+repository = "https://github.com/alecmocatta/amadeus"
+authors = ["..."]
+keywords = [ "arrow", "parquet", "hadoop" ]
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+amadeus-core = { version = "0.1", path = "../amadeus-core" }
+amadeus-types = { version = "0.1", path = "../amadeus-types" }
+serde = { version = "1.0", features = ["derive"] }
+postgres = { version = "0.15", features = ["with-chrono"] }
+serde_closure = { version = "0.1" } #, path = "../serde_closure" }
+postgres-binary-copy = "0.5"
+chrono = "0.4"
+sum = "0.1"

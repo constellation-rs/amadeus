@@ -3,7 +3,9 @@
 #[macro_use]
 extern crate serde_closure;
 
-use amadeus::prelude::*;
+use amadeus::{
+	prelude::*, source::aws::{Error, Row}
+};
 use constellation::*;
 use std::{
 	env, time::{Duration, SystemTime}
@@ -33,20 +35,23 @@ fn main() {
 
 	let _ = DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity);
 
-	println!(
-		"{:?}",
-		Cloudfront::new(rusoto_core::Region::UsEast1, "craigwrightlogs", "")
-			.unwrap()
-			.multi(
-				&pool,
-				Identity.for_each(FnMut!(|x: Result<Row, _>| {
-					println!("{:?}", x.unwrap().url);
-				})),
-				(
-					Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
-					Identity.cloned().count(),
-					// DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity),
-				)
-			)
+	let ((), (count, count2)) = Cloudfront::new(
+		rusoto_core::Region::UsEast1,
+		"us-east-1.data-analytics",
+		"cflogworkshop/raw/cf-accesslogs",
+	)
+	.unwrap()
+	.multi(
+		&pool,
+		Identity.for_each(FnMut!(|x: Result<Row, _>| {
+			println!("{:?}", x.unwrap().url);
+		})),
+		(
+			Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
+			Identity.cloned().count(),
+			// DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity),
+		),
 	);
+	assert_eq!(count, count2);
+	assert_eq!(count, 207_928);
 }

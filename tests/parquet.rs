@@ -28,7 +28,7 @@ fn main() {
 
 	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct StockSimulatedDerived {
 		bp1: Option<f64>,
 		bp2: Option<f64>,
@@ -77,7 +77,7 @@ fn main() {
 		42_000
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct StockSimulatedDerivedProjection1 {
 		bs5: Option<f64>,
 		__index_level_0__: Option<i64>,
@@ -107,7 +107,7 @@ fn main() {
 		42_000
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct StockSimulatedDerivedProjection2 {}
 
 	let rows = Parquet::<StockSimulatedDerivedProjection2>::new(vec![PathBuf::from(
@@ -145,7 +145,7 @@ fn main() {
 		Timestamp,
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct TenKayVeeTwoDerived {
 		binary_field: Vec<u8>,
 		int32_field: i32,
@@ -206,7 +206,7 @@ fn main() {
 		Option<Timestamp>,
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct AlltypesDictionaryDerived {
 		id: Option<i32>,
 		bool_col: Option<bool>,
@@ -270,7 +270,7 @@ fn main() {
 		Option<Timestamp>,
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct AlltypesPlainDerived {
 		id: Option<i32>,
 		bool_col: Option<bool>,
@@ -334,7 +334,7 @@ fn main() {
 		Option<Timestamp>,
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct AlltypesPlainSnappyDerived {
 		id: Option<i32>,
 		bool_col: Option<bool>,
@@ -394,7 +394,7 @@ fn main() {
 	// assert_eq!(
 	// 	rows.unwrap().collect::<Vec<_>>(&pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
-	// 		amadeus_parquet::errors::ParquetError::General(String::from(
+	// 		parchet::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
 	// 		))
 	// 	))]
@@ -406,7 +406,7 @@ fn main() {
 	// assert_eq!(
 	// 	rows.unwrap().collect::<Vec<_>>(&pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
-	// 		amadeus_parquet::errors::ParquetError::General(String::from(
+	// 		parchet::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
 	// 		))
 	// 	))]
@@ -416,7 +416,7 @@ fn main() {
 		Option<List<Option<List<Option<List<Option<String>>>>>>>,
 		i32,
 	);
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NestedListsDerived {
 		a: Option<List<Option<List<Option<List<Option<String>>>>>>>,
 		b: i32,
@@ -457,7 +457,7 @@ fn main() {
 	);
 
 	type NestedMaps = (Option<Map<String, Option<Map<i32, bool>>>>, i32, f64);
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NestedMapsDerived {
 		a: Option<Map<String, Option<Map<i32, bool>>>>,
 		b: i32,
@@ -512,7 +512,7 @@ fn main() {
 		),
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NonnullableDerived {
 		#[amadeus(name = "ID")]
 		id: i64,
@@ -526,7 +526,7 @@ fn main() {
 		nested_struct: NonnullableDerivedInner,
 	}
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NonnullableDerivedInner {
 		a: i32,
 		#[amadeus(name = "B")]
@@ -536,13 +536,13 @@ fn main() {
 		g: Map<String, ((List<f64>,),)>,
 	}
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NonnullableDerivedInnerInner {
 		#[amadeus(name = "D")]
 		d: List<List<NonnullableDerivedInnerInnerInner>>,
 	}
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NonnullableDerivedInnerInnerInner {
 		e: i32,
 		f: String,
@@ -596,7 +596,7 @@ fn main() {
 			Option<Map<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
 		)>,
 	);
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NullableDerived {
 		id: Option<i64>,
 		int_array: Option<List<Option<i32>>>,
@@ -648,7 +648,7 @@ fn main() {
 	);
 
 	type Nulls = (Option<(Option<i32>,)>,);
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NullsDerived {
 		b_struct: Option<(Option<i32>,)>,
 	}
@@ -688,7 +688,7 @@ fn main() {
 	);
 
 	type Repeated = (i32, Option<(List<(i64, Option<String>)>,)>);
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct RepeatedDerived {
 		id: i32,
 		#[amadeus(name = "phoneNumbers")]
@@ -730,7 +730,7 @@ fn main() {
 	);
 
 	type TestDatapage = (Option<String>, i32, f64, bool, Option<List<i32>>);
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct TestDatapageDerived {
 		a: Option<String>,
 		b: i32,
@@ -773,7 +773,7 @@ fn main() {
 		5
 	);
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct CommitsDerived {
 		id: Option<String>,
 		delay: Option<i32>,

@@ -19,7 +19,7 @@ fn main() {
 	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
 	// let pool = amadeus::no_pool::NoPool;
 
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct Weather {
 		city: Option<String>,
 		temp_lo: Option<i32>,
@@ -28,7 +28,7 @@ fn main() {
 		date: Option<Date>,
 		invent: Option<InventoryItem>,
 	}
-	#[derive(Data, Clone, PartialEq, Debug)]
+	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct InventoryItem {
 		name: Option<String>,
 		supplier_id: Option<i32>,
