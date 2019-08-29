@@ -34,13 +34,13 @@ struct Abc {
 #[allow(dead_code)]
 #[derive(Record)]
 struct Def {
-	#[parquet(rename = "!@£$%^&*(")]
+	#[parquet(name = "!@£$%^&*(")]
 	a: String,
 }
 
 // #[derive(Record)]
 // struct Ghi {
-// 	#[parquet(rename = 123)]
+// 	#[parquet(name = 123)]
 //     a: String,
 // }
 
@@ -84,31 +84,31 @@ macro_rules! map {
 fn test_file_reader_rows_nonnullable_derived() {
 	#[derive(PartialEq, Record, Debug)]
 	struct RowDerived {
-		#[parquet(rename = "ID")]
+		#[parquet(name = "ID")]
 		id: i64,
-		#[parquet(rename = "Int_Array")]
+		#[parquet(name = "Int_Array")]
 		int_array: List<i32>,
 		int_array_array: List<List<i32>>,
-		#[parquet(rename = "Int_Map")]
+		#[parquet(name = "Int_Map")]
 		int_map: Map<String, i32>,
 		int_map_array: List<Map<String, i32>>,
-		#[parquet(rename = "nested_Struct")]
+		#[parquet(name = "nested_Struct")]
 		nested_struct: RowDerivedInner,
 	}
 
 	#[derive(PartialEq, Record, Debug)]
 	struct RowDerivedInner {
 		a: i32,
-		#[parquet(rename = "B")]
+		#[parquet(name = "B")]
 		b: List<i32>,
 		c: RowDerivedInnerInner,
-		#[parquet(rename = "G")]
+		#[parquet(name = "G")]
 		g: Map<String, ((List<f64>,),)>,
 	}
 
 	#[derive(PartialEq, Record, Debug)]
 	struct RowDerivedInnerInner {
-		#[parquet(rename = "D")]
+		#[parquet(name = "D")]
 		d: List<List<RowDerivedInnerInnerInner>>,
 	}
 

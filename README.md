@@ -17,13 +17,13 @@
   under the License.
 -->
 
-# amadeus-parquet
+# parchet
 
-[![Crates.io](https://img.shields.io/crates/v/amadeus-parquet.svg?maxAge=86400)](https://crates.io/crates/amadeus-parquet)
-[![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/amadeus-parquet.svg?maxAge=2592000)](#License)
-[![Build Status](https://dev.azure.com/alecmocatta/amadeus-parquet/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/amadeus-parquet/_build/latest?branchName=master)
+[![Crates.io](https://img.shields.io/crates/v/parchet.svg?maxAge=86400)](https://crates.io/crates/parchet)
+[![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/parchet.svg?maxAge=2592000)](#License)
+[![Build Status](https://dev.azure.com/alecmocatta/parchet/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/parchet/_build/latest?branchName=master)
 
-[Docs](https://docs.rs/amadeus-parquet/0.1.0)
+[Docs](https://docs.rs/parchet/0.1.0)
 
 An Apache Parquet implementation in Rust.
 
@@ -31,15 +31,15 @@ An Apache Parquet implementation in Rust.
 Add this to your Cargo.toml:
 ```toml
 [dependencies]
-amadeus-parquet = "0.1.0"
+parchet = "0.1.0"
 ```
 
 Example usage of reading data untyped:
 ```rust
 use std::fs::File;
 use std::path::Path;
-use parquet::file::reader::{FileReader, SerializedFileReader};
-use parquet::record::types::Row;
+use parchet::file::reader::{FileReader, SerializedFileReader};
+use parchet::record::types::Row;
 
 let file = File::open(&Path::new("/path/to/file")).unwrap();
 let reader = SerializedFileReader::new(file).unwrap();
@@ -53,8 +53,8 @@ Example usage of reading data strongly-typed:
 ```rust
 use std::fs::File;
 use std::path::Path;
-use parquet::file::reader::{FileReader, SerializedFileReader};
-use parquet::record::{Record, types::Timestamp};
+use parchet::file::reader::{FileReader, SerializedFileReader};
+use parchet::record::{Record, types::Timestamp};
 
 #[derive(Record, Debug)]
 struct MyRow {
@@ -70,10 +70,9 @@ for record in iter.map(Result::unwrap) {
     println!("{}: {}", record.time, record.event);
 }
 ```
-See [crate documentation](https://docs.rs/crate/parquet/0.15.0-SNAPSHOT) on available API.
 
 ## Supported Parquet Version
-- Parquet-format 2.4.0
+- Parquet-format 2.6.0
 
 To update Parquet format to a newer version, check if [parquet-format](https://github.com/sunchao/parquet-format-rs)
 version is available. Then simply update version of `parquet-format` crate in Cargo.toml.

@@ -17,11 +17,11 @@
   under the License.
 -->
 
-# amadeus-parquet-derive
+# parchet-derive
 
-A crate for automatically deriving `amadeus-parquet::record::Record` for arbitrary structs.
+A crate for automatically deriving `parchet::record::Record` for arbitrary structs.
 
-This crate is intended to be used by the `amadeus-parquet` crate. See [its documentation](https://docs.rs/amadeus-parquet) for usage.
+This crate is intended to be used by the `parchet` crate. See [its documentation](https://docs.rs/parchet) for usage.
 
 ## License
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0.

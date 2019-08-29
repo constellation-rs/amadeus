@@ -402,7 +402,7 @@ fn get_lit_str<'a>(
 		Err(Error::new_spanned(
 			lit,
 			format!(
-				"expected amadeus {} attribute to be a string: `{} = \"...\"`",
+				"expected parquet {} attribute to be a string: `{} = \"...\"`",
 				attr_name, meta_item_name
 			),
 		))

@@ -159,7 +159,7 @@ pub(crate) use self::predicate::Predicate;
 /// # use parchet::record::{types::Timestamp, Record};
 /// #[derive(Record, Debug)]
 /// struct MyRow {
-///     #[parquet(rename = "ID")]
+///     #[parquet(name = "ID")]
 ///     id: u64,
 ///     time: Timestamp,
 ///     event: String,
