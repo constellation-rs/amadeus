@@ -4,7 +4,7 @@
 extern crate serde_closure;
 
 use amadeus::{
-	prelude::*, source::aws::{Error, Row}
+	prelude::*, source::aws::{CloudfrontRow, Error}
 };
 use constellation::*;
 use std::{
@@ -33,7 +33,7 @@ fn main() {
 		}),
 	);
 
-	let _ = DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity);
+	let _ = DistributedIteratorMulti::<&Result<CloudfrontRow, Error>>::count(Identity);
 
 	let ((), (count, count2)) = Cloudfront::new(
 		rusoto_core::Region::UsEast1,
@@ -43,13 +43,13 @@ fn main() {
 	.unwrap()
 	.multi(
 		&pool,
-		Identity.for_each(FnMut!(|x: Result<Row, _>| {
+		Identity.for_each(FnMut!(|x: Result<CloudfrontRow, _>| {
 			println!("{:?}", x.unwrap().url);
 		})),
 		(
 			Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
 			Identity.cloned().count(),
-			// DistributedIteratorMulti::<&Result<Row, Error>>::count(Identity),
+			// DistributedIteratorMulti::<&Result<CloudfrontRow, Error>>::count(Identity),
 		),
 	);
 	assert_eq!(count, count2);

@@ -37,6 +37,34 @@ pub trait Data:
 	}
 }
 
+#[derive(amadeus_derive::Data, Clone, Eq, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
+#[amadeus(crate = "crate")]
+pub struct CloudfrontRow {
+	// pub time: DateTime<Utc>,
+	pub edge_location: String,
+	pub response_bytes: u64,
+	// pub remote_ip: net::IpAddr,
+	// #[serde(with = "http_serde")]
+	// pub method: Method,
+	pub host: String,
+	// pub url: Url,
+	// #[serde(with = "http_serde")]
+	// pub status: Option<StatusCode>,
+	pub user_agent: Option<String>,
+	pub referer: Option<String>,
+	pub cookie: Option<String>,
+	pub result_type: String,
+	pub request_id: String,
+	pub request_bytes: u64,
+	// pub time_taken: Duration,
+	pub forwarded_for: Option<String>,
+	pub ssl_protocol_cipher: Option<(String, String)>,
+	pub response_result_type: String,
+	pub http_version: String,
+	pub fle_status: Option<String>,
+	pub fle_encrypted_fields: Option<String>,
+}
+
 pub struct CastError;
 
 // impl<T> PartialEq<T> for dyn Data {

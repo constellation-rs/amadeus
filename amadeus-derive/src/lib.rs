@@ -27,7 +27,7 @@ extern crate quote;
 use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use syn::{
-	punctuated::Punctuated, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Field, Fields, Ident, Lit, LitStr, Meta, NestedMeta, TypeParam, WhereClause
+	punctuated::Punctuated, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Field, Fields, Ident, Lit, LitStr, Meta, NestedMeta, Path, TypeParam, WhereClause
 };
 
 /// This is a procedural macro to derive the [`Data`](amadeus::record::Data) trait on
@@ -86,13 +86,55 @@ pub fn amadeus_data(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /// Implement on regular named or unit structs.
+#[allow(clippy::cognitive_complexity)]
 fn impl_struct(
 	ast: &DeriveInput, fields: &Punctuated<Field, Token![,]>,
 ) -> Result<TokenStream, Error> {
 	let name = &ast.ident;
+	let visibility = &ast.vis;
 	let serde_name = Ident::new(&format!("{}Serde", name), Span::call_site());
 	let schema_name = Ident::new(&format!("{}Schema", name), Span::call_site());
 	let reader_name = Ident::new(&format!("{}Reader", name), Span::call_site());
+
+	let mut amadeus_path = None;
+
+	for meta_items in ast.attrs.iter().filter_map(get_amadeus_meta_items) {
+		for meta_item in meta_items {
+			match meta_item {
+				// Parse `#[amadeus(crate = "self")]`
+				NestedMeta::Meta(Meta::NameValue(ref m)) if m.path.is_ident("crate") => {
+					let crate_ = m.path.get_ident().unwrap();
+					let s: Path = get_lit_str(crate_, crate_, &m.lit)?.parse()?;
+					if amadeus_path.is_some() {
+						return Err(Error::new_spanned(
+							crate_,
+							"duplicate amadeus attribute `crate`",
+						));
+					}
+					amadeus_path = Some(s.clone());
+				}
+				NestedMeta::Meta(ref meta_item) => {
+					let path = meta_item
+						.path()
+						.into_token_stream()
+						.to_string()
+						.replace(' ', "");
+					return Err(Error::new_spanned(
+						meta_item.path(),
+						format!("unknown amadeus field attribute `{}`", path),
+					));
+				}
+				NestedMeta::Lit(ref lit) => {
+					return Err(Error::new_spanned(
+						lit,
+						"unexpected literal in amadeus field attribute",
+					));
+				}
+			}
+		}
+	}
+
+	let amadeus_path = amadeus_path.unwrap_or_else(|| syn::parse2(quote! { ::amadeus }).unwrap());
 
 	let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
@@ -206,34 +248,31 @@ fn impl_struct(
 
 	let gen = quote! {
 		mod __ {
-			extern crate amadeus;
-			extern crate amadeus_parquet;
-			extern crate amadeus_postgres;
-			extern crate amadeus_serde;
-			pub use amadeus_parquet::{ParquetData,_internal::{
+			pub use ::amadeus_parquet::{ParquetData,_internal::{
 				basic::Repetition,
 				column::reader::ColumnReader,
 				errors::{ParquetError, Result as ParquetResult},
 				record::{Schema as ParquetSchema, Reader, _private::DisplaySchemaGroup},
 				schema::types::{ColumnPath, Type},
 			}};
-			pub use amadeus_serde::{SerdeData,_internal::{Serialize, Deserialize, Serializer, Deserializer}};
-			pub use amadeus_postgres::{Names,read_be_i32,read_value,_internal as postgres,PostgresData};
-			pub use amadeus::{data::{serde_data, Data, types::{DowncastImpl, Downcast, DowncastError, Value, Group, SchemaIncomplete}}};
+			pub use ::amadeus_serde::{SerdeData,_internal::{Serialize, Deserialize, Serializer, Deserializer}};
+			pub use ::amadeus_postgres::{Names,read_be_i32,read_value,_internal as postgres,PostgresData};
+			pub use ::amadeus_types::{DowncastImpl, Downcast, DowncastError, Value, Group, SchemaIncomplete};
+			pub use #amadeus_path::{data::{serde_data, Data}};
 			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::PartialEq, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
 		#[derive(__::Serialize, __::Deserialize)]
 		#[serde(remote = #name_str)]
 		#[serde(bound = "")]
-		struct #serde_name #impl_generics #where_clause_with_serde_data {
+		#visibility struct #serde_name #impl_generics #where_clause_with_serde_data {
 			#(
 				#[serde(with = "__::serde_data", rename = #field_renames1)]
 				#field_names1: #field_types1,
 			)*
 		}
 
-		struct #schema_name #impl_generics #where_clause_with_parquet_data {
+		#visibility struct #schema_name #impl_generics #where_clause_with_parquet_data {
 			#(#field_names1: <#field_types1 as __::ParquetData>::Schema,)*
 		}
 		// #[automatically_derived]
@@ -262,7 +301,7 @@ fn impl_struct(
 					.finish()
 			}
 		}
-		struct #reader_name #impl_generics #where_clause_with_parquet_data {
+		#visibility struct #reader_name #impl_generics #where_clause_with_parquet_data {
 			#(#field_names1: <#field_types1 as __::ParquetData>::Reader,)*
 		}
 		#[automatically_derived]

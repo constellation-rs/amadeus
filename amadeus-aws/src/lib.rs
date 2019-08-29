@@ -33,13 +33,13 @@ type CloudfrontInner = amadeus_core::dist_iter::Map<
 							for<'r, 'a> fn(&'r mut (), (&'a Result<String, io::Error>,)) -> bool,
 						>,
 					>,
-					Closure<(), (Result<String, io::Error>,), Result<Row, Error>>,
+					Closure<(), (Result<String, io::Error>,), Result<CloudfrontRow, Error>>,
 				>,
 				Error,
 			>,
 		>,
 	>,
-	Closure<(), (Result<Result<Row, Error>, Error>,), Result<Row, Error>>,
+	Closure<(), (Result<Result<CloudfrontRow, Error>, Error>,), Result<CloudfrontRow, Error>>,
 >;
 
 pub struct Cloudfront {
@@ -175,7 +175,7 @@ impl Cloudfront {
 											(time_taken.parse::<f64>().unwrap() * 1000.0).round()
 												as u64,
 										);
-										Ok(Row {
+										Ok(CloudfrontRow {
 											time,
 											edge_location: x_edge_location.to_owned(),
 											response_bytes: sc_bytes.parse().unwrap(),
@@ -246,13 +246,15 @@ impl Cloudfront {
 						}),
 				)
 			}))
-			.map(FnMut!(|x: Result<Result<Row, _>, _>| x.and_then(identity)));
+			.map(FnMut!(
+				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(identity)
+			));
 		Ok(Self { i })
 	}
 }
 
 impl DistributedIterator for Cloudfront {
-	type Item = Result<Row, Error>;
+	type Item = Result<CloudfrontRow, Error>;
 	type Task = CloudfrontConsumer;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
@@ -269,7 +271,7 @@ pub struct CloudfrontConsumer {
 }
 
 impl Consumer for CloudfrontConsumer {
-	type Item = Result<Row, Error>;
+	type Item = Result<CloudfrontRow, Error>;
 
 	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		self.task.run(i)
@@ -371,7 +373,7 @@ impl From<rusoto_s3::GetObjectError> for Error {
 }
 
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
-pub struct Row {
+pub struct CloudfrontRow {
 	pub time: DateTime<Utc>,
 	pub edge_location: String,
 	pub response_bytes: u64,
