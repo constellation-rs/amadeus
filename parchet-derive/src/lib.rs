@@ -87,6 +87,7 @@ pub fn parquet_record(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 }
 
 /// Implement on regular named or unit structs.
+#[allow(clippy::cognitive_complexity)]
 fn impl_struct(
 	ast: &DeriveInput, fields: &Punctuated<Field, Token![,]>,
 ) -> Result<TokenStream, Error> {
