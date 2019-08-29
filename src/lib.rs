@@ -1,9 +1,7 @@
 #[macro_use]
 extern crate nom;
-#[macro_use]
-extern crate serde_derive;
 extern crate url;
-extern crate url_serde;
+extern crate serde;
 
 mod nom_parser;
 
@@ -12,6 +10,7 @@ use std::{
     iter, net,
 };
 use url::Url;
+use serde::{Serialize, Deserialize};
 
 pub struct Webpage<'a> {
     pub ip: net::IpAddr,
@@ -38,7 +37,6 @@ impl<'a> Webpage<'a> {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct WebpageOwned {
     pub ip: net::IpAddr,
-    #[serde(with = "url_serde")]
     pub url: Url,
     pub contents: Box<[u8]>,
 }
