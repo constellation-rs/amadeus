@@ -25,11 +25,11 @@ extern crate syn;
 extern crate quote;
 
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use std::iter;
 use syn::{
 	punctuated::Punctuated, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Field, Fields, Ident, Lit, LitStr, Meta, NestedMeta, TypeParam, WhereClause
 };
-use quote::ToTokens;
 
 /// This is a procedural macro to derive the [`Record`](parquet::record::Record) trait on
 /// structs and enums.
