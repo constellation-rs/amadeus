@@ -29,7 +29,7 @@
 //! ```rust,no_run
 //! use std::{fs, path::Path, rc::Rc};
 //!
-//! use amadeus_parquet::{
+//! use parchet::{
 //!     file::{
 //!         properties::WriterProperties,
 //!         writer::{FileWriter, SerializedFileWriter},
@@ -62,7 +62,7 @@
 //! # Example of reading an existing file
 //!
 //! ```rust,no_run
-//! use amadeus_parquet::file::reader::{FileReader, SerializedFileReader, RowGroupReader};
+//! use parchet::file::reader::{FileReader, SerializedFileReader, RowGroupReader};
 //! use std::{fs::File, path::Path};
 //!
 //! let path = Path::new("/path/to/sample.parquet");
@@ -80,7 +80,7 @@
 //! # Example of reading multiple files
 //!
 //! ```rust,no_run,ignore
-//! use amadeus_parquet::file::reader::SerializedFileReader;
+//! use parchet::file::reader::SerializedFileReader;
 //! use std::convert::TryFrom;
 //!
 //! let paths = vec![

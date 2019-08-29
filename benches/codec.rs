@@ -27,7 +27,7 @@ use crate::common::*;
 use std::fs::File;
 use test::Bencher;
 
-use amadeus_parquet::{basic::Compression, compression::*, file::reader::*};
+use parchet::{basic::Compression, compression::*, file::reader::*};
 
 // 10k rows written in page v2 with type:
 //
@@ -44,7 +44,7 @@ use amadeus_parquet::{basic::Compression, compression::*, file::reader::*};
 //
 // filled with random values.
 
-fn get_rg_reader() -> amadeus_parquet::file::reader::SerializedRowGroupReader<File> {
+fn get_rg_reader() -> parchet::file::reader::SerializedRowGroupReader<File> {
 	let file = get_test_file("10k-v2.parquet");
 	let f_reader = SerializedFileReader::new(file).unwrap();
 	f_reader.get_row_group(0).unwrap()

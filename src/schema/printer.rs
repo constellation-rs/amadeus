@@ -21,7 +21,7 @@
 //! # Example
 //!
 //! ```rust
-//! use amadeus_parquet::{
+//! use parchet::{
 //!     file::reader::{FileReader, SerializedFileReader},
 //!     schema::printer::{print_file_metadata, print_parquet_metadata, print_schema},
 //! };

@@ -18,7 +18,7 @@
 use rand::{thread_rng, Rng};
 use std::{env, fs::File, path::PathBuf, rc::Rc, str::FromStr};
 
-use amadeus_parquet::{
+use parchet::{
 	basic::*, data_type::*, schema::types::{ColumnDescriptor, ColumnPath, Type as SchemaType}
 };
 

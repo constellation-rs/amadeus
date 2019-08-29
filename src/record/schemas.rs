@@ -26,8 +26,8 @@
 //! conveniently [`RootSchema`](super::RootSchema) also implements [`Display`].
 //!
 //! ```
-//! # use amadeus_parquet::errors::Result;
-//! use amadeus_parquet::record::{RootSchema, types::Value};
+//! # use parchet::errors::Result;
+//! use parchet::record::{RootSchema, types::Value};
 //!
 //! #
 //! # fn main() -> Result<()> {
@@ -1672,8 +1672,8 @@ where
 /// schema string like so:
 ///
 /// ```
-/// # use amadeus_parquet::errors::Result;
-/// use amadeus_parquet::record::{RootSchema, types::Value};
+/// # use parchet::errors::Result;
+/// use parchet::record::{RootSchema, types::Value};
 ///
 /// #
 /// # fn main() -> Result<()> {

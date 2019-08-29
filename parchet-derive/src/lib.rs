@@ -29,6 +29,7 @@ use std::iter;
 use syn::{
 	punctuated::Punctuated, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Field, Fields, Ident, Lit, LitStr, Meta, NestedMeta, TypeParam, WhereClause
 };
+use quote::ToTokens;
 
 /// This is a procedural macro to derive the [`Record`](parquet::record::Record) trait on
 /// structs and enums.
@@ -36,7 +37,7 @@ use syn::{
 /// ## Example
 ///
 /// ```text
-/// use amadeus_parquet::record::Record;
+/// use parchet::record::Record;
 ///
 /// #[derive(Record, Debug)]
 /// struct MyRow {
@@ -52,7 +53,7 @@ use syn::{
 /// ```text
 /// #[derive(Record, Debug)]
 /// struct MyRow {
-///     #[parquet(rename = "ID")]
+///     #[parquet(name = "ID")]
 ///     id: u64,
 ///     time: Timestamp,
 ///     event: String,
@@ -127,7 +128,7 @@ fn impl_struct(
 	let field_names1 = &field_names;
 	let field_names2 = &field_names;
 
-	// The field names specified via `#[parquet(rename = "foo")]`, falling back to struct
+	// The field names specified via `#[parquet(name = "foo")]`, falling back to struct
 	// field names
 	let field_renames = fields
 		.iter()
@@ -136,24 +137,30 @@ fn impl_struct(
 			for meta_items in field.attrs.iter().filter_map(get_parquet_meta_items) {
 				for meta_item in meta_items {
 					match meta_item {
-						// Parse `#[parquet(rename = "foo")]`
-						NestedMeta::Meta(Meta::NameValue(ref m)) if m.ident == "rename" => {
-							let s = get_lit_str(&m.ident, &m.ident, &m.lit)?;
+						// Parse `#[parquet(name = "foo")]`
+						NestedMeta::Meta(Meta::NameValue(ref m)) if m.path.is_ident("name") => {
+							let name = m.path.get_ident().unwrap();
+							let s = get_lit_str(name, name, &m.lit)?;
 							if rename.is_some() {
 								return Err(Error::new_spanned(
-									&m.ident,
-									"duplicate parquet attribute `rename`",
+									name,
+									"duplicate parquet attribute `name`",
 								));
 							}
 							rename = Some(s.clone());
 						}
 						NestedMeta::Meta(ref meta_item) => {
+							let path = meta_item
+								.path()
+								.into_token_stream()
+								.to_string()
+								.replace(' ', "");
 							return Err(Error::new_spanned(
-								meta_item.name(),
-								format!("unknown parquet field attribute `{}`", meta_item.name()),
+								meta_item.path(),
+								format!("unknown parquet field attribute `{}`", path),
 							));
 						}
-						NestedMeta::Literal(ref lit) => {
+						NestedMeta::Lit(ref lit) => {
 							return Err(Error::new_spanned(
 								lit,
 								"unexpected literal in parquet field attribute",
@@ -182,8 +189,8 @@ fn impl_struct(
 			#[allow(unknown_lints)]
 			#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
 			#[allow(rust_2018_idioms)]
-			extern crate amadeus_parquet;
-			pub use amadeus_parquet::{
+			extern crate parchet;
+			pub use parchet::{
 				basic::Repetition,
 				column::reader::ColumnReader,
 				errors::{ParquetError, Result},
@@ -300,7 +307,14 @@ fn impl_struct(
 		}
 	};
 
-	Ok(wrap_in_const("RECORD", name, gen))
+	let gen = quote! {
+		#[allow(non_upper_case_globals, unused_attributes, unused_qualifications, clippy::type_complexity, unknown_lints,clippy::useless_attribute,rust_2018_idioms)]
+		const _: () = {
+			#gen
+		};
+	};
+
+	Ok(gen)
 }
 
 /// Implement on tuple structs.
@@ -319,12 +333,17 @@ fn impl_tuple_struct(
 			for meta_item in meta_items {
 				match meta_item {
 					NestedMeta::Meta(ref meta_item) => {
+						let path = meta_item
+							.path()
+							.into_token_stream()
+							.to_string()
+							.replace(' ', "");
 						return Err(Error::new_spanned(
-							meta_item.name(),
-							format!("unknown parquet field attribute `{}`", meta_item.name()),
+							meta_item.path(),
+							format!("unknown parquet field attribute `{}`", path),
 						));
 					}
-					NestedMeta::Literal(ref lit) => {
+					NestedMeta::Lit(ref lit) => {
 						return Err(Error::new_spanned(
 							lit,
 							"unexpected literal in parquet field attribute",
@@ -361,9 +380,9 @@ fn impl_enum(ast: &DeriveInput, data: &DataEnum) -> Result<TokenStream, Error> {
 // The below code adapted from https://github.com/serde-rs/serde/tree/c8e39594357bdecb9dfee889dbdfced735033469/serde_derive/src
 
 fn get_parquet_meta_items(attr: &Attribute) -> Option<Vec<NestedMeta>> {
-	if attr.path.segments.len() == 1 && attr.path.segments[0].ident == "parquet" {
-		match attr.interpret_meta() {
-			Some(Meta::List(ref meta)) => Some(meta.nested.iter().cloned().collect()),
+	if attr.path.is_ident("parquet") {
+		match attr.parse_meta() {
+			Ok(Meta::List(ref meta)) => Some(meta.nested.iter().cloned().collect()),
 			_ => {
 				// TODO: produce an error
 				None
@@ -383,27 +402,9 @@ fn get_lit_str<'a>(
 		Err(Error::new_spanned(
 			lit,
 			format!(
-				"expected parquet {} attribute to be a string: `{} = \"...\"`",
+				"expected amadeus {} attribute to be a string: `{} = \"...\"`",
 				attr_name, meta_item_name
 			),
 		))
 	}
-}
-
-fn wrap_in_const(trait_: &str, ty: &Ident, code: TokenStream) -> TokenStream {
-	let dummy_const = Ident::new(
-		&format!("_IMPL_{}_FOR_{}", trait_, unraw(ty)),
-		Span::call_site(),
-	);
-
-	quote! {
-		#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
-		const #dummy_const: () = {
-			#code
-		};
-	}
-}
-
-fn unraw(ident: &Ident) -> String {
-	ident.to_string().trim_start_matches("r#").to_owned()
 }

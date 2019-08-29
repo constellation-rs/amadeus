@@ -19,7 +19,7 @@
 
 use std::{collections::HashMap, env, fs, path::PathBuf, str::FromStr};
 
-use amadeus_parquet::{
+use parchet::{
 	errors::ParquetError, file::reader::{FileReader, RowGroupReader, SerializedFileReader}, record::{
 		types::{List, Map}, Record
 	}

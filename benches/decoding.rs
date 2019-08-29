@@ -27,7 +27,7 @@ use crate::common::*;
 use std::rc::Rc;
 use test::Bencher;
 
-use amadeus_parquet::{
+use parchet::{
 	basic::*, data_type::*, decoding::*, encoding::*, memory::{ByteBufferPtr, MemTracker}
 };
 

@@ -27,7 +27,7 @@ use crate::common::*;
 use std::rc::Rc;
 use test::Bencher;
 
-use amadeus_parquet::{basic::*, data_type::*, encoding::*, memory::MemTracker};
+use parchet::{basic::*, data_type::*, encoding::*, memory::MemTracker};
 
 macro_rules! plain {
 	($fname:ident, $batch_size:expr, $ty:ident, $pty:expr, $gen_data_fn:expr) => {

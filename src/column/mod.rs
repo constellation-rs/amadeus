@@ -38,7 +38,7 @@
 //! ```rust,no_run
 //! use std::{fs, path::Path, rc::Rc};
 //!
-//! use amadeus_parquet::{
+//! use parchet::{
 //!     column::{reader::ColumnReader, writer::ColumnWriter},
 //!     file::{
 //!         properties::WriterProperties,

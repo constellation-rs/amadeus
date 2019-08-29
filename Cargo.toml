@@ -1,7 +1,7 @@
 [workspace]
 
 [package]
-name = "amadeus-parquet"
+name = "parchet"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
 authors = ["Apache Arrow <dev@arrow.apache.org>", "Alec Mocatta <alec@mocatta.net>"]
@@ -10,19 +10,19 @@ keywords = ["arrow", "parquet", "hadoop"]
 description = """
 An Apache Parquet implementation in Rust.
 """
-repository = "https://github.com/alecmocatta/amadeus-parquet"
-homepage = "https://github.com/alecmocatta/amadeus-parquet"
-documentation = "https://docs.rs/amadeus-parquet/0.1.0"
+repository = "https://github.com/alecmocatta/parchet"
+homepage = "https://github.com/alecmocatta/parchet"
+documentation = "https://docs.rs/parchet/0.1.0"
 readme = "README.md"
 edition = "2018"
 
 [badges]
-azure-devops = { project = "alecmocatta/amadeus-parquet", pipeline = "tests" }
+azure-devops = { project = "alecmocatta/parchet", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
 parquet-format = "2.6.0"
-amadeus-parquet-derive = { version = "0.1.0", path = "amadeus-parquet-derive" }
+parchet-derive = { version = "0.1.0", path = "parchet-derive" }
 quick-error = "1.2.2"
 byteorder = "1.2"
 thrift = "0.12.0"
