@@ -1,5 +1,6 @@
-use super::{ConsumerMulti, DistributedIteratorMulti};
 use serde::{Deserialize, Serialize};
+
+use super::{ConsumerMulti, DistributedIteratorMulti};
 
 pub struct Identity;
 impl<Item> DistributedIteratorMulti<Item> for Identity {

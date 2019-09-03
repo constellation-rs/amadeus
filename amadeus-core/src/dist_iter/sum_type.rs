@@ -1,6 +1,6 @@
-use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
-
 use sum::Sum2;
+
+use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
 
 impl<A: DistributedIterator, B: DistributedIterator<Item = A::Item>> DistributedIterator
 	for Sum2<A, B>

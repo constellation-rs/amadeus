@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct Inspect<I, F> {
@@ -15,7 +16,7 @@ impl<I, F> Inspect<I, F> {
 
 impl<I: DistributedIterator, F> DistributedIterator for Inspect<I, F>
 where
-	F: FnMut(&I::Item) + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(&I::Item) + Clone + ProcessSend,
 {
 	type Item = I::Item;
 	type Task = InspectConsumer<I::Task, F>;
@@ -34,11 +35,7 @@ where
 impl<I: DistributedIteratorMulti<Source>, F, Source> DistributedIteratorMulti<Source>
 	for Inspect<I, F>
 where
-	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item)
-		+ Clone
-		+ Serialize
-		+ for<'de> Deserialize<'de>
-		+ 'static,
+	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item) + Clone + ProcessSend,
 {
 	type Item = I::Item;
 	type Task = InspectConsumer<I::Task, F>;

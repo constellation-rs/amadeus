@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct Filter<I, F> {
@@ -15,7 +16,7 @@ impl<I, F> Filter<I, F> {
 
 impl<I: DistributedIterator, F> DistributedIterator for Filter<I, F>
 where
-	F: FnMut(&I::Item) -> bool + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(&I::Item) -> bool + Clone + ProcessSend,
 {
 	type Item = I::Item;
 	type Task = FilterConsumer<I::Task, F>;
@@ -34,11 +35,7 @@ where
 impl<I: DistributedIteratorMulti<Source>, F, Source> DistributedIteratorMulti<Source>
 	for Filter<I, F>
 where
-	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item) -> bool
-		+ Clone
-		+ Serialize
-		+ for<'de> Deserialize<'de>
-		+ 'static,
+	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item) -> bool + Clone + ProcessSend,
 {
 	type Item = I::Item;
 	type Task = FilterConsumer<I::Task, F>;

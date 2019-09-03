@@ -4,16 +4,19 @@
 
 #![allow(clippy::cognitive_complexity, clippy::type_complexity)]
 
+use constellation::*;
+use serde_closure::FnMut;
+use std::{
+	env, path::PathBuf, time::{Duration, SystemTime}
+};
+// use test::Bencher;
+
 // use amadeus::prelude::*;
 use amadeus::{
 	data::{
 		types::{Downcast, List, Map, Timestamp, Value}, Data
-	}, source::Parquet, DistributedIterator, ProcessPool
+	}, source::Parquet, DistributedIterator, LocalPool, ProcessPool, ThreadPool
 };
-use constellation::*;
-use serde_closure::FnMut;
-use std::{env, path::PathBuf, time::SystemTime};
-// use test::Bencher;
 
 fn main() {
 	init(Resources::default());
@@ -24,9 +27,27 @@ fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(10);
 
-	let start = SystemTime::now();
+	let local_pool_time = {
+		let local_pool = LocalPool::new();
+		run(&local_pool)
+	};
+	let thread_pool_time = {
+		let thread_pool = ThreadPool::new(processes).unwrap();
+		run(&thread_pool)
+	};
+	let process_pool_time = {
+		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		run(&process_pool)
+	};
 
-	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	println!(
+		"in {:?} {:?} {:?}",
+		local_pool_time, thread_pool_time, process_pool_time
+	);
+}
+
+fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+	let start = SystemTime::now();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct StockSimulatedDerived {
@@ -59,7 +80,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		42_000
 	);
 
@@ -73,7 +94,7 @@ fn main() {
 				let _: StockSimulatedDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		42_000
 	);
 
@@ -89,7 +110,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		42_000
 	);
 
@@ -103,7 +124,7 @@ fn main() {
 				let _: StockSimulatedDerivedProjection1 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		42_000
 	);
 
@@ -116,7 +137,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		42_000
 	);
 
@@ -130,7 +151,7 @@ fn main() {
 				let _: StockSimulatedDerivedProjection2 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		42_000
 	);
 
@@ -163,7 +184,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		10_000
 	);
 
@@ -173,7 +194,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		10_000
 	);
 
@@ -188,7 +209,7 @@ fn main() {
 				let _: TenKayVeeTwoDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		10_000
 	);
 
@@ -227,7 +248,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		2
 	);
 
@@ -237,7 +258,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		2
 	);
 
@@ -252,7 +273,7 @@ fn main() {
 				let _: AlltypesDictionaryDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		2
 	);
 
@@ -291,7 +312,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		8
 	);
 
@@ -301,7 +322,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		8
 	);
 
@@ -316,7 +337,7 @@ fn main() {
 				let _: AlltypesPlainDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		8
 	);
 
@@ -355,7 +376,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		2
 	);
 
@@ -365,7 +386,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		2
 	);
 
@@ -380,7 +401,7 @@ fn main() {
 				let _: AlltypesPlainSnappyDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		2
 	);
 
@@ -392,7 +413,7 @@ fn main() {
 	// 	"amadeus-testing/parquet/nation.dict-malformed.parquet",
 	// )]);
 	// assert_eq!(
-	// 	rows.unwrap().collect::<Vec<_>>(&pool),
+	// 	rows.unwrap().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
 	// 		parchet::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
@@ -404,7 +425,7 @@ fn main() {
 	// 	"amadeus-testing/parquet/nation.dict-malformed.parquet",
 	// )]);
 	// assert_eq!(
-	// 	rows.unwrap().collect::<Vec<_>>(&pool),
+	// 	rows.unwrap().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
 	// 		parchet::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
@@ -427,7 +448,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		3
 	);
 
@@ -437,7 +458,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		3
 	);
 
@@ -452,7 +473,7 @@ fn main() {
 				let _: NestedListsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		3
 	);
 
@@ -469,7 +490,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		6
 	);
 
@@ -479,7 +500,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		6
 	);
 
@@ -494,7 +515,7 @@ fn main() {
 				let _: NestedMapsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		6
 	);
 
@@ -554,7 +575,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		1
 	);
 
@@ -564,7 +585,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		1
 	);
 
@@ -579,7 +600,7 @@ fn main() {
 				let _: NonnullableDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		1
 	);
 
@@ -618,7 +639,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		7
 	);
 
@@ -628,7 +649,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		7
 	);
 
@@ -643,7 +664,7 @@ fn main() {
 				let _: NullableDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		7
 	);
 
@@ -658,7 +679,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		8
 	);
 
@@ -668,7 +689,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		8
 	);
 
@@ -683,7 +704,7 @@ fn main() {
 				let _: NullsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		8
 	);
 
@@ -700,7 +721,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		6
 	);
 
@@ -710,7 +731,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		6
 	);
 
@@ -725,7 +746,7 @@ fn main() {
 				let _: RepeatedDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		6
 	);
 
@@ -744,7 +765,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		5
 	);
 
@@ -754,7 +775,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		5
 	);
 
@@ -769,7 +790,7 @@ fn main() {
 				let _: TestDatapageDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		5
 	);
 
@@ -806,7 +827,7 @@ fn main() {
 	assert_eq!(
 		rows.unwrap()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		14_444
 	);
 
@@ -820,11 +841,11 @@ fn main() {
 				let _: CommitsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		14_444
 	);
 
-	println!("in {:?}", start.elapsed().unwrap());
+	start.elapsed().unwrap()
 }
 
 // #[bench]

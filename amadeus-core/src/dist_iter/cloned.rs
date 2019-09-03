@@ -1,6 +1,7 @@
-use super::{ConsumerMulti, DistributedIteratorMulti};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
+
+use super::{ConsumerMulti, DistributedIteratorMulti};
 
 #[must_use]
 pub struct Cloned<I, T, Source> {

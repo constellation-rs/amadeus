@@ -1,6 +1,8 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
 use serde::{Deserialize, Serialize};
 use std::{iter, marker::PhantomData, mem};
+
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct Sum<I, B> {
@@ -18,7 +20,7 @@ impl<I, B> Sum<I, B> {
 
 impl<I: DistributedIteratorMulti<Source>, B, Source> DistributedReducer<I, Source, B> for Sum<I, B>
 where
-	B: iter::Sum<I::Item> + iter::Sum<B> + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	B: iter::Sum<I::Item> + iter::Sum<B> + ProcessSend,
 	I::Item: 'static,
 {
 	type ReduceAFactory = SumReducerFactory<I::Item, B>;
@@ -74,7 +76,7 @@ where
 impl<A, B> ReducerA for SumReducer<A, B>
 where
 	A: 'static,
-	B: iter::Sum<A> + iter::Sum + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	B: iter::Sum<A> + iter::Sum + ProcessSend,
 {
 	type Output = B;
 }

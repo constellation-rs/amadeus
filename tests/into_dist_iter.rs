@@ -10,7 +10,7 @@ use either::Either;
 fn main() {
 	init(Resources::default());
 
-	let pool = ProcessPool::new(3, Resources::default()).unwrap();
+	let pool = ProcessPool::new(3, 1, Resources::default()).unwrap();
 
 	<&[usize] as IntoDistributedIterator>::into_dist_iter(&[1, 2, 3])
 		.map(FnMut!(|a: usize| a))

@@ -7,7 +7,7 @@ pub use self::{collections::*, iterator::*, slice::*};
 
 pub trait IntoDistributedIterator {
 	type Iter: DistributedIterator<Item = Self::Item>;
-	type Item; //: Serialize + for<'de> Deserialize<'de> + 'static;
+	type Item; //: ProcessSend;
 	fn into_dist_iter(self) -> Self::Iter
 	where
 		Self: Sized;

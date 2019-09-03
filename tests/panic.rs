@@ -10,7 +10,7 @@ use std::panic;
 fn main() {
 	init(Resources::default());
 
-	let pool = ProcessPool::new(3, Resources::default()).unwrap();
+	let pool = ProcessPool::new(3, 1, Resources::default()).unwrap();
 
 	let res = panic::catch_unwind(|| {
 		(0i32..1_000).into_dist_iter().for_each(

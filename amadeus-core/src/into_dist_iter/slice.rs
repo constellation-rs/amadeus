@@ -2,10 +2,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{iter, slice};
 
 use super::{Consumer, DistributedIterator, IntoDistributedIterator, IterIter};
+use crate::pool::ProcessSend;
 
 impl<T> IntoDistributedIterator for [T]
 where
-	T: Serialize + for<'de> Deserialize<'de> + 'static,
+	T: ProcessSend,
 {
 	type Iter = Never;
 	type Item = Never;
@@ -20,7 +21,7 @@ where
 
 impl<'a, T: Clone> IntoDistributedIterator for &'a [T]
 where
-	T: Serialize + for<'de> Deserialize<'de> + 'static,
+	T: ProcessSend,
 {
 	type Iter = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
 	type Item = T;

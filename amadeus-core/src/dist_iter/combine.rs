@@ -1,7 +1,9 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
 use replace_with::replace_with_or_abort;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
+
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct Combine<I, F> {
@@ -17,8 +19,8 @@ impl<I, F> Combine<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
 	for Combine<I, F>
 where
-	F: FnMut(I::Item, I::Item) -> I::Item + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
-	I::Item: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	F: FnMut(I::Item, I::Item) -> I::Item + Clone + ProcessSend,
+	I::Item: ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, CombineFn<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, CombineFn<F>>;
@@ -103,8 +105,8 @@ impl<A, B, F> ReducerA for CombineReducer<A, B, F>
 where
 	A: 'static,
 	Option<B>: From<A>,
-	F: Combiner<B> + Serialize + for<'de> Deserialize<'de> + 'static,
-	B: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	F: Combiner<B> + ProcessSend,
+	B: ProcessSend,
 {
 	type Output = Option<B>;
 }

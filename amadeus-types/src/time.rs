@@ -494,7 +494,7 @@ mod tests {
 			assert_eq!(date, date2);
 		}
 
-		check_date_conversion(-262144, 1, 1);
+		check_date_conversion(-262_144, 1, 1);
 		check_date_conversion(1969, 12, 31);
 		check_date_conversion(1970, 1, 1);
 		check_date_conversion(2010, 1, 2);
@@ -502,7 +502,7 @@ mod tests {
 		check_date_conversion(2016, 2, 29);
 		check_date_conversion(2017, 9, 12);
 		check_date_conversion(2018, 3, 31);
-		check_date_conversion(262143, 12, 31);
+		check_date_conversion(262_143, 12, 31);
 	}
 
 	#[test]

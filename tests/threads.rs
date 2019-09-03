@@ -5,8 +5,10 @@ extern crate serde_closure;
 
 use amadeus::prelude::*;
 use constellation::*;
-use rand::Rng;
-use std::{env, thread, time};
+use rand::{Rng, SeedableRng};
+use std::{
+	convert::TryInto, env, thread, time::{self, Duration, SystemTime}
+};
 
 fn main() {
 	init(Resources::default());
@@ -17,23 +19,51 @@ fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(10);
 
-	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	let local_pool_time = {
+		let local_pool = LocalPool::new();
+		run(&local_pool, 10)
+	};
+	let thread_pool_time = {
+		let thread_pool = ThreadPool::new(processes).unwrap();
+		run(&thread_pool, processes * 10)
+	};
+	let process_pool_time = {
+		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		run(&process_pool, processes * 10)
+	};
 
-	let handles = (0..processes * 3)
+	println!(
+		"in {:?} {:?} {:?}",
+		local_pool_time, thread_pool_time, process_pool_time
+	);
+	// println!("in {:?}", thread_pool_time);
+}
+
+fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, parallel: usize) -> Duration {
+	let start = SystemTime::now();
+
+	let handles = (0..parallel)
 		.map(|i| {
 			pool.spawn(FnOnce!([i] move || -> String {
-				thread::sleep(rand::thread_rng().gen_range(time::Duration::new(0,0),time::Duration::new(5,0)));
+				let mut rng = rand::rngs::SmallRng::seed_from_u64(i.try_into().unwrap());
+				thread::sleep(rng.gen_range(time::Duration::new(0,0),time::Duration::new(2,0)));
 				format!("warm greetings from job {}", i)
 			}))
 		})
-		.map(|handle| {
-			thread::spawn(move || {
-				println!("{}", handle.join().unwrap());
-			})
+		.enumerate()
+		.map(|(i, handle)| {
+			thread::Builder::new()
+				.name(format!("{}", i))
+				.spawn(move || {
+					println!("{}", handle.block().unwrap());
+				})
+				.unwrap()
 		})
 		.collect::<Vec<_>>();
 
 	for handle in handles {
 		handle.join().unwrap();
 	}
+
+	start.elapsed().unwrap()
 }

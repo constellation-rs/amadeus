@@ -21,17 +21,40 @@ fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(10);
 
+	let local_pool_time = {
+		// let local_pool = LocalPool::new();
+		0 // run(&local_pool) // cloudfront too slow
+	};
+	let thread_pool_time = {
+		let thread_pool = ThreadPool::new(processes).unwrap();
+		run(&thread_pool)
+	};
+	let process_pool_time = {
+		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		run(&process_pool)
+	};
+
+	println!(
+		"in {:?} {:?} {:?}",
+		local_pool_time, thread_pool_time, process_pool_time
+	);
+}
+
+fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	println!("commoncrawl");
 
 	CommonCrawl::new("CC-MAIN-2018-43").unwrap().all(
-		&pool,
+		pool,
 		FnMut!([start] move |x: Result<WebpageOwned,_>| -> bool {
-			println!("{}", x.unwrap().url);
+			let _x = x.unwrap();
+			// println!("{}", x.url);
 			start.elapsed().unwrap() < Duration::new(10,0)
 		}),
 	);
+
+	println!("cloudfront");
 
 	let _ = DistributedIteratorMulti::<&Result<CloudfrontRow, Error>>::count(Identity);
 
@@ -42,9 +65,10 @@ fn main() {
 	)
 	.unwrap()
 	.multi(
-		&pool,
+		pool,
 		Identity.for_each(FnMut!(|x: Result<CloudfrontRow, _>| {
-			println!("{:?}", x.unwrap().url);
+			let _x = x.unwrap();
+			// println!("{:?}", x.url);
 		})),
 		(
 			Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
@@ -54,4 +78,6 @@ fn main() {
 	);
 	assert_eq!(count, count2);
 	assert_eq!(count, 207_928);
+
+	start.elapsed().unwrap()
 }

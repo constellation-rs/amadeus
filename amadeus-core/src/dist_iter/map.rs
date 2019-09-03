@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct Map<I, F> {
@@ -15,7 +16,7 @@ impl<I, F> Map<I, F> {
 
 impl<I: DistributedIterator, F, R> DistributedIterator for Map<I, F>
 where
-	F: FnMut(I::Item) -> R + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(I::Item) -> R + Clone + ProcessSend,
 {
 	type Item = R;
 	type Task = MapConsumer<I::Task, F>;
@@ -34,11 +35,7 @@ where
 impl<I: DistributedIteratorMulti<Source>, F, R, Source> DistributedIteratorMulti<Source>
 	for Map<I, F>
 where
-	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R
-		+ Clone
-		+ Serialize
-		+ for<'de> Deserialize<'de>
-		+ 'static,
+	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R + Clone + ProcessSend,
 {
 	type Item = R;
 	type Task = MapConsumer<I::Task, F>;

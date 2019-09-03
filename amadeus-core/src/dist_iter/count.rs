@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
+
 use super::{
 	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, SumReducer
 };
-use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
 
 #[must_use]
 pub struct Count<I> {

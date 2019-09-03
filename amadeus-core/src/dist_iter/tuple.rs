@@ -4,6 +4,7 @@ use sum::*;
 use super::{
 	ConsumerMulti, DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA
 };
+use crate::pool::ProcessSend;
 
 macro_rules! impl_iterator_multi_tuple {
 	($reduceafactory:ident $reducea:ident $reduceb:ident $enum:ident $($copy:ident)* : $($i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $num:tt $t:ident),*) => (
@@ -80,7 +81,7 @@ macro_rules! impl_iterator_multi_tuple {
 				($(self.$num.0.ret(),)*)
 			}
 		}
-		impl<$($t: Reducer,)*> ReducerA for $reducea<$($t,)*> where $($t: Serialize + for<'de> Deserialize<'de> + 'static,)* $($t::Output: Serialize + for<'de> Deserialize<'de> + Send + 'static,)* {
+		impl<$($t: Reducer,)*> ReducerA for $reducea<$($t,)*> where $($t: ProcessSend,)* $($t::Output: ProcessSend,)* {
 			type Output = ($($t::Output,)*);
 		}
 

@@ -21,6 +21,7 @@ pub trait Data:
 	+ DowncastImpl<Value>
 	+ Into<Value>
 	+ Debug
+	+ Send
 	+ 'static
 {
 	fn cast<D: Data>(self) -> Result<D, CastError> {

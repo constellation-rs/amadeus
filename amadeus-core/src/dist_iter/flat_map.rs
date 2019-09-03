@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct FlatMap<I, F> {
@@ -15,7 +16,7 @@ impl<I, F> FlatMap<I, F> {
 
 impl<I: DistributedIterator, F, R: IntoIterator> DistributedIterator for FlatMap<I, F>
 where
-	F: FnMut(I::Item) -> R + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(I::Item) -> R + Clone + ProcessSend,
 {
 	type Item = R::Item;
 	type Task = FlatMapConsumer<I::Task, F>;
@@ -34,11 +35,7 @@ where
 impl<I: DistributedIteratorMulti<Source>, F, R: IntoIterator, Source>
 	DistributedIteratorMulti<Source> for FlatMap<I, F>
 where
-	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R
-		+ Clone
-		+ Serialize
-		+ for<'de> Deserialize<'de>
-		+ 'static,
+	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R + Clone + ProcessSend,
 {
 	type Item = R::Item;
 	type Task = FlatMapConsumer<I::Task, F>;

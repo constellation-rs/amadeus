@@ -3,7 +3,7 @@ use amadeus_core::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-	error, fmt::{self, Display}, fs::File, io, iter, marker::PhantomData, path::PathBuf, sync::Arc, vec
+	error, fmt::{self, Display}, fs::File, io::{self, BufReader}, iter, marker::PhantomData, path::PathBuf, sync::Arc, vec
 };
 use walkdir::WalkDir;
 
@@ -32,7 +32,7 @@ mod private {
 						iter::Map<
 							serde_json::StreamDeserializer<
 								'static,
-								serde_json::de::IoRead<File>,
+								serde_json::de::IoRead<BufReader<File>>,
 								SerdeDeserialize<Row>,
 							>,
 							Closure<
@@ -50,7 +50,7 @@ mod private {
 							iter::Map<
 								serde_json::StreamDeserializer<
 									'static,
-									serde_json::de::IoRead<File>,
+									serde_json::de::IoRead<BufReader<File>>,
 									SerdeDeserialize<Row>,
 								>,
 								Closure<
@@ -70,6 +70,7 @@ mod private {
 }
 use private::JsonInner;
 
+#[derive(Clone)]
 pub struct Json<Row>
 where
 	Row: SerdeData,
@@ -111,6 +112,7 @@ where
 				files
 					.flat_map(FnMut!(|file: Result<PathBuf, _>| ResultExpand(
 						file.and_then(|file| Ok(File::open(file)?)).map(|file| {
+							let file = BufReader::new(file);
 							serde_json::Deserializer::from_reader(file)
 								.into_iter()
 								.map(FnMut!(|x: Result<SerdeDeserialize<Row>, JsonError>| Ok(

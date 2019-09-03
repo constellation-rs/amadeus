@@ -56,7 +56,7 @@ fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(5);
 
-	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	let pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
 	// let pool = amadeus::no_pool::NoPool;
 
 	let body = reqwest::get(

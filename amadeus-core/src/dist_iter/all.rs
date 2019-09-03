@@ -1,6 +1,8 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
+
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct All<I, F> {
@@ -16,7 +18,7 @@ impl<I, F> All<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, bool>
 	for All<I, F>
 where
-	F: FnMut(I::Item) -> bool + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(I::Item) -> bool + Clone + ProcessSend,
 	I::Item: 'static,
 {
 	type ReduceAFactory = AllReducerFactory<I::Item, F>;
@@ -70,7 +72,7 @@ where
 impl<A, F> ReducerA for AllReducer<A, F>
 where
 	A: 'static,
-	F: FnMut(A) -> bool + Serialize + for<'de> Deserialize<'de> + 'static,
+	F: FnMut(A) -> bool + ProcessSend,
 {
 	type Output = bool;
 }

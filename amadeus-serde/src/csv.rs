@@ -59,23 +59,38 @@ type CsvInner<Row> = amadeus_core::dist_iter::FlatMap<
 	>,
 >;
 
+#[derive(Clone)]
 pub struct Csv<Row>
 where
 	Row: SerdeData,
 {
-	i: CsvInner<Row>,
+	files: Vec<PathBuf>,
+	marker: PhantomData<fn() -> Row>,
 }
 impl<Row> Csv<Row>
 where
 	Row: SerdeData,
 {
-	pub fn new<I>(files: I) -> Result<Self, ()>
-	where
-		I: IntoIterator<Item = PathBuf>,
-	{
-		let i = files
-			.into_iter()
-			.collect::<Vec<_>>()
+	pub fn new(files: Vec<PathBuf>) -> Self {
+		Self {
+			files,
+			marker: PhantomData,
+		}
+	}
+}
+impl<Row> amadeus_core::Source for Csv<Row>
+where
+	Row: SerdeData,
+{
+	type Item = Row;
+	type Error = Error;
+
+	// existential type DistIter: super::super::DistributedIterator<Item = Result<Row, Error>>;//, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
+	type DistIter = CsvInner<Row>;
+	type Iter = iter::Empty<Result<Row, Error>>;
+
+	fn dist_iter(self) -> Self::DistIter {
+		self.files
 			.into_dist_iter()
 			.flat_map(FnMut!(|file: PathBuf| {
 				let files = if !file.is_dir() {
@@ -96,8 +111,10 @@ where
 						})
 					)))
 					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
-			}));
-		Ok(Self { i })
+			}))
+	}
+	fn iter(self) -> Self::Iter {
+		iter::empty()
 	}
 }
 
@@ -146,126 +163,6 @@ fn get_csv_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>>
 		.collect::<Vec<_>>()
 		.into_iter()
 }
-
-// mod misc_serde {
-// 	use csv::Error as CsvError;
-// 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-// 	use std::{io, sync::Arc};
-
-// 	pub struct Serde<T>(T);
-
-// 	impl Serialize for Serde<&io::ErrorKind> {
-// 		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-// 		where
-// 			S: Serializer,
-// 		{
-// 			usize::serialize(
-// 				&match self.0 {
-// 					io::ErrorKind::NotFound => 0,
-// 					io::ErrorKind::PermissionDenied => 1,
-// 					io::ErrorKind::ConnectionRefused => 2,
-// 					io::ErrorKind::ConnectionReset => 3,
-// 					io::ErrorKind::ConnectionAborted => 4,
-// 					io::ErrorKind::NotConnected => 5,
-// 					io::ErrorKind::AddrInUse => 6,
-// 					io::ErrorKind::AddrNotAvailable => 7,
-// 					io::ErrorKind::BrokenPipe => 8,
-// 					io::ErrorKind::AlreadyExists => 9,
-// 					io::ErrorKind::WouldBlock => 10,
-// 					io::ErrorKind::InvalidInput => 11,
-// 					io::ErrorKind::InvalidData => 12,
-// 					io::ErrorKind::TimedOut => 13,
-// 					io::ErrorKind::WriteZero => 14,
-// 					io::ErrorKind::Interrupted => 15,
-// 					io::ErrorKind::UnexpectedEof => 17,
-// 					_ => 16,
-// 				},
-// 				serializer,
-// 			)
-// 		}
-// 	}
-// 	impl<'de> Deserialize<'de> for Serde<io::ErrorKind> {
-// 		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-// 		where
-// 			D: Deserializer<'de>,
-// 		{
-// 			usize::deserialize(deserializer)
-// 				.map(|kind| match kind {
-// 					0 => io::ErrorKind::NotFound,
-// 					1 => io::ErrorKind::PermissionDenied,
-// 					2 => io::ErrorKind::ConnectionRefused,
-// 					3 => io::ErrorKind::ConnectionReset,
-// 					4 => io::ErrorKind::ConnectionAborted,
-// 					5 => io::ErrorKind::NotConnected,
-// 					6 => io::ErrorKind::AddrInUse,
-// 					7 => io::ErrorKind::AddrNotAvailable,
-// 					8 => io::ErrorKind::BrokenPipe,
-// 					9 => io::ErrorKind::AlreadyExists,
-// 					10 => io::ErrorKind::WouldBlock,
-// 					11 => io::ErrorKind::InvalidInput,
-// 					12 => io::ErrorKind::InvalidData,
-// 					13 => io::ErrorKind::TimedOut,
-// 					14 => io::ErrorKind::WriteZero,
-// 					15 => io::ErrorKind::Interrupted,
-// 					17 => io::ErrorKind::UnexpectedEof,
-// 					_ => io::ErrorKind::Other,
-// 				})
-// 				.map(Self)
-// 		}
-// 	}
-
-// 	impl Serialize for Serde<&Arc<io::Error>> {
-// 		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-// 		where
-// 			S: Serializer,
-// 		{
-// 			<(Serde<&io::ErrorKind>, String)>::serialize(
-// 				&(Serde(&self.0.kind()), self.0.to_string()),
-// 				serializer,
-// 			)
-// 		}
-// 	}
-// 	impl<'de> Deserialize<'de> for Serde<Arc<io::Error>> {
-// 		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-// 		where
-// 			D: Deserializer<'de>,
-// 		{
-// 			<(Serde<io::ErrorKind>, String)>::deserialize(deserializer)
-// 				.map(|(kind, message)| Arc::new(io::Error::new(kind.0, message)))
-// 				.map(Self)
-// 		}
-// 	}
-
-// 	impl Serialize for Serde<&CsvError> {
-// 		fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-// 		where
-// 			S: Serializer,
-// 		{
-// 			panic!()
-// 		}
-// 	}
-// 	impl<'de> Deserialize<'de> for Serde<CsvError> {
-// 		fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-// 		where
-// 			D: Deserializer<'de>,
-// 		{
-// 			panic!()
-// 		}
-// 	}
-
-// 	pub fn serialize<T, S>(t: &T, serializer: S) -> Result<S::Ok, S::Error>
-// 		S: Serializer,
-// 	{
-// 		Serde(t).serialize(serializer)
-// 	}
-// 	pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-// 	where
-// 		Serde<T>: Deserialize<'de>,
-// 		D: Deserializer<'de>,
-// 	{
-// 		Serde::<T>::deserialize(deserializer).map(|x| x.0)
-// 	}
-// }
 
 mod csverror {
 	use serde::{Deserializer, Serializer};
@@ -370,44 +267,5 @@ impl From<io::Error> for Error {
 impl From<CsvError> for Error {
 	fn from(err: CsvError) -> Self {
 		Self::Csv(err)
-	}
-}
-
-impl<Row> DistributedIterator for Csv<Row>
-where
-	Row: SerdeData,
-{
-	type Item = Result<Row, Error>;
-	type Task = CsvConsumer<Row>;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.i.size_hint()
-	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| CsvConsumer::<Row> {
-			task,
-			marker: PhantomData,
-		})
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "")]
-pub struct CsvConsumer<Row>
-where
-	Row: SerdeData,
-{
-	task: <CsvInner<Row> as DistributedIterator>::Task,
-	marker: PhantomData<fn() -> Row>,
-}
-
-impl<Row> Consumer for CsvConsumer<Row>
-where
-	Row: SerdeData,
-{
-	type Item = Result<Row, Error>;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		self.task.run(i)
 	}
 }

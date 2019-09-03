@@ -1,11 +1,14 @@
+use constellation::*;
+use serde_closure::FnMut;
+use std::{
+	env, path::PathBuf, time::{Duration, SystemTime}
+};
+
 use amadeus::{
 	data::{
 		types::{Downcast, Value}, Data
-	}, source::Csv, DistributedIterator, ProcessPool
+	}, source::{Csv, Source}, DistributedIterator, LocalPool, ProcessPool, ThreadPool
 };
-use constellation::*;
-use serde_closure::FnMut;
-use std::{env, path::PathBuf, time::SystemTime};
 
 fn main() {
 	init(Resources::default());
@@ -16,9 +19,27 @@ fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(10);
 
-	let start = SystemTime::now();
+	let local_pool_time = {
+		let local_pool = LocalPool::new();
+		run(&local_pool)
+	};
+	let thread_pool_time = {
+		let thread_pool = ThreadPool::new(processes).unwrap();
+		run(&thread_pool)
+	};
+	let process_pool_time = {
+		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		run(&process_pool)
+	};
 
-	let pool = ProcessPool::new(processes, Resources::default()).unwrap();
+	println!(
+		"in {:?} {:?} {:?}",
+		local_pool_time, thread_pool_time, process_pool_time
+	);
+}
+
+fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+	let start = SystemTime::now();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct GameDerived {
@@ -32,9 +53,9 @@ fn main() {
 
 	let rows = Csv::<GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]);
 	assert_eq!(
-		rows.unwrap()
+		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(pool),
 		100_000
 	);
 
@@ -50,16 +71,16 @@ fn main() {
 
 	let rows = Csv::<Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]);
 	assert_eq!(
-		rows.unwrap()
+		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				// println!("{:?}", value);
 				let _: GameDerived2 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(&pool),
+			.count(pool),
 		100_000
 	);
 
-	println!("in {:?}", start.elapsed().unwrap());
+	start.elapsed().unwrap()
 }

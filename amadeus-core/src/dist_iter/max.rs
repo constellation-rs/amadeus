@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
+use std::{cmp::Ordering, marker::PhantomData};
+
 use super::{
 	CombineReducer, CombineReducerFactory, Combiner, DistributedIteratorMulti, DistributedReducer
 };
-use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, marker::PhantomData};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct Max<I> {
@@ -17,7 +19,7 @@ impl<I> Max<I> {
 impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
 	for Max<I>
 where
-	I::Item: Ord + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	I::Item: Ord + ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::Max>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::Max>;
@@ -46,12 +48,8 @@ impl<I, F> MaxBy<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
 	for MaxBy<I, F>
 where
-	F: FnMut(&I::Item, &I::Item) -> Ordering
-		+ Clone
-		+ Serialize
-		+ for<'de> Deserialize<'de>
-		+ 'static,
-	I::Item: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + ProcessSend,
+	I::Item: ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MaxBy<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MaxBy<F>>;
@@ -80,8 +78,8 @@ impl<I, F> MaxByKey<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F, B>
 	DistributedReducer<I, Source, Option<I::Item>> for MaxByKey<I, F>
 where
-	F: FnMut(&I::Item) -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
-	I::Item: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	F: FnMut(&I::Item) -> B + Clone + ProcessSend,
+	I::Item: ProcessSend,
 	B: Ord + 'static,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MaxByKey<F, B>>;
@@ -110,7 +108,7 @@ impl<I> Min<I> {
 impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
 	for Min<I>
 where
-	I::Item: Ord + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	I::Item: Ord + ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::Min>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::Min>;
@@ -139,12 +137,8 @@ impl<I, F> MinBy<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
 	for MinBy<I, F>
 where
-	F: FnMut(&I::Item, &I::Item) -> Ordering
-		+ Clone
-		+ Serialize
-		+ for<'de> Deserialize<'de>
-		+ 'static,
-	I::Item: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + ProcessSend,
+	I::Item: ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MinBy<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MinBy<F>>;
@@ -173,8 +167,8 @@ impl<I, F> MinByKey<I, F> {
 impl<I: DistributedIteratorMulti<Source>, Source, F, B>
 	DistributedReducer<I, Source, Option<I::Item>> for MinByKey<I, F>
 where
-	F: FnMut(&I::Item) -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
-	I::Item: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	F: FnMut(&I::Item) -> B + Clone + ProcessSend,
+	I::Item: ProcessSend,
 	B: Ord + 'static,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MinByKey<F, B>>;

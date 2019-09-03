@@ -1,8 +1,10 @@
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
 use either::Either;
 use replace_with::replace_with_or_abort;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
+
+use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use crate::pool::ProcessSend;
 
 #[must_use]
 pub struct Fold<I, ID, F, B> {
@@ -25,9 +27,9 @@ impl<I, ID, F, B> Fold<I, ID, F, B> {
 impl<I: DistributedIteratorMulti<Source>, Source, ID, F, B> DistributedReducer<I, Source, B>
 	for Fold<I, ID, F, B>
 where
-	ID: FnMut() -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
-	F: FnMut(B, Either<I::Item, B>) -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
-	B: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	ID: FnMut() -> B + Clone + ProcessSend,
+	F: FnMut(B, Either<I::Item, B>) -> B + Clone + ProcessSend,
+	B: ProcessSend,
 	I::Item: 'static,
 {
 	type ReduceAFactory = FoldReducerFactory<I::Item, ID, F, B>;
@@ -89,9 +91,9 @@ where
 impl<A, ID, F, B> ReducerA for FoldReducerA<A, ID, F, B>
 where
 	A: 'static,
-	ID: FnMut() -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
-	F: FnMut(B, Either<A, B>) -> B + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
-	B: Serialize + for<'de> Deserialize<'de> + Send + 'static,
+	ID: FnMut() -> B + Clone + ProcessSend,
+	F: FnMut(B, Either<A, B>) -> B + Clone + ProcessSend,
+	B: ProcessSend,
 {
 	type Output = B;
 }
