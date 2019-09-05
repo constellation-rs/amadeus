@@ -12,7 +12,7 @@
 	core_intrinsics,
 	step_trait,
 	test,
-	type_alias_impl_trait,
+	// type_alias_impl_trait,
 	bind_by_move_pattern_guards
 )]
 #![warn(

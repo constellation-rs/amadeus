@@ -1,17 +1,22 @@
-use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IteratorExt, util::ResultExpand
-};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use flate2::read::MultiGzDecoder;
 use http::{Method, StatusCode};
-use rusoto_core::Region;
-use rusoto_s3::{S3Client, S3};
+use rusoto_core::{Region, RusotoError};
+use rusoto_s3::{
+	GetObjectError, GetObjectRequest, ListObjectsV2Error, ListObjectsV2Request, Object, S3Client, S3
+};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::identity, error, fmt::{self, Display}, io::{self, BufRead, BufReader}, iter, net, ops::FnMut, sync::Arc, time::Duration, vec
+	convert::identity, error, fmt::{self, Display}, io::{self, BufRead, BufReader}, iter, net, time::Duration, vec
 };
 use url::Url;
+
+use amadeus_core::{
+	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::{IoError, ResultExpand}, Source
+};
+
+pub mod file;
 
 // https://docs.datadoghq.com/integrations/amazon_web_services/?tab=allpermissions#enable-logging-for-your-aws-service
 
@@ -42,52 +47,81 @@ type CloudfrontInner = amadeus_core::dist_iter::Map<
 	Closure<(), (Result<Result<CloudfrontRow, Error>, Error>,), Result<CloudfrontRow, Error>>,
 >;
 
+fn list(
+	client: &S3Client, bucket: &str, prefix: &str,
+) -> Result<Vec<Object>, RusotoError<ListObjectsV2Error>> {
+	let (mut first, mut continuation_token) = (true, None);
+	let objects: Result<Vec<Object>, _> = iter::from_fn(|| {
+		if !first && continuation_token.is_none() {
+			return None;
+		}
+		first = false;
+		Some(ResultExpand(
+			client
+				.list_objects_v2(ListObjectsV2Request {
+					bucket: bucket.to_owned(),
+					prefix: Some(prefix.to_owned()),
+					continuation_token: continuation_token.take(),
+					..ListObjectsV2Request::default()
+				})
+				.sync()
+				.map(|res| {
+					continuation_token = res.next_continuation_token;
+					res.contents.unwrap_or_default().into_iter()
+				}),
+		))
+	})
+	.flatten()
+	.collect();
+	objects
+}
+
 pub struct Cloudfront {
-	i: CloudfrontInner,
+	region: Region,
+	bucket: String,
+	objects: Vec<String>,
 }
 impl Cloudfront {
 	pub fn new(region: Region, bucket: &str, prefix: &str) -> Result<Self, Error> {
 		let (bucket, prefix) = (bucket.to_owned(), prefix.to_owned());
-		let s3client = S3Client::new(region.clone());
+		let client = S3Client::new(region.clone());
 
-		let (mut first, mut continuation_token) = (true, None);
-		let objects: Result<Vec<String>, _> = iter::from_fn(|| {
-			if !first && continuation_token.is_none() {
-				return None;
-			}
-			first = false;
-			Some(ResultExpand(
-				s3client
-					.list_objects_v2(rusoto_s3::ListObjectsV2Request {
-						bucket: bucket.clone(),
-						prefix: Some(prefix.clone()),
-						continuation_token: continuation_token.take(),
-						..rusoto_s3::ListObjectsV2Request::default()
-					})
-					.sync()
-					.map(|res| {
-						continuation_token = res.next_continuation_token;
-						res.contents
-							.unwrap_or_default()
-							.into_iter()
-							.map(|object: rusoto_s3::Object| object.key.unwrap())
-					}),
-			))
-		})
-		.flatten()
-		.collect();
-
-		let i = objects?
+		let objects = list(&client, &bucket, &prefix)?
 			.into_iter()
-			.dist()
+			.map(|object: Object| object.key.unwrap())
+			.collect();
+
+		Ok(Self {
+			region,
+			bucket,
+			objects,
+		})
+	}
+}
+impl Source for Cloudfront {
+	type Item = CloudfrontRow;
+	type Error = Error;
+
+	// type DistIter = impl DistributedIterator<Item = Result<CloudfrontRow, Error>>; //, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
+	type DistIter = CloudfrontInner;
+	type Iter = iter::Empty<Result<CloudfrontRow, Error>>;
+
+	fn dist_iter(self) -> Self::DistIter {
+		let Self {
+			bucket,
+			region,
+			objects,
+		} = self;
+		objects
+			.into_dist_iter()
 			.flat_map(FnMut!([bucket, region] move |key:String| {
-				let s3client = S3Client::new(region.clone());
+				let client = S3Client::new(region.clone());
 				ResultExpand(
-					s3client
-						.get_object(rusoto_s3::GetObjectRequest {
+					client
+						.get_object(GetObjectRequest {
 							bucket: bucket.clone(),
-							key: key,
-							..rusoto_s3::GetObjectRequest::default()
+							key,
+							..GetObjectRequest::default()
 						})
 						.sync()
 						.map_err(Error::from)
@@ -104,141 +138,7 @@ impl Cloudfront {
 								}))
 								.map(FnMut!(|x:Result<String,io::Error>| {
 									if let Ok(x) = x {
-										let mut values = x.split('\t');
-										let (
-											date,
-											time,
-											x_edge_location,
-											sc_bytes,
-											c_ip,
-											cs_method,
-											cs_host,
-											cs_uri_stem,
-											sc_status,
-											cs_referer,
-											cs_user_agent,
-											cs_uri_query,
-											cs_cookie,
-											x_edge_result_type,
-											x_edge_request_id,
-											x_host_header,
-											cs_protocol,
-											cs_bytes,
-											time_taken,
-											x_forwarded_for,
-											ssl_protocol,
-											ssl_cipher,
-											x_edge_response_result_type,
-											cs_protocol_version,
-											fle_status,
-											fle_encrypted_fields,
-										) = (
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-											values.next().unwrap(),
-										);
-										assert_eq!(values.next(), None);
-										let time = Utc.from_utc_datetime(&NaiveDateTime::new(
-											NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(),
-											NaiveTime::parse_from_str(&time, "%H:%M:%S").unwrap(),
-										));
-										let status = if sc_status != "000" {
-											Some(StatusCode::from_bytes(sc_status.as_bytes()).unwrap())
-										} else {
-											None
-										};
-										#[allow(clippy::cast_sign_loss,clippy::cast_possible_truncation)]
-										let time_taken = Duration::from_millis(
-											(time_taken.parse::<f64>().unwrap() * 1000.0).round()
-												as u64,
-										);
-										Ok(CloudfrontRow {
-											time,
-											edge_location: x_edge_location.to_owned(),
-											response_bytes: sc_bytes.parse().unwrap(),
-											remote_ip: c_ip.parse().unwrap(),
-											method: cs_method.parse().unwrap(),
-											host: cs_host.to_owned(),
-											url: Url::parse(&format!(
-												"{}://{}{}{}{}",
-												cs_protocol,
-												x_host_header,
-												cs_uri_stem,
-												if cs_uri_query == "-" { "" } else { "?" },
-												if cs_uri_query == "-" {
-													""
-												} else {
-													&cs_uri_query
-												}
-											))
-											.unwrap(),
-											status,
-											user_agent: if cs_user_agent != "-" {
-												Some(cs_user_agent.to_owned())
-											} else {
-												None
-											},
-											referer: if cs_referer != "-" {
-												Some(cs_referer.to_owned())
-											} else {
-												None
-											},
-											cookie: if cs_cookie != "-" {
-												Some(cs_cookie.to_owned())
-											} else {
-												None
-											},
-											result_type: x_edge_result_type.to_owned(),
-											request_id: x_edge_request_id.to_owned(),
-											request_bytes: cs_bytes.parse().unwrap(),
-											time_taken,
-											forwarded_for: if x_forwarded_for != "-" {
-												Some(x_forwarded_for.to_owned())
-											} else {
-												None
-											},
-											ssl_protocol_cipher: if let ("-", "-") = (&*ssl_protocol, &*ssl_cipher) {
-												None
-											} else {
-												Some((ssl_protocol.to_owned(), ssl_cipher.to_owned()))
-											},
-											response_result_type: x_edge_response_result_type
-												.to_owned(),
-											http_version: cs_protocol_version.to_owned(),
-											fle_status: if fle_status != "-" {
-												Some(fle_status.to_owned())
-											} else {
-												None
-											},
-											fle_encrypted_fields: if fle_encrypted_fields != "-" {
-												Some(fle_encrypted_fields.to_owned())
-											} else {
-												None
-											},
-										})
+										Ok(CloudfrontRow::from_line(&x))
 									} else {
 										Err(Error::from(x.err().unwrap()))
 									}
@@ -248,33 +148,11 @@ impl Cloudfront {
 			}))
 			.map(FnMut!(
 				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(identity)
-			));
-		Ok(Self { i })
+			))
 	}
-}
 
-impl DistributedIterator for Cloudfront {
-	type Item = Result<CloudfrontRow, Error>;
-	type Task = CloudfrontConsumer;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.i.size_hint()
-	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| CloudfrontConsumer { task })
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct CloudfrontConsumer {
-	task: <CloudfrontInner as DistributedIterator>::Task,
-}
-
-impl Consumer for CloudfrontConsumer {
-	type Item = Result<CloudfrontRow, Error>;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		self.task.run(i)
+	fn iter(self) -> Self::Iter {
+		iter::empty()
 	}
 }
 
@@ -288,7 +166,7 @@ pub enum Error {
 	Validation(String),
 	ParseError(String),
 	Unknown(rusoto_core::request::BufferedHttpResponse),
-	Io(Arc<io::Error>),
+	Io(IoError),
 }
 impl Clone for Error {
 	fn clone(&self) -> Self {
@@ -316,6 +194,21 @@ impl Clone for Error {
 		}
 	}
 }
+impl PartialEq for Error {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(Self::NoSuchBucket(a), Self::NoSuchBucket(b)) => a == b,
+			(Self::NoSuchKey(a), Self::NoSuchKey(b)) => a == b,
+			(Self::HttpDispatch(a), Self::HttpDispatch(b)) => a == b,
+			(Self::Credentials(a), Self::Credentials(b)) => a == b,
+			(Self::Validation(a), Self::Validation(b)) => a == b,
+			(Self::ParseError(a), Self::ParseError(b)) => a == b,
+			(Self::Unknown(a), Self::Unknown(b)) => a == b,
+			(Self::Io(a), Self::Io(b)) => a == b,
+			_ => false,
+		}
+	}
+}
 impl error::Error for Error {}
 impl Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -333,41 +226,35 @@ impl Display for Error {
 }
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		Self::Io(Arc::new(err))
+		Self::Io(err.into())
 	}
 }
-impl<E> From<rusoto_core::RusotoError<E>> for Error
+impl<E> From<RusotoError<E>> for Error
 where
 	Error: From<E>,
 {
-	fn from(err: rusoto_core::RusotoError<E>) -> Self {
+	fn from(err: RusotoError<E>) -> Self {
 		match err {
-			rusoto_core::RusotoError::Service(e) => e.into(),
-			rusoto_core::RusotoError::HttpDispatch(http_dispatch_error) => {
-				Self::HttpDispatch(http_dispatch_error)
-			}
-			rusoto_core::RusotoError::Credentials(credentials_error) => {
-				Self::Credentials(credentials_error)
-			}
-			rusoto_core::RusotoError::Validation(string) => Self::Validation(string),
-			rusoto_core::RusotoError::ParseError(string) => Self::ParseError(string),
-			rusoto_core::RusotoError::Unknown(buffered_http_response) => {
-				Self::Unknown(buffered_http_response)
-			}
+			RusotoError::Service(err) => err.into(),
+			RusotoError::HttpDispatch(err) => Self::HttpDispatch(err),
+			RusotoError::Credentials(err) => Self::Credentials(err),
+			RusotoError::Validation(err) => Self::Validation(err),
+			RusotoError::ParseError(err) => Self::ParseError(err),
+			RusotoError::Unknown(err) => Self::Unknown(err),
 		}
 	}
 }
-impl From<rusoto_s3::ListObjectsV2Error> for Error {
-	fn from(err: rusoto_s3::ListObjectsV2Error) -> Self {
+impl From<ListObjectsV2Error> for Error {
+	fn from(err: ListObjectsV2Error) -> Self {
 		match err {
-			rusoto_s3::ListObjectsV2Error::NoSuchBucket(err) => Self::NoSuchBucket(err),
+			ListObjectsV2Error::NoSuchBucket(err) => Self::NoSuchBucket(err),
 		}
 	}
 }
-impl From<rusoto_s3::GetObjectError> for Error {
-	fn from(err: rusoto_s3::GetObjectError) -> Self {
+impl From<GetObjectError> for Error {
+	fn from(err: GetObjectError) -> Self {
 		match err {
-			rusoto_s3::GetObjectError::NoSuchKey(err) => Self::NoSuchKey(err),
+			GetObjectError::NoSuchKey(err) => Self::NoSuchKey(err),
 		}
 	}
 }
@@ -397,6 +284,113 @@ pub struct CloudfrontRow {
 	pub http_version: String,
 	pub fle_status: Option<String>,
 	pub fle_encrypted_fields: Option<String>,
+}
+impl CloudfrontRow {
+	fn from_line(line: &str) -> Self {
+		let mut values = line.split('\t');
+		let date = values.next().unwrap();
+		let time = values.next().unwrap();
+		let x_edge_location = values.next().unwrap();
+		let sc_bytes = values.next().unwrap();
+		let c_ip = values.next().unwrap();
+		let cs_method = values.next().unwrap();
+		let cs_host = values.next().unwrap();
+		let cs_uri_stem = values.next().unwrap();
+		let sc_status = values.next().unwrap();
+		let cs_referer = values.next().unwrap();
+		let cs_user_agent = values.next().unwrap();
+		let cs_uri_query = values.next().unwrap();
+		let cs_cookie = values.next().unwrap();
+		let x_edge_result_type = values.next().unwrap();
+		let x_edge_request_id = values.next().unwrap();
+		let x_host_header = values.next().unwrap();
+		let cs_protocol = values.next().unwrap();
+		let cs_bytes = values.next().unwrap();
+		let time_taken = values.next().unwrap();
+		let x_forwarded_for = values.next().unwrap();
+		let ssl_protocol = values.next().unwrap();
+		let ssl_cipher = values.next().unwrap();
+		let x_edge_response_result_type = values.next().unwrap();
+		let cs_protocol_version = values.next().unwrap();
+		let fle_status = values.next().unwrap();
+		let fle_encrypted_fields = values.next().unwrap();
+		assert_eq!(values.next(), None);
+		let time = Utc.from_utc_datetime(&NaiveDateTime::new(
+			NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(),
+			NaiveTime::parse_from_str(&time, "%H:%M:%S").unwrap(),
+		));
+		let status = if sc_status != "000" {
+			Some(StatusCode::from_bytes(sc_status.as_bytes()).unwrap())
+		} else {
+			None
+		};
+		#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+		let time_taken =
+			Duration::from_millis((time_taken.parse::<f64>().unwrap() * 1000.0).round() as u64);
+		CloudfrontRow {
+			time,
+			edge_location: x_edge_location.to_owned(),
+			response_bytes: sc_bytes.parse().unwrap(),
+			remote_ip: c_ip.parse().unwrap(),
+			method: cs_method.parse().unwrap(),
+			host: cs_host.to_owned(),
+			url: Url::parse(&format!(
+				"{}://{}{}{}{}",
+				cs_protocol,
+				x_host_header,
+				cs_uri_stem,
+				if cs_uri_query == "-" { "" } else { "?" },
+				if cs_uri_query == "-" {
+					""
+				} else {
+					&cs_uri_query
+				}
+			))
+			.unwrap(),
+			status,
+			user_agent: if cs_user_agent != "-" {
+				Some(cs_user_agent.to_owned())
+			} else {
+				None
+			},
+			referer: if cs_referer != "-" {
+				Some(cs_referer.to_owned())
+			} else {
+				None
+			},
+			cookie: if cs_cookie != "-" {
+				Some(cs_cookie.to_owned())
+			} else {
+				None
+			},
+			result_type: x_edge_result_type.to_owned(),
+			request_id: x_edge_request_id.to_owned(),
+			request_bytes: cs_bytes.parse().unwrap(),
+			time_taken,
+			forwarded_for: if x_forwarded_for != "-" {
+				Some(x_forwarded_for.to_owned())
+			} else {
+				None
+			},
+			ssl_protocol_cipher: if let ("-", "-") = (&*ssl_protocol, &*ssl_cipher) {
+				None
+			} else {
+				Some((ssl_protocol.to_owned(), ssl_cipher.to_owned()))
+			},
+			response_result_type: x_edge_response_result_type.to_owned(),
+			http_version: cs_protocol_version.to_owned(),
+			fle_status: if fle_status != "-" {
+				Some(fle_status.to_owned())
+			} else {
+				None
+			},
+			fle_encrypted_fields: if fle_encrypted_fields != "-" {
+				Some(fle_encrypted_fields.to_owned())
+			} else {
+				None
+			},
+		}
+	}
 }
 
 mod http_serde {

@@ -76,10 +76,12 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 	}
 
 	// https://datahub.io/cryptocurrency/bitcoin
-	let rows = Json::<BitcoinDerived>::new(vec![
-		PathBuf::from("amadeus-testing/json/bitcoin2.json");
-		tasks
-	]);
+	let rows =
+		Json::<_, BitcoinDerived>::new(vec![
+			PathBuf::from("amadeus-testing/json/bitcoin2.json");
+			tasks
+		])
+		.unwrap();
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
@@ -89,10 +91,11 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 	println!("a: {:?}", start.elapsed().unwrap());
 	let b = SystemTime::now();
 
-	let rows = Json::<Value>::new(vec![
+	let rows = Json::<_, Value>::new(vec![
 		PathBuf::from("amadeus-testing/json/bitcoin2.json");
 		tasks
-	]);
+	])
+	.unwrap();
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {

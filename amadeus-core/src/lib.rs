@@ -1,6 +1,7 @@
 #![feature(specialization)]
 #![feature(never_type)]
 #![feature(core_intrinsics)]
+#![feature(atomic_min_max)]
 
 pub mod dist_iter;
 pub mod file;

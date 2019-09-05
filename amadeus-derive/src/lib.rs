@@ -246,8 +246,10 @@ fn impl_struct(
 
 	let name_str = LitStr::new(&name.to_string(), name.span());
 
-	let gen = quote! {
-		mod __ {
+	let mut parquet_includes = None;
+	let mut parquet_derives = None;
+	if cfg!(feature = "parquet") {
+		parquet_includes = Some(quote! {
 			pub use ::amadeus_parquet::{ParquetData,_internal::{
 				basic::Repetition,
 				column::reader::ColumnReader,
@@ -255,6 +257,120 @@ fn impl_struct(
 				record::{Schema as ParquetSchema, Reader, _private::DisplaySchemaGroup},
 				schema::types::{ColumnPath, Type},
 			}};
+		});
+
+		parquet_derives = Some(quote! {
+			#visibility struct #schema_name #impl_generics #where_clause_with_parquet_data {
+				#(#field_names1: <#field_types1 as __::ParquetData>::Schema,)*
+			}
+			// #[automatically_derived]
+			// impl #impl_generics __::Default for #schema_name #ty_generics #where_clause_with_data_default {
+			// 	fn default() -> Self {
+			// 		Self {
+			// 			#(#field_names1: __::Default::default(),)*
+			// 		}
+			// 	}
+			// }
+			#[automatically_derived]
+			impl #impl_generics __::Debug for #schema_name #ty_generics #where_clause_with_parquet_data_debug {
+				fn fmt(&self, f: &mut __::fmt::Formatter) -> __::fmt::Result {
+					f.debug_struct(stringify!(#schema_name))
+						#(.field(stringify!(#field_names1), &self.#field_names2))*
+						.finish()
+				}
+			}
+			#[automatically_derived]
+			impl #impl_generics __::ParquetSchema for #schema_name #ty_generics #where_clause_with_parquet_data {
+				fn fmt(self_: __::Option<&Self>, r: __::Option<__::Repetition>, name: __::Option<&str>, f: &mut __::fmt::Formatter) -> __::fmt::Result {
+					__::DisplaySchemaGroup::new(r, name, None, f)
+					#(
+						.field(__::Some(#field_renames1), self_.map(|self_|&self_.#field_names1))
+					)*
+						.finish()
+				}
+			}
+			#visibility struct #reader_name #impl_generics #where_clause_with_parquet_data {
+				#(#field_names1: <#field_types1 as __::ParquetData>::Reader,)*
+			}
+			#[automatically_derived]
+			impl #impl_generics __::Reader for #reader_name #ty_generics #where_clause_with_parquet_data {
+				type Item = #name #ty_generics;
+
+				#[allow(unused_variables, non_snake_case)]
+				fn read(&mut self, def_level: i16, rep_level: i16) -> __::ParquetResult<Self::Item> {
+					#(
+						let #field_names1 = self.#field_names2.read(def_level, rep_level);
+					)*
+					if #(#field_names1.is_err() ||)* false { // TODO: unlikely
+						#(#field_names1?;)*
+						unreachable!()
+					}
+					__::Ok(#name {
+						#(#field_names1: #field_names2.unwrap(),)*
+					})
+				}
+				fn advance_columns(&mut self) -> __::ParquetResult<()> {
+					#[allow(unused_mut)]
+					let mut res = __::Ok(());
+					#(
+						res = res.and(self.#field_names1.advance_columns());
+					)*
+					res
+				}
+				#[inline]
+				fn has_next(&self) -> bool {
+					#(if true { self.#field_names1.has_next() } else)*
+					{
+						true
+					}
+				}
+				#[inline]
+				fn current_def_level(&self) -> i16 {
+					#(if true { self.#field_names1.current_def_level() } else)*
+					{
+						panic!("Current definition level: empty group reader")
+					}
+				}
+				#[inline]
+				fn current_rep_level(&self) -> i16 {
+					#(if true { self.#field_names1.current_rep_level() } else)*
+					{
+						panic!("Current repetition level: empty group reader")
+					}
+				}
+			}
+
+			#[automatically_derived]
+			impl #impl_generics __::ParquetData for #name #ty_generics #where_clause_with_parquet_data {
+				type Schema = #schema_name #ty_generics;
+				type Reader = #reader_name #ty_generics;
+
+				fn parse(schema: &__::Type, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::Schema)> {
+					if schema.is_group() && repetition == __::Some(__::Repetition::Required) {
+						let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<__::HashMap<_,_>>();
+						let name = stringify!(#name);
+						let schema_ = #schema_name{
+							#(#field_names1: fields.get(#field_renames1).ok_or_else(|| __::ParquetError::General(format!("Struct \"{}\" has field \"{}\" not in the schema", name, #field_renames2))).and_then(|x|<#field_types1 as __::ParquetData>::parse(&**x, __::Some(x.get_basic_info().repetition())))?.1,)*
+						};
+						return __::Ok((schema.name().to_owned(), schema_))
+					}
+					__::Err(__::ParquetError::General(format!("Struct \"{}\" is not in the schema", stringify!(#name))))
+				}
+				fn reader(schema: &Self::Schema, mut path: &mut __::Vec<__::String>, def_level: i16, rep_level: i16, paths: &mut __::HashMap<__::ColumnPath, __::ColumnReader>, batch_size: usize) -> Self::Reader {
+					#(
+						path.push(#field_renames1.to_owned());
+						let #field_names1 = <#field_types1 as __::ParquetData>::reader(&schema.#field_names2, path, def_level, rep_level, paths, batch_size);
+						path.pop().unwrap();
+					)*
+					#reader_name { #(#field_names1,)* }
+				}
+			}
+		});
+	}
+
+	let gen = quote! {
+		mod __ {
+			#parquet_includes
 			pub use ::amadeus_serde::{SerdeData,_internal::{Serialize, Deserialize, Serializer, Deserializer}};
 			pub use ::amadeus_postgres::{Names,read_be_i32,read_value,_internal as postgres,PostgresData};
 			pub use ::amadeus_types::{DowncastImpl, Downcast, DowncastError, Value, Group, SchemaIncomplete};
@@ -272,114 +388,10 @@ fn impl_struct(
 			)*
 		}
 
-		#visibility struct #schema_name #impl_generics #where_clause_with_parquet_data {
-			#(#field_names1: <#field_types1 as __::ParquetData>::Schema,)*
-		}
-		// #[automatically_derived]
-		// impl #impl_generics __::Default for #schema_name #ty_generics #where_clause_with_data_default {
-		// 	fn default() -> Self {
-		// 		Self {
-		// 			#(#field_names1: __::Default::default(),)*
-		// 		}
-		// 	}
-		// }
-		#[automatically_derived]
-		impl #impl_generics __::Debug for #schema_name #ty_generics #where_clause_with_parquet_data_debug {
-			fn fmt(&self, f: &mut __::fmt::Formatter) -> __::fmt::Result {
-				f.debug_struct(stringify!(#schema_name))
-					#(.field(stringify!(#field_names1), &self.#field_names2))*
-					.finish()
-			}
-		}
-		#[automatically_derived]
-		impl #impl_generics __::ParquetSchema for #schema_name #ty_generics #where_clause_with_parquet_data {
-			fn fmt(self_: __::Option<&Self>, r: __::Option<__::Repetition>, name: __::Option<&str>, f: &mut __::fmt::Formatter) -> __::fmt::Result {
-				__::DisplaySchemaGroup::new(r, name, None, f)
-				#(
-					.field(__::Some(#field_renames1), self_.map(|self_|&self_.#field_names1))
-				)*
-					.finish()
-			}
-		}
-		#visibility struct #reader_name #impl_generics #where_clause_with_parquet_data {
-			#(#field_names1: <#field_types1 as __::ParquetData>::Reader,)*
-		}
-		#[automatically_derived]
-		impl #impl_generics __::Reader for #reader_name #ty_generics #where_clause_with_parquet_data {
-			type Item = #name #ty_generics;
-
-			#[allow(unused_variables, non_snake_case)]
-			fn read(&mut self, def_level: i16, rep_level: i16) -> __::ParquetResult<Self::Item> {
-				#(
-					let #field_names1 = self.#field_names2.read(def_level, rep_level);
-				)*
-				if #(#field_names1.is_err() ||)* false { // TODO: unlikely
-					#(#field_names1?;)*
-					unreachable!()
-				}
-				__::Ok(#name {
-					#(#field_names1: #field_names2.unwrap(),)*
-				})
-			}
-			fn advance_columns(&mut self) -> __::ParquetResult<()> {
-				#[allow(unused_mut)]
-				let mut res = __::Ok(());
-				#(
-					res = res.and(self.#field_names1.advance_columns());
-				)*
-				res
-			}
-			#[inline]
-			fn has_next(&self) -> bool {
-				#(if true { self.#field_names1.has_next() } else)*
-				{
-					true
-				}
-			}
-			#[inline]
-			fn current_def_level(&self) -> i16 {
-				#(if true { self.#field_names1.current_def_level() } else)*
-				{
-					panic!("Current definition level: empty group reader")
-				}
-			}
-			#[inline]
-			fn current_rep_level(&self) -> i16 {
-				#(if true { self.#field_names1.current_rep_level() } else)*
-				{
-					panic!("Current repetition level: empty group reader")
-				}
-			}
-		}
+		#parquet_derives
 
 		#[automatically_derived]
 		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {}
-
-		#[automatically_derived]
-		impl #impl_generics __::ParquetData for #name #ty_generics #where_clause_with_parquet_data {
-			type Schema = #schema_name #ty_generics;
-			type Reader = #reader_name #ty_generics;
-
-			fn parse(schema: &__::Type, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::Schema)> {
-				if schema.is_group() && repetition == __::Some(__::Repetition::Required) {
-					let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<__::HashMap<_,_>>();
-					let name = stringify!(#name);
-					let schema_ = #schema_name{
-						#(#field_names1: fields.get(#field_renames1).ok_or_else(|| __::ParquetError::General(format!("Struct \"{}\" has field \"{}\" not in the schema", name, #field_renames2))).and_then(|x|<#field_types1 as __::ParquetData>::parse(&**x, __::Some(x.get_basic_info().repetition())))?.1,)*
-					};
-					return __::Ok((schema.name().to_owned(), schema_))
-				}
-				__::Err(__::ParquetError::General(format!("Struct \"{}\" is not in the schema", stringify!(#name))))
-			}
-			fn reader(schema: &Self::Schema, mut path: &mut __::Vec<__::String>, def_level: i16, rep_level: i16, paths: &mut __::HashMap<__::ColumnPath, __::ColumnReader>, batch_size: usize) -> Self::Reader {
-				#(
-					path.push(#field_renames1.to_owned());
-					let #field_names1 = <#field_types1 as __::ParquetData>::reader(&schema.#field_names2, path, def_level, rep_level, paths, batch_size);
-					path.pop().unwrap();
-				)*
-				#reader_name { #(#field_names1,)* }
-			}
-		}
 
 		#[automatically_derived]
 		impl #impl_generics __::PostgresData for #name #ty_generics #where_clause_with_postgres_data {

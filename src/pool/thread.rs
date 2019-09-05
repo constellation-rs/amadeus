@@ -1,4 +1,4 @@
-// TODO: Is 'static or Any friendlier in user-facing API?
+// TODO: get rid of 'static and boxing
 
 use constellation::FutureExt1;
 use futures::{sink::SinkExt, stream::StreamExt};
@@ -125,7 +125,7 @@ impl ThreadPoolInner {
 	fn threads(&self) -> usize {
 		self.threads.len()
 	}
-	async fn spawn<F: Any + FnOnce() -> T + Send, T: Any + Send>(
+	async fn spawn<F: FnOnce() -> T + Send + 'static, T: Send + 'static>(
 		&self, work: F,
 	) -> Result<T, Panicked> {
 		let mut pool_sender_lock = self.pool_sender.lock().await;

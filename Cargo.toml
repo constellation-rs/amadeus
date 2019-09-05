@@ -25,11 +25,14 @@ travis-ci = { repository = "alecmocatta/amadeus" }
 
 maintenance = { status = "actively-developed" }
 
+[features]
+parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
+
 [dependencies]
 amadeus-derive = { version = "0.1.0", path = "amadeus-derive" }
 amadeus-types = { version = "0.1.0", path = "amadeus-types" }
 amadeus-postgres = { version = "0.1.0", path = "amadeus-postgres" }
-amadeus-parquet = { version = "0.1.0", path = "amadeus-parquet" }
+amadeus-parquet = { version = "0.1.0", path = "amadeus-parquet", optional = true }
 amadeus-serde = { version = "0.1.0", path = "amadeus-serde" }
 amadeus-core = { version = "0.1.0", path = "amadeus-core" }
 amadeus-aws = { version = "0.1.0", path = "amadeus-aws" }
@@ -78,6 +81,7 @@ harness = false
 [[test]]
 name = "parquet"
 harness = false
+required-features = ["parquet"]
 
 [[test]]
 name = "csv"

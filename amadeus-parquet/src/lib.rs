@@ -3,9 +3,6 @@
 
 mod impls;
 
-use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IntoDistributedIterator, util::ResultExpand
-};
 pub use parchet as _internal;
 use parchet::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, file::reader::{FileReader, SerializedFileReader}, record::{Reader as ParquetReader, RowIter, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
@@ -13,9 +10,13 @@ use parchet::{
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	collections::HashMap, error, fmt::{self, Debug, Display}, fs::File, io, iter, marker::PhantomData, ops::FnMut, path::PathBuf, sync::Arc, vec
+	collections::HashMap, error, fmt::{self, Debug, Display}, fs::File, io, iter, marker::PhantomData, ops::FnMut, path::PathBuf, vec
 };
 use walkdir::WalkDir;
+
+use amadeus_core::{
+	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IntoDistributedIterator, util::{IoError, ResultExpand}
+};
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
@@ -245,91 +246,8 @@ fn get_parquet_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Err
 mod misc_serde {
 	use parchet::errors::ParquetError;
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-	use std::{io, sync::Arc};
 
 	pub struct Serde<T>(T);
-
-	impl Serialize for Serde<&io::ErrorKind> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			usize::serialize(
-				&match self.0 {
-					io::ErrorKind::NotFound => 0,
-					io::ErrorKind::PermissionDenied => 1,
-					io::ErrorKind::ConnectionRefused => 2,
-					io::ErrorKind::ConnectionReset => 3,
-					io::ErrorKind::ConnectionAborted => 4,
-					io::ErrorKind::NotConnected => 5,
-					io::ErrorKind::AddrInUse => 6,
-					io::ErrorKind::AddrNotAvailable => 7,
-					io::ErrorKind::BrokenPipe => 8,
-					io::ErrorKind::AlreadyExists => 9,
-					io::ErrorKind::WouldBlock => 10,
-					io::ErrorKind::InvalidInput => 11,
-					io::ErrorKind::InvalidData => 12,
-					io::ErrorKind::TimedOut => 13,
-					io::ErrorKind::WriteZero => 14,
-					io::ErrorKind::Interrupted => 15,
-					io::ErrorKind::UnexpectedEof => 17,
-					_ => 16,
-				},
-				serializer,
-			)
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<io::ErrorKind> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			usize::deserialize(deserializer)
-				.map(|kind| match kind {
-					0 => io::ErrorKind::NotFound,
-					1 => io::ErrorKind::PermissionDenied,
-					2 => io::ErrorKind::ConnectionRefused,
-					3 => io::ErrorKind::ConnectionReset,
-					4 => io::ErrorKind::ConnectionAborted,
-					5 => io::ErrorKind::NotConnected,
-					6 => io::ErrorKind::AddrInUse,
-					7 => io::ErrorKind::AddrNotAvailable,
-					8 => io::ErrorKind::BrokenPipe,
-					9 => io::ErrorKind::AlreadyExists,
-					10 => io::ErrorKind::WouldBlock,
-					11 => io::ErrorKind::InvalidInput,
-					12 => io::ErrorKind::InvalidData,
-					13 => io::ErrorKind::TimedOut,
-					14 => io::ErrorKind::WriteZero,
-					15 => io::ErrorKind::Interrupted,
-					17 => io::ErrorKind::UnexpectedEof,
-					_ => io::ErrorKind::Other,
-				})
-				.map(Self)
-		}
-	}
-
-	impl Serialize for Serde<&Arc<io::Error>> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			<(Serde<&io::ErrorKind>, String)>::serialize(
-				&(Serde(&self.0.kind()), self.0.to_string()),
-				serializer,
-			)
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<Arc<io::Error>> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			<(Serde<io::ErrorKind>, String)>::deserialize(deserializer)
-				.map(|(kind, message)| Arc::new(io::Error::new(kind.0, message)))
-				.map(Self)
-		}
-	}
 
 	impl Serialize for Serde<&ParquetError> {
 		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -378,7 +296,7 @@ mod misc_serde {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Error {
-	Io(#[serde(with = "misc_serde")] Arc<io::Error>),
+	Io(IoError),
 	Parquet(#[serde(with = "misc_serde")] ParquetError),
 }
 impl PartialEq for Error {
@@ -401,7 +319,7 @@ impl Display for Error {
 }
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		Self::Io(Arc::new(err))
+		Self::Io(err.into())
 	}
 }
 impl From<ParquetError> for Error {

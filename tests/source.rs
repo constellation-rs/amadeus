@@ -64,6 +64,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		"cflogworkshop/raw/cf-accesslogs",
 	)
 	.unwrap()
+	.dist_iter()
 	.multi(
 		pool,
 		Identity.for_each(FnMut!(|x: Result<CloudfrontRow, _>| {

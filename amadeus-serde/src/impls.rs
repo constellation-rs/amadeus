@@ -98,6 +98,7 @@ macro_rules! impl_parquet_record_array {
 
 		// Specialize the implementation to avoid passing a potentially large array around
 		// on the stack.
+		#[doc(hidden)]
 		impl SerdeData for Box<[u8; $i]> {
 			fn deserialize<'de, D>(
 				deserializer: D, _schema: Option<SchemaIncomplete>,

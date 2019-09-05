@@ -2,15 +2,16 @@
 
 mod impls;
 
-use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IntoDistributedIterator
-};
 pub use postgres as _internal;
 use postgres::{params::IntoConnectParams, Error as PostgresError};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::TryFrom, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::{Fn, FnMut}, path::PathBuf, str, sync::Arc, vec
+	convert::TryFrom, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::{Fn, FnMut}, path::PathBuf, str, vec
+};
+
+use amadeus_core::{
+	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IntoDistributedIterator, util::IoError
 };
 
 pub trait PostgresData
@@ -349,7 +350,7 @@ mod misc_serde {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Error {
-	Io(#[serde(with = "amadeus_core::misc_serde")] Arc<io::Error>),
+	Io(IoError),
 	Postgres(#[serde(with = "misc_serde")] PostgresError),
 }
 impl PartialEq for Error {
@@ -372,7 +373,7 @@ impl Display for Error {
 }
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		Self::Io(Arc::new(err))
+		Self::Io(err.into())
 	}
 }
 impl From<PostgresError> for Error {

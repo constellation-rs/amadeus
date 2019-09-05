@@ -1,9 +1,7 @@
-// TODO: Is 'static or Any friendlier in user-facing API?
-
 use constellation::*;
 use serde_traitobject as st;
 use std::{
-	any, collections::VecDeque, fmt, mem, panic, sync::{Arc, Mutex}
+	any, collections::VecDeque, fmt, future::Future, mem, panic, sync::{Arc, Mutex}
 };
 
 use amadeus_core::pool::ProcessSend;
@@ -118,7 +116,7 @@ impl ProcessPoolInner {
 	fn processes(&self) -> usize {
 		self.processes.len()
 	}
-	async fn spawn<F: any::Any + FnOnce() -> T + ProcessSend, T: any::Any + ProcessSend>(
+	async fn spawn<F: FnOnce() -> T + ProcessSend, T: ProcessSend>(
 		&self, work: F,
 	) -> Result<T, Panicked> {
 		let process_index = self.i.get();
@@ -202,7 +200,7 @@ impl ProcessPool {
 	}
 	pub fn spawn<F: FnOnce() -> T + ProcessSend, T: ProcessSend>(
 		&self, work: F,
-	) -> impl std::future::Future<Output = Result<T, Panicked>> {
+	) -> impl Future<Output = Result<T, Panicked>> {
 		let inner = self.0.clone();
 		let future = async move { inner.spawn(work).await };
 		assert_sync_and_send(unsafe { ImplSync::new(future) })

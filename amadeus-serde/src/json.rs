@@ -1,128 +1,133 @@
-use amadeus_core::{
-	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::ResultExpand
-};
 use serde::{Deserialize, Serialize};
+use serde_closure::*;
+use serde_json::Error as SerdeJsonError;
 use std::{
-	error, fmt::{self, Display}, fs::File, io::{self, BufReader}, iter, marker::PhantomData, path::PathBuf, sync::Arc, vec
+	error, fmt::{self, Debug, Display}, io::{self, BufReader}, iter, marker::PhantomData, path::PathBuf, vec
 };
 use walkdir::WalkDir;
 
-use serde_closure::*;
-use serde_json::Error as JsonError;
+use amadeus_core::{
+	dist_iter::DistributedIterator, file::{File, Page, Partition, Reader}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
+};
 
 use super::{SerdeData, SerdeDeserialize};
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
 
-mod private {
-	use super::*;
-	pub type JsonInner<Row> = amadeus_core::dist_iter::FlatMap<
-		amadeus_core::into_dist_iter::IterIter<vec::IntoIter<PathBuf>>,
-		Closure<
-			(),
-			(PathBuf,),
-			iter::Map<
-				iter::FlatMap<
-					sum::Sum2<
-						iter::Once<Result<PathBuf, io::Error>>,
-						vec::IntoIter<Result<PathBuf, io::Error>>,
+pub type JsonInner<F, Row> = amadeus_core::dist_iter::FlatMap<
+	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<<F as File>::Partition>>,
+	Closure<
+		(),
+		(<F as File>::Partition,),
+		iter::Map<
+			iter::FlatMap<
+				amadeus_core::util::ResultExpandIter<
+					vec::IntoIter<<<F as File>::Partition as Partition>::Page>,
+					JsonError<F>,
+				>,
+				ResultExpand<
+					iter::Map<
+						serde_json::StreamDeserializer<
+							'static,
+							serde_json::de::IoRead<
+								BufReader<Reader<<<F as File>::Partition as Partition>::Page>>,
+							>,
+							SerdeDeserialize<Row>,
+						>,
+						Closure<
+							(),
+							(Result<SerdeDeserialize<Row>, SerdeJsonError>,),
+							Result<Row, SerdeJsonError>,
+						>,
 					>,
+					JsonError<F>,
+				>,
+				Closure<
+					(),
+					(Result<<<F as File>::Partition as Partition>::Page, JsonError<F>>,),
 					ResultExpand<
 						iter::Map<
 							serde_json::StreamDeserializer<
 								'static,
-								serde_json::de::IoRead<BufReader<File>>,
+								serde_json::de::IoRead<
+									BufReader<Reader<<<F as File>::Partition as Partition>::Page>>,
+								>,
 								SerdeDeserialize<Row>,
 							>,
 							Closure<
 								(),
-								(Result<SerdeDeserialize<Row>, JsonError>,),
-								Result<Row, JsonError>,
+								(Result<SerdeDeserialize<Row>, SerdeJsonError>,),
+								Result<Row, SerdeJsonError>,
 							>,
 						>,
-						io::Error,
-					>,
-					Closure<
-						(),
-						(Result<PathBuf, io::Error>,),
-						ResultExpand<
-							iter::Map<
-								serde_json::StreamDeserializer<
-									'static,
-									serde_json::de::IoRead<BufReader<File>>,
-									SerdeDeserialize<Row>,
-								>,
-								Closure<
-									(),
-									(Result<SerdeDeserialize<Row>, JsonError>,),
-									Result<Row, JsonError>,
-								>,
-							>,
-							io::Error,
-						>,
+						JsonError<F>,
 					>,
 				>,
-				Closure<(), (Result<Result<Row, JsonError>, io::Error>,), Result<Row, Error>>,
+			>,
+			Closure<
+				(),
+				(Result<Result<Row, SerdeJsonError>, JsonError<F>>,),
+				Result<Row, JsonError<F>>,
 			>,
 		>,
-	>;
-}
-use private::JsonInner;
+	>,
+>;
 
 #[derive(Clone)]
-pub struct Json<Row>
+pub struct Json<File, Row>
 where
+	File: amadeus_core::file::File,
 	Row: SerdeData,
 {
-	files: Vec<PathBuf>,
+	partitions: Vec<File::Partition>,
 	marker: PhantomData<fn() -> Row>,
 }
-impl<Row> Json<Row>
+impl<F, Row> Json<F, Row>
 where
+	F: File,
 	Row: SerdeData,
 {
-	pub fn new(files: Vec<PathBuf>) -> Self {
-		Self {
-			files,
+	pub fn new(file: F) -> Result<Self, JsonError<F>> {
+		Ok(Self {
+			partitions: file.partitions().map_err(JsonError::<F>::File)?,
 			marker: PhantomData,
-		}
+		})
 	}
 }
-impl<Row> amadeus_core::Source for Json<Row>
+impl<F, Row> Source for Json<F, Row>
 where
+	F: File,
 	Row: SerdeData,
 {
 	type Item = Row;
-	type Error = Error;
+	type Error = JsonError<F>;
 
-	// existential type DistIter: super::super::DistributedIterator<Item = Result<Row, Error>>;//, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
-	type DistIter = JsonInner<Row>;
-	type Iter = iter::Empty<Result<Row, Error>>;
+	// type DistIter = impl DistributedIterator<Item = Result<Row, Self::Error>>; //, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
+	type DistIter = JsonInner<F, Row>;
+	type Iter = iter::Empty<Result<Row, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter {
-		self.files
+		self.partitions
 			.into_dist_iter()
-			.flat_map(FnMut!(|file: PathBuf| {
-				let files = if !file.is_dir() {
-					sum::Sum2::A(iter::once(Ok(file)))
-				} else {
-					sum::Sum2::B(get_json_partitions(file))
-				};
-				files
-					.flat_map(FnMut!(|file: Result<PathBuf, _>| ResultExpand(
-						file.and_then(|file| Ok(File::open(file)?)).map(|file| {
-							let file = BufReader::new(file);
-							serde_json::Deserializer::from_reader(file)
+			.flat_map(FnMut!(|partition: F::Partition| {
+				ResultExpand(partition.pages().map_err(JsonError::<F>::Partition))
+					.into_iter()
+					.flat_map(FnMut!(|page: Result<_, _>| ResultExpand(page.map(
+						|page| {
+							let reader = BufReader::new(Page::reader(page));
+							serde_json::Deserializer::from_reader(reader)
 								.into_iter()
-								.map(FnMut!(|x: Result<SerdeDeserialize<Row>, JsonError>| Ok(
-									x?.0
-								)))
-						})
-					)))
-					.map(FnMut!(|row: Result<Result<Row, JsonError>, io::Error>| Ok(
-						row??
-					)))
+								.map(FnMut!(|x: Result<
+									SerdeDeserialize<Row>,
+									SerdeJsonError,
+								>| Ok(x?.0)))
+						}
+					))))
+					.map(FnMut!(|row: Result<
+						Result<Row, SerdeJsonError>,
+						Self::Error,
+					>| Ok(row??)))
 			}))
 	}
 	fn iter(self) -> Self::Iter {
@@ -137,22 +142,22 @@ where
 		// 		};
 		// 		files
 		// 			.flat_map(|file: Result<PathBuf, _>| ResultExpand(
-		// 				file.and_then(|file| Ok(File::open(file)?)).map(|file| {
+		// 				file.and_then(|file| Ok(fs::File::open(file)?)).map(|file| {
 		// 					serde_json::Deserializer::from_reader(file)
 		// 						.into_iter()
-		// 						.map(FnMut!(|x: Result<SerdeDeserialize<Row>, JsonError>| Ok(
+		// 						.map(FnMut!(|x: Result<SerdeDeserialize<Row>, SerdeJsonError>| Ok(
 		// 							x?.0
 		// 						)))
 		// 				})
 		// 			))
-		// 			.map(|row: Result<Result<Row, JsonError>, io::Error>| Ok(row??))
+		// 			.map(|row: Result<Result<Row, SerdeJsonError>, io::Error>| Ok(row??))
 		// 	})
 	}
 }
 
 /// "Logic" interpreted from https://github.com/apache/arrow/blob/927cfeff875e557e28649891ea20ca38cb9d1536/python/pyarrow/parquet.py#L705-L829
 /// and https://github.com/apache/spark/blob/5a7403623d0525c23ab8ae575e9d1383e3e10635/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/InMemoryFileIndex.scala#L348-L359
-fn get_json_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>> {
+fn _get_json_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>> {
 	WalkDir::new(dir)
 		.follow_links(true)
 		.sort_by(|a, b| a.file_name().cmp(b.file_name()))
@@ -211,40 +216,91 @@ mod jsonerror {
 	{
 		unimplemented!()
 	}
-
-	// TODO
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Error {
-	Io(#[serde(with = "amadeus_core::misc_serde")] Arc<io::Error>),
-	Json(#[serde(with = "jsonerror")] JsonError),
+pub type JsonError<F> = JsonErrorInternal<
+	<F as File>::Error,
+	<<F as File>::Partition as Partition>::Error,
+	<<<F as File>::Partition as Partition>::Page as Page>::Error,
+>;
+
+#[derive(Serialize, Deserialize)]
+pub enum JsonErrorInternal<A, B, C> {
+	File(A),
+	Partition(B),
+	Page(C),
+	Json(#[serde(with = "jsonerror")] SerdeJsonError),
 }
-impl PartialEq for Error {
+impl<A, B, C> Clone for JsonErrorInternal<A, B, C>
+where
+	A: Clone,
+	B: Clone,
+	C: Clone,
+{
+	fn clone(&self) -> Self {
+		match self {
+			Self::File(err) => Self::File(err.clone()),
+			Self::Partition(err) => Self::Partition(err.clone()),
+			Self::Page(err) => Self::Page(err.clone()),
+			Self::Json(err) => Self::Json(serde::de::Error::custom(err)),
+		}
+	}
+}
+impl<A, B, C> PartialEq for JsonErrorInternal<A, B, C>
+where
+	A: PartialEq,
+	B: PartialEq,
+	C: PartialEq,
+{
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Self::Io(a), Self::Io(b)) => a.to_string() == b.to_string(),
+			(Self::File(a), Self::File(b)) => a.eq(b),
+			(Self::Partition(a), Self::Partition(b)) => a.eq(b),
+			(Self::Page(a), Self::Page(b)) => a.eq(b),
 			(Self::Json(a), Self::Json(b)) => a.to_string() == b.to_string(),
 			_ => false,
 		}
 	}
 }
-impl error::Error for Error {}
-impl Display for Error {
+impl<A, B, C> error::Error for JsonErrorInternal<A, B, C>
+where
+	A: error::Error,
+	B: error::Error,
+	C: error::Error,
+{
+}
+impl<A, B, C> Display for JsonErrorInternal<A, B, C>
+where
+	A: Display,
+	B: Display,
+	C: Display,
+{
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Self::Io(err) => err.fmt(f),
-			Self::Json(err) => err.fmt(f),
+			Self::File(err) => Display::fmt(err, f),
+			Self::Partition(err) => Display::fmt(err, f),
+			Self::Page(err) => Display::fmt(err, f),
+			Self::Json(err) => Display::fmt(err, f),
 		}
 	}
 }
-impl From<io::Error> for Error {
-	fn from(err: io::Error) -> Self {
-		Self::Io(Arc::new(err))
+impl<A, B, C> Debug for JsonErrorInternal<A, B, C>
+where
+	A: Debug,
+	B: Debug,
+	C: Debug,
+{
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::File(err) => Debug::fmt(err, f),
+			Self::Partition(err) => Debug::fmt(err, f),
+			Self::Page(err) => Debug::fmt(err, f),
+			Self::Json(err) => Debug::fmt(err, f),
+		}
 	}
 }
-impl From<JsonError> for Error {
-	fn from(err: JsonError) -> Self {
+impl<A, B, C> From<SerdeJsonError> for JsonErrorInternal<A, B, C> {
+	fn from(err: SerdeJsonError) -> Self {
 		Self::Json(err)
 	}
 }

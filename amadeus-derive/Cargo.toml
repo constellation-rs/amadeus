@@ -13,6 +13,9 @@ edition = "2018"
 [lib]
 proc-macro = true
 
+[features]
+parquet = []
+
 [dependencies]
 proc-macro2 = { version = "1.0.1", default-features = false }
 quote = { version = "1.0.2", default-features = false }

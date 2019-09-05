@@ -1,6 +1,6 @@
 use super::SerdeData;
 use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IntoDistributedIterator, util::ResultExpand
+	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::ResultExpand
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -11,7 +11,6 @@ use walkdir::WalkDir;
 use super::SerdeDeserializeGroup;
 use csv::Error as CsvError;
 use serde_closure::*;
-use std::ops::FnMut;
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
@@ -59,11 +58,50 @@ type CsvInner<Row> = amadeus_core::dist_iter::FlatMap<
 	>,
 >;
 
+// #[doc(inline)]
+// pub type Trim = csv::Trim;
+// #[doc(inline)]
+// pub type Terminator = csv::Terminator;
+
+// open (assume exists,
+
+// open: append/overwrite (fail on not existing)
+// create: append/overwrite/fail on existing
+
+// create, fail if exists
+// create, overwrite if exists
+// create, append if exists
+
+// open, fail if not exists
+// open, overwrite if exists
+// open, append if exists
+
+// open fail on exist/fail on not exist/no fail overwrite/append
+
+// fail on exist
+// fail on not exist; overwrite/append
+// no fail; overwrite/append
+
+// open: must exist; append
+// create: overwrite
+
+// trait File
+
 #[derive(Clone)]
 pub struct Csv<Row>
 where
 	Row: SerdeData,
 {
+	// delimiter: u8,
+	// has_headers: bool,
+	// flexible: bool,
+	// trim: Trim,
+	// terminator: Terminator,
+	// quote: u8,
+	// escape: Option<u8>,
+	// double_quote: bool,
+	// quoting: bool,
+	// comment: Option<u8>,
 	files: Vec<PathBuf>,
 	marker: PhantomData<fn() -> Row>,
 }
@@ -77,6 +115,8 @@ where
 			marker: PhantomData,
 		}
 	}
+	// pub fn open<Row>(files: Vec<PathBuf>) -> Csv<Row> {}
+	// pub fn create<Row>(files: Vec<PathBuf>) -> Csv<Row> {}
 }
 impl<Row> amadeus_core::Source for Csv<Row>
 where

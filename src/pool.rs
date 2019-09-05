@@ -26,9 +26,7 @@ mod process_pool_impls {
 			F: FnOnce() -> T + ProcessSend,
 			T: ProcessSend,
 		{
-			Pin::from(Box::new(
-				ProcessPool::spawn(self, work).map_err(|e| Box::new(e) as _),
-			))
+			Box::pin(ProcessPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 
@@ -41,9 +39,7 @@ mod process_pool_impls {
 			F: FnOnce() -> T + ProcessSend,
 			T: ProcessSend,
 		{
-			Pin::from(Box::new(
-				ThreadPool::spawn(self, work).map_err(|e| Box::new(e) as _),
-			))
+			Box::pin(ThreadPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 
@@ -56,9 +52,7 @@ mod process_pool_impls {
 			F: FnOnce() -> T + ProcessSend,
 			T: ProcessSend,
 		{
-			Pin::from(Box::new(
-				LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _),
-			))
+			Box::pin(LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 }
@@ -82,9 +76,7 @@ mod thread_pool_impls {
 			F: FnOnce() -> T + Send + 'static,
 			T: Send + 'static,
 		{
-			Pin::from(Box::new(
-				ThreadPool::spawn(self, work).map_err(|e| Box::new(e) as _),
-			))
+			Box::pin(ThreadPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 
@@ -97,9 +89,7 @@ mod thread_pool_impls {
 			F: FnOnce() -> T + Send + 'static,
 			T: Send + 'static,
 		{
-			Pin::from(Box::new(
-				LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _),
-			))
+			Box::pin(LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 }
@@ -120,9 +110,7 @@ mod local_pool_impls {
 			F: FnOnce() -> T + 'static,
 			T: Send + 'static,
 		{
-			Pin::from(Box::new(
-				LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _),
-			))
+			Box::pin(LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 }

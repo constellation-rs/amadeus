@@ -3,6 +3,7 @@ use std::{
 };
 
 pub use amadeus_derive::Data;
+#[cfg(feature = "parquet")]
 use amadeus_parquet::ParquetData;
 use amadeus_postgres::PostgresData;
 use amadeus_serde::SerdeData;
@@ -10,6 +11,9 @@ pub use amadeus_types as types;
 pub use amadeus_types::{
 	Bson, Date, Decimal, Downcast, DowncastImpl, Enum, Group, Json, List, Map, Time, Timestamp, Value
 };
+
+#[cfg(not(feature = "parquet"))]
+use std::any::Any as ParquetData;
 
 pub trait Data:
 	Clone
@@ -64,6 +68,27 @@ pub struct CloudfrontRow {
 	pub http_version: String,
 	pub fle_status: Option<String>,
 	pub fle_encrypted_fields: Option<String>,
+}
+impl From<amadeus_aws::CloudfrontRow> for CloudfrontRow {
+	fn from(from: amadeus_aws::CloudfrontRow) -> Self {
+		Self {
+			edge_location: from.edge_location,
+			response_bytes: from.response_bytes,
+			host: from.host,
+			user_agent: from.user_agent,
+			referer: from.referer,
+			cookie: from.cookie,
+			result_type: from.result_type,
+			request_id: from.request_id,
+			request_bytes: from.request_bytes,
+			forwarded_for: from.forwarded_for,
+			ssl_protocol_cipher: from.ssl_protocol_cipher,
+			response_result_type: from.response_result_type,
+			http_version: from.http_version,
+			fle_status: from.fle_status,
+			fle_encrypted_fields: from.fle_encrypted_fields,
+		}
+	}
 }
 
 pub struct CastError;

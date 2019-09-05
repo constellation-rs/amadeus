@@ -86,6 +86,28 @@ impl<'de> Deserialize<'de> for Serde<Arc<io::Error>> {
 	}
 }
 
+impl Serialize for Serde<&io::Error> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		<(Serde<&io::ErrorKind>, String)>::serialize(
+			&(Serde(&self.0.kind()), self.0.to_string()),
+			serializer,
+		)
+	}
+}
+impl<'de> Deserialize<'de> for Serde<io::Error> {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		<(Serde<io::ErrorKind>, String)>::deserialize(deserializer)
+			.map(|(kind, message)| io::Error::new(kind.0, message))
+			.map(Self)
+	}
+}
+
 // impl Serialize for Serde<&JsonError> {
 // 	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 // 	where

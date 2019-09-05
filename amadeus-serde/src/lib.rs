@@ -1,3 +1,4 @@
+#![feature(type_alias_impl_trait)]
 #![feature(specialization)]
 
 mod csv;
@@ -10,7 +11,9 @@ use amadeus_types::SchemaIncomplete;
 use serde::{Deserializer, Serializer};
 use std::fmt::Debug;
 
-pub use self::{csv::*, json::*};
+pub use self::{
+	csv::*, json::{Json, JsonError}
+};
 
 pub trait SerdeData
 where
