@@ -33,6 +33,25 @@ where
 		<Self as amadeus_core::Source>::iter(self)
 	}
 }
+#[cfg(feature = "parquet")]
+impl<File, Row> Source for Parquet<File, Row>
+where
+	File: amadeus_core::file::File,
+	Row: super::data::Data,
+{
+	type Item = <Self as amadeus_core::Source>::Item;
+	type Error = <Self as amadeus_core::Source>::Error;
+
+	type DistIter = <Self as amadeus_core::Source>::DistIter;
+	type Iter = <Self as amadeus_core::Source>::Iter;
+
+	fn dist_iter(self) -> Self::DistIter {
+		<Self as amadeus_core::Source>::dist_iter(self)
+	}
+	fn iter(self) -> Self::Iter {
+		<Self as amadeus_core::Source>::iter(self)
+	}
+}
 impl<Row> Source for Csv<Row>
 where
 	Row: super::data::Data,

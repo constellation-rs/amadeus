@@ -1,12 +1,26 @@
-use rusoto_core::Region;
+use futures::future::FutureExt;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use std::{
 	convert::{TryFrom, TryInto}, future::Future, io, pin::Pin
 };
-use tokio_io::AsyncRead;
+use tokio::io::AsyncRead;
 
 use amadeus_core::util::{IoError, ResultExpand};
+
+fn block_on<F>(future: F) -> F::Output
+where
+	F: Future,
+{
+	tokio::runtime::current_thread::Runtime::new()
+		.unwrap()
+		.block_on(futures::compat::Compat::new(
+			Box::pin(future).map(Ok::<_, ()>),
+		))
+		.unwrap()
+}
+
+pub type Region = rusoto_core::Region;
 
 #[derive(Serialize, Deserialize)]
 pub struct S3Directory {
@@ -53,6 +67,39 @@ impl amadeus_core::file::File for S3Directory {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct S3File {
+	region: Region,
+	bucket: String,
+	key: String,
+}
+impl S3File {
+	pub fn new(region: Region, bucket: &str, key: &str) -> Self {
+		let (bucket, key) = (bucket.to_owned(), key.to_owned());
+		Self {
+			region,
+			bucket,
+			key,
+		}
+	}
+}
+impl amadeus_core::file::File for S3File {
+	type Partition = S3File;
+	type Error = super::Error;
+
+	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		Ok(vec![self])
+	}
+}
+impl amadeus_core::file::Partition for S3File {
+	type Page = S3Page;
+	type Error = IoError;
+
+	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
+		Ok(vec![S3Page::new(self.region, self.bucket, self.key)])
+	}
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct S3Partition {
 	region: Region,
 	bucket: String,
@@ -60,13 +107,13 @@ pub struct S3Partition {
 	len: u64,
 }
 impl amadeus_core::file::Partition for S3Partition {
-	type Page = S3File;
+	type Page = S3Page;
 	type Error = IoError;
 
 	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
 		let client = S3Client::new(self.region);
 		let (bucket, key, len) = (self.bucket, self.key, self.len);
-		Ok(vec![S3File {
+		Ok(vec![S3Page {
 			client,
 			bucket,
 			key,
@@ -75,38 +122,41 @@ impl amadeus_core::file::Partition for S3Partition {
 	}
 }
 
-pub struct S3File {
+pub struct S3Page {
 	client: S3Client,
 	bucket: String,
 	key: String,
 	len: u64,
 }
-impl S3File {
-	pub fn new(region: Region, bucket: &str, key: &str) -> impl Future<Output = Self> {
+impl S3Page {
+	fn new(region: Region, bucket: String, key: String) -> Self {
 		let client = S3Client::new(region);
-		let (bucket, key) = (bucket.to_owned(), key.to_owned());
-		async move {
-			let object =
-				futures::compat::Compat01As03::new(client.head_object(HeadObjectRequest {
-					bucket: bucket.clone(),
-					key: key.clone(),
-					..HeadObjectRequest::default()
-				}))
-				.await
-				.unwrap();
-			let len = object.content_length.unwrap().try_into().unwrap();
-			S3File {
-				client,
-				bucket,
-				key,
-				len,
-			}
+		let object = client
+			.head_object(HeadObjectRequest {
+				bucket: bucket.clone(),
+				key: key.clone(),
+				..HeadObjectRequest::default()
+			})
+			.sync()
+			.unwrap();
+		let len = object.content_length.unwrap().try_into().unwrap();
+		S3Page {
+			client,
+			bucket,
+			key,
+			len,
 		}
 	}
 }
-impl amadeus_core::file::Page for S3File {
+impl amadeus_core::file::Page for S3Page {
 	type Error = IoError;
 
+	fn block_on<F>(future: F) -> F::Output
+	where
+		F: Future,
+	{
+		block_on(future)
+	}
 	fn len(&self) -> u64 {
 		self.len
 	}
@@ -115,9 +165,9 @@ impl amadeus_core::file::Page for S3File {
 	}
 	fn read<'a>(
 		&'a self, offset: u64, buf: &'a mut [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
 		Box::pin(async move {
-			let (start, end) = (offset, offset + u64::try_from(buf.len()).unwrap());
+			let (start, end) = (offset, offset + u64::try_from(buf.len()).unwrap() - 1);
 			let res =
 				futures::compat::Compat01As03::new(self.client.get_object(GetObjectRequest {
 					bucket: self.bucket.clone(),
@@ -143,7 +193,7 @@ impl amadeus_core::file::Page for S3File {
 	}
 	fn write<'a>(
 		&'a self, _offset: u64, _buf: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
 		unimplemented!()
 	}
 }

@@ -219,7 +219,7 @@ impl Page for LocalFile {
 	}
 	fn read<'a>(
 		&'a self, mut offset: u64, mut buf: &'a mut [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
 		Box::pin(async move {
 			while !buf.is_empty() {
 				match self.read_at(offset, buf) {
@@ -245,7 +245,7 @@ impl Page for LocalFile {
 	}
 	fn write<'a>(
 		&'a self, mut offset: u64, mut buf: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
 		Box::pin(async move {
 			while !buf.is_empty() {
 				match self.write_at(offset, buf) {

@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 amadeus-core = { version = "0.1", path = "../amadeus-core" }
 amadeus-types = { version = "0.1", path = "../amadeus-types" }
-parchet = { version = "0.1", git = "https://github.com/alecmocatta/parchet", branch = "initial" }
+parchet = "0.1"
 walkdir = "2.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = { version = "0.1" } #, path = "../serde_closure" }

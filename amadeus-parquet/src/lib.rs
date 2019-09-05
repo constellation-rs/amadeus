@@ -1,30 +1,26 @@
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
+#![feature(read_initializer)]
 
 mod impls;
 
 pub use parchet as _internal;
 use parchet::{
-	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, file::reader::{FileReader, SerializedFileReader}, record::{Reader as ParquetReader, RowIter, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
+	basic::Repetition, column::reader::ColumnReader, errors::ParquetError as InternalParquetError, file::reader::{FileReader, SerializedFileReader}, record::{Reader as ParquetReader, RowIter, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
 };
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	collections::HashMap, error, fmt::{self, Debug, Display}, fs::File, io, iter, marker::PhantomData, ops::FnMut, path::PathBuf, vec
+	collections::HashMap, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, path::PathBuf, sync::Arc, vec
 };
 use walkdir::WalkDir;
 
 use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IntoDistributedIterator, util::{IoError, ResultExpand}
+	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
 };
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
-
-// trait Abc where Self: DistributedIterator, <Self as DistributedIterator>::Task: serde::Serialize {}
-// impl<T:?Sized> Abc for T where T: DistributedIterator, <T as DistributedIterator>::Task: serde::Serialize {}
-
-// existential type ParquetInner: Abc;
 
 pub trait ParquetData
 where
@@ -35,52 +31,66 @@ where
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
-	) -> Result<(String, Self::Schema), ParquetError>;
+	) -> Result<(String, Self::Schema), InternalParquetError>;
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader;
 }
 
-type ParquetInner<Row> = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<PathBuf>>,
+pub type ParquetInner<F, Row> = amadeus_core::dist_iter::FlatMap<
+	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<<F as File>::Partition>>,
 	Closure<
 		(),
-		(PathBuf,),
+		(<F as File>::Partition,),
 		iter::Map<
 			iter::FlatMap<
-				sum::Sum2<
-					iter::Once<Result<PathBuf, io::Error>>,
-					vec::IntoIter<Result<PathBuf, io::Error>>,
+				amadeus_core::util::ResultExpandIter<
+					vec::IntoIter<<<F as File>::Partition as Partition>::Page>,
+					ParquetError<F>,
 				>,
 				ResultExpand<
 					iter::Map<
-						RowIter<SerializedFileReader<File>, Record<Row>>,
+						RowIter<
+							SerializedFileReader<
+								ParquetReaderWrap<<<F as File>::Partition as Partition>::Page>,
+							>,
+							Record<Row>,
+						>,
 						Closure<
 							(),
-							(Result<Record<Row>, ParquetError>,),
-							Result<Row, ParquetError>,
+							(Result<Record<Row>, InternalParquetError>,),
+							Result<Row, InternalParquetError>,
 						>,
 					>,
-					io::Error,
+					ParquetError<F>,
 				>,
 				Closure<
 					(),
-					(Result<PathBuf, io::Error>,),
+					(Result<<<F as File>::Partition as Partition>::Page, ParquetError<F>>,),
 					ResultExpand<
 						iter::Map<
-							RowIter<SerializedFileReader<File>, Record<Row>>,
+							RowIter<
+								SerializedFileReader<
+									ParquetReaderWrap<<<F as File>::Partition as Partition>::Page>,
+								>,
+								Record<Row>,
+							>,
 							Closure<
 								(),
-								(Result<Record<Row>, ParquetError>,),
-								Result<Row, ParquetError>,
+								(Result<Record<Row>, InternalParquetError>,),
+								Result<Row, InternalParquetError>,
 							>,
 						>,
-						io::Error,
+						ParquetError<F>,
 					>,
 				>,
 			>,
-			Closure<(), (Result<Result<Row, ParquetError>, io::Error>,), Result<Row, Error>>,
+			Closure<
+				(),
+				(Result<Result<Row, InternalParquetError>, ParquetError<F>>,),
+				Result<Row, ParquetError<F>>,
+			>,
 		>,
 	>,
 >;
@@ -157,47 +167,112 @@ mod wrap {
 }
 pub use wrap::Record;
 
-pub struct Parquet<Row>
+pub struct Parquet<File, Row>
 where
+	File: amadeus_core::file::File,
 	Row: ParquetData,
 {
-	i: ParquetInner<Row>,
+	partitions: Vec<File::Partition>,
+	marker: PhantomData<fn() -> Row>,
 }
-impl<Row> Parquet<Row>
+impl<F, Row> Parquet<F, Row>
 where
+	F: File,
 	Row: ParquetData,
 {
-	pub fn new<I>(files: I) -> Result<Self, ()>
-	where
-		I: IntoIterator<Item = PathBuf>,
-	{
-		let i = files
-			.into_iter()
-			.collect::<Vec<_>>()
+	pub fn new(file: F) -> Result<Self, ParquetError<F>> {
+		Ok(Self {
+			partitions: file.partitions().map_err(ParquetError::<F>::File)?,
+			marker: PhantomData,
+		})
+	}
+}
+impl<F, Row> Source for Parquet<F, Row>
+where
+	F: File,
+	Row: ParquetData,
+{
+	type Item = Row;
+	type Error = ParquetError<F>;
+
+	// type DistIter = impl DistributedIterator<Item = Result<Row, Self::Error>>; //, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
+	type DistIter = ParquetInner<F, Row>;
+	type Iter = iter::Empty<Result<Row, Self::Error>>;
+
+	fn dist_iter(self) -> Self::DistIter {
+		self.partitions
 			.into_dist_iter()
-			.flat_map(FnMut!(|file: PathBuf| {
-				let files = if !file.is_dir() {
-					sum::Sum2::A(iter::once(Ok(file)))
-				} else {
-					sum::Sum2::B(get_parquet_partitions(file))
-				};
-				files
-					.flat_map(FnMut!(|file: Result<PathBuf, _>| ResultExpand(
-						file.and_then(|file| Ok(File::open(file)?))
-							.and_then(|file| Ok(SerializedFileReader::new(file)?
+			.flat_map(FnMut!(|partition: F::Partition| {
+				ResultExpand(partition.pages().map_err(ParquetError::<F>::Partition))
+					.into_iter()
+					.flat_map(FnMut!(|page: Result<_, _>| {
+						ResultExpand(page.and_then(
+							|page: <<F as File>::Partition as Partition>::Page| {
+								Ok(SerializedFileReader::new(ParquetReaderWrap(Page::reader(
+									Arc::new(page),
+								)))?
 								.get_row_iter(None)?
-								.map(FnMut!(|x: Result<Record<Row>, ParquetError>| Ok(x?.0)))))
-					)))
+								.map(FnMut!(|x: Result<
+										Record<Row>,
+										InternalParquetError,
+									>|
+									 -> Result<Row, InternalParquetError> {
+										Ok(x?.0)
+									})))
+							},
+						))
+					}))
 					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
-			}));
-		Ok(Self { i })
+			}))
+	}
+	fn iter(self) -> Self::Iter {
+		iter::empty()
+	}
+}
+
+pub struct ParquetReaderWrap<P>(amadeus_core::file::Reader<Arc<P>>)
+where
+	P: Page;
+impl<P> io::Read for ParquetReaderWrap<P>
+where
+	P: Page,
+{
+	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+		self.0.read(buf)
+	}
+	unsafe fn initializer(&self) -> io::Initializer {
+		io::Initializer::nop()
+	}
+}
+impl<P> Clone for ParquetReaderWrap<P>
+where
+	P: Page,
+{
+	fn clone(&self) -> Self {
+		ParquetReaderWrap(self.0.clone())
+	}
+}
+impl<P> io::Seek for ParquetReaderWrap<P>
+where
+	P: Page,
+{
+	fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+		self.0.seek(pos)
+	}
+}
+impl<P> parchet::file::reader::ParquetReader for ParquetReaderWrap<P>
+where
+	P: Page,
+{
+	fn len(&self) -> u64 {
+		self.0.len()
 	}
 }
 
 /// "Logic" interpreted from https://github.com/apache/arrow/blob/927cfeff875e557e28649891ea20ca38cb9d1536/python/pyarrow/parquet.py#L705-L829
 /// and https://github.com/apache/spark/blob/5a7403623d0525c23ab8ae575e9d1383e3e10635/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/InMemoryFileIndex.scala#L348-L359
 /// and https://github.com/apache/spark/blob/5a7403623d0525c23ab8ae575e9d1383e3e10635/sql/core/src/test/scala/org/apache/spark/sql/execution/datasources/parquet/ParquetPartitionDiscoverySuite.scala
-fn get_parquet_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>> {
+fn _get_parquet_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>> {
 	WalkDir::new(dir)
 		.follow_links(true)
 		.sort_by(|a, b| a.file_name().cmp(b.file_name()))
@@ -294,75 +369,59 @@ mod misc_serde {
 	}
 }
 
+pub type ParquetError<F> = ParquetErrorInternal<
+	<F as File>::Error,
+	<<F as File>::Partition as Partition>::Error,
+	<<<F as File>::Partition as Partition>::Page as Page>::Error,
+>;
+
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Error {
-	Io(IoError),
-	Parquet(#[serde(with = "misc_serde")] ParquetError),
+pub enum ParquetErrorInternal<A, B, C> {
+	File(A),
+	Partition(B),
+	Page(C),
+	Parquet(#[serde(with = "misc_serde")] InternalParquetError),
 }
-impl PartialEq for Error {
+impl<A, B, C> PartialEq for ParquetErrorInternal<A, B, C>
+where
+	A: PartialEq,
+	B: PartialEq,
+	C: PartialEq,
+{
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Self::Io(a), Self::Io(b)) => a.to_string() == b.to_string(),
+			(Self::File(a), Self::File(b)) => a == b,
+			(Self::Partition(a), Self::Partition(b)) => a == b,
+			(Self::Page(a), Self::Page(b)) => a == b,
 			(Self::Parquet(a), Self::Parquet(b)) => a == b,
 			_ => false,
 		}
 	}
 }
-impl error::Error for Error {}
-impl Display for Error {
+impl<A, B, C> error::Error for ParquetErrorInternal<A, B, C>
+where
+	A: error::Error,
+	B: error::Error,
+	C: error::Error,
+{
+}
+impl<A, B, C> Display for ParquetErrorInternal<A, B, C>
+where
+	A: Display,
+	B: Display,
+	C: Display,
+{
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Self::Io(err) => Display::fmt(err, f),
+			Self::File(err) => Display::fmt(err, f),
+			Self::Partition(err) => Display::fmt(err, f),
+			Self::Page(err) => Display::fmt(err, f),
 			Self::Parquet(err) => Display::fmt(err, f),
 		}
 	}
 }
-impl From<io::Error> for Error {
-	fn from(err: io::Error) -> Self {
-		Self::Io(err.into())
-	}
-}
-impl From<ParquetError> for Error {
-	fn from(err: ParquetError) -> Self {
+impl<A, B, C> From<InternalParquetError> for ParquetErrorInternal<A, B, C> {
+	fn from(err: InternalParquetError) -> Self {
 		Self::Parquet(err)
-	}
-}
-
-impl<Row> DistributedIterator for Parquet<Row>
-where
-	Row: ParquetData,
-{
-	type Item = Result<Row, Error>;
-	type Task = ParquetConsumer<Row>;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.i.size_hint()
-	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| ParquetConsumer::<Row> {
-			task,
-			marker: PhantomData,
-		})
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "")]
-pub struct ParquetConsumer<Row>
-where
-	Row: ParquetData,
-{
-	task: <ParquetInner<Row> as DistributedIterator>::Task,
-	marker: PhantomData<fn() -> Row>,
-}
-
-impl<Row> Consumer for ParquetConsumer<Row>
-where
-	Row: ParquetData,
-{
-	type Item = Result<Row, Error>;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		self.task.run(i)
 	}
 }

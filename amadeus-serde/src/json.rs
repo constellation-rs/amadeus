@@ -224,7 +224,7 @@ pub type JsonError<F> = JsonErrorInternal<
 	<<<F as File>::Partition as Partition>::Page as Page>::Error,
 >;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum JsonErrorInternal<A, B, C> {
 	File(A),
 	Partition(B),
@@ -281,21 +281,6 @@ where
 			Self::Partition(err) => Display::fmt(err, f),
 			Self::Page(err) => Display::fmt(err, f),
 			Self::Json(err) => Display::fmt(err, f),
-		}
-	}
-}
-impl<A, B, C> Debug for JsonErrorInternal<A, B, C>
-where
-	A: Debug,
-	B: Debug,
-	C: Debug,
-{
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Self::File(err) => Debug::fmt(err, f),
-			Self::Partition(err) => Debug::fmt(err, f),
-			Self::Page(err) => Debug::fmt(err, f),
-			Self::Json(err) => Debug::fmt(err, f),
 		}
 	}
 }
