@@ -68,7 +68,6 @@ harness = false
 [[test]]
 name = "panic"
 harness = false
-test = false # TODO
 
 [[test]]
 name = "threads"

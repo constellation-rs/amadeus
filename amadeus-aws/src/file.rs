@@ -1,25 +1,54 @@
 use futures::future::FutureExt;
+use once_cell::sync::Lazy;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use std::{
-	convert::{TryFrom, TryInto}, future::Future, io, pin::Pin
+	cell::RefCell, convert::{TryFrom, TryInto}, future::Future, io, mem::transmute, pin::Pin
 };
-use tokio::io::AsyncRead;
+use tokio::{io::AsyncRead, runtime::Runtime};
 
 use amadeus_core::{
 	file::{Directory, File, Page, Partition, PathBuf}, util::IoError
 };
 
-fn block_on<F>(future: F) -> F::Output
+static RUNTIME: Lazy<Runtime> = Lazy::new(|| Runtime::new().unwrap());
+
+thread_local! {
+	static REENTRANCY_CHECK: RefCell<()> = RefCell::new(());
+}
+
+pub fn block_on_01<F>(future: F) -> Result<F::Item, F::Error>
 where
-	F: Future,
+	F: futures_01::future::Future + Send,
+	F::Item: Send,
+	F::Error: Send,
 {
-	tokio::runtime::current_thread::Runtime::new()
-		.unwrap()
-		.block_on(futures::compat::Compat::new(
-			Box::pin(future).map(Ok::<_, ()>),
-		))
-		.unwrap()
+	use futures_01::{future::Future, sync::oneshot};
+	REENTRANCY_CHECK.with(|reentrancy_check| {
+		let _reentrancy_check = reentrancy_check.borrow_mut();
+		// unsafe is used here to magic away tokio's 'static constraints
+		struct Receiver<T>(Option<T>);
+		unsafe impl<T> Sync for Receiver<T> {}
+		let mut i = Receiver(None);
+		let mut e = Receiver(None);
+		let mut future = future.map(|i_| i.0 = Some(i_)).map_err(|e_| e.0 = Some(e_));
+		let future: &mut (dyn Future<Item = (), Error = ()> + Send) = &mut future;
+		let future: &mut (dyn Future<Item = (), Error = ()> + Send) = unsafe { transmute(future) };
+		oneshot::spawn(future, &RUNTIME.executor())
+			.wait()
+			.map(|()| i.0.take().unwrap())
+			.map_err(|()| e.0.take().unwrap())
+	})
+}
+pub fn block_on<F>(future: F) -> F::Output
+where
+	F: Future + Send,
+	F::Output: Send,
+{
+	block_on_01(futures::compat::Compat::new(
+		Box::pin(future).map(Ok::<_, ()>),
+	))
+	.unwrap()
 }
 
 pub type Region = rusoto_core::Region;
@@ -180,14 +209,12 @@ pub struct S3Page {
 impl S3Page {
 	fn new(region: Region, bucket: String, key: String) -> Self {
 		let client = S3Client::new(region);
-		let object = client
-			.head_object(HeadObjectRequest {
-				bucket: bucket.clone(),
-				key: key.clone(),
-				..HeadObjectRequest::default()
-			})
-			.sync()
-			.unwrap();
+		let object = block_on_01(client.head_object(HeadObjectRequest {
+			bucket: bucket.clone(),
+			key: key.clone(),
+			..HeadObjectRequest::default()
+		}))
+		.unwrap();
 		let len = object.content_length.unwrap().try_into().unwrap();
 		S3Page {
 			client,
@@ -202,7 +229,8 @@ impl Page for S3Page {
 
 	fn block_on<F>(future: F) -> F::Output
 	where
-		F: Future,
+		F: Future + Send,
+		F::Output: Send,
 	{
 		block_on(future)
 	}

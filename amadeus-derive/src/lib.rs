@@ -16,6 +16,7 @@
 // under the License.
 
 #![recursion_limit = "400"]
+#![allow(clippy::useless_let_if_seq)]
 
 extern crate proc_macro;
 extern crate proc_macro2;

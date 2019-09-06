@@ -130,7 +130,8 @@ pub trait Page {
 
 	fn block_on<F>(future: F) -> F::Output
 	where
-		F: Future,
+		F: Future + Send,
+		F::Output: Send,
 	{
 		futures::executor::block_on(future)
 	}
@@ -158,7 +159,8 @@ where
 
 	fn block_on<F>(future: F) -> F::Output
 	where
-		F: Future,
+		F: Future + Send,
+		F::Output: Send,
 	{
 		T::block_on(future)
 	}
@@ -188,7 +190,8 @@ where
 
 	fn block_on<F>(future: F) -> F::Output
 	where
-		F: Future,
+		F: Future + Send,
+		F::Output: Send,
 	{
 		T::block_on(future)
 	}

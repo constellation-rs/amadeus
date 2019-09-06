@@ -18,6 +18,8 @@ use amadeus_core::{
 
 pub mod file;
 
+use file::block_on_01;
+
 // https://docs.datadoghq.com/integrations/amazon_web_services/?tab=allpermissions#enable-logging-for-your-aws-service
 
 type Closure<Env, Args, Output> =
@@ -57,18 +59,16 @@ fn list(
 		}
 		first = false;
 		Some(ResultExpand(
-			client
-				.list_objects_v2(ListObjectsV2Request {
-					bucket: bucket.to_owned(),
-					prefix: Some(prefix.to_owned()),
-					continuation_token: continuation_token.take(),
-					..ListObjectsV2Request::default()
-				})
-				.sync()
-				.map(|res| {
-					continuation_token = res.next_continuation_token;
-					res.contents.unwrap_or_default().into_iter()
-				}),
+			block_on_01(client.list_objects_v2(ListObjectsV2Request {
+				bucket: bucket.to_owned(),
+				prefix: Some(prefix.to_owned()),
+				continuation_token: continuation_token.take(),
+				..ListObjectsV2Request::default()
+			}))
+			.map(|res| {
+				continuation_token = res.next_continuation_token;
+				res.contents.unwrap_or_default().into_iter()
+			}),
 		))
 	})
 	.flatten()
@@ -117,13 +117,13 @@ impl Source for Cloudfront {
 			.flat_map(FnMut!([bucket, region] move |key:String| {
 				let client = S3Client::new(region.clone());
 				ResultExpand(
-					client
+					block_on_01(client
 						.get_object(GetObjectRequest {
 							bucket: bucket.clone(),
 							key,
 							..GetObjectRequest::default()
 						})
-						.sync()
+						)
 						.map_err(Error::from)
 						.map(|res| {
 							let body = res.body.unwrap().into_blocking_read();

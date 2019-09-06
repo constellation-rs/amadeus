@@ -190,7 +190,7 @@ pub trait DistributedIterator {
 			}
 		}
 		if let Some(err) = panicked {
-			panic!("Amadeus: a task panicked: {}", err)
+			panic!("Amadeus: task '<unnamed>' panicked at '{}'", err)
 		}
 		reduce2.ret()
 	}

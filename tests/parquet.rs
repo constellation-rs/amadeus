@@ -112,7 +112,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
 			.count(pool),
-		45_167
+		207_535
 	);
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
