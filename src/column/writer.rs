@@ -784,7 +784,7 @@ impl EncodingWriteSupport for ColumnWriterImpl<FixedLenByteArrayType> {
 mod tests {
 	use super::*;
 
-	use std::error::Error;
+	use std::{cell::RefCell, error::Error, rc::Rc};
 
 	use rand::distributions::uniform::SampleUniform;
 
@@ -794,7 +794,7 @@ mod tests {
 		}, file::{
 			properties::WriterProperties, reader::SerializedPageReader, writer::SerializedPageWriter
 		}, schema::types::{ColumnDescriptor, ColumnPath, Type as SchemaType}, util::{
-			io::{FileSink, FileSource}, test_common::{get_temp_file, random_numbers_range}
+			io::{BufReader, FileSink, FileSource}, test_common::{get_temp_file, random_numbers_range}
 		}
 	};
 
@@ -1362,7 +1362,11 @@ mod tests {
 		let (bytes_written, _, _) = writer.close().unwrap();
 
 		// Read pages and check the sequence
-		let source = FileSource::new(&file, 0, bytes_written as usize);
+		let source = FileSource::new(
+			Rc::new(RefCell::new(BufReader::new(file))),
+			0,
+			bytes_written,
+		);
 		let mut page_reader = Box::new(
 			SerializedPageReader::new(
 				source,
@@ -1461,7 +1465,11 @@ mod tests {
 		assert_eq!(values_written, values.len());
 		let (bytes_written, rows_written, column_metadata) = writer.close().unwrap();
 
-		let source = FileSource::new(&file, 0, bytes_written as usize);
+		let source = FileSource::new(
+			Rc::new(RefCell::new(BufReader::new(file))),
+			0,
+			bytes_written,
+		);
 		let page_reader = Box::new(
 			SerializedPageReader::new(
 				source,

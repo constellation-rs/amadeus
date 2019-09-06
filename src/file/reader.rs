@@ -19,7 +19,7 @@
 //! readers to read individual column chunks, or access record iterator.
 
 use std::{
-	convert::TryFrom, fs::File, io::{BufReader, Cursor, Read, Seek, SeekFrom}, path::Path, rc::Rc
+	cell::RefCell, convert::TryFrom, fs::File, io::{self, Cursor, Read, Seek, SeekFrom}, path::Path, rc::Rc
 };
 
 use byteorder::{ByteOrder, LittleEndian};
@@ -31,7 +31,9 @@ use thrift::protocol::TCompactInputProtocol;
 use crate::{
 	basic::{ColumnOrder, Compression, Encoding, Type}, column::{
 		page::{Page, PageReader}, reader::{ColumnReader, ColumnReaderImpl}
-	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, record::{Predicate, Record, RowIter}, schema::types::{self, SchemaDescriptor}, util::{io::FileSource, memory::ByteBufferPtr}
+	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, record::{Predicate, Record, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
+		io::{BufReader, FileSource}, memory::ByteBufferPtr
+	}
 };
 
 // ----------------------------------------------------------------------
@@ -133,7 +135,7 @@ pub trait RowGroupReader {
 	/// full file schema is assumed.
 	fn get_row_iter<T>(
 		&self, projection: Option<Predicate>,
-	) -> Result<RowIter<SerializedFileReader<File>, T>>
+	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
 		T: Record,
 		Self: Sized;
@@ -142,53 +144,47 @@ pub trait RowGroupReader {
 // ----------------------------------------------------------------------
 // Serialized impl for file & row group readers
 
-/// Length should return the amount of bytes that implementor contains.
-/// It's mainly used to read the metadata, which is at the end of the source.
-pub trait Length {
+/// ParquetReader is the interface which needs to be fulfilled to be able to parse a
+/// parquet source.
+pub trait ParquetReader: Read + Seek {
+	/// Length should return the amount of bytes that implementor contains.
+	/// It's mainly used to read the metadata, which is at the end of the source.
 	/// Returns the amount of bytes of the inner source.
 	fn len(&self) -> u64;
 }
 
-/// TryClone tries to clone the type and should maintain the `Seek` position of the given
-/// instance.
-pub trait TryClone: Sized {
-	/// Clones the type returning a new instance or an error if it's not possible
-	/// to clone it.
-	fn try_clone(&self) -> Result<Self>;
-}
-
-impl Length for File {
+impl ParquetReader for File {
 	fn len(&self) -> u64 {
 		self.metadata().map(|m| m.len()).unwrap_or(0u64)
 	}
 }
 
-impl TryClone for File {
-	fn try_clone(&self) -> Result<Self> {
-		self.try_clone().map_err(|e| e.into())
-	}
-}
-
-impl<'a> Length for Cursor<&'a [u8]> {
+impl<'a> ParquetReader for Cursor<&'a [u8]> {
 	fn len(&self) -> u64 {
 		self.get_ref().len() as u64
 	}
 }
 
-impl<'a> TryClone for Cursor<&'a [u8]> {
-	fn try_clone(&self) -> Result<Self> {
-		Ok(self.clone())
+pub enum Never {}
+impl Read for Never {
+	fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+		unreachable!()
+	}
+}
+impl Seek for Never {
+	fn seek(&mut self, _pos: SeekFrom) -> io::Result<u64> {
+		unreachable!()
+	}
+}
+impl ParquetReader for Never {
+	fn len(&self) -> u64 {
+		unreachable!()
 	}
 }
 
-/// ParquetReader is the interface which needs to be fulfilled to be able to parse a
-/// parquet source.
-pub trait ParquetReader: Read + Seek + Length + TryClone {}
-impl<T: Read + Seek + Length + TryClone> ParquetReader for T {}
-
 /// A serialized implementation for Parquet [`FileReader`].
 pub struct SerializedFileReader<R: ParquetReader> {
-	buf: BufReader<R>,
+	buf: Rc<RefCell<BufReader<R>>>,
 	metadata: ParquetMetaDataPtr,
 }
 
@@ -196,7 +192,8 @@ impl<R: ParquetReader> SerializedFileReader<R> {
 	/// Creates file reader from a Parquet file.
 	/// Returns error if Parquet file does not exist or is corrupt.
 	pub fn new(reader: R) -> Result<Self> {
-		let mut buf = BufReader::new(reader);
+		let mut buf = Rc::new(RefCell::new(BufReader::with_capacity(256 * 1024, reader)));
+
 		let metadata = Self::parse_metadata(&mut buf)?;
 		Ok(Self {
 			buf,
@@ -210,8 +207,9 @@ impl<R: ParquetReader> SerializedFileReader<R> {
 	// +---------------------------+---+-----+
 	// where A: parquet footer, B: parquet metadata.
 	//
-	fn parse_metadata(buf: &mut BufReader<R>) -> Result<ParquetMetaData> {
-		let file_size = buf.get_ref().len();
+	fn parse_metadata(buf: &mut Rc<RefCell<BufReader<R>>>) -> Result<ParquetMetaData> {
+		let buf = &mut *buf.borrow_mut();
+		let file_size = buf.len();
 		if file_size < (FOOTER_SIZE as u64) {
 			return Err(general_err!(
 				"Invalid Parquet file. Size is smaller than footer"
@@ -238,7 +236,7 @@ impl<R: ParquetReader> SerializedFileReader<R> {
 			));
 		}
 		let _ = buf.seek(SeekFrom::Start(metadata_start as u64))?;
-		let metadata_buf = buf.take(metadata_len as u64).into_inner();
+		let metadata_buf = buf.take(metadata_len as u64); //.into_inner();
 
 		// TODO: row group filtering
 		let mut prot = TCompactInputProtocol::new(metadata_buf);
@@ -312,8 +310,11 @@ impl<R: 'static + ParquetReader> FileReader for SerializedFileReader<R> {
 	fn get_row_group(&self, i: usize) -> Result<Self::RowGroupReader> {
 		let row_group_metadata = self.metadata.row_group(i);
 		// Row groups should be processed sequentially.
-		let f = self.buf.get_ref().try_clone()?;
-		Ok(SerializedRowGroupReader::new(f, row_group_metadata))
+		// let f = self.buf.get_ref().clone();
+		Ok(SerializedRowGroupReader::new(
+			self.buf.clone(),
+			row_group_metadata,
+		))
 	}
 }
 
@@ -363,14 +364,13 @@ impl<'a> TryFrom<&'a str> for SerializedFileReader<File> {
 
 /// A serialized implementation for Parquet [`RowGroupReader`].
 pub struct SerializedRowGroupReader<R: ParquetReader> {
-	buf: BufReader<R>,
+	buf: Rc<RefCell<BufReader<R>>>,
 	metadata: RowGroupMetaDataPtr,
 }
 
 impl<R: 'static + ParquetReader> SerializedRowGroupReader<R> {
 	/// Creates new row group reader from a file and row group metadata.
-	fn new(file: R, metadata: RowGroupMetaDataPtr) -> Self {
-		let buf = BufReader::new(file);
+	fn new(buf: Rc<RefCell<BufReader<R>>>, metadata: RowGroupMetaDataPtr) -> Self {
 		Self { buf, metadata }
 	}
 }
@@ -392,7 +392,7 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
 			col_start = col.dictionary_page_offset().unwrap();
 		}
 		let col_length = col.compressed_size();
-		let file_chunk = FileSource::new(self.buf.get_ref(), col_start as u64, col_length as usize);
+		let file_chunk = FileSource::new(self.buf.clone(), col_start as u64, col_length as u64);
 		let page_reader = SerializedPageReader::new(
 			file_chunk,
 			col.num_values(),
@@ -438,7 +438,7 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
 
 	fn get_row_iter<T>(
 		&self, projection: Option<Predicate>,
-	) -> Result<RowIter<SerializedFileReader<File>, T>>
+	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
 		T: Record,
 		Self: Sized,

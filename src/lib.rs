@@ -20,7 +20,12 @@
 //! **[Crates.io](https://crates.io/crates/parchet) │ [Repo](https://github.com/alecmocatta/parchet)**
 
 #![doc(html_root_url = "https://docs.rs/parchet/0.1.0")]
-#![feature(specialization, type_alias_impl_trait)]
+#![feature(
+	specialization,
+	type_alias_impl_trait,
+	bufreader_seek_relative,
+	read_initializer
+)]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
