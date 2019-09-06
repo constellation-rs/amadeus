@@ -1,11 +1,10 @@
-use futures::future::FutureExt;
+use futures::{compat::Compat01As03, future::FutureExt};
 use once_cell::sync::Lazy;
+use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 use serde::{Deserialize, Serialize};
-use std::{
-	cell::RefCell, convert::{TryFrom, TryInto}, future::Future, io, mem::transmute, pin::Pin
-};
-use tokio::{io::AsyncRead, runtime::Runtime};
+use std::{cell::RefCell, convert::TryInto, future::Future, io, mem::transmute, pin::Pin};
+use tokio::{io::AsyncRead, prelude::future::poll_fn, runtime::Runtime};
 
 use amadeus_core::{
 	file::{Directory, File, Page, Partition, PathBuf}, util::IoError
@@ -244,26 +243,28 @@ impl Page for S3Page {
 		&'a self, offset: u64, buf: &'a mut [u8],
 	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
 		Box::pin(async move {
-			let (start, end) = (offset, offset + u64::try_from(buf.len()).unwrap() - 1);
-			let res =
-				futures::compat::Compat01As03::new(self.client.get_object(GetObjectRequest {
+			let len: u64 = buf.len().try_into().unwrap();
+			let mut cursor = io::Cursor::new(buf);
+			while len - cursor.position() > 0 {
+				let (start, end) = (offset + cursor.position(), offset + len - 1);
+				let res = Compat01As03::new(self.client.get_object(GetObjectRequest {
 					bucket: self.bucket.clone(),
 					key: self.key.clone(),
 					range: Some(format!("bytes={}-{}", start, end)),
 					..GetObjectRequest::default()
 				}))
-				.await
-				.unwrap();
-			let len: u64 = buf.len().try_into().unwrap();
-			let mut cursor = io::Cursor::new(buf);
-			let mut read = res.body.unwrap().into_async_read();
-			while len - cursor.position() > 0 {
-				let _: usize =
-					futures::compat::Compat01As03::new(tokio::prelude::future::poll_fn(|| {
-						read.read_buf(&mut cursor)
-					}))
-					.await
-					.unwrap();
+				.await;
+				if let Err(RusotoError::HttpDispatch(_)) = res {
+					continue;
+				}
+				let mut read = res.unwrap().body.unwrap().into_async_read();
+				while len - cursor.position() > 0 {
+					let res = Compat01As03::new(poll_fn(|| read.read_buf(&mut cursor))).await;
+					match res {
+						Ok(0) | Err(_) => break,
+						_ => (),
+					}
+				}
 			}
 			Ok(())
 		})
