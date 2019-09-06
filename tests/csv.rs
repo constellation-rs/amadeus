@@ -51,7 +51,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		f: String,
 	}
 
-	let rows = Csv::<GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]);
+	let rows =
+		Csv::<_, GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]).unwrap();
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
@@ -69,7 +70,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		f: String,
 	}
 
-	let rows = Csv::<Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]);
+	let rows = Csv::<_, Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]).unwrap();
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {

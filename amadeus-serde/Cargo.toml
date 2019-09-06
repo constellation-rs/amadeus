@@ -14,7 +14,6 @@ edition = "2018"
 amadeus-core = { version = "0.1", path = "../amadeus-core" }
 amadeus-types = { version = "0.1", path = "../amadeus-types" }
 serde = { version = "1.0", features = ["derive"] }
-walkdir = "2.2"
 serde_json = "1.0"
 csv = "1.0"
 chrono = { version = "0.4", features = ["serde"] }

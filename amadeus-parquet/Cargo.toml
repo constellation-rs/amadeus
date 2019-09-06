@@ -14,7 +14,6 @@ edition = "2018"
 amadeus-core = { version = "0.1", path = "../amadeus-core" }
 amadeus-types = { version = "0.1", path = "../amadeus-types" }
 parchet = "0.1"
-walkdir = "2.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = { version = "0.1" } #, path = "../serde_closure" }
 sum = { version = "0.1", features = ["serde"] }

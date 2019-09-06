@@ -1,13 +1,14 @@
 use std::{
 	convert::TryFrom, ffi::{OsStr, OsString}, fs, future::Future, io::{self, Seek, SeekFrom}, path::{Path, PathBuf}, pin::Pin, sync::atomic::{AtomicU64, Ordering}
 };
+use walkdir::WalkDir;
 
 #[cfg(unix)]
 use std::os::unix::fs::FileExt;
 #[cfg(windows)]
 use std::os::windows::fs::FileExt;
 
-use super::{File, Page, Partition};
+use super::{Directory, File, Page, Partition};
 use crate::util::{IoError, ResultExpand};
 
 impl<F> File for Vec<F>
@@ -45,6 +46,14 @@ impl File for PathBuf {
 		Ok(vec![self])
 	}
 }
+impl Directory for PathBuf {
+	fn partitions_filter<F>(self, f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	where
+		F: FnMut(&super::PathBuf) -> bool,
+	{
+		(*self).partitions_filter(f)
+	}
+}
 impl Partition for PathBuf {
 	type Page = LocalFile;
 	type Error = IoError;
@@ -53,60 +62,107 @@ impl Partition for PathBuf {
 		Ok(vec![LocalFile::open(self)?])
 	}
 }
+impl Directory for &Path {
+	fn partitions_filter<F>(self, mut f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	where
+		F: FnMut(&super::PathBuf) -> bool,
+	{
+		WalkDir::new(self)
+			.follow_links(true)
+			.sort_by(|a, b| a.file_name().cmp(b.file_name()))
+			.into_iter()
+			.filter_entry(|e| {
+				let is_dir = e.file_type().is_dir();
+				let path = e.path();
+				if path == self {
+					return true;
+				}
+				let mut path = path.strip_prefix(self).unwrap();
+				let mut path_buf = if !cfg!(windows) {
+					super::PathBuf::new()
+				} else {
+					super::PathBuf::new_wide()
+				};
+				let mut file_name = None;
+				#[cfg(unix)]
+				let into = |osstr: &OsStr| -> Vec<u8> {
+					std::os::unix::ffi::OsStrExt::as_bytes(osstr).to_owned()
+				};
+				#[cfg(windows)]
+				let into = |osstr: &OsStr| -> Vec<u8> {
+					std::os::windows::ffi::OsStrExt::encode_wide(osstr)
+						.flat_map(|char| {
+							let char = char.to_be();
+							[
+								u8::try_from(char >> 8).unwrap(),
+								u8::try_from(char & 0xff).unwrap(),
+							]
+							.iter()
+							.copied()
+						})
+						.collect()
+				};
+				if !is_dir {
+					file_name = Some(path.file_name().unwrap());
+					path = path.parent().unwrap();
+				}
+				for component in path {
+					path_buf.push(into(component));
+				}
+				path_buf.set_file_name(file_name.map(into));
+				f(&path_buf)
+			})
+			.filter_map(|e| match e {
+				Ok(ref e) if e.file_type().is_dir() => None,
+				Ok(e) => Some(Ok(e.into_path())),
+				Err(e) => Some(Err(if e.io_error().is_some() {
+					e.into_io_error().unwrap()
+				} else {
+					io::Error::new(io::ErrorKind::Other, e)
+				}
+				.into())),
+			})
+			.collect()
+	}
+}
 impl File for &Path {
 	type Partition = PathBuf;
 	type Error = IoError;
 
 	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		Ok(vec![self.to_owned()])
+		PathBuf::partitions(self.into())
 	}
 }
 impl File for String {
-	type Partition = Self;
+	type Partition = PathBuf;
 	type Error = IoError;
 
 	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		Ok(vec![self])
-	}
-}
-impl Partition for String {
-	type Page = LocalFile;
-	type Error = IoError;
-
-	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
-		Ok(vec![LocalFile::open(self)?])
+		PathBuf::partitions(self.into())
 	}
 }
 impl File for &str {
-	type Partition = String;
+	type Partition = PathBuf;
 	type Error = IoError;
 
 	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		Ok(vec![self.to_owned()])
+		PathBuf::partitions(self.into())
 	}
 }
 impl File for OsString {
-	type Partition = Self;
+	type Partition = PathBuf;
 	type Error = IoError;
 
 	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		Ok(vec![self])
-	}
-}
-impl Partition for OsString {
-	type Page = LocalFile;
-	type Error = IoError;
-
-	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
-		Ok(vec![LocalFile::open(self)?])
+		PathBuf::partitions(self.into())
 	}
 }
 impl File for &OsStr {
-	type Partition = OsString;
+	type Partition = PathBuf;
 	type Error = IoError;
 
 	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		Ok(vec![self.to_owned()])
+		PathBuf::partitions(self.into())
 	}
 }
 // impl File for fs::File {

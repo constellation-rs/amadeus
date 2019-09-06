@@ -73,6 +73,17 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		207_535
 	);
 
+	let rows = Parquet::<_, Value>::new(ParquetDirectory::new(PathBuf::from(
+		"amadeus-testing/parquet/cf-accesslogs/",
+	)));
+	assert_eq!(
+		rows.unwrap()
+			.dist_iter()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(pool),
+		207_535
+	);
+
 	let rows = Parquet::<_, Value>::new(vec![
 		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
 		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-ed461019-4a12-46fa-a3f3-246d58f0ee06.c000.snappy.parquet"),

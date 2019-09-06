@@ -1,59 +1,67 @@
-use super::SerdeData;
 use amadeus_core::{
-	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::ResultExpand
+	dist_iter::DistributedIterator, file::{File, Page, Partition, Reader}, into_dist_iter::IntoDistributedIterator, util::ResultExpand
 };
 use serde::{Deserialize, Serialize};
 use std::{
-	error, fmt::{self, Display}, fs::File, io, iter, marker::PhantomData, path::PathBuf, sync::Arc, vec
+	error, fmt::{self, Display}, iter, marker::PhantomData, vec
 };
-use walkdir::WalkDir;
 
-use super::SerdeDeserializeGroup;
-use csv::Error as CsvError;
+use super::{SerdeData, SerdeDeserializeGroup};
+use csv::Error as SerdeCsvError;
 use serde_closure::*;
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
 
-type CsvInner<Row> = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<PathBuf>>,
+type CsvInner<Row, F> = amadeus_core::dist_iter::FlatMap<
+	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<<F as File>::Partition>>,
 	Closure<
 		(),
-		(PathBuf,),
+		(<F as File>::Partition,),
 		iter::Map<
 			iter::FlatMap<
-				sum::Sum2<
-					iter::Once<Result<PathBuf, io::Error>>,
-					vec::IntoIter<Result<PathBuf, io::Error>>,
+				amadeus_core::util::ResultExpandIter<
+					vec::IntoIter<<<F as File>::Partition as Partition>::Page>,
+					CsvError<F>,
 				>,
 				ResultExpand<
 					iter::Map<
-						csv::DeserializeRecordsIntoIter<File, SerdeDeserializeGroup<Row>>,
+						csv::DeserializeRecordsIntoIter<
+							Reader<<<F as File>::Partition as Partition>::Page>,
+							SerdeDeserializeGroup<Row>,
+						>,
 						Closure<
 							(),
-							(Result<SerdeDeserializeGroup<Row>, CsvError>,),
-							Result<Row, CsvError>,
+							(Result<SerdeDeserializeGroup<Row>, SerdeCsvError>,),
+							Result<Row, SerdeCsvError>,
 						>,
 					>,
-					io::Error,
+					CsvError<F>,
 				>,
 				Closure<
 					(),
-					(Result<PathBuf, io::Error>,),
+					(Result<<<F as File>::Partition as Partition>::Page, CsvError<F>>,),
 					ResultExpand<
 						iter::Map<
-							csv::DeserializeRecordsIntoIter<File, SerdeDeserializeGroup<Row>>,
+							csv::DeserializeRecordsIntoIter<
+								Reader<<<F as File>::Partition as Partition>::Page>,
+								SerdeDeserializeGroup<Row>,
+							>,
 							Closure<
 								(),
-								(Result<SerdeDeserializeGroup<Row>, CsvError>,),
-								Result<Row, CsvError>,
+								(Result<SerdeDeserializeGroup<Row>, SerdeCsvError>,),
+								Result<Row, SerdeCsvError>,
 							>,
 						>,
-						io::Error,
+						CsvError<F>,
 					>,
 				>,
 			>,
-			Closure<(), (Result<Result<Row, CsvError>, io::Error>,), Result<Row, Error>>,
+			Closure<
+				(),
+				(Result<Result<Row, SerdeCsvError>, CsvError<F>>,),
+				Result<Row, CsvError<F>>,
+			>,
 		>,
 	>,
 >;
@@ -88,8 +96,9 @@ type CsvInner<Row> = amadeus_core::dist_iter::FlatMap<
 // trait File
 
 #[derive(Clone)]
-pub struct Csv<Row>
+pub struct Csv<File, Row>
 where
+	File: amadeus_core::file::File,
 	Row: SerdeData,
 {
 	// delimiter: u8,
@@ -102,106 +111,62 @@ where
 	// double_quote: bool,
 	// quoting: bool,
 	// comment: Option<u8>,
-	files: Vec<PathBuf>,
+	partitions: Vec<File::Partition>,
 	marker: PhantomData<fn() -> Row>,
 }
-impl<Row> Csv<Row>
+impl<F, Row> Csv<F, Row>
 where
+	F: File,
 	Row: SerdeData,
 {
-	pub fn new(files: Vec<PathBuf>) -> Self {
-		Self {
-			files,
+	pub fn new(file: F) -> Result<Self, CsvError<F>> {
+		Ok(Self {
+			partitions: file.partitions().map_err(CsvError::<F>::File)?,
 			marker: PhantomData,
-		}
+		})
 	}
 	// pub fn open<Row>(files: Vec<PathBuf>) -> Csv<Row> {}
 	// pub fn create<Row>(files: Vec<PathBuf>) -> Csv<Row> {}
 }
-impl<Row> amadeus_core::Source for Csv<Row>
+impl<F, Row> amadeus_core::Source for Csv<F, Row>
 where
+	F: File,
 	Row: SerdeData,
 {
 	type Item = Row;
-	type Error = Error;
+	type Error = CsvError<F>;
 
-	// existential type DistIter: super::super::DistributedIterator<Item = Result<Row, Error>>;//, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
-	type DistIter = CsvInner<Row>;
-	type Iter = iter::Empty<Result<Row, Error>>;
+	// type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistIter = CsvInner<Self::Item, F>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter {
-		self.files
+		self.partitions
 			.into_dist_iter()
-			.flat_map(FnMut!(|file: PathBuf| {
-				let files = if !file.is_dir() {
-					sum::Sum2::A(iter::once(Ok(file)))
-				} else {
-					sum::Sum2::B(get_csv_partitions(file))
-				};
-				files
-					.flat_map(FnMut!(|file: Result<PathBuf, _>| ResultExpand(
-						file.and_then(|file| Ok(File::open(file)?)).map(|file| {
+			.flat_map(FnMut!(|partition: F::Partition| {
+				ResultExpand(partition.pages().map_err(CsvError::<F>::Partition))
+					.into_iter()
+					.flat_map(FnMut!(|page: Result<_, _>| ResultExpand(page.map(
+						|page| {
 							csv::ReaderBuilder::new()
 								.has_headers(false)
-								.from_reader(file)
+								.from_reader(Page::reader(page))
 								.into_deserialize()
-								.map(FnMut!(
-									|x: Result<SerdeDeserializeGroup<Row>, CsvError>| Ok(x?.0)
-								))
-						})
-					)))
-					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
+								.map(FnMut!(|x: Result<
+									SerdeDeserializeGroup<Row>,
+									SerdeCsvError,
+								>| Ok(x?.0)))
+						}
+					))))
+					.map(FnMut!(|row: Result<
+						Result<Row, SerdeCsvError>,
+						Self::Error,
+					>| Ok(row??)))
 			}))
 	}
 	fn iter(self) -> Self::Iter {
 		iter::empty()
 	}
-}
-
-/// "Logic" interpreted from https://github.com/apache/arrow/blob/927cfeff875e557e28649891ea20ca38cb9d1536/python/pyarrow/parquet.py#L705-L829
-/// and https://github.com/apache/spark/blob/5a7403623d0525c23ab8ae575e9d1383e3e10635/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/InMemoryFileIndex.scala#L348-L359
-fn get_csv_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>> {
-	WalkDir::new(dir)
-		.follow_links(true)
-		.sort_by(|a, b| a.file_name().cmp(b.file_name()))
-		.into_iter()
-		.filter_entry(|e| {
-			let is_dir = e.file_type().is_dir();
-			let path = e.path();
-			let extension = path.extension();
-			let file_name = path.file_name().unwrap().to_string_lossy();
-			let skip = file_name.starts_with('.')
-				|| if is_dir {
-					file_name.starts_with('_') && !file_name.contains('=') // ARROW-1079: Filter out "private" directories starting with underscore
-				} else {
-					// || (extension.is_some() && extension.unwrap() == "_COPYING_") // File copy in progress; TODO: Emit error on this.
-					(extension.is_some() && extension.unwrap() == "crc") // Checksums
-						|| file_name == "_SUCCESS" // Spark success marker
-				};
-			!skip
-		})
-		.filter_map(|e| match e {
-			Ok(ref e) if e.file_type().is_dir() => {
-				let path = e.path();
-				let directory_name = path.file_name().unwrap();
-				let valid = directory_name.to_string_lossy().contains('=');
-				if !valid {
-					Some(Err(io::Error::new(
-						io::ErrorKind::Other,
-						format!(
-							"Invalid directory name \"{}\"",
-							directory_name.to_string_lossy()
-						),
-					)))
-				} else {
-					None
-				}
-			}
-			Ok(e) => Some(Ok(e.into_path())),
-			Err(e) => Some(Err(e.into())),
-		})
-		.collect::<Vec<_>>()
-		.into_iter()
 }
 
 mod csverror {
@@ -276,36 +241,74 @@ mod csverror {
 	// }
 }
 
+pub type CsvError<F> = CsvErrorInternal<
+	<F as File>::Error,
+	<<F as File>::Partition as Partition>::Error,
+	<<<F as File>::Partition as Partition>::Page as Page>::Error,
+>;
+
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Error {
-	Io(#[serde(with = "amadeus_core::misc_serde")] Arc<io::Error>),
-	Csv(#[serde(with = "csverror")] CsvError),
+pub enum CsvErrorInternal<A, B, C> {
+	File(A),
+	Partition(B),
+	Page(C),
+	Csv(#[serde(with = "csverror")] SerdeCsvError),
 }
-impl PartialEq for Error {
+impl<A, B, C> Clone for CsvErrorInternal<A, B, C>
+where
+	A: Clone,
+	B: Clone,
+	C: Clone,
+{
+	fn clone(&self) -> Self {
+		match self {
+			Self::File(err) => Self::File(err.clone()),
+			Self::Partition(err) => Self::Partition(err.clone()),
+			Self::Page(err) => Self::Page(err.clone()),
+			Self::Csv(err) => Self::Csv(serde::ser::Error::custom(err)),
+		}
+	}
+}
+impl<A, B, C> PartialEq for CsvErrorInternal<A, B, C>
+where
+	A: PartialEq,
+	B: PartialEq,
+	C: PartialEq,
+{
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Self::Io(a), Self::Io(b)) => a.to_string() == b.to_string(),
+			(Self::File(a), Self::File(b)) => a.eq(b),
+			(Self::Partition(a), Self::Partition(b)) => a.eq(b),
+			(Self::Page(a), Self::Page(b)) => a.eq(b),
 			(Self::Csv(a), Self::Csv(b)) => a.to_string() == b.to_string(),
 			_ => false,
 		}
 	}
 }
-impl error::Error for Error {}
-impl Display for Error {
+impl<A, B, C> error::Error for CsvErrorInternal<A, B, C>
+where
+	A: error::Error,
+	B: error::Error,
+	C: error::Error,
+{
+}
+impl<A, B, C> Display for CsvErrorInternal<A, B, C>
+where
+	A: Display,
+	B: Display,
+	C: Display,
+{
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Self::Io(err) => err.fmt(f),
-			Self::Csv(err) => err.fmt(f),
+			Self::File(err) => Display::fmt(err, f),
+			Self::Partition(err) => Display::fmt(err, f),
+			Self::Page(err) => Display::fmt(err, f),
+			Self::Csv(err) => Display::fmt(err, f),
 		}
 	}
 }
-impl From<io::Error> for Error {
-	fn from(err: io::Error) -> Self {
-		Self::Io(Arc::new(err))
-	}
-}
-impl From<CsvError> for Error {
-	fn from(err: CsvError) -> Self {
+impl<A, B, C> From<SerdeCsvError> for CsvErrorInternal<A, B, C> {
+	fn from(err: SerdeCsvError) -> Self {
 		Self::Csv(err)
 	}
 }

@@ -33,8 +33,7 @@ where
 		<Self as amadeus_core::Source>::iter(self)
 	}
 }
-#[cfg(feature = "parquet")]
-impl<File, Row> Source for Parquet<File, Row>
+impl<File, Row> Source for Csv<File, Row>
 where
 	File: amadeus_core::file::File,
 	Row: super::data::Data,
@@ -52,8 +51,10 @@ where
 		<Self as amadeus_core::Source>::iter(self)
 	}
 }
-impl<Row> Source for Csv<Row>
+#[cfg(feature = "parquet")]
+impl<File, Row> Source for Parquet<File, Row>
 where
+	File: amadeus_core::file::File,
 	Row: super::data::Data,
 {
 	type Item = <Self as amadeus_core::Source>::Item;

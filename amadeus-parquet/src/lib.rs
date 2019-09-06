@@ -11,7 +11,7 @@ use parchet::{
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	collections::HashMap, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::FnMut, sync::Arc, vec
+	collections::HashMap, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::FnMut, vec
 };
 
 use amadeus_core::{
@@ -208,7 +208,7 @@ where
 						ResultExpand(page.and_then(
 							|page: <<F as File>::Partition as Partition>::Page| {
 								Ok(SerializedFileReader::new(ParquetReaderWrap(Page::reader(
-									Arc::new(page),
+									page,
 								)))?
 								.get_row_iter(None)?
 								.map(FnMut!(|x: Result<
@@ -229,7 +229,7 @@ where
 	}
 }
 
-pub struct ParquetReaderWrap<P>(amadeus_core::file::Reader<Arc<P>>)
+pub struct ParquetReaderWrap<P>(amadeus_core::file::Reader<P>)
 where
 	P: Page;
 impl<P> io::Read for ParquetReaderWrap<P>
@@ -241,14 +241,6 @@ where
 	}
 	unsafe fn initializer(&self) -> io::Initializer {
 		io::Initializer::nop()
-	}
-}
-impl<P> Clone for ParquetReaderWrap<P>
-where
-	P: Page,
-{
-	fn clone(&self) -> Self {
-		ParquetReaderWrap(self.0.clone())
 	}
 }
 impl<P> io::Seek for ParquetReaderWrap<P>
@@ -301,7 +293,7 @@ where
 		// "Logic" interpreted from https://github.com/apache/arrow/blob/927cfeff875e557e28649891ea20ca38cb9d1536/python/pyarrow/parquet.py#L705-L829
 		// and https://github.com/apache/spark/blob/5a7403623d0525c23ab8ae575e9d1383e3e10635/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/InMemoryFileIndex.scala#L348-L359
 		// and https://github.com/apache/spark/blob/5a7403623d0525c23ab8ae575e9d1383e3e10635/sql/core/src/test/scala/org/apache/spark/sql/execution/datasources/parquet/ParquetPartitionDiscoverySuite.scala
-		let ret = self.directory.partitions_filter(|path| {
+		self.directory.partitions_filter(|path| {
 			let skip;
 			if !path.is_file() {
 				let dir_name = path.last().unwrap();
@@ -318,9 +310,7 @@ where
 							|| file_name.ends_with("_$folder$"); // This is created by Apache tools on S3
 			}
 			!skip && f(path)
-		});
-		println!("{:?}", ret);
-		ret
+		})
 	}
 }
 

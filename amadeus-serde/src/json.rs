@@ -2,9 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use serde_json::Error as SerdeJsonError;
 use std::{
-	error, fmt::{self, Debug, Display}, io::{self, BufReader}, iter, marker::PhantomData, path::PathBuf, vec
+	error, fmt::{self, Debug, Display}, io::BufReader, iter, marker::PhantomData, vec
 };
-use walkdir::WalkDir;
 
 use amadeus_core::{
 	dist_iter::DistributedIterator, file::{File, Page, Partition, Reader}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
@@ -103,9 +102,9 @@ where
 	type Item = Row;
 	type Error = JsonError<F>;
 
-	// type DistIter = impl DistributedIterator<Item = Result<Row, Self::Error>>; //, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
-	type DistIter = JsonInner<F, Row>;
-	type Iter = iter::Empty<Result<Row, Self::Error>>;
+	// type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistIter = JsonInner<F, Self::Item>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter {
 		self.partitions
@@ -153,52 +152,6 @@ where
 		// 			.map(|row: Result<Result<Row, SerdeJsonError>, io::Error>| Ok(row??))
 		// 	})
 	}
-}
-
-/// "Logic" interpreted from https://github.com/apache/arrow/blob/927cfeff875e557e28649891ea20ca38cb9d1536/python/pyarrow/parquet.py#L705-L829
-/// and https://github.com/apache/spark/blob/5a7403623d0525c23ab8ae575e9d1383e3e10635/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/InMemoryFileIndex.scala#L348-L359
-fn _get_json_partitions(dir: PathBuf) -> vec::IntoIter<Result<PathBuf, io::Error>> {
-	WalkDir::new(dir)
-		.follow_links(true)
-		.sort_by(|a, b| a.file_name().cmp(b.file_name()))
-		.into_iter()
-		.filter_entry(|e| {
-			let is_dir = e.file_type().is_dir();
-			let path = e.path();
-			let extension = path.extension();
-			let file_name = path.file_name().unwrap().to_string_lossy();
-			let skip = file_name.starts_with('.')
-				|| if is_dir {
-					file_name.starts_with('_') && !file_name.contains('=') // ARROW-1079: Filter out "private" directories starting with underscore
-				} else {
-					// || (extension.is_some() && extension.unwrap() == "_COPYING_") // File copy in progress; TODO: Emit error on this.
-					(extension.is_some() && extension.unwrap() == "crc") // Checksums
-						|| file_name == "_SUCCESS" // Spark success marker
-				};
-			!skip
-		})
-		.filter_map(|e| match e {
-			Ok(ref e) if e.file_type().is_dir() => {
-				let path = e.path();
-				let directory_name = path.file_name().unwrap();
-				let valid = directory_name.to_string_lossy().contains('=');
-				if !valid {
-					Some(Err(io::Error::new(
-						io::ErrorKind::Other,
-						format!(
-							"Invalid directory name \"{}\"",
-							directory_name.to_string_lossy()
-						),
-					)))
-				} else {
-					None
-				}
-			}
-			Ok(e) => Some(Ok(e.into_path())),
-			Err(e) => Some(Err(e.into())),
-		})
-		.collect::<Vec<_>>()
-		.into_iter()
 }
 
 mod jsonerror {

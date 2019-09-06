@@ -11,12 +11,21 @@ pub use local::LocalFile;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PathBuf {
+	wide: bool, // for if the Vec<u8> is actually utf16
 	components: Vec<Vec<u8>>,
 	file_name: Option<Vec<u8>>,
 }
 impl PathBuf {
 	pub fn new() -> Self {
 		Self {
+			wide: false,
+			components: Vec::new(),
+			file_name: None,
+		}
+	}
+	pub fn new_wide() -> Self {
+		Self {
+			wide: true,
 			components: Vec::new(),
 			file_name: None,
 		}
@@ -59,6 +68,11 @@ impl PathBuf {
 		self.components
 			.iter()
 			.map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+	}
+}
+impl Default for PathBuf {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 impl fmt::Display for PathBuf {
