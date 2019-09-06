@@ -17,7 +17,8 @@ use amadeus::{
 		types::{Downcast, List, Map, Timestamp, Value}, Data
 	}, source::{Parquet, Source}, DistributedIterator, LocalPool, ProcessPool, ThreadPool
 };
-use amadeus_aws::file::{Region, S3File};
+use amadeus_aws::file::{Region, S3Directory, S3File};
+use amadeus_parquet::ParquetDirectory;
 
 fn main() {
 	init(Resources::default());
@@ -50,7 +51,51 @@ fn main() {
 fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	let rows = Parquet::<_, Value>::new(S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"));
+	let rows = Parquet::<_, Value>::new(vec![S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet");20]);
+	assert_eq!(
+		rows.unwrap()
+			.dist_iter()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(pool),
+		45_167 * 20
+	);
+
+	let rows = Parquet::<_, Value>::new(ParquetDirectory::new(S3Directory::new(
+		Region::UsEast1,
+		"us-east-1.data-analytics",
+		"cflogworkshop/optimized/cf-accesslogs/",
+	)));
+	assert_eq!(
+		rows.unwrap()
+			.dist_iter()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(pool),
+		207_535
+	);
+
+	let rows = Parquet::<_, Value>::new(vec![
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-ed461019-4a12-46fa-a3f3-246d58f0ee06.c000.snappy.parquet"),
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=04/part-00173-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=05/part-00025-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=05/part-00025-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=06/part-00185-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+		S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=07/part-00151-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+	]);
+	assert_eq!(
+		rows.unwrap()
+			.dist_iter()
+			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			.count(pool),
+		207_535
+	);
+
+	let rows = Parquet::<_, Value>::new(ParquetDirectory::new(S3Directory::new(
+		Region::UsEast1,
+		"us-east-1.data-analytics",
+		"cflogworkshop/optimized/cf-accesslogs/",
+	)));
 	assert_eq!(
 		rows.unwrap()
 			.dist_iter()

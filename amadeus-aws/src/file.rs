@@ -6,7 +6,9 @@ use std::{
 };
 use tokio::io::AsyncRead;
 
-use amadeus_core::util::{IoError, ResultExpand};
+use amadeus_core::{
+	file::{Directory, File, Page, Partition, PathBuf}, util::IoError
+};
 
 fn block_on<F>(future: F) -> F::Output
 where
@@ -22,7 +24,7 @@ where
 
 pub type Region = rusoto_core::Region;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3Directory {
 	region: Region,
 	bucket: String,
@@ -38,35 +40,82 @@ impl S3Directory {
 		}
 	}
 }
-impl amadeus_core::file::File for S3Directory {
-	type Partition = S3Partition;
-	type Error = super::Error;
-
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		let S3Directory {
+impl Directory for S3Directory {
+	fn partitions_filter<F>(self, mut f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	where
+		F: FnMut(&PathBuf) -> bool,
+	{
+		let Self {
 			region,
 			bucket,
 			prefix,
 		} = self;
 		let client = S3Client::new(region.clone());
-		let objects = super::list(&client, &bucket, &prefix);
-		ResultExpand(objects)
+		let objects = super::list(&client, &bucket, &prefix)?;
+
+		let mut current_path = PathBuf::new();
+		let mut skip = false;
+		let mut last_key: Option<String> = None;
+		objects
 			.into_iter()
+			.filter(|object| {
+				let key = object.key.as_ref().unwrap();
+				assert!(key.starts_with(&prefix));
+				let key = &key[prefix.len()..];
+				assert!(last_key.is_none() || **last_key.as_ref().unwrap() < *key, "S3 API not returning objects in \"UTF-8 character encoding in lexicographical order\" as their docs specify");
+				last_key = Some(key.to_owned());
+				let mut path = key.split('/').collect::<Vec<&str>>();
+				let file_name = path.pop().unwrap();
+				skip = skip
+					&& path.len() >= current_path.depth()
+					&& path
+						.iter()
+						.take(current_path.depth())
+						.copied()
+						.eq(current_path.iter());
+				if skip {
+					return false;
+				}
+				while current_path.depth() > path.len()
+					|| (current_path.depth() > 0
+						&& current_path.last().unwrap() != path[current_path.depth() - 1])
+				{
+					current_path.pop().unwrap();
+				}
+				while path.len() > current_path.depth() {
+					current_path.push(path[current_path.depth()]);
+					if !f(&current_path) {
+						skip = true;
+						return false;
+					}
+				}
+				current_path.set_file_name(Some(file_name));
+				let ret = f(&current_path);
+				current_path.set_file_name::<Vec<u8>>(None);
+				ret
+			})
 			.map(|object| {
-				object
-					.map(|object| S3Partition {
-						region: region.clone(),
-						bucket: bucket.clone(),
-						key: object.key.unwrap(),
-						len: object.size.unwrap().try_into().unwrap(),
-					})
-					.map_err(From::from)
+				Ok(S3Partition {
+					region: region.clone(),
+					bucket: bucket.clone(),
+					key: object.key.unwrap(),
+					len: object.size.unwrap().try_into().unwrap(),
+				})
 			})
 			.collect()
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+impl File for S3Directory {
+	type Partition = S3Partition;
+	type Error = super::Error;
+
+	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		self.partitions_filter(|_| true)
+	}
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3File {
 	region: Region,
 	bucket: String,
@@ -82,7 +131,7 @@ impl S3File {
 		}
 	}
 }
-impl amadeus_core::file::File for S3File {
+impl File for S3File {
 	type Partition = S3File;
 	type Error = super::Error;
 
@@ -90,7 +139,7 @@ impl amadeus_core::file::File for S3File {
 		Ok(vec![self])
 	}
 }
-impl amadeus_core::file::Partition for S3File {
+impl Partition for S3File {
 	type Page = S3Page;
 	type Error = IoError;
 
@@ -99,14 +148,14 @@ impl amadeus_core::file::Partition for S3File {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3Partition {
 	region: Region,
 	bucket: String,
 	key: String,
 	len: u64,
 }
-impl amadeus_core::file::Partition for S3Partition {
+impl Partition for S3Partition {
 	type Page = S3Page;
 	type Error = IoError;
 
@@ -148,7 +197,7 @@ impl S3Page {
 		}
 	}
 }
-impl amadeus_core::file::Page for S3Page {
+impl Page for S3Page {
 	type Error = IoError;
 
 	fn block_on<F>(future: F) -> F::Output

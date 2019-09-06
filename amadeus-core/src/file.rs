@@ -2,12 +2,101 @@ mod local;
 
 use futures::future::FutureExt;
 use std::{
-	convert::{TryFrom, TryInto}, error::Error, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
+	convert::{TryFrom, TryInto}, error::Error, fmt, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
 use crate::pool::ProcessSend;
 
 pub use local::LocalFile;
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PathBuf {
+	components: Vec<Vec<u8>>,
+	file_name: Option<Vec<u8>>,
+}
+impl PathBuf {
+	pub fn new() -> Self {
+		Self {
+			components: Vec::new(),
+			file_name: None,
+		}
+	}
+	pub fn push<S>(&mut self, component: S)
+	where
+		S: Into<Vec<u8>>,
+	{
+		assert!(self.file_name.is_none());
+		self.components.push(component.into());
+	}
+	pub fn pop(&mut self) -> Option<Vec<u8>> {
+		assert!(self.file_name.is_none());
+		self.components.pop()
+	}
+	pub fn last(&self) -> Option<String> {
+		assert!(self.file_name.is_none());
+		self.components
+			.last()
+			.map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+	}
+	pub fn set_file_name<S>(&mut self, file_name: Option<S>)
+	where
+		S: Into<Vec<u8>>,
+	{
+		self.file_name = file_name.map(Into::into);
+	}
+	pub fn is_file(&self) -> bool {
+		self.file_name.is_some()
+	}
+	pub fn file_name(&self) -> Option<String> {
+		self.file_name
+			.as_ref()
+			.map(|file_name| String::from_utf8_lossy(file_name).into_owned())
+	}
+	pub fn depth(&self) -> usize {
+		self.components.len()
+	}
+	pub fn iter<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
+		self.components
+			.iter()
+			.map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+	}
+}
+impl fmt::Display for PathBuf {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let mut res: fmt::Result = self
+			.iter()
+			.map(|component| write!(f, "{}/", component))
+			.collect();
+		if let Some(file_name) = self.file_name() {
+			res = res.and_then(|()| write!(f, "{}", file_name));
+		}
+		res
+	}
+}
+impl fmt::Debug for PathBuf {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		fmt::Debug::fmt(&self.to_string(), f)
+	}
+}
+impl PartialEq<str> for PathBuf {
+	fn eq(&self, other: &str) -> bool {
+		let mut vec: Vec<u8> = Vec::new();
+		for component in self.components.iter() {
+			vec.extend(component);
+			vec.push(b'/');
+		}
+		if let Some(file_name) = &self.file_name {
+			vec.extend(file_name);
+		}
+		&*vec == other.as_bytes()
+	}
+}
+
+pub trait Directory: File {
+	fn partitions_filter<F>(self, f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	where
+		F: FnMut(&PathBuf) -> bool;
+}
 
 pub trait File {
 	type Partition: Partition;

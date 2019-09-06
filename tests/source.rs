@@ -61,7 +61,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let ((), (count, count2)) = Cloudfront::new(
 		rusoto_core::Region::UsEast1,
 		"us-east-1.data-analytics",
-		"cflogworkshop/raw/cf-accesslogs",
+		"cflogworkshop/raw/cf-accesslogs/",
 	)
 	.unwrap()
 	.dist_iter()
