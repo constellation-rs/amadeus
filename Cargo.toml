@@ -88,3 +88,4 @@ harness = false
 [[test]]
 name = "postgres"
 harness = false
+test = false # TODO set up postgres on CI
