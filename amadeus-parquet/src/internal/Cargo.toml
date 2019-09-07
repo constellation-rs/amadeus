@@ -1,0 +1,41 @@
+[workspace]
+
+[package]
+name = "parchet"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+authors = ["Apache Arrow <dev@arrow.apache.org>", "Alec Mocatta <alec@mocatta.net>"]
+categories = []
+keywords = ["arrow", "parquet", "hadoop"]
+description = """
+An Apache Parquet implementation in Rust.
+"""
+repository = "https://github.com/alecmocatta/parchet"
+homepage = "https://github.com/alecmocatta/parchet"
+documentation = "https://docs.rs/parchet/0.1.0"
+readme = "README.md"
+edition = "2018"
+
+[badges]
+azure-devops = { project = "alecmocatta/parchet", pipeline = "tests" }
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+parquet-format = "2.6.0"
+parchet-derive = { version = "0.1.0", path = "parchet-derive" }
+quick-error = "1.2.2"
+byteorder = "1.2"
+thrift = "0.12.0"
+snap = "0.2"
+brotli = "3.3"
+flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = false }
+lz4 = "1.23"
+zstd = "0.4"
+chrono = "0.4"
+num-bigint = "0.2"
+sum = "0.1"
+linked-hash-map = "0.5"
+fxhash = "0.2"
+
+[dev-dependencies]
+rand = "0.7"

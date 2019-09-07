@@ -1,0 +1,27 @@
+[package]
+name = "parchet-derive"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+authors = ["Apache Arrow <dev@arrow.apache.org>", "Alec Mocatta <alec@mocatta.net>"]
+categories = []
+keywords = ["arrow", "parquet", "hadoop"]
+description = """
+Apache Parquet Derive Macro implementation.
+"""
+repository = "https://github.com/alecmocatta/parchet"
+homepage = "https://github.com/alecmocatta/parchet"
+documentation = "https://docs.rs/parchet-derive/0.1.0"
+readme = "README.md"
+edition = "2018"
+
+[badges]
+azure-devops = { project = "alecmocatta/parchet", pipeline = "tests" }
+maintenance = { status = "actively-developed" }
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "1.0.1", default-features = false }
+quote = { version = "1.0.2", default-features = false }
+syn = { version = "1.0.5", default-features = false, features = ["derive", "clone-impls", "parsing", "printing", "proc-macro"] }
