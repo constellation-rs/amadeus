@@ -9,7 +9,7 @@ use std::{
 
 use super::Value;
 
-// use parchet::{
+// use internal::{
 //     basic::Repetition,
 //     column::reader::ColumnReader,
 //     errors::{ParquetError, Result},
@@ -80,7 +80,7 @@ impl<'de> Deserialize<'de> for Group {
 	}
 }
 
-// impl From<Group> for parchet::record::types::Group {
+// impl From<Group> for internal::record::types::Group {
 // 	fn from(group: Group) -> Self {
 // 		let field_names = group.field_names();
 // 		Self::new(group.into_fields().into_iter().map(Into::into).collect(), field_names)

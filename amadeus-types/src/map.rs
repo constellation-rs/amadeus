@@ -5,7 +5,7 @@ use std::{
 	borrow::Borrow, cmp::Ordering, collections::{hash_map, HashMap}, fmt::{self, Debug}, hash::Hash
 };
 
-// use parchet::{
+// use internal::{
 //     basic::{LogicalType, Repetition},
 //     column::reader::ColumnReader,
 //     errors::{ParquetError, Result},
@@ -51,7 +51,7 @@ where
 		self.0.into_iter()
 	}
 }
-// impl From<Map> for parchet::record::types::Map {
+// impl From<Map> for internal::record::types::Map {
 //     fn from(map: Map) -> Self {
 //         unimplemented!()
 //     }

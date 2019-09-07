@@ -499,7 +499,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	// assert_eq!(
 	// 	rows.unwrap().dist_iter().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
-	// 		parchet::errors::ParquetError::General(String::from(
+	// 		amadeus_parquet::internal::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
 	// 		))
 	// 	))]
@@ -511,7 +511,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	// assert_eq!(
 	// 	rows.unwrap().dist_iter().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
-	// 		parchet::errors::ParquetError::General(String::from(
+	// 		amadeus_parquet::internal::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
 	// 		))
 	// 	))]

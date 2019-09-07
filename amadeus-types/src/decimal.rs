@@ -3,7 +3,7 @@
 // use num_bigint::{BigInt, Sign};
 use serde::{Deserialize, Serialize};
 
-// use parchet::{
+// use internal::{
 //     basic::Repetition,
 //     column::reader::ColumnReader,
 //     // data_type::{Vec<u8>, Decimal},
@@ -105,7 +105,7 @@ impl Decimal {
 	}
 }
 
-// impl From<Decimal> for parchet::data_type::Decimal {
+// impl From<Decimal> for internal::data_type::Decimal {
 // 	fn from(_decimal: Decimal) -> Self {
 // 		unimplemented!()
 // 	}

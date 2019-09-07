@@ -251,7 +251,7 @@ fn impl_struct(
 	let mut parquet_derives = None;
 	if cfg!(feature = "parquet") {
 		parquet_includes = Some(quote! {
-			pub use ::amadeus_parquet::{ParquetData,_internal::{
+			pub use ::amadeus_parquet::{ParquetData,internal::{
 				basic::Repetition,
 				column::reader::ColumnReader,
 				errors::{ParquetError, Result as ParquetResult},

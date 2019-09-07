@@ -263,7 +263,7 @@ pub mod serde_data {
 // 	};
 // 	use std::{collections::HashMap, fmt, marker::PhantomData};
 
-// 	use parchet::{
+// 	use amadeus_parquet::internal::{
 // 		basic::Repetition, column::reader::ColumnReader, errors::Result as ParquetResult, record::Record as ParquetRecord, schema::types::{ColumnPath, Type}
 // 	};
 // 	use serde::{Deserialize, Deserializer, Serialize, Serializer};

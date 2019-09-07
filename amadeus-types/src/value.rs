@@ -1759,9 +1759,9 @@ where
 
 // /// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 // pub struct ValueReader<T>(T);
-// impl<T> parchet::record::Reader for ValueReader<T>
+// impl<T> internal::record::Reader for ValueReader<T>
 // where
-// 	T: parchet::record::Reader<Item = parchet::record::types::Value>,
+// 	T: internal::record::Reader<Item = internal::record::types::Value>,
 // {
 // 	type Item = Value;
 

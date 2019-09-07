@@ -1,11 +1,12 @@
 #![allow(clippy::type_complexity)]
 
-use super::ParquetData;
+use super::{
+	internal::{
+		self, basic::Repetition, column::reader::ColumnReader, errors::ParquetError, record::Record as ParquetRecord, schema::types::{ColumnPath, Type}
+	}, ParquetData
+};
 use amadeus_types::{
 	Bson, Date, Decimal, Enum, Group, Json, List, Map, Time, Timestamp, Value, ValueRequired
-};
-use parchet::{
-	basic::Repetition, column::reader::ColumnReader, errors::ParquetError, record::Record as ParquetRecord, schema::types::{ColumnPath, Type}
 };
 use std::{
 	collections::HashMap, convert::{TryFrom, TryInto}, hash::Hash, marker::PhantomData, mem::transmute
@@ -14,30 +15,30 @@ use std::{
 pub trait InternalInto<T> {
 	fn internal_into(self) -> T;
 }
-impl InternalInto<Bson> for parchet::record::types::Bson {
+impl InternalInto<Bson> for internal::record::types::Bson {
 	fn internal_into(self) -> Bson {
 		let vec: Vec<u8> = self.into();
 		vec.into()
 	}
 }
-impl InternalInto<Json> for parchet::record::types::Json {
+impl InternalInto<Json> for internal::record::types::Json {
 	fn internal_into(self) -> Json {
 		let vec: String = self.into();
 		vec.into()
 	}
 }
-impl InternalInto<Enum> for parchet::record::types::Enum {
+impl InternalInto<Enum> for internal::record::types::Enum {
 	fn internal_into(self) -> Enum {
 		let vec: String = self.into();
 		vec.into()
 	}
 }
-impl InternalInto<Decimal> for parchet::data_type::Decimal {
+impl InternalInto<Decimal> for internal::data_type::Decimal {
 	fn internal_into(self) -> Decimal {
 		unimplemented!()
 	}
 }
-impl InternalInto<Group> for parchet::record::types::Group {
+impl InternalInto<Group> for internal::record::types::Group {
 	fn internal_into(self) -> Group {
 		let field_names = self.field_names();
 		Group::new(
@@ -51,17 +52,17 @@ impl InternalInto<Group> for parchet::record::types::Group {
 }
 const JULIAN_DAY_OF_EPOCH: i64 = 2_440_588;
 const NANOS_PER_MICRO: i64 = 1_000;
-impl InternalInto<Date> for parchet::record::types::Date {
+impl InternalInto<Date> for internal::record::types::Date {
 	fn internal_into(self) -> Date {
 		Date::from_days(self.as_days().into()).unwrap()
 	}
 }
-impl InternalInto<Time> for parchet::record::types::Time {
+impl InternalInto<Time> for internal::record::types::Time {
 	fn internal_into(self) -> Time {
 		Time::from_nanos(self.as_micros() * u64::try_from(NANOS_PER_MICRO).unwrap()).unwrap()
 	}
 }
-impl InternalInto<Timestamp> for parchet::record::types::Timestamp {
+impl InternalInto<Timestamp> for internal::record::types::Timestamp {
 	fn internal_into(self) -> Timestamp {
 		// Self::from_day_nanos(self.as_nanos().unwrap())
 		let (date, time) = self.as_day_nanos();
@@ -70,7 +71,7 @@ impl InternalInto<Timestamp> for parchet::record::types::Timestamp {
 		Timestamp::from_date_time(date, time).unwrap()
 	}
 }
-impl InternalInto<Value> for parchet::record::types::Value {
+impl InternalInto<Value> for internal::record::types::Value {
 	fn internal_into(self) -> Value {
 		match self {
 			Self::Bool(value) => Value::Bool(value),
@@ -97,58 +98,58 @@ impl InternalInto<Value> for parchet::record::types::Value {
 			Self::Map(value) => Value::Map(value.internal_into()),
 			Self::Group(value) => Value::Group(value.internal_into()),
 			Self::Option(value) => Value::Option(value.map(|value| match value {
-				parchet::record::types::ValueRequired::Bool(value) => ValueRequired::Bool(value),
-				parchet::record::types::ValueRequired::U8(value) => ValueRequired::U8(value),
-				parchet::record::types::ValueRequired::I8(value) => ValueRequired::I8(value),
-				parchet::record::types::ValueRequired::U16(value) => ValueRequired::U16(value),
-				parchet::record::types::ValueRequired::I16(value) => ValueRequired::I16(value),
-				parchet::record::types::ValueRequired::U32(value) => ValueRequired::U32(value),
-				parchet::record::types::ValueRequired::I32(value) => ValueRequired::I32(value),
-				parchet::record::types::ValueRequired::U64(value) => ValueRequired::U64(value),
-				parchet::record::types::ValueRequired::I64(value) => ValueRequired::I64(value),
-				parchet::record::types::ValueRequired::F32(value) => ValueRequired::F32(value),
-				parchet::record::types::ValueRequired::F64(value) => ValueRequired::F64(value),
-				parchet::record::types::ValueRequired::Date(value) => {
+				internal::record::types::ValueRequired::Bool(value) => ValueRequired::Bool(value),
+				internal::record::types::ValueRequired::U8(value) => ValueRequired::U8(value),
+				internal::record::types::ValueRequired::I8(value) => ValueRequired::I8(value),
+				internal::record::types::ValueRequired::U16(value) => ValueRequired::U16(value),
+				internal::record::types::ValueRequired::I16(value) => ValueRequired::I16(value),
+				internal::record::types::ValueRequired::U32(value) => ValueRequired::U32(value),
+				internal::record::types::ValueRequired::I32(value) => ValueRequired::I32(value),
+				internal::record::types::ValueRequired::U64(value) => ValueRequired::U64(value),
+				internal::record::types::ValueRequired::I64(value) => ValueRequired::I64(value),
+				internal::record::types::ValueRequired::F32(value) => ValueRequired::F32(value),
+				internal::record::types::ValueRequired::F64(value) => ValueRequired::F64(value),
+				internal::record::types::ValueRequired::Date(value) => {
 					ValueRequired::Date(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::Time(value) => {
+				internal::record::types::ValueRequired::Time(value) => {
 					ValueRequired::Time(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::Timestamp(value) => {
+				internal::record::types::ValueRequired::Timestamp(value) => {
 					ValueRequired::Timestamp(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::Decimal(value) => {
+				internal::record::types::ValueRequired::Decimal(value) => {
 					ValueRequired::Decimal(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::ByteArray(value) => {
+				internal::record::types::ValueRequired::ByteArray(value) => {
 					ValueRequired::ByteArray(value)
 				}
-				parchet::record::types::ValueRequired::Bson(value) => {
+				internal::record::types::ValueRequired::Bson(value) => {
 					ValueRequired::Bson(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::String(value) => {
+				internal::record::types::ValueRequired::String(value) => {
 					ValueRequired::String(value)
 				}
-				parchet::record::types::ValueRequired::Json(value) => {
+				internal::record::types::ValueRequired::Json(value) => {
 					ValueRequired::Json(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::Enum(value) => {
+				internal::record::types::ValueRequired::Enum(value) => {
 					ValueRequired::Enum(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::List(value) => {
+				internal::record::types::ValueRequired::List(value) => {
 					ValueRequired::List(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::Map(value) => {
+				internal::record::types::ValueRequired::Map(value) => {
 					ValueRequired::Map(value.internal_into())
 				}
-				parchet::record::types::ValueRequired::Group(value) => {
+				internal::record::types::ValueRequired::Group(value) => {
 					ValueRequired::Group(value.internal_into())
 				}
 			})),
 		}
 	}
 }
-impl<T, U> InternalInto<List<T>> for parchet::record::types::List<U>
+impl<T, U> InternalInto<List<T>> for internal::record::types::List<U>
 where
 	T: ParquetData,
 	U: InternalInto<T>,
@@ -161,7 +162,7 @@ where
 			.into()
 	}
 }
-impl<K, V, K1, V1> InternalInto<Map<K, V>> for parchet::record::types::Map<K1, V1>
+impl<K, V, K1, V1> InternalInto<Map<K, V>> for internal::record::types::Map<K1, V1>
 where
 	K: Hash + Eq,
 	K1: Hash + Eq + InternalInto<K>,
@@ -263,57 +264,57 @@ impl ParquetData for Vec<u8> {
 }
 
 impl ParquetData for Bson {
-	type Schema = <parchet::record::types::Bson as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::record::types::Bson as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Bson as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Bson as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Bson as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::Bson as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(<parchet::record::types::Bson as ParquetRecord>::reader(
+		IntoReader::new(<internal::record::types::Bson as ParquetRecord>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
 }
 
 impl ParquetData for Json {
-	type Schema = <parchet::record::types::Json as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::record::types::Json as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Json as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Json as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Json as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::Json as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(<parchet::record::types::Json as ParquetRecord>::reader(
+		IntoReader::new(<internal::record::types::Json as ParquetRecord>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
 }
 
 impl ParquetData for Enum {
-	type Schema = <parchet::record::types::Enum as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::record::types::Enum as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Enum as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Enum as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Enum as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::Enum as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(<parchet::record::types::Enum as ParquetRecord>::reader(
+		IntoReader::new(<internal::record::types::Enum as ParquetRecord>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
@@ -407,7 +408,7 @@ macro_rules! impl_parquet_record_tuple {
 	($len:tt $($t:ident $i:tt)*) => (
 		impl<$($t,)*> ParquetData for ($($t,)*) where $($t: ParquetData,)* {
 			type Schema = <($(super::Record<$t>,)*) as ParquetRecord>::Schema;
-			type Reader = impl parchet::record::Reader<Item = Self>;
+			type Reader = impl internal::record::Reader<Item = Self>;
 
 			fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema), ParquetError> {
 				<($(super::Record<$t>,)*) as ParquetRecord>::parse(schema, repetition)
@@ -455,38 +456,38 @@ impl_parquet_record_tuple!(12 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11)
 // impl_parquet_record_tuple!(32 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30 AF 31);
 
 impl ParquetData for Decimal {
-	type Schema = <parchet::data_type::Decimal as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::data_type::Decimal as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::data_type::Decimal as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::data_type::Decimal as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::data_type::Decimal as ParquetRecord>::parse(schema, repetition)
+		<internal::data_type::Decimal as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(<parchet::data_type::Decimal as ParquetRecord>::reader(
+		IntoReader::new(<internal::data_type::Decimal as ParquetRecord>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
 }
 
 impl ParquetData for Group {
-	type Schema = <parchet::record::types::Group as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::record::types::Group as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Group as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Group as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Group as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::Group as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(<parchet::record::types::Group as ParquetRecord>::reader(
+		IntoReader::new(<internal::record::types::Group as ParquetRecord>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
@@ -496,27 +497,29 @@ impl<T> ParquetData for List<T>
 where
 	T: ParquetData,
 {
-	type Schema = <parchet::record::types::List<super::Record<T>> as ParquetRecord>::Schema;
-	type Reader = impl parchet::record::Reader<Item = Self>;
+	type Schema = <internal::record::types::List<super::Record<T>> as ParquetRecord>::Schema;
+	type Reader = impl internal::record::Reader<Item = Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::List<super::Record<T>> as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::List<super::Record<T>> as ParquetRecord>::parse(
+			schema, repetition,
+		)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
 		MapReader::new(
-			<parchet::record::types::List<super::Record<T>> as ParquetRecord>::reader(
+			<internal::record::types::List<super::Record<T>> as ParquetRecord>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 			|list| {
 				<_ as Into<Vec<T>>>::into(unsafe {
 					transmute::<
-						parchet::record::types::List<super::Record<T>>,
-						parchet::record::types::List<T>,
+						internal::record::types::List<super::Record<T>>,
+						internal::record::types::List<T>,
 					>(list)
 				})
 				.into()
@@ -531,13 +534,13 @@ where
 	V: ParquetData,
 {
 	type Schema =
-		<parchet::record::types::Map<super::Record<K>, super::Record<V>> as ParquetRecord>::Schema;
-	type Reader = impl parchet::record::Reader<Item = Self>;
+		<internal::record::types::Map<super::Record<K>, super::Record<V>> as ParquetRecord>::Schema;
+	type Reader = impl internal::record::Reader<Item = Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Map<super::Record<K>, super::Record<V>> as ParquetRecord>::parse(
+		<internal::record::types::Map<super::Record<K>, super::Record<V>> as ParquetRecord>::parse(
 			schema, repetition,
 		)
 	}
@@ -546,7 +549,7 @@ where
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
 		MapReader::new(
-			<parchet::record::types::Map<
+			<internal::record::types::Map<
 				super::Record<K>,
 				super::Record<V>,
 			> as ParquetRecord>::reader(
@@ -555,11 +558,11 @@ where
 			|map| {
 				<_ as Into<HashMap<K,V>>>::into(unsafe {
 					transmute::<
-						parchet::record::types::Map<
+						internal::record::types::Map<
 							super::Record<K>,
 							super::Record<V>,
 						>,
-						parchet::record::types::Map<K, V>,
+						internal::record::types::Map<K, V>,
 					>(map)
 				}).into()
 			},
@@ -568,58 +571,58 @@ where
 }
 
 impl ParquetData for Date {
-	type Schema = <parchet::record::types::Date as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::record::types::Date as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Date as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Date as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Date as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::Date as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(<parchet::record::types::Date as ParquetRecord>::reader(
+		IntoReader::new(<internal::record::types::Date as ParquetRecord>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
 }
 
 impl ParquetData for Time {
-	type Schema = <parchet::record::types::Time as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::record::types::Time as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Time as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Time as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Time as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::Time as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(<parchet::record::types::Time as ParquetRecord>::reader(
+		IntoReader::new(<internal::record::types::Time as ParquetRecord>::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
 }
 
 impl ParquetData for Timestamp {
-	type Schema = <parchet::record::types::Timestamp as ParquetRecord>::Schema;
-	type Reader = IntoReader<<parchet::record::types::Timestamp as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Timestamp as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Timestamp as ParquetRecord>::Reader, Self>;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		<parchet::record::types::Timestamp as ParquetRecord>::parse(schema, repetition)
+		<internal::record::types::Timestamp as ParquetRecord>::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
 		IntoReader::new(
-			<parchet::record::types::Timestamp as ParquetRecord>::reader(
+			<internal::record::types::Timestamp as ParquetRecord>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			),
 		)
@@ -627,28 +630,28 @@ impl ParquetData for Timestamp {
 }
 
 impl ParquetData for Value {
-	type Reader = IntoReader<<parchet::record::types::Value as ParquetRecord>::Reader, Self>;
-	type Schema = <parchet::record::types::Value as ParquetRecord>::Schema;
+	type Reader = IntoReader<<internal::record::types::Value as ParquetRecord>::Reader, Self>;
+	type Schema = <internal::record::types::Value as ParquetRecord>::Schema;
 
 	fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema), ParquetError> {
-		parchet::record::types::Value::parse(schema, repetition)
+		internal::record::types::Value::parse(schema, repetition)
 	}
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		IntoReader::new(parchet::record::types::Value::reader(
+		IntoReader::new(internal::record::types::Value::reader(
 			schema, path, def_level, rep_level, paths, batch_size,
 		))
 	}
 }
 // /// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 // pub struct ValueReader<T>(T);
-// impl<T> parchet::record::Reader for ValueReader<T>
+// impl<T> internal::record::Reader for ValueReader<T>
 // where
-// 	T: parchet::record::Reader<Item = parchet::record::types::Value>,
+// 	T: internal::record::Reader<Item = internal::record::types::Value>,
 // {
 // 	type Item = Value;
 
@@ -722,9 +725,9 @@ where
 }
 /// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 pub struct OptionReader<T>(T);
-impl<T, U> parchet::record::Reader for OptionReader<T>
+impl<T, U> internal::record::Reader for OptionReader<T>
 where
-	T: parchet::record::Reader<Item = Option<super::Record<U>>>,
+	T: internal::record::Reader<Item = Option<super::Record<U>>>,
 	U: ParquetData,
 {
 	type Item = Option<U>;
@@ -752,13 +755,13 @@ where
 }
 
 /// A convenience Reader that maps the read value using [`TryInto`].
-pub struct IntoReader<R: parchet::record::Reader, T>(R, PhantomData<fn(T)>);
-impl<R: parchet::record::Reader, T> IntoReader<R, T> {
+pub struct IntoReader<R: internal::record::Reader, T>(R, PhantomData<fn(T)>);
+impl<R: internal::record::Reader, T> IntoReader<R, T> {
 	fn new(reader: R) -> Self {
 		Self(reader, PhantomData)
 	}
 }
-impl<R: parchet::record::Reader, T> parchet::record::Reader for IntoReader<R, T>
+impl<R: internal::record::Reader, T> internal::record::Reader for IntoReader<R, T>
 where
 	R::Item: InternalInto<T>,
 {
@@ -767,14 +770,14 @@ where
 	#[inline]
 	fn read(
 		&mut self, def_level: i16, rep_level: i16,
-	) -> Result<Self::Item, parchet::errors::ParquetError> {
+	) -> Result<Self::Item, internal::errors::ParquetError> {
 		self.0
 			.read(def_level, rep_level)
 			.map(InternalInto::internal_into)
 	}
 
 	#[inline]
-	fn advance_columns(&mut self) -> Result<(), parchet::errors::ParquetError> {
+	fn advance_columns(&mut self) -> Result<(), internal::errors::ParquetError> {
 		self.0.advance_columns()
 	}
 
@@ -795,13 +798,13 @@ where
 }
 
 /// A convenience Reader that maps the read value using the supplied closure.
-pub struct MapReader<R: parchet::record::Reader, F>(R, F);
-impl<R: parchet::record::Reader, F> MapReader<R, F> {
+pub struct MapReader<R: internal::record::Reader, F>(R, F);
+impl<R: internal::record::Reader, F> MapReader<R, F> {
 	fn new(reader: R, f: F) -> Self {
 		Self(reader, f)
 	}
 }
-impl<R: parchet::record::Reader, F, T> parchet::record::Reader for MapReader<R, F>
+impl<R: internal::record::Reader, F, T> internal::record::Reader for MapReader<R, F>
 where
 	F: FnMut(R::Item) -> T,
 {
@@ -810,12 +813,12 @@ where
 	#[inline]
 	fn read(
 		&mut self, def_level: i16, rep_level: i16,
-	) -> Result<Self::Item, parchet::errors::ParquetError> {
+	) -> Result<Self::Item, internal::errors::ParquetError> {
 		self.0.read(def_level, rep_level).map(&mut self.1)
 	}
 
 	#[inline]
-	fn advance_columns(&mut self) -> Result<(), parchet::errors::ParquetError> {
+	fn advance_columns(&mut self) -> Result<(), internal::errors::ParquetError> {
 		self.0.advance_columns()
 	}
 
@@ -836,13 +839,13 @@ where
 }
 
 // /// A convenience Reader that maps the read value using [`TryInto`].
-// pub struct TryIntoReader<R: parchet::record::Reader, T>(R, PhantomData<fn(T)>);
-// impl<R: parchet::record::Reader, T> TryIntoReader<R, T> {
+// pub struct TryIntoReader<R: internal::record::Reader, T>(R, PhantomData<fn(T)>);
+// impl<R: internal::record::Reader, T> TryIntoReader<R, T> {
 //     fn new(reader: R) -> Self {
 //         TryIntoReader(reader, PhantomData)
 //     }
 // }
-// impl<R: parchet::record::Reader, T> parchet::record::Reader for TryIntoReader<R, T>
+// impl<R: internal::record::Reader, T> internal::record::Reader for TryIntoReader<R, T>
 // where
 //     R::Item: TryInto<T>,
 //     <R::Item as TryInto<T>>::Error: Error,
@@ -850,7 +853,7 @@ where
 //     type Item = T;
 
 //     #[inline]
-//     fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item, parchet::errors::ParquetError> {
+//     fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item, internal::errors::ParquetError> {
 //         self.0.read(def_level, rep_level).and_then(|x| {
 //             x.try_into()
 //                 .map_err(|err| ParquetError::General(err.description().to_owned()))
@@ -858,7 +861,7 @@ where
 //     }
 
 //     #[inline]
-//     fn advance_columns(&mut self) -> Result<(), parchet::errors::ParquetError> {
+//     fn advance_columns(&mut self) -> Result<(), internal::errors::ParquetError> {
 //         self.0.advance_columns()
 //     }
 

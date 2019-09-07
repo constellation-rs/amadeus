@@ -1,11 +1,13 @@
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 #![feature(read_initializer)]
+#![feature(bufreader_seek_relative)]
 
 mod impls;
 
-pub use parchet as _internal;
-use parchet::{
+pub mod internal;
+
+use internal::{
 	basic::Repetition, column::reader::ColumnReader, errors::ParquetError as InternalParquetError, file::reader::{FileReader, SerializedFileReader}, record::{Reader as ParquetReader, RowIter, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
 };
 use serde::{Deserialize, Serialize};
@@ -95,8 +97,8 @@ pub type ParquetInner<F, Row> = amadeus_core::dist_iter::FlatMap<
 >;
 
 mod wrap {
-	use super::ParquetData;
-	use parchet::{
+	use super::{internal, ParquetData};
+	use internal::{
 		basic::Repetition, column::reader::ColumnReader, errors::Result, schema::types::{ColumnPath, Type}
 	};
 	use std::collections::HashMap;
@@ -106,7 +108,7 @@ mod wrap {
 	pub struct Record<T>(pub T)
 	where
 		T: ParquetData;
-	impl<T> parchet::record::Record for Record<T>
+	impl<T> internal::record::Record for Record<T>
 	where
 		T: ParquetData,
 	{
@@ -131,9 +133,9 @@ mod wrap {
 
 	/// A Reader that wraps a Reader, wrapping the read value in a `Record`.
 	pub struct RecordReader<T>(T);
-	impl<T> parchet::record::Reader for RecordReader<T>
+	impl<T> internal::record::Reader for RecordReader<T>
 	where
-		T: parchet::record::Reader,
+		T: internal::record::Reader,
 		T::Item: ParquetData,
 	{
 		type Item = Record<T::Item>;
@@ -251,7 +253,7 @@ where
 		self.0.seek(pos)
 	}
 }
-impl<P> parchet::file::reader::ParquetReader for ParquetReaderWrap<P>
+impl<P> internal::file::reader::ParquetReader for ParquetReaderWrap<P>
 where
 	P: Page,
 {
@@ -315,7 +317,8 @@ where
 }
 
 mod misc_serde {
-	use parchet::errors::ParquetError;
+	use super::internal;
+	use internal::errors::ParquetError;
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 	pub struct Serde<T>(T);

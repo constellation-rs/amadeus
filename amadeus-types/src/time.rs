@@ -43,7 +43,7 @@ impl From<NaiveDate> for Date {
 		Self::from_days(i64::from(date.num_days_from_ce()) - GREGORIAN_DAY_OF_EPOCH).unwrap()
 	}
 }
-// impl TryFrom<Date> for parchet::record::types::Date {
+// impl TryFrom<Date> for internal::record::types::Date {
 // 	type Error = ();
 
 // 	fn try_from(date: Date) -> Result<Self, ()> {
@@ -154,7 +154,7 @@ impl From<NaiveTime> for Time {
 		.unwrap()
 	}
 }
-// impl TryFrom<Time> for parchet::record::types::Time {
+// impl TryFrom<Time> for internal::record::types::Time {
 // 	type Error = ();
 
 // 	fn try_from(time: Time) -> Result<Self, Self::Error> {
@@ -404,11 +404,11 @@ impl From<NaiveDateTime> for Timestamp {
 		Self::from_nanos(timestamp.timestamp_nanos())
 	}
 }
-// impl TryFrom<Timestamp> for parchet::record::types::Timestamp {
+// impl TryFrom<Timestamp> for internal::record::types::Timestamp {
 // 	type Error = ();
 
 // 	fn try_from(_timestamp: Timestamp) -> Result<Self, Self::Error> {
-// 		// parchet::record::types::Timestamp::from_days(timestamp.0)
+// 		// internal::record::types::Timestamp::from_days(timestamp.0)
 // 		unimplemented!()
 // 	}
 // }

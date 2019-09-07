@@ -1,23 +1,31 @@
 [package]
 name = "amadeus-core"
-version = "0.1.0"
+version = "0.1.1"
 license = "Apache-2.0"
-description = "Derive Macro TODO"
-homepage = "https://github.com/alecmocatta/amadeus"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
+keywords = ["amadeus", "distributed", "data-science", "data", "logs"]
+description = """
+Harmonious distributed data analysis in Rust.
+"""
 repository = "https://github.com/alecmocatta/amadeus"
-authors = ["..."]
-keywords = [ "arrow", "parquet", "hadoop" ]
+homepage = "https://github.com/alecmocatta/amadeus"
+documentation = "https://docs.rs/amadeus/0.1.1"
 readme = "README.md"
 edition = "2018"
 
+[badges]
+azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
+maintenance = { status = "actively-developed" }
+
 [dependencies]
-either = "1.5"
+either = { version = "1.5", features = ["serde"] }
 futures-preview = "=0.3.0-alpha.18"
 owned_chars = "0.3"
 rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = { version = "0.1" } #, path = "../serde_closure" }
+serde_closure = "0.1"
 streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms" }#, path = "../streaming_algorithms" }
 sum = { version = "0.1", features = ["serde"] }
 walkdir = "2.2"

@@ -1,19 +1,43 @@
 [package]
 name = "amadeus-parquet"
-version = "0.1.0"
+version = "0.1.1"
 license = "Apache-2.0"
-description = "Derive Macro TODO"
-homepage = "https://github.com/alecmocatta/amadeus"
+authors = ["Alec Mocatta <alec@mocatta.net>", "Apache Arrow <dev@arrow.apache.org>"]
+categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
+keywords = ["amadeus", "data", "parquet", "arrow", "hadoop"]
+description = """
+An Apache Parquet implementation in Rust.
+"""
 repository = "https://github.com/alecmocatta/amadeus"
-authors = ["..."]
-keywords = [ "arrow", "parquet", "hadoop" ]
+homepage = "https://github.com/alecmocatta/amadeus"
+documentation = "https://docs.rs/amadeus/0.1.1"
 readme = "README.md"
 edition = "2018"
 
+[badges]
+azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
+maintenance = { status = "actively-developed" }
+
 [dependencies]
+amadeus-parquet-derive = { version = "0.1.0", path = "amadeus-parquet-derive" }
 amadeus-core = { version = "0.1", path = "../amadeus-core" }
 amadeus-types = { version = "0.1", path = "../amadeus-types" }
-parchet = "0.1"
+brotli = "3.3"
+byteorder = "1.2"
+chrono = "0.4"
+flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = false }
+fxhash = "0.2"
+linked-hash-map = "0.5"
+lz4 = "1.23"
+num-bigint = "0.2"
+parquet-format = "2.6.0"
+quick-error = "1.2.2"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = { version = "0.1" } #, path = "../serde_closure" }
-sum = { version = "0.1", features = ["serde"] }
+serde_closure = "0.1"
+snap = "0.2"
+sum = "0.1"
+thrift = "0.12.0"
+zstd = "0.4"
+
+[dev-dependencies]
+rand = "0.7"

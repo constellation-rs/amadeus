@@ -5,7 +5,7 @@ use std::{
 	fmt::{self, Debug}, ops::Index, slice::{self, SliceIndex}, vec
 };
 
-// use parchet::{
+// use internal::{
 //     basic::{LogicalType, Repetition},
 //     column::reader::ColumnReader,
 //     errors::{ParquetError, Result},
@@ -36,7 +36,7 @@ impl<T> IntoIterator for List<T> {
 		self.0.into_iter()
 	}
 }
-// impl From<List> for parchet::record::types::List {
+// impl From<List> for internal::record::types::List {
 //     fn from(list: List) -> Self {
 //         unimplemented!()
 //     }

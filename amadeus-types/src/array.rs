@@ -8,13 +8,13 @@ use std::fmt::{self, Display};
 /// A Rust type corresponding to the [Bson logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#bson).
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Bson(Vec<u8>);
-// impl From<Bson> for parchet::record::types::Bson {
+// impl From<Bson> for internal::record::types::Bson {
 // 	fn from(bson: Bson) -> Self {
 // 		bson.0.into()
 // 	}
 // }
-// impl From<parchet::record::types::Bson> for Bson {
-// 	fn from(bson: parchet::record::types::Bson) -> Self {
+// impl From<internal::record::types::Bson> for Bson {
+// 	fn from(bson: internal::record::types::Bson) -> Self {
 // 		Self(bson.into())
 // 	}
 // }
@@ -34,13 +34,13 @@ impl From<Vec<u8>> for Bson {
 /// A Rust type corresponding to the [Json logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#json).
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Json(String);
-// impl From<Json> for parchet::record::types::Json {
+// impl From<Json> for internal::record::types::Json {
 // 	fn from(json: Json) -> Self {
 // 		json.0.into()
 // 	}
 // }
-// impl From<parchet::record::types::Json> for Json {
-// 	fn from(json: parchet::record::types::Json) -> Self {
+// impl From<internal::record::types::Json> for Json {
+// 	fn from(json: internal::record::types::Json) -> Self {
 // 		Self(json.into())
 // 	}
 // }
@@ -63,13 +63,13 @@ impl From<String> for Json {
 /// A Rust type corresponding to the [Enum logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#enum).
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Enum(String);
-// impl From<Enum> for parchet::record::types::Enum {
+// impl From<Enum> for internal::record::types::Enum {
 // 	fn from(enum_: Enum) -> Self {
 // 		enum_.0.into()
 // 	}
 // }
-// impl From<parchet::record::types::Enum> for Enum {
-// 	fn from(enum_: parchet::record::types::Enum) -> Self {
+// impl From<internal::record::types::Enum> for Enum {
+// 	fn from(enum_: internal::record::types::Enum) -> Self {
 // 		Self(enum_.into())
 // 	}
 // }

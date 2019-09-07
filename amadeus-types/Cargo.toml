@@ -1,14 +1,22 @@
 [package]
 name = "amadeus-types"
-version = "0.1.0"
+version = "0.1.1"
 license = "Apache-2.0"
-description = "Derive Macro TODO"
-homepage = "https://github.com/alecmocatta/amadeus"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["concurrency", "science", "database", "date-and-time", "data-structures"]
+keywords = ["amadeus", "distributed", "data-science", "data", "logs"]
+description = """
+Harmonious distributed data analysis in Rust.
+"""
 repository = "https://github.com/alecmocatta/amadeus"
-authors = ["..."]
-keywords = [ "arrow", "parquet", "hadoop" ]
+homepage = "https://github.com/alecmocatta/amadeus"
+documentation = "https://docs.rs/amadeus/0.1.1"
 readme = "README.md"
 edition = "2018"
+
+[badges]
+azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
