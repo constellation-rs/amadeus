@@ -23,7 +23,7 @@
 //! # Example
 //!
 //! ```rust
-//! use internal::{basic::Compression, compression::create_codec};
+//! use amadeus_parquet::internal::{basic::Compression, compression::create_codec};
 //!
 //! let mut codec = match create_codec(Compression::Snappy) {
 //!     Ok(Some(codec)) => codec,

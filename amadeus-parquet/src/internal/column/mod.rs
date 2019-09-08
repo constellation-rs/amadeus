@@ -38,7 +38,7 @@
 //! ```rust,no_run
 //! use std::{fs, path::Path, rc::Rc};
 //!
-//! use internal::{
+//! use amadeus_parquet::internal::{
 //!     column::{reader::ColumnReader, writer::ColumnWriter},
 //!     file::{
 //!         properties::WriterProperties,

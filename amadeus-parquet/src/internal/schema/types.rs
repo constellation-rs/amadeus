@@ -542,6 +542,7 @@ impl ColumnPath {
 
 	/// Returns string representation of this column path.
 	/// ```rust
+	/// use amadeus_parquet::internal;
 	/// use internal::schema::types::ColumnPath;
 	///
 	/// let path = ColumnPath::new(vec!["a".to_string(), "b".to_string(), "c".to_string()]);

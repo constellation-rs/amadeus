@@ -309,14 +309,8 @@ fn get_test_file(file_name: &str) -> fs::File {
 }
 
 fn get_test_path(file_name: &str) -> PathBuf {
-	let mut pathbuf = match env::var("PARQUET_TEST_DATA") {
-		Ok(path) => PathBuf::from_str(path.as_str()).unwrap(),
-		Err(_) => {
-			let mut pathbuf = env::current_dir().unwrap();
-			pathbuf.push(PathBuf::from_str("amadeus-testing/data").unwrap());
-			pathbuf
-		}
-	};
+	let mut pathbuf = env::current_dir().unwrap();
+	pathbuf.push(PathBuf::from_str("../amadeus-testing/parquet").unwrap());
 	pathbuf.push(file_name);
 	pathbuf
 }

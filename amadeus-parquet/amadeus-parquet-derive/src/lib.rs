@@ -20,6 +20,7 @@ use syn::{
 /// ## Example
 ///
 /// ```text
+/// use amadeus_parquet::internal;
 /// use internal::record::Record;
 ///
 /// #[derive(Record, Debug)]
