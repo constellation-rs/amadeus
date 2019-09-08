@@ -17,6 +17,7 @@ jobs:
       rust_lint_toolchain: nightly-2019-09-05
       rust_flags: ''
       rust_features: 'parquet'
+      rust_doc_features: ''
       rust_target_check: ''
       rust_target_build: ''
       rust_target_run: ''
