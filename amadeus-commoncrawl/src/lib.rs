@@ -1,6 +1,10 @@
+mod commoncrawl;
+mod parser;
+
 use amadeus_core::{
 	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IteratorExt
 };
+pub use commoncrawl::{WarcParser, Webpage};
 use flate2::read::MultiGzDecoder;
 use reqwest_resume::ClientExt;
 use serde::{Deserialize, Serialize};
@@ -8,7 +12,6 @@ use serde_closure::*;
 use std::{
 	io::{self, BufRead, BufReader}, iter, ops::FnMut, time
 };
-use warc_parser::{WarcParser, WebpageOwned};
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
@@ -66,7 +69,7 @@ impl CommonCrawl {
 }
 
 impl DistributedIterator for CommonCrawl {
-	type Item = Result<WebpageOwned, io::Error>;
+	type Item = Result<Webpage<'static>, io::Error>;
 	type Task = CommonCrawlConsumer;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
@@ -83,7 +86,7 @@ pub struct CommonCrawlConsumer {
 }
 
 impl Consumer for CommonCrawlConsumer {
-	type Item = Result<WebpageOwned, io::Error>;
+	type Item = Result<Webpage<'static>, io::Error>;
 
 	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		self.task.run(i)

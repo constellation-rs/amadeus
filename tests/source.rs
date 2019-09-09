@@ -6,11 +6,11 @@ extern crate serde_closure;
 use amadeus::{
 	prelude::*, source::aws::{CloudfrontRow, Error}
 };
+use amadeus_commoncrawl::Webpage;
 use constellation::*;
 use std::{
 	env, time::{Duration, SystemTime}
 };
-use warc_parser::WebpageOwned;
 
 fn main() {
 	init(Resources::default());
@@ -47,7 +47,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	CommonCrawl::new("CC-MAIN-2018-43").unwrap().all(
 		pool,
-		FnMut!([start] move |x: Result<WebpageOwned,_>| -> bool {
+		FnMut!([start] move |x: Result<Webpage<'static>,_>| -> bool {
 			let _x = x.unwrap();
 			// println!("{}", x.url);
 			start.elapsed().unwrap() < Duration::new(10,0)

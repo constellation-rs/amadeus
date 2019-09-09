@@ -40,12 +40,12 @@
 extern crate serde_closure;
 
 use amadeus::prelude::*;
+use amadeus_commoncrawl::Webpage;
 use constellation::{init, Resources};
 use reqwest_resume::ClientExt;
 use std::{
 	env, io::{BufRead, BufReader}, time
 };
-use warc_parser::WebpageOwned;
 
 fn main() {
 	init(Resources::default());
@@ -91,18 +91,18 @@ fn main() {
 				.send()
 				.unwrap();
 			let body = flate2::read::MultiGzDecoder::new(body);
-			warc_parser::WarcParser::new(body).take(1000).map(Result::unwrap)
+			amadeus_commoncrawl::WarcParser::new(body).take(1000).map(Result::unwrap)
 		}))
 		.multi(
 			&pool,
 			((
 				// Identity
-				// 	.map(FnMut!(|x: WebpageOwned| -> usize { x.contents.len() }))
+				// 	.map(FnMut!(|x: Webpage<'static>| -> usize { x.contents.len() }))
 				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
 				// 	.collect(),
 				// (),
 				// Identity
-				// 	.map(FnMut!(|x: WebpageOwned| -> usize {
+				// 	.map(FnMut!(|x: Webpage<'static>| -> usize {
 				// 		x.contents.len()
 				// 	}))
 				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
@@ -110,7 +110,7 @@ fn main() {
 			),),
 			(
 				Identity
-					.map(FnMut!(|x: &WebpageOwned| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
 					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
 					.fold(
 						FnMut!(|| 0_u32),
@@ -118,19 +118,19 @@ fn main() {
 					),
 				// .sum(),
 				// Identity
-				// 	.map(FnMut!(|x: &WebpageOwned| -> usize { x.contents.len() }))
+				// 	.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
 				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
 				// 	.collect(),
 				Identity
-					.map(FnMut!(|x: &WebpageOwned| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
 					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
 					.most_frequent(100, 0.99, 2.0/1000.0),
 				Identity
-					.map(FnMut!(|x: &WebpageOwned| { (x.contents.len(),x.contents[..5].to_owned()) }))
+					.map(FnMut!(|x: &Webpage<'static>| { (x.contents.len(),x.contents[..5].to_owned()) }))
 					.most_distinct(100, 0.99, 2.0/1000.0, 0.0808),
 				Identity
 					.cloned()
-					.map(FnMut!(|x: WebpageOwned| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: Webpage<'static>| -> usize { x.contents.len() }))
 					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
 					.sample_unstable(100),
 			),
