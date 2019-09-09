@@ -53,8 +53,7 @@ reqwest_resume = "0.2"
 rand = "0.7"
 rusoto_core = "0.40"
 select = "0.4"
-streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms" }
-warc_parser = { git = "https://github.com/alecmocatta/warc_nom_parser" }
+streaming_algorithms = "0.1"
 
 [[test]]
 name = "into_dist_iter"
