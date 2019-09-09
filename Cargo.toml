@@ -16,7 +16,6 @@ repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
 documentation = "https://docs.rs/amadeus/0.1.1"
 readme = "README.md"
-autotests = true
 edition = "2018"
 
 [badges]
@@ -62,6 +61,10 @@ rand = "0.7"
 rusoto_core = "0.40"
 select = "0.4"
 streaming_algorithms = "0.1"
+
+[[example]]
+name = "common_crawl"
+required-features = ["commoncrawl"]
 
 [[test]]
 name = "into_dist_iter"
