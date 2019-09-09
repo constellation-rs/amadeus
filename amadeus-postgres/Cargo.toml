@@ -1,0 +1,29 @@
+[package]
+name = "amadeus-postgres"
+version = "0.1.1"
+license = "Apache-2.0"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
+keywords = ["amadeus", "data", "postgres", "postgresql", "sql"]
+description = """
+Harmonious distributed data analysis in Rust.
+"""
+repository = "https://github.com/alecmocatta/amadeus"
+homepage = "https://github.com/alecmocatta/amadeus"
+documentation = "https://docs.rs/amadeus/0.1.1"
+readme = "README.md"
+edition = "2018"
+
+[badges]
+azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+amadeus-core = { version = "0.1", path = "../amadeus-core" }
+amadeus-types = { version = "0.1", path = "../amadeus-types" }
+serde = { version = "1.0", features = ["derive"] }
+postgres = { version = "0.15", features = ["with-chrono"] }
+serde_closure = "0.1"
+postgres-binary-copy = "0.5"
+chrono = "0.4"
+sum = "0.1"

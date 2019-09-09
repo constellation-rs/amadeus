@@ -1,43 +1,91 @@
+[workspace]
+
 [package]
 name = "amadeus"
 version = "0.1.1"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
-categories = ["concurrency","science"]
-keywords = ["constellation","distributed","data-science"]
+categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
+keywords = ["constellation", "distributed", "data-science", "data", "logs"]
 description = """
-Harmonious distributed data analysis in Rust.
+Harmonious distributed data processing & analysis in Rust.
+
+parquet postgres aws s3 cloudfront elb json csv logs hadoop hdfs arrow common crawl
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
 documentation = "https://docs.rs/amadeus/0.1.1"
 readme = "README.md"
+autotests = true
+edition = "2018"
 
 [badges]
-# appveyor = { repository = "alecmocatta/amadeus" }
-circle-ci = { repository = "alecmocatta/amadeus" }
-#gitlab = { repository = "alecmocatta/amadeus" }
-travis-ci = { repository = "alecmocatta/amadeus" }
-
+azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
+[features]
+parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
+
 [dependencies]
-serde_derive = "1.0"
-serde = "1.0"
-rand = "0.5"
-either = "1.5"
-serde_closure = { version = "0.1" } #, path = "../serde_closure" }
-serde_traitobject = { version = "0.1.2" } #, path = "../serde_traitobject" }
-constellation-rs = { version = "0.1", git = "https://github.com/alecmocatta/constellation.git" } #, path = "../constellation" }
-streaming_algorithms = { version = "0.1" } #, path = "../streaming_algorithms" }
+amadeus-derive = { version = "0.1.0", path = "amadeus-derive" }
+amadeus-types = { version = "0.1.0", path = "amadeus-types" }
+amadeus-postgres = { version = "0.1.0", path = "amadeus-postgres" }
+amadeus-parquet = { version = "0.1.0", path = "amadeus-parquet", optional = true }
+amadeus-serde = { version = "0.1.0", path = "amadeus-serde" }
+amadeus-core = { version = "0.1.0", path = "amadeus-core" }
+amadeus-aws = { version = "0.1.0", path = "amadeus-aws" }
+amadeus-commoncrawl = { version = "0.1.0", path = "amadeus-commoncrawl" }
+constellation-rs = { version = "0.1", default-features = false }
+crossbeam-channel = "0.3"
+futures-preview = "=0.3.0-alpha.18"
+serde = { version = "1.0", features = ["derive"] }
+serde_closure = "0.1"
+serde_traitobject = "0.1.6"
+
+# pin; broken for some reason
+bincode = "=1.0.1"
 
 [dev-dependencies]
-reqwest = "0.8"
-reqwest_resume = "0.1"
-select = "0.4"
+either = "1.5"
 flate2 = "1.0"
-nom = "2.2"
+reqwest = "0.9"
+reqwest_resume = "0.2"
+rand = "0.7"
+rusoto_core = "0.40"
+select = "0.4"
+streaming_algorithms = { version = "0.1", git = "https://github.com/alecmocatta/streaming_algorithms" }
 warc_parser = { git = "https://github.com/alecmocatta/warc_nom_parser" }
 
-[profile.release]
-debug = 2
+[[test]]
+name = "into_dist_iter"
+harness = false
+
+[[test]]
+name = "panic"
+harness = false
+
+[[test]]
+name = "threads"
+harness = false
+
+[[test]]
+name = "source"
+harness = false
+
+[[test]]
+name = "parquet"
+harness = false
+required-features = ["parquet"]
+
+[[test]]
+name = "csv"
+harness = false
+
+[[test]]
+name = "json"
+harness = false
+
+[[test]]
+name = "postgres"
+harness = false
+test = false # TODO set up postgres on CI

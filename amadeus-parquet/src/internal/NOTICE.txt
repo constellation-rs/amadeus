@@ -1,0 +1,2 @@
+This product includes software from the Arrow project (Apache 2.0)
+https://github.com/apache/arrow

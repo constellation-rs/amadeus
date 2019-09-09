@@ -1,0 +1,4 @@
+[submodule "amadeus-testing"]
+	path = amadeus-testing
+	url = https://github.com/alecmocatta/amadeus-testing.git
+	branch = master
