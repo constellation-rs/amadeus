@@ -1,20 +1,26 @@
+#[cfg(feature = "aws")]
 #[doc(inline)]
 pub use amadeus_aws::Cloudfront;
+#[cfg(feature = "aws")]
 pub mod aws {
 	pub use crate::data::CloudfrontRow;
 	#[doc(inline)]
 	pub use amadeus_aws::*;
 }
+#[cfg(feature = "commoncrawl")]
 #[doc(inline)]
 pub use amadeus_commoncrawl::{self as commoncrawl, CommonCrawl};
 #[cfg(feature = "parquet")]
 #[doc(inline)]
 pub use amadeus_parquet::{self as parquet, Parquet};
+#[cfg(feature = "postgres")]
 #[doc(inline)]
 pub use amadeus_postgres::{self as postgres, Postgres};
+#[cfg(feature = "amadeus-serde")]
 #[doc(inline)]
 pub use amadeus_serde::{self as serde, Csv, Json};
 
+#[cfg(feature = "amadeus-serde")]
 impl<File, Row> Source for Json<File, Row>
 where
 	File: amadeus_core::file::File,
@@ -33,6 +39,7 @@ where
 		<Self as amadeus_core::Source>::iter(self)
 	}
 }
+#[cfg(feature = "amadeus-serde")]
 impl<File, Row> Source for Csv<File, Row>
 where
 	File: amadeus_core::file::File,
@@ -70,6 +77,7 @@ where
 		<Self as amadeus_core::Source>::iter(self)
 	}
 }
+#[cfg(feature = "aws")]
 impl Source for Cloudfront {
 	type Item = crate::data::CloudfrontRow;
 	type Error = <Self as amadeus_core::Source>::Error;

@@ -24,17 +24,25 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
+aws = ["amadeus-aws"]
+commoncrawl = ["amadeus-commoncrawl"]
 parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
+postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
+csv = ["amadeus-serde", "amadeus-derive/serde"]
+json = ["amadeus-serde", "amadeus-derive/serde"]
+
+[package.metadata.docs.rs]
+features = ["aws", "commoncrawl", "postgres", "csv", "json"]
 
 [dependencies]
+amadeus-core = { version = "0.1.0", path = "amadeus-core" }
 amadeus-derive = { version = "0.1.0", path = "amadeus-derive" }
 amadeus-types = { version = "0.1.0", path = "amadeus-types" }
-amadeus-postgres = { version = "0.1.0", path = "amadeus-postgres" }
+amadeus-aws = { version = "0.1.0", path = "amadeus-aws", optional = true }
+amadeus-commoncrawl = { version = "0.1.0", path = "amadeus-commoncrawl", optional = true }
 amadeus-parquet = { version = "0.1.0", path = "amadeus-parquet", optional = true }
-amadeus-serde = { version = "0.1.0", path = "amadeus-serde" }
-amadeus-core = { version = "0.1.0", path = "amadeus-core" }
-amadeus-aws = { version = "0.1.0", path = "amadeus-aws" }
-amadeus-commoncrawl = { version = "0.1.0", path = "amadeus-commoncrawl" }
+amadeus-postgres = { version = "0.1.0", path = "amadeus-postgres", optional = true }
+amadeus-serde = { version = "0.1.0", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false }
 crossbeam-channel = "0.3"
 futures-preview = "=0.3.0-alpha.18"
@@ -68,8 +76,14 @@ name = "threads"
 harness = false
 
 [[test]]
-name = "source"
+name = "cloudfront"
 harness = false
+required-features = ["aws"]
+
+[[test]]
+name = "commoncrawl"
+harness = false
+required-features = ["commoncrawl"]
 
 [[test]]
 name = "parquet"
@@ -79,12 +93,15 @@ required-features = ["parquet"]
 [[test]]
 name = "csv"
 harness = false
+required-features = ["csv"]
 
 [[test]]
 name = "json"
 harness = false
+required-features = ["json"]
 
 [[test]]
 name = "postgres"
 harness = false
+required-features = ["postgres"]
 test = false # TODO set up postgres on CI

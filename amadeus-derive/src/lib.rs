@@ -369,86 +369,107 @@ fn impl_struct(
 		});
 	}
 
+	let mut postgres_includes = None;
+	let mut postgres_derives = None;
+	if cfg!(feature = "postgres") {
+		postgres_includes = Some(quote! {
+			pub use ::amadeus_postgres::{Names,read_be_i32,read_value,_internal as postgres,PostgresData};
+		});
+		postgres_derives = Some(quote! {
+			#[automatically_derived]
+			impl #impl_generics __::PostgresData for #name #ty_generics #where_clause_with_postgres_data {
+				fn query(f: &mut __::fmt::Formatter, name: __::Option<&__::Names<'_>>) -> __::fmt::Result {
+					if let __::Some(name) = name {
+						__::Write::write_str(f, "CASE WHEN ")?;
+						__::fmt::Display::fmt(name, f)?;
+						__::Write::write_str(f, " IS NOT NULL THEN ROW(")?;
+					} else {
+						__::Write::write_str(f, "ROW(")?;
+					}
+					let mut comma = false;
+					#(
+						if comma { __::Write::write_str(f, ",")? } comma = true;
+						<#field_types1 as __::PostgresData>::query(f, __::Some(&__::Names(name, #field_renames1)))?;
+					)*
+					if let __::Some(_name) = name {
+						__::Write::write_str(f, ") ELSE NULL END")
+					} else {
+						__::Write::write_str(f, ")")
+					}
+				}
+				fn decode(type_: &__::postgres::types::Type, buf: Option<&[u8]>) -> __::Result<Self, __::Box<__::Error + __::Sync + __::Send>> {
+					let buf = buf.unwrap();
+					assert_eq!(type_, &__::postgres::types::RECORD);
+
+					let mut buf = buf;
+					let num_fields = __::read_be_i32(&mut buf)?;
+					if num_fields as usize != #num_fields {
+						return __::Err(__::Into::into(format!("invalid field count: {} vs {}", num_fields, #num_fields)));
+					}
+
+					__::Ok(Self {
+						#(
+							#field_names1: {
+								let oid = __::read_be_i32(&mut buf)? as u32;
+								__::read_value(&__::postgres::types::Type::from_oid(oid).unwrap_or(__::postgres::types::OPAQUE), &mut buf)?
+							},
+						)*
+					})
+				}
+			}
+		});
+	}
+
+	let mut serde_includes = None;
+	let mut serde_derives = None;
+	if cfg!(feature = "serde") {
+		serde_includes = Some(quote! {
+			pub use ::amadeus_serde::{SerdeData,_internal::{Serialize, Deserialize, Serializer, Deserializer}};
+			pub use #amadeus_path::data::serde_data;
+		});
+		serde_derives = Some(quote! {
+			#[derive(__::Serialize, __::Deserialize)]
+			#[serde(remote = #name_str)]
+			#[serde(bound = "")]
+			#visibility struct #serde_name #impl_generics #where_clause_with_serde_data {
+				#(
+					#[serde(with = "__::serde_data", rename = #field_renames1)]
+					#field_names1: #field_types1,
+				)*
+			}
+
+			#[automatically_derived]
+			impl #impl_generics __::SerdeData for #name #ty_generics #where_clause_with_serde_data {
+				fn serialize<__S>(&self, serializer: __S) -> __::Result<__S::Ok, __S::Error>
+				where
+					__S: __::Serializer {
+					<#serde_name #ty_generics>::serialize(self, serializer)
+				}
+				fn deserialize<'de, __D>(deserializer: __D, schema: __::Option<__::SchemaIncomplete>) -> __::Result<Self, __D::Error>
+				where
+					__D: __::Deserializer<'de> {
+					<#serde_name #ty_generics>::deserialize(deserializer)
+				}
+			}
+		});
+	}
+
 	let gen = quote! {
 		mod __ {
 			#parquet_includes
-			pub use ::amadeus_serde::{SerdeData,_internal::{Serialize, Deserialize, Serializer, Deserializer}};
-			pub use ::amadeus_postgres::{Names,read_be_i32,read_value,_internal as postgres,PostgresData};
+			#postgres_includes
+			#serde_includes
 			pub use ::amadeus_types::{DowncastImpl, Downcast, DowncastError, Value, Group, SchemaIncomplete};
-			pub use #amadeus_path::{data::{serde_data, Data}};
+			pub use #amadeus_path::data::Data;
 			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::PartialEq, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
-		#[derive(__::Serialize, __::Deserialize)]
-		#[serde(remote = #name_str)]
-		#[serde(bound = "")]
-		#visibility struct #serde_name #impl_generics #where_clause_with_serde_data {
-			#(
-				#[serde(with = "__::serde_data", rename = #field_renames1)]
-				#field_names1: #field_types1,
-			)*
-		}
-
 		#parquet_derives
+		#postgres_derives
+		#serde_derives
 
 		#[automatically_derived]
 		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {}
-
-		#[automatically_derived]
-		impl #impl_generics __::PostgresData for #name #ty_generics #where_clause_with_postgres_data {
-			fn query(f: &mut __::fmt::Formatter, name: __::Option<&__::Names<'_>>) -> __::fmt::Result {
-				if let __::Some(name) = name {
-					__::Write::write_str(f, "CASE WHEN ")?;
-					__::fmt::Display::fmt(name, f)?;
-					__::Write::write_str(f, " IS NOT NULL THEN ROW(")?;
-				} else {
-					__::Write::write_str(f, "ROW(")?;
-				}
-				let mut comma = false;
-				#(
-					if comma { __::Write::write_str(f, ",")? } comma = true;
-					<#field_types1 as __::PostgresData>::query(f, __::Some(&__::Names(name, #field_renames1)))?;
-				)*
-				if let __::Some(_name) = name {
-					__::Write::write_str(f, ") ELSE NULL END")
-				} else {
-					__::Write::write_str(f, ")")
-				}
-			}
-			fn decode(type_: &__::postgres::types::Type, buf: Option<&[u8]>) -> __::Result<Self, __::Box<__::Error + __::Sync + __::Send>> {
-				let buf = buf.unwrap();
-				assert_eq!(type_, &__::postgres::types::RECORD);
-
-				let mut buf = buf;
-				let num_fields = __::read_be_i32(&mut buf)?;
-				if num_fields as usize != #num_fields {
-					return __::Err(__::Into::into(format!("invalid field count: {} vs {}", num_fields, #num_fields)));
-				}
-
-				__::Ok(Self {
-					#(
-						#field_names1: {
-							let oid = __::read_be_i32(&mut buf)? as u32;
-							__::read_value(&__::postgres::types::Type::from_oid(oid).unwrap_or(__::postgres::types::OPAQUE), &mut buf)?
-						},
-					)*
-				})
-			}
-		}
-
-		#[automatically_derived]
-		impl #impl_generics __::SerdeData for #name #ty_generics #where_clause_with_serde_data {
-			fn serialize<__S>(&self, serializer: __S) -> __::Result<__S::Ok, __S::Error>
-			where
-				__S: __::Serializer {
-				<#serde_name #ty_generics>::serialize(self, serializer)
-			}
-			fn deserialize<'de, __D>(deserializer: __D, schema: __::Option<__::SchemaIncomplete>) -> __::Result<Self, __D::Error>
-			where
-				__D: __::Deserializer<'de> {
-				<#serde_name #ty_generics>::deserialize(deserializer)
-			}
-		}
 
 		impl #impl_generics __::DowncastImpl<__::Value> for #name #ty_generics #where_clause_with_data {
 			fn downcast_impl(t: __::Value) -> __::Result<Self, __::DowncastError> {
