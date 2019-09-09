@@ -199,6 +199,29 @@ impl Partition for S3Partition {
 	}
 }
 
+pub fn retry<F, FU, S>(f: F) -> impl futures_01::future::Future<Item = FU::Item, Error = FU::Error>
+where
+	F: FnMut() -> FU,
+	FU: futures_01::future::Future<Error = RusotoError<S>>,
+{
+	use futures_01::future::Future;
+	tokio_retry::RetryIf::spawn(
+		tokio_retry::strategy::ExponentialBackoff::from_millis(10),
+		f,
+		|err: &RusotoError<_>| {
+			if let RusotoError::HttpDispatch(_) = *err {
+				true
+			} else {
+				false
+			}
+		},
+	)
+	.map_err(|err| match err {
+		tokio_retry::Error::OperationError(err) => err,
+		_ => panic!(),
+	})
+}
+
 pub struct S3Page {
 	client: S3Client,
 	bucket: String,
@@ -208,10 +231,12 @@ pub struct S3Page {
 impl S3Page {
 	fn new(region: Region, bucket: String, key: String) -> Self {
 		let client = S3Client::new(region);
-		let object = block_on_01(client.head_object(HeadObjectRequest {
-			bucket: bucket.clone(),
-			key: key.clone(),
-			..HeadObjectRequest::default()
+		let object = block_on_01(retry(|| {
+			client.head_object(HeadObjectRequest {
+				bucket: bucket.clone(),
+				key: key.clone(),
+				..HeadObjectRequest::default()
+			})
 		}))
 		.unwrap();
 		let len = object.content_length.unwrap().try_into().unwrap();

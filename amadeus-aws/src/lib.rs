@@ -18,7 +18,7 @@ use amadeus_core::{
 
 pub mod file;
 
-use file::block_on_01;
+use file::{block_on_01, retry};
 
 // https://docs.datadoghq.com/integrations/amazon_web_services/?tab=allpermissions#enable-logging-for-your-aws-service
 
@@ -59,11 +59,13 @@ fn list(
 		}
 		first = false;
 		Some(ResultExpand(
-			block_on_01(client.list_objects_v2(ListObjectsV2Request {
-				bucket: bucket.to_owned(),
-				prefix: Some(prefix.to_owned()),
-				continuation_token: continuation_token.take(),
-				..ListObjectsV2Request::default()
+			block_on_01(retry(|| {
+				client.list_objects_v2(ListObjectsV2Request {
+					bucket: bucket.to_owned(),
+					prefix: Some(prefix.to_owned()),
+					continuation_token: continuation_token.take(),
+					..ListObjectsV2Request::default()
+				})
 			}))
 			.map(|res| {
 				continuation_token = res.next_continuation_token;
@@ -117,13 +119,13 @@ impl Source for Cloudfront {
 			.flat_map(FnMut!([bucket, region] move |key:String| {
 				let client = S3Client::new(region.clone());
 				ResultExpand(
-					block_on_01(client
+					block_on_01(retry(||client
 						.get_object(GetObjectRequest {
 							bucket: bucket.clone(),
-							key,
+							key: key.clone(),
 							..GetObjectRequest::default()
 						})
-						)
+						))
 						.map_err(Error::from)
 						.map(|res| {
 							let body = res.body.unwrap().into_blocking_read();
