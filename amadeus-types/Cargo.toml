@@ -19,7 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-linked-hash-map = "0.5"
-fxhash = "0.2"
 chrono = "0.4"
+fxhash = "0.2"
+linked-hash-map = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+url = { version = "2.1", features = ["serde"] }

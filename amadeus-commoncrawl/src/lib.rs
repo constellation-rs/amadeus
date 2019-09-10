@@ -1,10 +1,6 @@
 mod commoncrawl;
 mod parser;
 
-use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IteratorExt
-};
-pub use commoncrawl::{WarcParser, Webpage};
 use flate2::read::MultiGzDecoder;
 use reqwest_resume::ClientExt;
 use serde::{Deserialize, Serialize};
@@ -12,6 +8,13 @@ use serde_closure::*;
 use std::{
 	io::{self, BufRead, BufReader}, iter, ops::FnMut, time
 };
+
+use amadeus_core::{
+	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IteratorExt
+};
+use amadeus_types::Webpage;
+
+use commoncrawl::WarcParser;
 
 type Closure<Env, Args, Output> =
 	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;

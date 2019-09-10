@@ -23,6 +23,8 @@ proc-macro = true
 
 [features]
 parquet = []
+postgres = []
+serde = []
 
 [dependencies]
 proc-macro2 = { version = "1.0.1", default-features = false }

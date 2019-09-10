@@ -27,32 +27,32 @@ use internal::{
 };
 
 #[allow(dead_code)]
-#[derive(Record)]
+#[derive(Data)]
 struct Abc {
 	a: String,
 }
 
 #[allow(dead_code)]
-#[derive(Record)]
+#[derive(Data)]
 struct Def {
 	#[parquet(name = "!@£$%^&*(")]
 	a: String,
 }
 
-// #[derive(Record)]
+// #[derive(Data)]
 // struct Ghi {
 // 	#[parquet(name = 123)]
 //     a: String,
 // }
 
 #[allow(dead_code)]
-#[derive(Record)]
+#[derive(Data)]
 struct Jkl<M> {
 	a: M,
 }
 
 #[allow(dead_code)]
-#[derive(Record)]
+#[derive(Data)]
 struct Mno {}
 
 macro_rules! list {

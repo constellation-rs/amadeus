@@ -1,9 +1,11 @@
 mod local;
+#[cfg(feature = "constellation")]
 mod process;
 mod thread;
-mod util;
+pub(crate) mod util;
 
 pub use local::LocalPool;
+#[cfg(feature = "constellation")]
 pub use process::ProcessPool;
 pub use thread::ThreadPool;
 
@@ -13,10 +15,13 @@ mod process_pool_impls {
 
 	use amadeus_core::pool::{ProcessPool as Pool, ProcessSend};
 
-	use super::{LocalPool, ProcessPool, ThreadPool};
+	#[cfg(feature = "constellation")]
+	use super::ProcessPool;
+	use super::{LocalPool, ThreadPool};
 
 	type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
+	#[cfg(feature = "constellation")]
 	impl Pool for ProcessPool {
 		fn processes(&self) -> usize {
 			ProcessPool::processes(self)

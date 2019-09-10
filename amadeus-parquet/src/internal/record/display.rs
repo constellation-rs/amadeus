@@ -93,7 +93,7 @@ where
 }
 
 /// Display a group. Tuples, [`Group`](super::types::Group) and structs marked with
-/// `#[derive(Record)]` all make use of this, so the logic is encapsulated here.
+/// `#[derive(Data)]` all make use of this, so the logic is encapsulated here.
 #[must_use = "must eventually call `finish()` on Debug builders"]
 #[allow(missing_debug_implementations)]
 pub struct DisplaySchemaGroup<'a, 'b: 'a> {

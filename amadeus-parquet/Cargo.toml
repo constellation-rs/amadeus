@@ -19,7 +19,6 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-parquet-derive = { version = "0.1.0", path = "amadeus-parquet-derive" }
 amadeus-core = { version = "0.1", path = "../amadeus-core" }
 amadeus-types = { version = "0.1", path = "../amadeus-types" }
 brotli = "3.3"
@@ -41,3 +40,7 @@ zstd = "0.4"
 
 [dev-dependencies]
 rand = "0.7"
+
+[[test]]
+name = "derive"
+test = false

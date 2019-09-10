@@ -2,18 +2,24 @@ use std::{
 	cmp::Ordering, fmt::Debug, hash::{Hash, Hasher}
 };
 
-pub use amadeus_derive::Data;
 #[cfg(feature = "parquet")]
 use amadeus_parquet::ParquetData;
+#[cfg(feature = "postgres")]
 use amadeus_postgres::PostgresData;
+#[cfg(feature = "amadeus-serde")]
 use amadeus_serde::SerdeData;
-pub use amadeus_types as types;
-pub use amadeus_types::{
-	Bson, Date, Decimal, Downcast, DowncastImpl, Enum, Group, Json, List, Map, Time, Timestamp, Value
-};
 
 #[cfg(not(feature = "parquet"))]
 use std::any::Any as ParquetData;
+#[cfg(not(feature = "postgres"))]
+use std::any::Any as PostgresData;
+#[cfg(not(feature = "amadeus-serde"))]
+use std::any::Any as SerdeData;
+
+pub use amadeus_derive::Data;
+pub use amadeus_types::{
+	Bson, Date, Decimal, Downcast, DowncastImpl, Enum, Group, Json, List, Map, Time, Timestamp, Value, Webpage
+};
 
 pub trait Data:
 	Clone
@@ -69,6 +75,7 @@ pub struct CloudfrontRow {
 	pub fle_status: Option<String>,
 	pub fle_encrypted_fields: Option<String>,
 }
+#[cfg(feature = "aws")]
 impl From<amadeus_aws::CloudfrontRow> for CloudfrontRow {
 	fn from(from: amadeus_aws::CloudfrontRow) -> Self {
 		Self {
@@ -214,6 +221,7 @@ impl_parquet_record_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9);
 impl_parquet_record_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10);
 impl_parquet_record_tuple!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11);
 
+#[cfg(feature = "amadeus-serde")]
 pub mod serde_data {
 	use super::Data;
 	use serde::{Deserializer, Serializer};

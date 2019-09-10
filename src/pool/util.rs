@@ -5,8 +5,58 @@ use std::{
 	}, task::{Context, Poll, Waker}
 };
 
+#[cfg(feature = "constellation")]
+pub use constellation::FutureExt1;
+
+#[cfg(not(feature = "constellation"))]
+mod future_ext {
+	use futures::{future::Future, pin_mut};
+	use std::{
+		sync::Arc, task::{Context, Poll}, thread::{self, Thread}
+	};
+
+	/// Extension trait to provide convenient [`block()`](FutureExt1::block) method on futures.
+	///
+	/// Named `FutureExt1` to avoid clashing with [`futures::future::FutureExt`].
+	pub trait FutureExt1: Future {
+		/// Convenience method over `futures::executor::block_on(future)`.
+		fn block(self) -> Self::Output
+		where
+			Self: Sized,
+		{
+			// futures::executor::block_on(self) // Not reentrant for some reason
+			struct ThreadNotify {
+				thread: Thread,
+			}
+			impl futures::task::ArcWake for ThreadNotify {
+				fn wake_by_ref(arc_self: &Arc<Self>) {
+					arc_self.thread.unpark();
+				}
+			}
+			let f = self;
+			pin_mut!(f);
+			let thread_notify = Arc::new(ThreadNotify {
+				thread: thread::current(),
+			});
+			let waker = futures::task::waker_ref(&thread_notify);
+			let mut cx = Context::from_waker(&waker);
+			loop {
+				if let Poll::Ready(t) = f.as_mut().poll(&mut cx) {
+					return t;
+				}
+				thread::park();
+			}
+		}
+	}
+	impl<T: ?Sized> FutureExt1 for T where T: Future {}
+}
+#[cfg(not(feature = "constellation"))]
+pub use future_ext::FutureExt1;
+
+#[cfg(feature = "constellation")]
 #[derive(Debug)]
 pub struct RoundRobin(AtomicUsize, usize);
+#[cfg(feature = "constellation")]
 impl RoundRobin {
 	pub fn new(start: usize, limit: usize) -> Self {
 		Self(AtomicUsize::new(start), limit)

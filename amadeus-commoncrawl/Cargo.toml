@@ -20,6 +20,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 amadeus-core = { version = "0.1", path = "../amadeus-core" }
+amadeus-types = { version = "0.1", path = "../amadeus-types" }
 flate2 = "1.0"
 reqwest = "0.9"
 reqwest_resume = "0.2"

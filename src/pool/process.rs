@@ -1,7 +1,7 @@
 use constellation::*;
 use serde_traitobject as st;
 use std::{
-	any, collections::VecDeque, fmt, future::Future, mem, panic, sync::{Arc, Mutex}
+	any, collections::VecDeque, fmt, future::Future, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}
 };
 
 use amadeus_core::pool::ProcessSend;
@@ -206,6 +206,9 @@ impl ProcessPool {
 		assert_sync_and_send(unsafe { ImplSync::new(future) })
 	}
 }
+
+impl UnwindSafe for ProcessPool {}
+impl RefUnwindSafe for ProcessPool {}
 
 fn _assert() {
 	let _ = assert_sync_and_send::<ProcessPool>;

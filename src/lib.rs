@@ -5,6 +5,9 @@
 //! This library is very nascent. 3 parts: process pool; sources/sinks (Data/Value); analytics;
 
 #![doc(html_root_url = "https://docs.rs/amadeus/0.1.1")]
+#![doc(
+	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
+)]
 #![feature(
 	unboxed_closures,
 	never_type,
@@ -54,17 +57,21 @@ pub mod source;
 pub use amadeus_core::{dist_iter, into_dist_iter};
 
 #[doc(inline)]
-pub use crate::dist_iter::{DistributedIterator, FromDistributedIterator};
-#[doc(inline)]
-pub use crate::into_dist_iter::{IntoDistributedIterator, IteratorExt};
-#[doc(inline)]
-pub use crate::pool::{LocalPool, ProcessPool, ThreadPool};
+pub use crate::{
+	data::{Data, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1
+};
 
 pub mod prelude {
+	#[cfg(feature = "constellation")]
+	#[doc(inline)]
+	pub use super::pool::ProcessPool;
+	#[cfg(feature = "aws")]
+	#[doc(inline)]
+	pub use super::source::aws::{AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File};
 	#[doc(inline)]
 	pub use super::{
-		dist_iter::{DistributedIteratorMulti, Identity}, source::*, DistributedIterator, FromDistributedIterator, IntoDistributedIterator, IteratorExt, LocalPool, ProcessPool, ThreadPool
+		data, data::{Date, Decimal, Downcast, DowncastImpl, Enum, Group, List, Map, Time, Timestamp}, dist_iter::{DistributedIteratorMulti, Identity}, pool::LocalPool, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, FutureExt1, IntoDistributedIterator, IteratorExt, Value
 	};
 	#[doc(inline)]
-	pub use amadeus_core::pool::ProcessPool as _;
+	pub use amadeus_core::pool::{LocalPool as _, ProcessPool as _, ThreadPool as _};
 }
