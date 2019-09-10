@@ -32,7 +32,7 @@ csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
 
 [package.metadata.docs.rs]
-features = ["aws", "commoncrawl", "postgres", "csv", "json"]
+features = ["constellation", "aws", "commoncrawl", "postgres", "csv", "json"]
 
 [dependencies]
 amadeus-core = { version = "0.1.0", path = "amadeus-core" }
@@ -44,7 +44,6 @@ amadeus-parquet = { version = "0.1.0", path = "amadeus-parquet", optional = true
 amadeus-postgres = { version = "0.1.0", path = "amadeus-postgres", optional = true }
 amadeus-serde = { version = "0.1.0", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
-crossbeam-channel = "0.3"
 futures-preview = "=0.3.0-alpha.18"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.1"
@@ -54,18 +53,13 @@ serde_traitobject = "0.1.6"
 bincode = "=1.0.1"
 
 [dev-dependencies]
-either = "1.5"
-flate2 = "1.0"
-reqwest = "0.9"
-reqwest_resume = "0.2"
+either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
-rusoto_core = "0.40"
-select = "0.4"
 streaming_algorithms = "0.1"
 
 [[example]]
 name = "common_crawl"
-required-features = ["commoncrawl"]
+required-features = ["commoncrawl", "constellation"]
 
 [[test]]
 name = "into_dist_iter"

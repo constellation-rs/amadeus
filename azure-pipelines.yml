@@ -16,8 +16,8 @@ jobs:
       rust_toolchain: nightly
       rust_lint_toolchain: nightly-2019-09-05
       rust_flags: ''
-      rust_features: 'aws;commoncrawl;parquet;postgres;csv;json;aws commoncrawl parquet postgres csv json constellation'
-      rust_doc_features: 'aws commoncrawl postgres csv json constellation'
+      rust_features: 'aws;commoncrawl;parquet;postgres;csv;json;constellation aws commoncrawl parquet postgres csv json'
+      rust_doc_features: 'constellation aws commoncrawl postgres csv json'
       rust_target_check: ''
       rust_target_build: ''
       rust_target_run: ''
