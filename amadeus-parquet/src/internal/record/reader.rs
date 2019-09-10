@@ -675,7 +675,7 @@ where
 // Row iterators
 
 /// Iterator of rows. [`Row`](`super::types::Row`) can be used to read as untyped rows. A
-/// tuple or a struct marked with `#[derive(Record)]` can be used to read as typed rows.
+/// tuple or a struct marked with `#[derive(Data)]` can be used to read as typed rows.
 ///
 /// It is used either for a single row group to iterate over data in that row group, or
 /// an entire file with auto buffering of all row groups.

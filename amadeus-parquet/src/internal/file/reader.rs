@@ -56,7 +56,7 @@ pub trait FileReader {
 	/// Get full iterator of `Row`s from a file (over all row groups).
 	///
 	/// [`Row`](`crate::internal::record::types::Row`) can be used for the type parameter `T` to
-	/// read as untyped rows. A tuple or a struct marked with `#[derive(Record)]` can
+	/// read as untyped rows. A tuple or a struct marked with `#[derive(Data)]` can
 	/// be used to read as typed rows.
 	///
 	/// Iterator will automatically load the next row group to advance.
@@ -128,7 +128,7 @@ pub trait RowGroupReader {
 	/// Get iterator of `Row`s from this row group.
 	///
 	/// [`Row`](`crate::internal::record::types::Row`) can be used for the type parameter `T` to
-	/// read as untyped rows. A tuple or a struct marked with `#[derive(Record)]` can
+	/// read as untyped rows. A tuple or a struct marked with `#[derive(Data)]` can
 	/// be used to read as typed rows.
 	///
 	/// Projected schema can be a subset of or equal to the file schema, when it is None,

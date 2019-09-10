@@ -19,7 +19,7 @@
 //!
 //! Example usage of reading data untyped:
 //!
-//! ```rust,no_run
+//! ```no_run
 //! use std::fs::File;
 //! use std::path::Path;
 //! use amadeus_parquet::internal::file::reader::{FileReader, SerializedFileReader};
@@ -35,13 +35,13 @@
 //!
 //! Example usage of reading data strongly-typed:
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use std::fs::File;
 //! use std::path::Path;
 //! use amadeus_parquet::internal::file::reader::{FileReader, SerializedFileReader};
 //! use amadeus_parquet::internal::record::{Record, types::Timestamp};
 //!
-//! #[derive(Record, Debug)]
+//! #[derive(Data, Debug)]
 //! struct MyRow {
 //!     id: u64,
 //!     time: Timestamp,
@@ -74,7 +74,7 @@ pub use reader::RowIter;
 pub use schemas::RootSchema;
 #[doc(hidden)]
 pub mod _private {
-	/// This is used by `#[derive(Record)]`
+	/// This is used by `#[derive(Data)]`
 	pub use super::display::DisplaySchemaGroup;
 }
 mod predicate {
@@ -136,15 +136,15 @@ pub(crate) use self::predicate::Predicate;
 /// The implementation for tuples is only for those up to length 32. The implementation
 /// for arrays is only for common array lengths. See [`Record`] for more details.
 ///
-/// ## `#[derive(Record)]`
+/// ## `#[derive(Data)]`
 ///
-/// The easiest way to implement `Record` on a new type is using `#[derive(Record)]`:
+/// The easiest way to implement `Record` on a new type is using `#[derive(Data)]`:
 ///
-/// ```
+/// ```ignore
 /// use amadeus_parquet::internal;
 /// use internal::record::{types::Timestamp, Record};
 ///
-/// #[derive(Record, Debug)]
+/// #[derive(Data, Debug)]
 /// struct MyRow {
 ///     id: u64,
 ///     time: Timestamp,
@@ -154,11 +154,11 @@ pub(crate) use self::predicate::Predicate;
 ///
 /// If the Rust field name and the Parquet field name differ, say if the latter is not an idiomatic or valid identifier in Rust, then an automatic rename can be made like so:
 ///
-/// ```
+/// ```ignore
 /// # use amadeus_parquet::internal::record::{types::Timestamp, Record};
-/// #[derive(Record, Debug)]
+/// #[derive(Data, Debug)]
 /// struct MyRow {
-///     #[parquet(name = "ID")]
+///     #[amadeus(name = "ID")]
 ///     id: u64,
 ///     time: Timestamp,
 ///     event: String,
