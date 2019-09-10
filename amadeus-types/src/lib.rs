@@ -1,3 +1,4 @@
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.1.2")]
 #![feature(specialization)]
 
 //! Implementations of Rust types that correspond to Parquet logical types.

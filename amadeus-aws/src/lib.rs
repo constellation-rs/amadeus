@@ -1,3 +1,5 @@
+#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.1.2")]
+
 mod cloudfront;
 mod file;
 

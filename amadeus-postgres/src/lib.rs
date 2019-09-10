@@ -1,3 +1,4 @@
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.2")]
 #![feature(specialization)]
 
 mod impls;

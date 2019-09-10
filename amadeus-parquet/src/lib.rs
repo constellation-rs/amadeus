@@ -1,3 +1,4 @@
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.1.2")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 #![feature(read_initializer)]

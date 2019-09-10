@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-	<a href="https://docs.rs/amadeus/0.1.1">Docs</a>
+	<a href="https://docs.rs/amadeus/0.1.2">Docs</a>
 </p>
 
 
