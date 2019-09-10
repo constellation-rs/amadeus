@@ -17,7 +17,8 @@ use amadeus_core::util::{IoError, ResultExpand};
 pub use cloudfront::{Cloudfront, CloudfrontRow};
 pub use file::{S3Directory, S3File};
 
-pub type AwsRegion = rusoto_core::Region;
+#[doc(inline)]
+pub use rusoto_core::Region as AwsRegion;
 
 // https://docs.datadoghq.com/integrations/amazon_web_services/?tab=allpermissions#enable-logging-for-your-aws-service
 

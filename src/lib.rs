@@ -5,6 +5,9 @@
 //! This library is very nascent. 3 parts: process pool; sources/sinks (Data/Value); analytics;
 
 #![doc(html_root_url = "https://docs.rs/amadeus/0.1.1")]
+#![doc(
+	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
+)]
 #![feature(
 	unboxed_closures,
 	never_type,
@@ -53,26 +56,21 @@ pub mod source;
 
 pub use amadeus_core::{dist_iter, into_dist_iter};
 
-#[cfg(feature = "constellation")]
-#[doc(inline)]
-pub use crate::pool::ProcessPool;
 #[doc(inline)]
 pub use crate::{
-	data::{
-		Data, Date, Decimal, Downcast, DowncastImpl, Enum, Group, List, Map, Time, Timestamp, Value
-	}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::{util::FutureExt1, LocalPool, ThreadPool}
+	data::{Data, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1
 };
 
 pub mod prelude {
+	#[cfg(feature = "constellation")]
+	#[doc(inline)]
+	pub use super::pool::ProcessPool;
 	#[cfg(feature = "aws")]
 	#[doc(inline)]
 	pub use super::source::aws::{AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File};
-	#[cfg(feature = "constellation")]
-	#[doc(inline)]
-	pub use super::ProcessPool;
 	#[doc(inline)]
 	pub use super::{
-		data, dist_iter::{DistributedIteratorMulti, Identity}, source::*, Data, Date, Decimal, DistributedIterator, Downcast, DowncastImpl, Enum, FromDistributedIterator, FutureExt1, Group, IntoDistributedIterator, IteratorExt, List, LocalPool, Map, ThreadPool, Time, Timestamp, Value
+		data, data::{Date, Decimal, Downcast, DowncastImpl, Enum, Group, List, Map, Time, Timestamp}, dist_iter::{DistributedIteratorMulti, Identity}, pool::LocalPool, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, FutureExt1, IntoDistributedIterator, IteratorExt, Value
 	};
 	#[doc(inline)]
 	pub use amadeus_core::pool::{LocalPool as _, ProcessPool as _, ThreadPool as _};

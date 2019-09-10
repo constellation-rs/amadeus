@@ -44,8 +44,11 @@ use constellation::{init, Resources};
 use data::Webpage;
 use std::env;
 
+#[allow(unreachable_code)]
 fn main() {
 	init(Resources::default());
+
+	return; // TODO: runs for a long time; overflows sum
 
 	// Accept the number of processes at the command line, defaulting to 10
 	let processes = env::args()
@@ -68,7 +71,8 @@ fn main() {
 			),),
 		(
 			u32,
-			// std::collections::HashSet<u32>,
+			u32,
+			std::collections::HashSet<u32>,
 			streaming_algorithms::Top<u32,usize>,
 			streaming_algorithms::Top<usize,streaming_algorithms::HyperLogLogMagnitude<Vec<u8>>>,
 			streaming_algorithms::SampleUnstable<u32>,
@@ -116,11 +120,14 @@ fn main() {
 						FnMut!(|| 0_u32),
 						FnMut!(|a: u32, b: either::Either<u32, u32>| a + b.into_inner()),
 					),
-				// .sum(),
-				// Identity
-				// 	.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
-				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
-				// 	.collect(),
+				Identity
+					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.sum(),
+				Identity
+					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
+					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.collect(),
 				Identity
 					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
 					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
