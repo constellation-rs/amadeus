@@ -1,65 +1,24 @@
-use futures::{compat::Compat01As03, future::FutureExt};
-use once_cell::sync::Lazy;
+use futures::compat::Compat01As03;
 use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, convert::TryInto, future::Future, io, mem::transmute, pin::Pin};
-use tokio::{io::AsyncRead, prelude::future::poll_fn, runtime::Runtime};
+use std::{convert::TryInto, future::Future, io, pin::Pin};
+use tokio::{io::AsyncRead, prelude::future::poll_fn};
 
 use amadeus_core::{
 	file::{Directory, File, Page, Partition, PathBuf}, util::IoError
 };
 
-static RUNTIME: Lazy<Runtime> = Lazy::new(|| Runtime::new().unwrap());
-
-thread_local! {
-	static REENTRANCY_CHECK: RefCell<()> = RefCell::new(());
-}
-
-pub fn block_on_01<F>(future: F) -> Result<F::Item, F::Error>
-where
-	F: futures_01::future::Future + Send,
-	F::Item: Send,
-	F::Error: Send,
-{
-	use futures_01::{future::Future, sync::oneshot};
-	REENTRANCY_CHECK.with(|reentrancy_check| {
-		let _reentrancy_check = reentrancy_check.borrow_mut();
-		// unsafe is used here to magic away tokio's 'static constraints
-		struct Receiver<T>(Option<T>);
-		unsafe impl<T> Sync for Receiver<T> {}
-		let mut i = Receiver(None);
-		let mut e = Receiver(None);
-		let mut future = future.map(|i_| i.0 = Some(i_)).map_err(|e_| e.0 = Some(e_));
-		let future: &mut (dyn Future<Item = (), Error = ()> + Send) = &mut future;
-		let future: &mut (dyn Future<Item = (), Error = ()> + Send) = unsafe { transmute(future) };
-		oneshot::spawn(future, &RUNTIME.executor())
-			.wait()
-			.map(|()| i.0.take().unwrap())
-			.map_err(|()| e.0.take().unwrap())
-	})
-}
-pub fn block_on<F>(future: F) -> F::Output
-where
-	F: Future + Send,
-	F::Output: Send,
-{
-	block_on_01(futures::compat::Compat::new(
-		Box::pin(future).map(Ok::<_, ()>),
-	))
-	.unwrap()
-}
-
-pub type Region = rusoto_core::Region;
+use super::{block_on, block_on_01, retry, AwsError, AwsRegion};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3Directory {
-	region: Region,
+	region: AwsRegion,
 	bucket: String,
 	prefix: String,
 }
 impl S3Directory {
-	pub fn new(region: Region, bucket: &str, prefix: &str) -> Self {
+	pub fn new(region: AwsRegion, bucket: &str, prefix: &str) -> Self {
 		let (bucket, prefix) = (bucket.to_owned(), prefix.to_owned());
 		Self {
 			region,
@@ -136,7 +95,7 @@ impl Directory for S3Directory {
 
 impl File for S3Directory {
 	type Partition = S3Partition;
-	type Error = super::Error;
+	type Error = AwsError;
 
 	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
 		self.partitions_filter(|_| true)
@@ -145,12 +104,12 @@ impl File for S3Directory {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3File {
-	region: Region,
+	region: AwsRegion,
 	bucket: String,
 	key: String,
 }
 impl S3File {
-	pub fn new(region: Region, bucket: &str, key: &str) -> Self {
+	pub fn new(region: AwsRegion, bucket: &str, key: &str) -> Self {
 		let (bucket, key) = (bucket.to_owned(), key.to_owned());
 		Self {
 			region,
@@ -161,7 +120,7 @@ impl S3File {
 }
 impl File for S3File {
 	type Partition = S3File;
-	type Error = super::Error;
+	type Error = AwsError;
 
 	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
 		Ok(vec![self])
@@ -178,7 +137,7 @@ impl Partition for S3File {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3Partition {
-	region: Region,
+	region: AwsRegion,
 	bucket: String,
 	key: String,
 	len: u64,
@@ -199,29 +158,6 @@ impl Partition for S3Partition {
 	}
 }
 
-pub fn retry<F, FU, S>(f: F) -> impl futures_01::future::Future<Item = FU::Item, Error = FU::Error>
-where
-	F: FnMut() -> FU,
-	FU: futures_01::future::Future<Error = RusotoError<S>>,
-{
-	use futures_01::future::Future;
-	tokio_retry::RetryIf::spawn(
-		tokio_retry::strategy::ExponentialBackoff::from_millis(10),
-		f,
-		|err: &RusotoError<_>| {
-			if let RusotoError::HttpDispatch(_) = *err {
-				true
-			} else {
-				false
-			}
-		},
-	)
-	.map_err(|err| match err {
-		tokio_retry::Error::OperationError(err) => err,
-		_ => panic!(),
-	})
-}
-
 pub struct S3Page {
 	client: S3Client,
 	bucket: String,
@@ -229,7 +165,7 @@ pub struct S3Page {
 	len: u64,
 }
 impl S3Page {
-	fn new(region: Region, bucket: String, key: String) -> Self {
+	fn new(region: AwsRegion, bucket: String, key: String) -> Self {
 		let client = S3Client::new(region);
 		let object = block_on_01(retry(|| {
 			client.head_object(HeadObjectRequest {

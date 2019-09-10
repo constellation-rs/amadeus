@@ -40,12 +40,9 @@
 extern crate serde_closure;
 
 use amadeus::prelude::*;
-use amadeus_commoncrawl::Webpage;
 use constellation::{init, Resources};
-use reqwest_resume::ClientExt;
-use std::{
-	env, io::{BufRead, BufReader}, time
-};
+use data::Webpage;
+use std::env;
 
 fn main() {
 	init(Resources::default());
@@ -59,11 +56,11 @@ fn main() {
 	let pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
 	// let pool = amadeus::no_pool::NoPool;
 
-	let body = reqwest::get(
-		"http://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2018-30/warc.paths.gz",
-	)
-	.unwrap();
-	let body = flate2::read::MultiGzDecoder::new(body); // Content-Encoding isn't set, so decode manually
+	// let body = reqwest::get(
+	// 	"http://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2018-30/warc.paths.gz",
+	// )
+	// .unwrap();
+	// let body = flate2::read::MultiGzDecoder::new(body); // Content-Encoding isn't set, so decode manually
 
 	let top: (
 		((
@@ -76,7 +73,8 @@ fn main() {
 			streaming_algorithms::Top<usize,streaming_algorithms::HyperLogLogMagnitude<Vec<u8>>>,
 			streaming_algorithms::SampleUnstable<u32>,
 		),
-	) = BufReader::new(body)
+	) =
+	/*BufReader::new(body)
 		.lines()
 		.map(|url| format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap()))
 		.take(7)
@@ -93,6 +91,8 @@ fn main() {
 			let body = flate2::read::MultiGzDecoder::new(body);
 			amadeus_commoncrawl::WarcParser::new(body).take(1000).map(Result::unwrap)
 		}))
+		*/
+		CommonCrawl::new("CC-MAIN-2018-30").unwrap().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
 		.multi(
 			&pool,
 			((

@@ -1,12 +1,11 @@
 // TODO: get rid of 'static and boxing
 
-use constellation::FutureExt1;
 use futures::{sink::SinkExt, stream::StreamExt};
 use std::{
-	any::Any, collections::VecDeque, fmt, future::Future, io, mem, panic, sync::{Arc, Mutex}, thread::{self, JoinHandle}
+	any::Any, collections::VecDeque, fmt, future::Future, io, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}, thread::{self, JoinHandle}
 };
 
-use super::util::{assert_sync_and_send, ImplSync, OnDrop, Panicked, Synchronize};
+use super::util::{assert_sync_and_send, FutureExt1, ImplSync, OnDrop, Panicked, Synchronize};
 
 type Request = Box<dyn FnOnce() -> Response + Send>;
 type Response = Box<dyn Any + Send>;
@@ -215,6 +214,9 @@ impl ThreadPool {
 		assert_sync_and_send(unsafe { ImplSync::new(future) })
 	}
 }
+
+impl UnwindSafe for ThreadPool {}
+impl RefUnwindSafe for ThreadPool {}
 
 fn _assert() {
 	let _ = assert_sync_and_send::<ThreadPool>;

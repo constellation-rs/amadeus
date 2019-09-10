@@ -1,11 +1,12 @@
-use amadeus::{
-	data::{types::Date, Data}, source::Postgres, DistributedIterator, ProcessPool
-};
+#[cfg(feature = "constellation")]
 use constellation::*;
 use serde_closure::FnMut;
 use std::{env, time::SystemTime};
 
+use amadeus::prelude::*;
+
 fn main() {
+	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10

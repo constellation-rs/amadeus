@@ -3,14 +3,12 @@
 #[macro_use]
 extern crate serde_closure;
 
-use amadeus::prelude::*;
-use constellation::*;
 use either::Either;
 
-fn main() {
-	init(Resources::default());
+use amadeus::prelude::*;
 
-	let pool = ProcessPool::new(3, 1, Resources::default()).unwrap();
+fn main() {
+	let pool = ThreadPool::new(3).unwrap();
 
 	<&[usize] as IntoDistributedIterator>::into_dist_iter(&[1, 2, 3])
 		.map(FnMut!(|a: usize| a))

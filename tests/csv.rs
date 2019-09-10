@@ -1,16 +1,14 @@
+#[cfg(feature = "constellation")]
 use constellation::*;
 use serde_closure::FnMut;
 use std::{
 	env, path::PathBuf, time::{Duration, SystemTime}
 };
 
-use amadeus::{
-	data::{
-		types::{Downcast, Value}, Data
-	}, source::{Csv, Source}, DistributedIterator, LocalPool, ProcessPool, ThreadPool
-};
+use amadeus::prelude::*;
 
 fn main() {
+	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10
@@ -27,10 +25,13 @@ fn main() {
 		let thread_pool = ThreadPool::new(processes).unwrap();
 		run(&thread_pool)
 	};
+	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
 		run(&process_pool)
 	};
+	#[cfg(not(feature = "constellation"))]
+	let process_pool_time = "-";
 
 	println!(
 		"in {:?} {:?} {:?}",

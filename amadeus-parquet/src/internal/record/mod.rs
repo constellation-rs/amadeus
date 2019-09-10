@@ -70,8 +70,6 @@ use crate::internal::{
 	basic::Repetition, column::reader::ColumnReader, errors::Result, schema::types::{ColumnPath, Type}
 };
 
-#[doc(inline)]
-pub use amadeus_parquet_derive::Record;
 pub use reader::RowIter;
 pub use schemas::RootSchema;
 #[doc(hidden)]

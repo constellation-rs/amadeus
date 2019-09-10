@@ -3,14 +3,17 @@
 #[macro_use]
 extern crate serde_closure;
 
-use amadeus::prelude::*;
-use amadeus_commoncrawl::Webpage;
+#[cfg(feature = "constellation")]
 use constellation::*;
 use std::{
 	env, time::{Duration, SystemTime}
 };
 
+use amadeus::prelude::*;
+use data::Webpage;
+
 fn main() {
+	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10
@@ -27,10 +30,13 @@ fn main() {
 		let thread_pool = ThreadPool::new(processes).unwrap();
 		run(&thread_pool)
 	};
+	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
 		run(&process_pool)
 	};
+	#[cfg(not(feature = "constellation"))]
+	let process_pool_time = "-";
 
 	println!(
 		"in {:?} {:?} {:?}",

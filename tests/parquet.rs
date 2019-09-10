@@ -4,6 +4,7 @@
 
 #![allow(clippy::cognitive_complexity, clippy::type_complexity)]
 
+#[cfg(feature = "constellation")]
 use constellation::*;
 use serde_closure::FnMut;
 use std::{
@@ -11,17 +12,10 @@ use std::{
 };
 // use test::Bencher;
 
-// use amadeus::prelude::*;
-use amadeus::{
-	data::{
-		types::{Downcast, List, Map, Timestamp, Value}, Data
-	}, source::{Parquet, Source}, DistributedIterator, LocalPool, ProcessPool, ThreadPool
-};
-#[cfg(feature = "aws")]
-use amadeus_aws::file::{Region, S3Directory, S3File};
-use amadeus_parquet::ParquetDirectory;
+use amadeus::prelude::*;
 
 fn main() {
+	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10
@@ -38,10 +32,13 @@ fn main() {
 		let thread_pool = ThreadPool::new(processes).unwrap();
 		run(&thread_pool)
 	};
+	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
 		run(&process_pool)
 	};
+	#[cfg(not(feature = "constellation"))]
+	let process_pool_time = "-";
 
 	println!(
 		"in {:?} {:?} {:?}",
@@ -65,7 +62,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	#[cfg(feature = "aws")]
 	{
-		let rows = Parquet::<_, Value>::new(vec![S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet");20]);
+		let rows = Parquet::<_, Value>::new(vec![S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet");20]);
 		assert_eq!(
 			rows.unwrap()
 				.dist_iter()
@@ -75,7 +72,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		);
 
 		let rows = Parquet::<_, Value>::new(ParquetDirectory::new(S3Directory::new(
-			Region::UsEast1,
+			AwsRegion::UsEast1,
 			"us-east-1.data-analytics",
 			"cflogworkshop/optimized/cf-accesslogs/",
 		)));
@@ -88,14 +85,14 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		);
 
 		let rows = Parquet::<_, Value>::new(vec![
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-ed461019-4a12-46fa-a3f3-246d58f0ee06.c000.snappy.parquet"),
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=04/part-00173-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=05/part-00025-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=05/part-00025-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=06/part-00185-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
-			S3File::new(Region::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=07/part-00151-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-ed461019-4a12-46fa-a3f3-246d58f0ee06.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=04/part-00173-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=05/part-00025-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=05/part-00025-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=06/part-00185-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+			S3File::new(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=07/part-00151-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
 		]);
 		assert_eq!(
 			rows.unwrap()
@@ -106,7 +103,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		);
 
 		let rows = Parquet::<_, Value>::new(ParquetDirectory::new(S3Directory::new(
-			Region::UsEast1,
+			AwsRegion::UsEast1,
 			"us-east-1.data-analytics",
 			"cflogworkshop/optimized/cf-accesslogs/",
 		)));

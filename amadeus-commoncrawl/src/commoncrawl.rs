@@ -1,26 +1,11 @@
-use serde::{Deserialize, Serialize};
 use std::{
-	borrow::Cow, io::{self, Read}, iter, net
+	borrow::Cow, io::{self, Read}, iter
 };
 use url::Url;
 
-use super::parser;
+use amadeus_types::Webpage;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Webpage<'a> {
-	pub ip: net::IpAddr,
-	pub url: Url,
-	pub contents: Cow<'a, [u8]>,
-}
-impl<'a> Webpage<'a> {
-	pub fn to_owned(&self) -> Webpage<'static> {
-		Webpage {
-			ip: self.ip,
-			url: self.url.clone(),
-			contents: Cow::Owned(self.contents.clone().into_owned()),
-		}
-	}
-}
+use super::parser;
 
 const BUF: usize = 2 << 26; // 64 MiB
 const CHOMP: usize = 2 << 13; // 8 KiB

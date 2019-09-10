@@ -6,6 +6,7 @@
 mod array;
 mod decimal;
 mod group;
+mod http;
 mod list;
 mod map;
 mod time;
@@ -17,7 +18,7 @@ use std::{
 };
 
 pub use self::{
-	array::{Bson, Enum, Json}, decimal::Decimal, group::Group, list::List, map::Map, time::{Date, Time, Timestamp}, value::{Schema, SchemaIncomplete, Value}, value_required::ValueRequired
+	array::{Bson, Enum, Json}, decimal::Decimal, group::Group, http::Webpage, list::List, map::Map, time::{Date, Time, Timestamp}, value::{Schema, SchemaIncomplete, Value}, value_required::ValueRequired
 };
 
 /// This trait lets one downcast a generic type like [`Value`] to a specific type like

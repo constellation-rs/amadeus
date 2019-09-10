@@ -3,14 +3,17 @@
 #[macro_use]
 extern crate serde_closure;
 
-use amadeus::prelude::*;
+#[cfg(feature = "constellation")]
 use constellation::*;
 use rand::{Rng, SeedableRng};
 use std::{
 	convert::TryInto, env, thread, time::{self, Duration, SystemTime}
 };
 
+use amadeus::prelude::*;
+
 fn main() {
+	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
 	// Accept the number of processes at the command line, defaulting to 10
@@ -27,10 +30,13 @@ fn main() {
 		let thread_pool = ThreadPool::new(processes).unwrap();
 		run(&thread_pool, processes * 10)
 	};
+	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
 		run(&process_pool, processes * 10)
 	};
+	#[cfg(not(feature = "constellation"))]
+	let process_pool_time = "-";
 
 	println!(
 		"in {:?} {:?} {:?}",

@@ -23,6 +23,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
+constellation = ["constellation-rs"]
 aws = ["amadeus-aws"]
 commoncrawl = ["amadeus-commoncrawl"]
 parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
@@ -42,7 +43,7 @@ amadeus-commoncrawl = { version = "0.1.0", path = "amadeus-commoncrawl", optiona
 amadeus-parquet = { version = "0.1.0", path = "amadeus-parquet", optional = true }
 amadeus-postgres = { version = "0.1.0", path = "amadeus-postgres", optional = true }
 amadeus-serde = { version = "0.1.0", path = "amadeus-serde", optional = true }
-constellation-rs = { version = "0.1", default-features = false }
+constellation-rs = { version = "0.1", default-features = false, optional = true }
 crossbeam-channel = "0.3"
 futures-preview = "=0.3.0-alpha.18"
 serde = { version = "1.0", features = ["derive"] }

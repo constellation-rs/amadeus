@@ -53,18 +53,27 @@ pub mod source;
 
 pub use amadeus_core::{dist_iter, into_dist_iter};
 
+#[cfg(feature = "constellation")]
 #[doc(inline)]
-pub use crate::dist_iter::{DistributedIterator, FromDistributedIterator};
+pub use crate::pool::ProcessPool;
 #[doc(inline)]
-pub use crate::into_dist_iter::{IntoDistributedIterator, IteratorExt};
-#[doc(inline)]
-pub use crate::pool::{LocalPool, ProcessPool, ThreadPool};
+pub use crate::{
+	data::{
+		Data, Date, Decimal, Downcast, DowncastImpl, Enum, Group, List, Map, Time, Timestamp, Value
+	}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::{util::FutureExt1, LocalPool, ThreadPool}
+};
 
 pub mod prelude {
+	#[cfg(feature = "aws")]
+	#[doc(inline)]
+	pub use super::source::aws::{AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File};
+	#[cfg(feature = "constellation")]
+	#[doc(inline)]
+	pub use super::ProcessPool;
 	#[doc(inline)]
 	pub use super::{
-		dist_iter::{DistributedIteratorMulti, Identity}, source::*, DistributedIterator, FromDistributedIterator, IntoDistributedIterator, IteratorExt, LocalPool, ProcessPool, ThreadPool
+		data, dist_iter::{DistributedIteratorMulti, Identity}, source::*, Data, Date, Decimal, DistributedIterator, Downcast, DowncastImpl, Enum, FromDistributedIterator, FutureExt1, Group, IntoDistributedIterator, IteratorExt, List, LocalPool, Map, ThreadPool, Time, Timestamp, Value
 	};
 	#[doc(inline)]
-	pub use amadeus_core::pool::ProcessPool as _;
+	pub use amadeus_core::pool::{LocalPool as _, ProcessPool as _, ThreadPool as _};
 }
