@@ -213,8 +213,8 @@ impl Page for S3Page {
 					key: self.key.clone(),
 					range: Some(format!("bytes={}-{}", start, end)),
 					..GetObjectRequest::default()
-				}))
-				.await;
+				}));
+				let res = res.await;
 				if let Err(RusotoError::HttpDispatch(_)) = res {
 					continue;
 				}

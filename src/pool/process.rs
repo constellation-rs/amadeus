@@ -121,13 +121,11 @@ impl ProcessPoolInner {
 	) -> Result<T, Panicked> {
 		let process_index = self.i.get();
 		let process = &self.processes[process_index];
-		process
-			.sender
-			.send(Some(Box::new(FnOnce!([work] move || {
-				let work: F = work;
-				Box::new(work()) as Response
-			})) as Request))
-			.await;
+		let x = process.sender.send(Some(Box::new(FnOnce!([work] move || {
+			let work: F = work;
+			Box::new(work()) as Response
+		})) as Request));
+		x.await;
 		let index;
 		{
 			// https://github.com/rust-lang/rust/issues/57478

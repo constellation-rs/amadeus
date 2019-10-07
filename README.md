@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-	Harmonious distributed data analysis in Rust
+	Harmonious distributed data processing & analysis in Rust
 </p>
 
 <p align="center">

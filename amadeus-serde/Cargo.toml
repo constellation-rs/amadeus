@@ -21,10 +21,10 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 amadeus-core = { version = "=0.1.2", path = "../amadeus-core" }
 amadeus-types = { version = "=0.1.2", path = "../amadeus-types" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-csv = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+csv = "1.0"
 linked-hash-map = "0.5"
+serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.1"
+serde_json = "1.0"
 sum = { version = "0.1", features = ["serde"] }

@@ -160,11 +160,14 @@ impl Synchronize {
 	}
 }
 
-pub struct ImplSync<F>(F);
+pub struct ImplSync<F> {
+	inner: F,
+}
 impl<F> ImplSync<F> {
 	pub unsafe fn new(f: F) -> Self {
-		Self(f)
+		Self { inner: f }
 	}
+	pin_utils::unsafe_pinned!(inner: F);
 }
 impl<F> Future for ImplSync<F>
 where
@@ -172,9 +175,10 @@ where
 {
 	type Output = F::Output;
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
+		self.inner().poll(cx)
 	}
 }
+impl<F: Unpin> Unpin for ImplSync<F> {}
 unsafe impl<F> Sync for ImplSync<F> {}
 
 pub fn assert_sync_and_send<T: Send + Sync>(t: T) -> T {

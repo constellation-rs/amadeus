@@ -74,13 +74,19 @@ impl ByteArray {
 	}
 
 	/// Return the inner Vec<T>, if there is exactly one reference to it.
-	pub fn try_unwrap(self) -> Result<Vec<u8>, Self> {
+	fn try_unwrap(self) -> Result<Vec<u8>, Self> {
 		self.data.try_unwrap().map_err(|data| Self { data })
 	}
 
 	/// Returns `ByteArray` instance with slice of values for a data.
 	pub fn slice(&self, start: usize, len: usize) -> Self {
 		Self::from(self.data.range(start, len))
+	}
+}
+
+impl From<ByteArray> for Vec<u8> {
+	fn from(v: ByteArray) -> Self {
+		v.try_unwrap().unwrap_or_else(|data| data.data().to_owned())
 	}
 }
 

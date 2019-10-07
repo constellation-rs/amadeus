@@ -31,7 +31,7 @@ use thrift::protocol::TCompactInputProtocol;
 use crate::internal::{
 	basic::{ColumnOrder, Compression, Encoding, Type}, column::{
 		page::{Page, PageReader}, reader::{ColumnReader, ColumnReaderImpl}
-	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, record::{Predicate, Record, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
+	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, record::{ParquetData, Predicate, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
 		io::{BufReader, FileSource}, memory::ByteBufferPtr
 	}
 };
@@ -65,7 +65,7 @@ pub trait FileReader {
 	/// full file schema is assumed.
 	fn get_row_iter<T>(self, projection: Option<Predicate>) -> Result<RowIter<Self, T>>
 	where
-		T: Record,
+		T: ParquetData,
 		Self: Sized,
 	{
 		RowIter::from_file(projection, self)
@@ -137,7 +137,7 @@ pub trait RowGroupReader {
 		&self, projection: Option<Predicate>,
 	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
-		T: Record,
+		T: ParquetData,
 		Self: Sized;
 }
 
@@ -440,7 +440,7 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
 		&self, projection: Option<Predicate>,
 	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
-		T: Record,
+		T: ParquetData,
 		Self: Sized,
 	{
 		RowIter::from_row_group(projection, self)

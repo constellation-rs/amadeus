@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use flate2::read::MultiGzDecoder;
 use http::{Method, StatusCode};
 
@@ -6,13 +6,13 @@ use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::identity, io::{self, BufRead, BufReader}, iter, net, time::Duration, vec
+	convert::identity, io::{self, BufRead, BufReader}, iter, time::Duration, vec
 };
-use url::Url;
 
 use amadeus_core::{
 	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
 };
+use amadeus_types::{DateTime, IpAddr, Url};
 
 use super::{block_on_01, list, retry, AwsError, AwsRegion};
 
@@ -129,10 +129,10 @@ impl Source for Cloudfront {
 
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub struct CloudfrontRow {
-	pub time: DateTime<Utc>,
+	pub time: DateTime,
 	pub edge_location: String,
 	pub response_bytes: u64,
-	pub remote_ip: net::IpAddr,
+	pub remote_ip: IpAddr,
 	#[serde(with = "http_serde")]
 	pub method: Method,
 	pub host: String,
@@ -183,10 +183,10 @@ impl CloudfrontRow {
 		let fle_status = values.next().unwrap();
 		let fle_encrypted_fields = values.next().unwrap();
 		assert_eq!(values.next(), None);
-		let time = Utc.from_utc_datetime(&NaiveDateTime::new(
+		let time = DateTime::from_chrono(&Utc.from_utc_datetime(&NaiveDateTime::new(
 			NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(),
 			NaiveTime::parse_from_str(&time, "%H:%M:%S").unwrap(),
-		));
+		)));
 		let status = if sc_status != "000" {
 			Some(StatusCode::from_bytes(sc_status.as_bytes()).unwrap())
 		} else {

@@ -5,7 +5,9 @@ use std::{
 	cmp::Ordering, hash::{Hash, Hasher}
 };
 
-use super::{Bson, Date, Decimal, Enum, Group, Json, List, Map, Time, Timestamp, Value};
+use super::{
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+};
 
 /// Represents any valid required Parquet value. Exists to avoid [`Value`] being recursive
 /// and thus infinitely sized.
@@ -37,10 +39,19 @@ pub enum ValueRequired {
 	/// Date without a time of day, stores the number of days from the Unix epoch, 1
 	/// January 1970.
 	Date(Date),
+	/// Date without a time of day, stores the number of days from the Unix epoch, 1
+	/// January 1970.
+	DateWithoutTimezone(DateWithoutTimezone),
 	/// Time of day, stores the number of microseconds from midnight.
 	Time(Time),
+	/// Time of day, stores the number of microseconds from midnight.
+	TimeWithoutTimezone(TimeWithoutTimezone),
 	/// Milliseconds from the Unix epoch, 1 January 1970.
-	Timestamp(Timestamp),
+	DateTime(DateTime),
+	/// Milliseconds from the Unix epoch, 1 January 1970.
+	DateTimeWithoutTimezone(DateTimeWithoutTimezone),
+	/// Timezone
+	Timezone(Timezone),
 	/// Decimal value.
 	Decimal(Decimal),
 	/// General binary value.
@@ -53,6 +64,12 @@ pub enum ValueRequired {
 	Json(Json),
 	/// Enum string.
 	Enum(Enum),
+	/// URL
+	Url(Url),
+	/// Webpage
+	Webpage(Webpage<'static>),
+	/// Ip Address
+	IpAddr(IpAddr),
 
 	// Complex types
 	/// List of elements.
@@ -113,11 +130,27 @@ impl Hash for ValueRequired {
 				11u8.hash(state);
 				value.hash(state);
 			}
+			Self::DateWithoutTimezone(value) => {
+				11u8.hash(state);
+				value.hash(state);
+			}
 			Self::Time(value) => {
 				12u8.hash(state);
 				value.hash(state);
 			}
-			Self::Timestamp(value) => {
+			Self::TimeWithoutTimezone(value) => {
+				12u8.hash(state);
+				value.hash(state);
+			}
+			Self::DateTime(value) => {
+				13u8.hash(state);
+				value.hash(state);
+			}
+			Self::DateTimeWithoutTimezone(value) => {
+				13u8.hash(state);
+				value.hash(state);
+			}
+			Self::Timezone(value) => {
 				13u8.hash(state);
 				value.hash(state);
 			}
@@ -141,6 +174,18 @@ impl Hash for ValueRequired {
 				value.hash(state);
 			}
 			Self::Enum(value) => {
+				19u8.hash(state);
+				value.hash(state);
+			}
+			Self::Url(value) => {
+				19u8.hash(state);
+				value.hash(state);
+			}
+			Self::Webpage(value) => {
+				19u8.hash(state);
+				value.hash(state);
+			}
+			Self::IpAddr(value) => {
 				19u8.hash(state);
 				value.hash(state);
 			}
@@ -173,14 +218,23 @@ impl PartialOrd for ValueRequired {
 			(Self::F32(a), Self::F32(b)) => a.partial_cmp(b),
 			(Self::F64(a), Self::F64(b)) => a.partial_cmp(b),
 			(Self::Date(a), Self::Date(b)) => a.partial_cmp(b),
+			(Self::DateWithoutTimezone(a), Self::DateWithoutTimezone(b)) => a.partial_cmp(b),
 			(Self::Time(a), Self::Time(b)) => a.partial_cmp(b),
-			(Self::Timestamp(a), Self::Timestamp(b)) => a.partial_cmp(b),
+			(Self::TimeWithoutTimezone(a), Self::TimeWithoutTimezone(b)) => a.partial_cmp(b),
+			(Self::DateTime(a), Self::DateTime(b)) => a.partial_cmp(b),
+			(Self::DateTimeWithoutTimezone(a), Self::DateTimeWithoutTimezone(b)) => {
+				a.partial_cmp(b)
+			}
+			(Self::Timezone(a), Self::Timezone(b)) => a.partial_cmp(b),
 			(Self::Decimal(a), Self::Decimal(b)) => a.partial_cmp(b),
 			(Self::ByteArray(a), Self::ByteArray(b)) => a.partial_cmp(b),
 			(Self::Bson(a), Self::Bson(b)) => a.partial_cmp(b),
 			(Self::String(a), Self::String(b)) => a.partial_cmp(b),
 			(Self::Json(a), Self::Json(b)) => a.partial_cmp(b),
 			(Self::Enum(a), Self::Enum(b)) => a.partial_cmp(b),
+			(Self::Url(a), Self::Url(b)) => a.partial_cmp(b),
+			(Self::Webpage(a), Self::Webpage(b)) => a.partial_cmp(b),
+			(Self::IpAddr(a), Self::IpAddr(b)) => a.partial_cmp(b),
 			(Self::List(a), Self::List(b)) => a.partial_cmp(b),
 			(Self::Map(_a), Self::Map(_b)) => None, // TODO?
 			(Self::Group(a), Self::Group(b)) => a.partial_cmp(b),
@@ -225,14 +279,21 @@ impl From<ValueRequired> for Value {
 			ValueRequired::F32(value) => Self::F32(value),
 			ValueRequired::F64(value) => Self::F64(value),
 			ValueRequired::Date(value) => Self::Date(value),
+			ValueRequired::DateWithoutTimezone(value) => Self::DateWithoutTimezone(value),
 			ValueRequired::Time(value) => Self::Time(value),
-			ValueRequired::Timestamp(value) => Self::Timestamp(value),
+			ValueRequired::TimeWithoutTimezone(value) => Self::TimeWithoutTimezone(value),
+			ValueRequired::DateTime(value) => Self::DateTime(value),
+			ValueRequired::DateTimeWithoutTimezone(value) => Self::DateTimeWithoutTimezone(value),
+			ValueRequired::Timezone(value) => Self::Timezone(value),
 			ValueRequired::Decimal(value) => Self::Decimal(value),
 			ValueRequired::ByteArray(value) => Self::ByteArray(value),
 			ValueRequired::Bson(value) => Self::Bson(value),
 			ValueRequired::String(value) => Self::String(value),
 			ValueRequired::Json(value) => Self::Json(value),
 			ValueRequired::Enum(value) => Self::Enum(value),
+			ValueRequired::Url(value) => Self::Url(value),
+			ValueRequired::Webpage(value) => Self::Webpage(value),
+			ValueRequired::IpAddr(value) => Self::IpAddr(value),
 			ValueRequired::List(value) => Self::List(value),
 			ValueRequired::Map(value) => Self::Map(value),
 			ValueRequired::Group(value) => Self::Group(value),
@@ -255,14 +316,21 @@ impl From<Value> for Option<ValueRequired> {
 			Value::F32(value) => ValueRequired::F32(value),
 			Value::F64(value) => ValueRequired::F64(value),
 			Value::Date(value) => ValueRequired::Date(value),
+			Value::DateWithoutTimezone(value) => ValueRequired::DateWithoutTimezone(value),
 			Value::Time(value) => ValueRequired::Time(value),
-			Value::Timestamp(value) => ValueRequired::Timestamp(value),
+			Value::TimeWithoutTimezone(value) => ValueRequired::TimeWithoutTimezone(value),
+			Value::DateTime(value) => ValueRequired::DateTime(value),
+			Value::DateTimeWithoutTimezone(value) => ValueRequired::DateTimeWithoutTimezone(value),
+			Value::Timezone(value) => ValueRequired::Timezone(value),
 			Value::Decimal(value) => ValueRequired::Decimal(value),
 			Value::ByteArray(value) => ValueRequired::ByteArray(value),
 			Value::Bson(value) => ValueRequired::Bson(value),
 			Value::String(value) => ValueRequired::String(value),
 			Value::Json(value) => ValueRequired::Json(value),
 			Value::Enum(value) => ValueRequired::Enum(value),
+			Value::Url(value) => ValueRequired::Url(value),
+			Value::Webpage(value) => ValueRequired::Webpage(value),
+			Value::IpAddr(value) => ValueRequired::IpAddr(value),
 			Value::List(value) => ValueRequired::List(value),
 			Value::Map(value) => ValueRequired::Map(value),
 			Value::Group(value) => ValueRequired::Group(value),
@@ -290,7 +358,7 @@ impl From<Value> for Option<ValueRequired> {
 // 			ValueRequired::F64(value) => value.serialize(serializer),
 // 			ValueRequired::Date(value) => value.serialize(serializer),
 // 			ValueRequired::Time(value) => value.serialize(serializer),
-// 			ValueRequired::Timestamp(value) => value.serialize(serializer),
+// 			ValueRequired::DateTime(value) => value.serialize(serializer),
 // 			ValueRequired::Decimal(value) => value.serialize(serializer),
 // 			ValueRequired::ByteArray(value) => value.serialize(serializer),
 // 			ValueRequired::Bson(value) => value.serialize(serializer),

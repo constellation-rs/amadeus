@@ -20,6 +20,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 amadeus-core = { version = "=0.1.2", path = "../amadeus-core" }
+amadeus-types = { version = "=0.1.2", path = "../amadeus-types" }
 chrono = "0.4"
 flate2 = "1.0"
 futures-01 = { package = "futures", version = "0.1" }

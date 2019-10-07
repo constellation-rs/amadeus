@@ -252,13 +252,9 @@ fn impl_struct(
 	let mut parquet_derives = None;
 	if cfg!(feature = "parquet") {
 		parquet_includes = Some(quote! {
-			pub use ::amadeus_parquet::{ParquetData,internal::{
-				basic::Repetition,
-				column::reader::ColumnReader,
-				errors::{ParquetError, Result as ParquetResult},
-				record::{Schema as ParquetSchema, Reader, _private::DisplaySchemaGroup},
-				schema::types::{ColumnPath, Type},
-			}};
+			pub use ::amadeus_parquet::derive::{
+				ParquetData, Repetition, ColumnReader, ParquetError, ParquetResult, ParquetSchema, Reader, DisplaySchemaGroup, ColumnPath, Type
+			};
 		});
 
 		parquet_derives = Some(quote! {

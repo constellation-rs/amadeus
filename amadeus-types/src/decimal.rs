@@ -2,6 +2,9 @@
 
 // use num_bigint::{BigInt, Sign};
 use serde::{Deserialize, Serialize};
+use std::{
+	error::Error, fmt::{self, Display}, str::FromStr
+};
 
 // use internal::{
 //     basic::Repetition,
@@ -104,6 +107,28 @@ impl Decimal {
 		}
 	}
 }
+
+impl Display for Decimal {
+	fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
+		unimplemented!()
+	}
+}
+impl FromStr for Decimal {
+	type Err = ParseDecimalError;
+
+	fn from_str(_s: &str) -> Result<Self, Self::Err> {
+		unimplemented!()
+	}
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ParseDecimalError;
+impl Display for ParseDecimalError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "error parsing decimal")
+	}
+}
+impl Error for ParseDecimalError {}
 
 // impl From<Decimal> for internal::data_type::Decimal {
 // 	fn from(_decimal: Decimal) -> Self {

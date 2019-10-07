@@ -498,7 +498,7 @@ mod tests {
 	macro_rules! test {
 		// branch for generating i32 cases
 		($test_func:ident, i32, $func:ident, $def_level:expr, $rep_level:expr,
-     $num_pages:expr, $num_levels:expr, $batch_size:expr, $min:expr, $max:expr) => {
+			$num_pages:expr, $num_levels:expr, $batch_size:expr, $min:expr, $max:expr) => {
 			test_internal!(
 				$test_func,
 				Int32Type,
@@ -515,7 +515,7 @@ mod tests {
 		};
 		// branch for generating i64 cases
 		($test_func:ident, i64, $func:ident, $def_level:expr, $rep_level:expr,
-     $num_pages:expr, $num_levels:expr, $batch_size:expr, $min:expr, $max:expr) => {
+			$num_pages:expr, $num_levels:expr, $batch_size:expr, $min:expr, $max:expr) => {
 			test_internal!(
 				$test_func,
 				Int64Type,
@@ -534,8 +534,8 @@ mod tests {
 
 	macro_rules! test_internal {
 		($test_func:ident, $ty:ident, $pty:ident, $func:ident, $def_level:expr,
-     $rep_level:expr, $num_pages:expr, $num_levels:expr, $batch_size:expr,
-     $min:expr, $max:expr) => {
+			$rep_level:expr, $num_pages:expr, $num_levels:expr, $batch_size:expr,
+			$min:expr, $max:expr) => {
 			#[test]
 			fn $test_func() {
 				let desc = Rc::new(ColumnDescriptor::new(

@@ -1,85 +1,16 @@
 use super::{SerdeData, SerdeDeserialize, SerdeSerialize};
 use amadeus_types::{
-	Bson, Date, Decimal, Enum, Group, Json, List, Map, SchemaIncomplete, Time, Timestamp, Value, ValueRequired
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
 };
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use linked_hash_map::LinkedHashMap;
 use serde::{
 	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer
 };
-use std::{collections::HashMap, convert::TryFrom, fmt, hash::Hash, str, sync::Arc};
+use std::{collections::HashMap, fmt, hash::Hash, str, sync::Arc};
 
-impl SerdeData for Vec<u8> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(self, serializer)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		serde::Deserialize::deserialize(deserializer)
-	}
-}
-
-impl SerdeData for Bson {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(self, serializer)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		serde::Deserialize::deserialize(deserializer)
-	}
-}
-
-impl SerdeData for Json {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(self, serializer)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		serde::Deserialize::deserialize(deserializer)
-	}
-}
-
-impl SerdeData for Enum {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(self, serializer)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		serde::Deserialize::deserialize(deserializer)
-	}
-}
-
-macro_rules! impl_parquet_record_array {
-	($i:tt) => {
-		impl SerdeData for [u8; $i] {
+macro_rules! forward {
+	($($t:ty)*) => {
+		$(impl SerdeData for $t {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
 				S: Serializer,
@@ -94,143 +25,45 @@ macro_rules! impl_parquet_record_array {
 			{
 				serde::Deserialize::deserialize(deserializer)
 			}
-		}
+		})*
+	};
+}
 
-		// Specialize the implementation to avoid passing a potentially large array around
-		// on the stack.
-		#[doc(hidden)]
-		impl SerdeData for Box<[u8; $i]> {
+forward!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 Vec<u8> Bson String Enum Json);
+
+macro_rules! via_string {
+	($($t:ty)*) => {
+		$(impl SerdeData for $t {
+			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+			where
+				S: Serializer,
+			{
+				serde::Serialize::serialize(&self.to_string(), serializer)
+			}
 			fn deserialize<'de, D>(
 				deserializer: D, _schema: Option<SchemaIncomplete>,
 			) -> Result<Self, D::Error>
 			where
 				D: Deserializer<'de>,
 			{
-				// TODO
-				serde::Deserialize::deserialize(deserializer)
+				let s: String = serde::Deserialize::deserialize(deserializer)?;
+				s.parse().map_err(de::Error::custom)
 			}
-		}
+		})*
 	};
 }
 
-// Implement Record for common array lengths, copied from arrayvec
-impl_parquet_record_array!(0);
-impl_parquet_record_array!(1);
-impl_parquet_record_array!(2);
-impl_parquet_record_array!(3);
-impl_parquet_record_array!(4);
-impl_parquet_record_array!(5);
-impl_parquet_record_array!(6);
-impl_parquet_record_array!(7);
-impl_parquet_record_array!(8);
-impl_parquet_record_array!(9);
-impl_parquet_record_array!(10);
-impl_parquet_record_array!(11);
-impl_parquet_record_array!(12);
-impl_parquet_record_array!(13);
-impl_parquet_record_array!(14);
-impl_parquet_record_array!(15);
-impl_parquet_record_array!(16);
-impl_parquet_record_array!(17);
-impl_parquet_record_array!(18);
-impl_parquet_record_array!(19);
-impl_parquet_record_array!(20);
-impl_parquet_record_array!(21);
-impl_parquet_record_array!(22);
-impl_parquet_record_array!(23);
-impl_parquet_record_array!(24);
-impl_parquet_record_array!(25);
-impl_parquet_record_array!(26);
-impl_parquet_record_array!(27);
-impl_parquet_record_array!(28);
-impl_parquet_record_array!(29);
-impl_parquet_record_array!(30);
-impl_parquet_record_array!(31);
-impl_parquet_record_array!(32);
-// impl_parquet_record_array!(40);
-// impl_parquet_record_array!(48);
-// impl_parquet_record_array!(50);
-// impl_parquet_record_array!(56);
-// impl_parquet_record_array!(64);
-// impl_parquet_record_array!(72);
-// impl_parquet_record_array!(96);
-// impl_parquet_record_array!(100);
-// impl_parquet_record_array!(128);
-// impl_parquet_record_array!(160);
-// impl_parquet_record_array!(192);
-// impl_parquet_record_array!(200);
-// impl_parquet_record_array!(224);
-// impl_parquet_record_array!(256);
-// impl_parquet_record_array!(384);
-// impl_parquet_record_array!(512);
-// impl_parquet_record_array!(768);
-// impl_parquet_record_array!(1024);
-// impl_parquet_record_array!(2048);
-// impl_parquet_record_array!(4096);
-// impl_parquet_record_array!(8192);
-// impl_parquet_record_array!(16384);
-// impl_parquet_record_array!(32768);
-// impl_parquet_record_array!(65536);
+via_string!(Decimal Date DateWithoutTimezone Time TimeWithoutTimezone DateTime DateTimeWithoutTimezone Timezone Webpage<'static> Url IpAddr);
 
-/// Macro to implement [`Reader`] on tuples up to length 32.
-macro_rules! impl_parquet_record_tuple {
-	($len:tt $($t:ident $i:tt)*) => (
-		impl<$($t,)*> SerdeData for ($($t,)*) where $($t: SerdeData,)* {
-			fn serialize<S_>(&self, serializer: S_) -> Result<S_::Ok, S_::Error>
-			where
-				S_: Serializer {
-				serde::Serialize::serialize(&($(SerdeSerialize(&self.$i),)*), serializer)
-			}
-			#[allow(unused_variables)]
-			fn deserialize<'de,D_>(deserializer: D_, _schema: Option<SchemaIncomplete>) -> Result<Self, D_::Error>
-			where
-				D_: Deserializer<'de> {
-				<($(SerdeDeserialize<$t>,)*) as serde::Deserialize>::deserialize(deserializer).map(|self_|($((self_.$i).0,)*))
-			}
-		}
-	);
-}
-
-impl_parquet_record_tuple!(0);
-impl_parquet_record_tuple!(1 A 0);
-impl_parquet_record_tuple!(2 A 0 B 1);
-impl_parquet_record_tuple!(3 A 0 B 1 C 2);
-impl_parquet_record_tuple!(4 A 0 B 1 C 2 D 3);
-impl_parquet_record_tuple!(5 A 0 B 1 C 2 D 3 E 4);
-impl_parquet_record_tuple!(6 A 0 B 1 C 2 D 3 E 4 F 5);
-impl_parquet_record_tuple!(7 A 0 B 1 C 2 D 3 E 4 F 5 G 6);
-impl_parquet_record_tuple!(8 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7);
-impl_parquet_record_tuple!(9 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8);
-impl_parquet_record_tuple!(10 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9);
-impl_parquet_record_tuple!(11 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10);
-impl_parquet_record_tuple!(12 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11);
-// impl_parquet_record_tuple!(13 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12);
-// impl_parquet_record_tuple!(14 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13);
-// impl_parquet_record_tuple!(15 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14);
-// impl_parquet_record_tuple!(16 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15);
-// impl_parquet_record_tuple!(17 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16);
-// impl_parquet_record_tuple!(18 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17);
-// impl_parquet_record_tuple!(19 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18);
-// impl_parquet_record_tuple!(20 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19);
-// impl_parquet_record_tuple!(21 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20);
-// impl_parquet_record_tuple!(22 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21);
-// impl_parquet_record_tuple!(23 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22);
-// impl_parquet_record_tuple!(24 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23);
-// impl_parquet_record_tuple!(25 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24);
-// impl_parquet_record_tuple!(26 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25);
-// impl_parquet_record_tuple!(27 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26);
-// impl_parquet_record_tuple!(28 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27);
-// impl_parquet_record_tuple!(29 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28);
-// impl_parquet_record_tuple!(30 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29);
-// impl_parquet_record_tuple!(31 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30);
-// impl_parquet_record_tuple!(32 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30 AF 31);
-
-impl SerdeData for Decimal {
+impl<T> SerdeData for Option<T>
+where
+	T: SerdeData,
+{
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		serde::Serialize::serialize(self, serializer)
+		serde::Serialize::serialize(&self.as_ref().map(SerdeSerialize), serializer)
 	}
 	fn deserialize<'de, D>(
 		deserializer: D, _schema: Option<SchemaIncomplete>,
@@ -238,7 +71,8 @@ impl SerdeData for Decimal {
 	where
 		D: Deserializer<'de>,
 	{
-		serde::Deserialize::deserialize(deserializer)
+		<Option<SerdeDeserialize<T>> as serde::Deserialize>::deserialize(deserializer)
+			.map(|x| x.map(|x| x.0))
 	}
 }
 
@@ -259,6 +93,7 @@ impl SerdeData for Group {
 					Box::leak(name.clone().into_boxed_str()),
 					&SerdeSerialize(field),
 				)?; // TODO!! static hashmap caching strings? aka string interning
+				 // https://github.com/serde-rs/serde/issues/708
 			}
 			struct_serializer.end()
 		} else {
@@ -368,66 +203,6 @@ where
 	}
 }
 
-impl SerdeData for Date {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(
-			&NaiveDate::try_from(*self).expect("not implemented yet"),
-			serializer,
-		)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		<NaiveDate as serde::Deserialize>::deserialize(deserializer).map(Into::into)
-	}
-}
-
-impl SerdeData for Time {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(
-			&NaiveTime::try_from(*self).expect("not implemented yet"),
-			serializer,
-		)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		<NaiveTime as serde::Deserialize>::deserialize(deserializer).map(Into::into)
-	}
-}
-
-impl SerdeData for Timestamp {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(
-			&NaiveDateTime::try_from(*self).expect("not implemented yet"),
-			serializer,
-		)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		<NaiveDateTime as serde::Deserialize>::deserialize(deserializer).map(Into::into)
-	}
-}
-
 impl SerdeData for Value {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -446,14 +221,21 @@ impl SerdeData for Value {
 			Self::F32(value) => SerdeData::serialize(value, serializer),
 			Self::F64(value) => SerdeData::serialize(value, serializer),
 			Self::Date(value) => SerdeData::serialize(value, serializer),
+			Self::DateWithoutTimezone(value) => SerdeData::serialize(value, serializer),
 			Self::Time(value) => SerdeData::serialize(value, serializer),
-			Self::Timestamp(value) => SerdeData::serialize(value, serializer),
+			Self::TimeWithoutTimezone(value) => SerdeData::serialize(value, serializer),
+			Self::DateTime(value) => SerdeData::serialize(value, serializer),
+			Self::DateTimeWithoutTimezone(value) => SerdeData::serialize(value, serializer),
+			Self::Timezone(value) => SerdeData::serialize(value, serializer),
 			Self::Decimal(value) => SerdeData::serialize(value, serializer),
 			Self::ByteArray(value) => SerdeData::serialize(value, serializer),
 			Self::Bson(value) => SerdeData::serialize(value, serializer),
 			Self::String(value) => SerdeData::serialize(value, serializer),
 			Self::Json(value) => SerdeData::serialize(value, serializer),
 			Self::Enum(value) => SerdeData::serialize(value, serializer),
+			Self::Url(value) => SerdeData::serialize(value, serializer),
+			Self::Webpage(value) => SerdeData::serialize(value, serializer),
+			Self::IpAddr(value) => SerdeData::serialize(value, serializer),
 			Self::List(value) => SerdeData::serialize(value, serializer),
 			Self::Map(value) => SerdeData::serialize(value, serializer),
 			Self::Group(value) => SerdeData::serialize(value, serializer),
@@ -471,8 +253,20 @@ impl SerdeData for Value {
 					ValueRequired::F32(value) => serializer.serialize_some(&SerdeSerialize(value)),
 					ValueRequired::F64(value) => serializer.serialize_some(&SerdeSerialize(value)),
 					ValueRequired::Date(value) => serializer.serialize_some(&SerdeSerialize(value)),
+					ValueRequired::DateWithoutTimezone(value) => {
+						serializer.serialize_some(&SerdeSerialize(value))
+					}
 					ValueRequired::Time(value) => serializer.serialize_some(&SerdeSerialize(value)),
-					ValueRequired::Timestamp(value) => {
+					ValueRequired::TimeWithoutTimezone(value) => {
+						serializer.serialize_some(&SerdeSerialize(value))
+					}
+					ValueRequired::DateTime(value) => {
+						serializer.serialize_some(&SerdeSerialize(value))
+					}
+					ValueRequired::DateTimeWithoutTimezone(value) => {
+						serializer.serialize_some(&SerdeSerialize(value))
+					}
+					ValueRequired::Timezone(value) => {
 						serializer.serialize_some(&SerdeSerialize(value))
 					}
 					ValueRequired::Decimal(value) => {
@@ -487,6 +281,13 @@ impl SerdeData for Value {
 					}
 					ValueRequired::Json(value) => serializer.serialize_some(&SerdeSerialize(value)),
 					ValueRequired::Enum(value) => serializer.serialize_some(&SerdeSerialize(value)),
+					ValueRequired::Url(value) => serializer.serialize_some(&SerdeSerialize(value)),
+					ValueRequired::Webpage(value) => {
+						serializer.serialize_some(&SerdeSerialize(value))
+					}
+					ValueRequired::IpAddr(value) => {
+						serializer.serialize_some(&SerdeSerialize(value))
+					}
 					ValueRequired::List(value) => serializer.serialize_some(&SerdeSerialize(value)),
 					ValueRequired::Map(value) => serializer.serialize_some(&SerdeSerialize(value)),
 					ValueRequired::Group(value) => {
@@ -643,58 +444,60 @@ impl SerdeData for Value {
 	}
 }
 
-macro_rules! impl_data_for_record {
-	($($t:ty : $pt:ty),*) => (
-		$(
-			#[allow(clippy::use_self)]
-			impl SerdeData for $t {
-				fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-				where
-					S: Serializer {
-					serde::Serialize::serialize(self, serializer)
-				}
-				fn deserialize<'de, D>(deserializer: D, _schema: Option<SchemaIncomplete>) -> Result<Self, D::Error>
-				where
-					D: Deserializer<'de> {
-					serde::Deserialize::deserialize(deserializer)
-				}
+/// Implement SerdeData for common array lengths, copied from arrayvec.
+macro_rules! array {
+	($($i:tt)*) => {
+		$(impl SerdeData for [u8; $i] {
+			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+			where
+				S: Serializer,
+			{
+				serde::Serialize::serialize(self, serializer)
 			}
-		)*
+			fn deserialize<'de, D>(
+				deserializer: D, _schema: Option<SchemaIncomplete>,
+			) -> Result<Self, D::Error>
+			where
+				D: Deserializer<'de>,
+			{
+				serde::Deserialize::deserialize(deserializer)
+			}
+		}
+
+		// Specialize the implementation to avoid passing a potentially large array around
+		// on the stack.
+		#[doc(hidden)]
+		impl SerdeData for Box<[u8; $i]> {
+			fn deserialize<'de, D>(
+				deserializer: D, _schema: Option<SchemaIncomplete>,
+			) -> Result<Self, D::Error>
+			where
+				D: Deserializer<'de>,
+			{
+				// TODO
+				serde::Deserialize::deserialize(deserializer)
+			}
+		})*
+	};
+}
+amadeus_types::array!(array);
+
+/// Implement SerdeData on tuples up to length 32.
+macro_rules! tuple {
+	($len:tt $($t:ident $i:tt)*) => (
+		impl<$($t,)*> SerdeData for ($($t,)*) where $($t: SerdeData,)* {
+			fn serialize<S_>(&self, serializer: S_) -> Result<S_::Ok, S_::Error>
+			where
+				S_: Serializer {
+				serde::Serialize::serialize(&($(SerdeSerialize(&self.$i),)*), serializer)
+			}
+			#[allow(unused_variables)]
+			fn deserialize<'de,D_>(deserializer: D_, _schema: Option<SchemaIncomplete>) -> Result<Self, D_::Error>
+			where
+				D_: Deserializer<'de> {
+				<($(SerdeDeserialize<$t>,)*) as serde::Deserialize>::deserialize(deserializer).map(|self_|($((self_.$i).0,)*))
+			}
+		}
 	);
 }
-impl_data_for_record!(
-	bool: bool,
-	u8: i8,
-	i8: i8,
-	u16: i16,
-	i16: i16,
-	u32: i32,
-	i32: i32,
-	u64: i64,
-	i64: i64,
-	f32: f32,
-	f64: f64,
-	String: String
-);
-// use super::types::{Date,Time,Timestamp,Decimal};
-
-impl<T> SerdeData for Option<T>
-where
-	T: SerdeData,
-{
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde::Serialize::serialize(&self.as_ref().map(SerdeSerialize), serializer)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		<Option<SerdeDeserialize<T>> as serde::Deserialize>::deserialize(deserializer)
-			.map(|x| x.map(|x| x.0))
-	}
-}
+amadeus_types::tuple!(tuple);

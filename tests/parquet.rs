@@ -236,7 +236,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		f32,
 		f64,
 		Vec<u8>, // [u8;1024],
-		Timestamp,
+		DateTime,
 	);
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -248,7 +248,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		float_field: f32,
 		double_field: f64,
 		flba_field: Vec<u8>, // [u8;1024],
-		int96_field: Timestamp,
+		int96_field: DateTime,
 	}
 
 	let rows = Parquet::<_, TenKayVeeTwo>::new(vec![PathBuf::from(
@@ -300,7 +300,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<f64>,
 		Option<Vec<u8>>,
 		Option<Vec<u8>>,
-		Option<Timestamp>,
+		Option<DateTime>,
 	);
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -315,7 +315,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		double_col: Option<f64>,
 		date_string_col: Option<Vec<u8>>,
 		string_col: Option<Vec<u8>>,
-		timestamp_col: Option<Timestamp>,
+		timestamp_col: Option<DateTime>,
 	}
 
 	let rows = Parquet::<_, AlltypesDictionary>::new(vec![PathBuf::from(
@@ -367,7 +367,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<f64>,
 		Option<Vec<u8>>,
 		Option<Vec<u8>>,
-		Option<Timestamp>,
+		Option<DateTime>,
 	);
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -382,7 +382,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		double_col: Option<f64>,
 		date_string_col: Option<Vec<u8>>,
 		string_col: Option<Vec<u8>>,
-		timestamp_col: Option<Timestamp>,
+		timestamp_col: Option<DateTime>,
 	}
 
 	let rows = Parquet::<_, AlltypesPlain>::new(vec![PathBuf::from(
@@ -434,7 +434,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<f64>,
 		Option<Vec<u8>>,
 		Option<Vec<u8>>,
-		Option<Timestamp>,
+		Option<DateTime>,
 	);
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -449,7 +449,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		double_col: Option<f64>,
 		date_string_col: Option<Vec<u8>>,
 		string_col: Option<Vec<u8>>,
-		timestamp_col: Option<Timestamp>,
+		timestamp_col: Option<DateTime>,
 	}
 
 	let rows = Parquet::<_, AlltypesPlainSnappy>::new(vec![PathBuf::from(
@@ -911,8 +911,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		author_email: Option<String>,
 		committer_name: Option<String>,
 		committer_email: Option<String>,
-		author_time: Option<Timestamp>,
-		committer_time: Option<Timestamp>,
+		author_time: Option<DateTime>,
+		committer_time: Option<DateTime>,
 		loc_d: Option<i64>,
 		loc_i: Option<i64>,
 		comp_d: Option<i64>,
@@ -992,7 +992,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 // 	bench.bytes = len;
 // 	bench.iter(|| {
 // 		let iter =
-// 			read2::<_, (Vec<u8>, i32, i64, bool, f32, f64, [u8; 1024], Timestamp)>(&parquet_reader);
+// 			read2::<_, (Vec<u8>, i32, i64, bool, f32, f64, [u8; 1024], DateTime)>(&parquet_reader);
 // 		println!("{}", iter.unwrap().count());
 // 	})
 // }
