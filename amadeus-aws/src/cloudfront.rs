@@ -122,6 +122,7 @@ pub struct CloudfrontRow {
 	pub fle_encrypted_fields: Option<String>,
 }
 impl CloudfrontRow {
+	#[inline(always)]
 	fn from_line(line: &str) -> Self {
 		let mut values = line.split('\t');
 		let date = values.next().unwrap();
