@@ -78,7 +78,6 @@ harness = false
 name = "cloudfront"
 harness = false
 required-features = ["aws"]
-test = false # TODO rustc ICE
 
 [[test]]
 name = "commoncrawl"
