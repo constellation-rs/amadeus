@@ -1,70 +1,15 @@
-use amadeus_core::{
-	dist_iter::DistributedIterator, file::{File, Page, Partition, Reader}, into_dist_iter::IntoDistributedIterator, util::ResultExpand
-};
+use csv::Error as SerdeCsvError;
 use serde::{Deserialize, Serialize};
+use serde_closure::*;
 use std::{
-	error, fmt::{self, Display}, iter, marker::PhantomData, vec
+	error, fmt::{self, Display}, iter, marker::PhantomData
+};
+
+use amadeus_core::{
+	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpand
 };
 
 use super::{SerdeData, SerdeDeserializeGroup};
-use csv::Error as SerdeCsvError;
-use serde_closure::*;
-
-type Closure<Env, Args, Output> =
-	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
-
-type CsvInner<Row, F> = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<<F as File>::Partition>>,
-	Closure<
-		(),
-		(<F as File>::Partition,),
-		iter::Map<
-			iter::FlatMap<
-				amadeus_core::util::ResultExpandIter<
-					vec::IntoIter<<<F as File>::Partition as Partition>::Page>,
-					CsvError<F>,
-				>,
-				ResultExpand<
-					iter::Map<
-						csv::DeserializeRecordsIntoIter<
-							Reader<<<F as File>::Partition as Partition>::Page>,
-							SerdeDeserializeGroup<Row>,
-						>,
-						Closure<
-							(),
-							(Result<SerdeDeserializeGroup<Row>, SerdeCsvError>,),
-							Result<Row, SerdeCsvError>,
-						>,
-					>,
-					CsvError<F>,
-				>,
-				Closure<
-					(),
-					(Result<<<F as File>::Partition as Partition>::Page, CsvError<F>>,),
-					ResultExpand<
-						iter::Map<
-							csv::DeserializeRecordsIntoIter<
-								Reader<<<F as File>::Partition as Partition>::Page>,
-								SerdeDeserializeGroup<Row>,
-							>,
-							Closure<
-								(),
-								(Result<SerdeDeserializeGroup<Row>, SerdeCsvError>,),
-								Result<Row, SerdeCsvError>,
-							>,
-						>,
-						CsvError<F>,
-					>,
-				>,
-			>,
-			Closure<
-				(),
-				(Result<Result<Row, SerdeCsvError>, CsvError<F>>,),
-				Result<Row, CsvError<F>>,
-			>,
-		>,
-	>,
->;
 
 // #[doc(inline)]
 // pub type Trim = csv::Trim;
@@ -136,8 +81,7 @@ where
 	type Item = Row;
 	type Error = CsvError<F>;
 
-	// type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
-	type DistIter = CsvInner<Self::Item, F>;
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter {
@@ -146,22 +90,18 @@ where
 			.flat_map(FnMut!(|partition: F::Partition| {
 				ResultExpand(partition.pages().map_err(CsvError::<F>::Partition))
 					.into_iter()
-					.flat_map(FnMut!(|page: Result<_, _>| ResultExpand(page.map(
-						|page| {
+					.flat_map(|page: Result<_, _>| {
+						ResultExpand(page.map(|page| {
 							csv::ReaderBuilder::new()
 								.has_headers(false)
 								.from_reader(Page::reader(page))
 								.into_deserialize()
-								.map(FnMut!(|x: Result<
-									SerdeDeserializeGroup<Row>,
-									SerdeCsvError,
-								>| Ok(x?.0)))
-						}
-					))))
-					.map(FnMut!(|row: Result<
-						Result<Row, SerdeCsvError>,
-						Self::Error,
-					>| Ok(row??)))
+								.map(
+									|x: Result<SerdeDeserializeGroup<Row>, SerdeCsvError>| Ok(x?.0),
+								)
+						}))
+					})
+					.map(|row: Result<Result<Row, SerdeCsvError>, Self::Error>| Ok(row??))
 			}))
 	}
 	fn iter(self) -> Self::Iter {

@@ -27,9 +27,9 @@ futures-01 = { package = "futures", version = "0.1" }
 futures-preview = { version = "=0.3.0-alpha.19", features = ["compat"] }
 http = "0.1"
 once_cell = "1.0"
-rusoto_core = "0.40"
-rusoto_s3 = "0.40"
-serde_closure = "0.1"
+rusoto_core = "0.41"
+rusoto_s3 = "0.41"
+serde_closure = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 tokio = "0.1.7"
 tokio-retry = "0.2"

@@ -20,16 +20,11 @@
 #![allow(clippy::useless_let_if_seq)]
 
 extern crate proc_macro;
-extern crate proc_macro2;
-#[macro_use]
-extern crate syn;
-#[macro_use]
-extern crate quote;
 
 use proc_macro2::{Span, TokenStream};
-use quote::ToTokens;
+use quote::{quote, ToTokens};
 use syn::{
-	punctuated::Punctuated, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Field, Fields, Ident, Lit, LitStr, Meta, NestedMeta, Path, TypeParam, WhereClause
+	punctuated::Punctuated, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Field, Fields, Ident, Lit, LitStr, Meta, NestedMeta, Path, Token, TypeParam, WhereClause
 };
 
 /// This is a procedural macro to derive the [`Data`](amadeus::record::Data) trait on
@@ -164,7 +159,7 @@ fn impl_struct(
 			.predicates
 			.push(syn::parse2(quote! { #ident: __::PostgresData }).unwrap());
 	}
-	let mut where_clause_with_serde_data = where_clause.clone();
+	let mut where_clause_with_serde_data = where_clause;
 	for TypeParam { ident, .. } in ast.generics.type_params() {
 		where_clause_with_serde_data
 			.predicates

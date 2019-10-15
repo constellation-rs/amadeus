@@ -32,7 +32,7 @@ num-bigint = "0.2"
 parquet-format = "2.6.0"
 quick-error = "1.2.2"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.1"
+serde_closure = "0.2"
 snap = "0.2"
 sum = "0.1"
 thrift = "0.12.0"

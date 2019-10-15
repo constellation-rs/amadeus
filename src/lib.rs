@@ -46,9 +46,6 @@
 	clippy::match_same_arms
 )]
 
-#[macro_use]
-extern crate serde_closure;
-
 pub mod data;
 pub mod pool;
 pub mod source;
@@ -57,7 +54,7 @@ pub use amadeus_core::{dist_iter, into_dist_iter};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1
+	data::{Data, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1, source::Source
 };
 
 pub mod prelude {

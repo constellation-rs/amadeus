@@ -1,7 +1,6 @@
 #![allow(where_clauses_object_safety)]
 
-#[macro_use]
-extern crate serde_closure;
+use serde_closure::FnMut;
 
 use amadeus::prelude::*;
 #[cfg(feature = "constellation")]

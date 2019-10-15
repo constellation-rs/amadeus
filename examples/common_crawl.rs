@@ -36,8 +36,7 @@
 // #![warn(clippy::pedantic)]
 #![allow(where_clauses_object_safety, clippy::all)]
 
-#[macro_use]
-extern crate serde_closure;
+use serde_closure::FnMut;
 
 use amadeus::prelude::*;
 use constellation::{init, Resources};
@@ -96,7 +95,7 @@ fn main() {
 			amadeus_commoncrawl::WarcParser::new(body).take(1000).map(Result::unwrap)
 		}))
 		*/
-		CommonCrawl::new("CC-MAIN-2018-30").unwrap().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
+		CommonCrawl::new("CC-MAIN-2018-30").unwrap().dist_iter().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
 		.multi(
 			&pool,
 			((

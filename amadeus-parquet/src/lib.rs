@@ -7,20 +7,17 @@
 mod internal;
 
 use internal::{
-	errors::ParquetError as InternalParquetError, file::reader::{FileReader, ParquetReader, SerializedFileReader}, record::RowIter
+	errors::ParquetError as InternalParquetError, file::reader::{FileReader, ParquetReader, SerializedFileReader}
 };
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	error, fmt::{self, Debug, Display}, iter, marker::PhantomData, ops::FnMut, vec
+	error, fmt::{self, Debug, Display}, iter, marker::PhantomData, ops::FnMut
 };
 
 use amadeus_core::{
 	dist_iter::DistributedIterator, file::{Directory, File, Page, Partition, PathBuf}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
 };
-
-type Closure<Env, Args, Output> =
-	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
 
 pub use internal::record::ParquetData;
 
@@ -32,51 +29,6 @@ pub mod derive {
 		}, ParquetData
 	};
 }
-
-pub type ParquetInner<F, Row> = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<<F as File>::Partition>>,
-	Closure<
-		(),
-		(<F as File>::Partition,),
-		iter::Map<
-			iter::FlatMap<
-				amadeus_core::util::ResultExpandIter<
-					vec::IntoIter<<<F as File>::Partition as Partition>::Page>,
-					ParquetError<F>,
-				>,
-				ResultExpand<
-					RowIter<
-						SerializedFileReader<
-							amadeus_core::file::Reader<<<F as File>::Partition as Partition>::Page>,
-						>,
-						Row,
-					>,
-					ParquetError<F>,
-				>,
-				Closure<
-					(),
-					(Result<<<F as File>::Partition as Partition>::Page, ParquetError<F>>,),
-					ResultExpand<
-						RowIter<
-							SerializedFileReader<
-								amadeus_core::file::Reader<
-									<<F as File>::Partition as Partition>::Page,
-								>,
-							>,
-							Row,
-						>,
-						ParquetError<F>,
-					>,
-				>,
-			>,
-			Closure<
-				(),
-				(Result<Result<Row, InternalParquetError>, ParquetError<F>>,),
-				Result<Row, ParquetError<F>>,
-			>,
-		>,
-	>,
->;
 
 pub struct Parquet<File, Row>
 where
@@ -106,8 +58,7 @@ where
 	type Item = Row;
 	type Error = ParquetError<F>;
 
-	// type DistIter = impl DistributedIterator<Item = Result<Row, Self::Error>>;
-	type DistIter = ParquetInner<F, Row>;
+	type DistIter = impl DistributedIterator<Item = Result<Row, Self::Error>>;
 	type Iter = iter::Empty<Result<Row, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter {
@@ -116,15 +67,15 @@ where
 			.flat_map(FnMut!(|partition: F::Partition| {
 				ResultExpand(partition.pages().map_err(ParquetError::<F>::Partition))
 					.into_iter()
-					.flat_map(FnMut!(|page: Result<_, _>| {
+					.flat_map(|page: Result<_, _>| {
 						ResultExpand(page.and_then(
 							|page: <<F as File>::Partition as Partition>::Page| {
 								Ok(SerializedFileReader::new(Page::reader(page))?
 									.get_row_iter(None)?)
 							},
 						))
-					}))
-					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
+					})
+					.map(|row: Result<Result<Row, _>, _>| Ok(row??))
 			}))
 	}
 	fn iter(self) -> Self::Iter {

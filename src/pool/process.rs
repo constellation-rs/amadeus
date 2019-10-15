@@ -1,4 +1,5 @@
 use constellation::*;
+use serde_closure::FnOnce;
 use serde_traitobject as st;
 use std::{
 	any, collections::VecDeque, fmt, future::Future, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}

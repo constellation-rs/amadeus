@@ -1,3 +1,4 @@
+use ::serde::{Deserialize, Serialize};
 use std::{
 	cmp::Ordering, fmt::Debug, hash::{Hash, Hasher}
 };
