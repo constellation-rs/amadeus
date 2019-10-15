@@ -1,8 +1,11 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.1.2")]
+#![feature(bufreader_seek_relative)]
+#![feature(read_initializer)]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
-#![feature(read_initializer)]
-#![feature(bufreader_seek_relative)]
+#![cfg_attr(test, feature(test))]
+#[cfg(test)]
+extern crate test;
 
 mod internal;
 
