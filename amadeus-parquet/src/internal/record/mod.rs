@@ -2,15 +2,15 @@
 //!
 //! Example usage of reading data untyped:
 //!
-//! ```no_run
+//! ```ignore
 //! use std::fs::File;
 //! use std::path::Path;
 //! use amadeus_parquet::internal::file::reader::{FileReader, SerializedFileReader};
-//! use amadeus_parquet::internal::record::types::Row;
+//! use amadeus_types::Group;
 //!
 //! let file = File::open(&Path::new("/path/to/file")).unwrap();
 //! let reader = SerializedFileReader::new(file).unwrap();
-//! let iter = reader.get_row_iter::<Row>(None).unwrap();
+//! let iter = reader.get_row_iter::<Group>(None).unwrap();
 //! for record in iter.map(Result::unwrap) {
 //!     println!("{:?}", record);
 //! }

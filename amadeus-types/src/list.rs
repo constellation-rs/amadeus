@@ -19,9 +19,16 @@ use std::{
 
 /// [`List<T>`](List) corresponds to the [List logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists).
 #[derive(Clone, Hash, Eq, PartialOrd, Serialize, Deserialize)]
-pub struct List<T>(pub(crate) Vec<T>);
+pub struct List<T>(Vec<T>);
 
 impl<T> List<T> {
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
 	/// Returns an iterator over references to the elements of the List.
 	pub fn iter(&self) -> slice::Iter<'_, T> {
 		self.0.iter()

@@ -902,8 +902,9 @@ mod tests {
 	use std::{collections::HashMap, sync::Arc};
 
 	use crate::internal::{
-		errors::Result, file::reader::{FileReader, SerializedFileReader}, record::types::{Row, Value}, util::test_common::get_test_file
+		errors::Result, file::reader::{FileReader, SerializedFileReader}, util::test_common::get_test_file
 	};
+	use amadeus_types::{Group, Value};
 
 	// Convenient macros to assemble row, list, map, and group.
 
@@ -919,7 +920,7 @@ mod tests {
 					assert!(res.is_none());
 					result.push($e);
 				)*
-				Group(result, Arc::new(keys))
+				Group::new(result, Some(Arc::new(keys)))
 			}
 		}
 	}
@@ -942,7 +943,7 @@ mod tests {
 				$(
 					result.push($e);
 				)*
-				List(result)
+				List::from(result)
 			}
 		}
 	}
@@ -961,7 +962,7 @@ mod tests {
 					let res = result.insert($k, $v);
 					assert!(res.is_none());
 				)*
-				Map(result)
+				Map::from(result)
 			}
 		}
 	}
@@ -984,7 +985,7 @@ mod tests {
 
 	#[test]
 	fn test_file_reader_rows_nulls() {
-		let rows = test_file_reader_rows::<Row>("nulls.snappy.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("nulls.snappy.parquet", None).unwrap();
 
 		let expected_rows = vec![
 			row![(
@@ -1046,7 +1047,7 @@ mod tests {
 
 	#[test]
 	fn test_file_reader_rows_nonnullable() {
-		let rows = test_file_reader_rows::<Row>("nonnullable.impala.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("nonnullable.impala.parquet", None).unwrap();
 
 		let expected_rows = vec![row![
 			("ID".to_string(), Value::I64(8)),
@@ -1128,7 +1129,7 @@ mod tests {
 
 	#[test]
 	fn test_file_reader_rows_nullable() {
-		let rows = test_file_reader_rows::<Row>("nullable.impala.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("nullable.impala.parquet", None).unwrap();
 
 		let expected_rows = vec![
 			row![
@@ -1635,7 +1636,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let rows =
-	//         test_file_reader_rows::<Row>("nested_maps.snappy.parquet", Some(schema))
+	//         test_file_reader_rows::<Group>("nested_maps.snappy.parquet", Some(schema))
 	//             .unwrap();
 	//     let expected_rows = vec![
 	//         row![
@@ -1685,7 +1686,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let rows =
-	//         test_file_reader_rows::<Row>("nested_maps.snappy.parquet", Some(schema))
+	//         test_file_reader_rows::<Group>("nested_maps.snappy.parquet", Some(schema))
 	//             .unwrap();
 	//     let expected_rows = vec![
 	//         row![(
@@ -1756,7 +1757,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let rows =
-	//         test_file_reader_rows::<Row>("nested_lists.snappy.parquet", Some(schema))
+	//         test_file_reader_rows::<Group>("nested_lists.snappy.parquet", Some(schema))
 	//             .unwrap();
 	//     let expected_rows = vec![
 	//         row![(
@@ -1819,7 +1820,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let res =
-	//         test_file_reader_rows::<Row>("nested_maps.snappy.parquet", Some(schema));
+	//         test_file_reader_rows::<Group>("nested_maps.snappy.parquet", Some(schema));
 	//     assert!(res.is_err());
 	//     assert_eq!(
 	//         res.unwrap_err(),
@@ -1906,7 +1907,7 @@ mod tests {
 
 		// Array field `phoneNumbers` does not contain LIST annotation.
 		// We parse it as struct with `phone` repeated field as array.
-		let rows = test_file_reader_rows::<Row>("repeated_no_annotation.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("repeated_no_annotation.parquet", None).unwrap();
 		let rows_typed =
 			test_file_reader_rows::<RepeatedNoAnnotation>("repeated_no_annotation.parquet", None)
 				.unwrap();

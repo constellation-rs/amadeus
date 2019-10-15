@@ -19,7 +19,7 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```ignore
 //! use amadeus_parquet::internal::{
 //!     basic::{Compression, Encoding},
 //!     file::properties::*,

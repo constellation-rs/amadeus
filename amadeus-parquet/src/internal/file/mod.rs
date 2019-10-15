@@ -26,7 +26,7 @@
 //!
 //! # Example of writing a new file
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use std::{fs, path::Path, rc::Rc};
 //!
 //! use amadeus_parquet::internal::{
@@ -61,7 +61,7 @@
 //! ```
 //! # Example of reading an existing file
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use amadeus_parquet::internal::file::reader::{FileReader, SerializedFileReader, RowGroupReader};
 //! use std::{fs::File, path::Path};
 //!
@@ -79,7 +79,7 @@
 //! ```
 //! # Example of reading multiple files
 //!
-//! ```rust,no_run,ignore
+//! ```ignore
 //! use amadeus_parquet::internal::file::reader::SerializedFileReader;
 //! use std::convert::TryFrom;
 //!

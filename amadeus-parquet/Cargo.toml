@@ -23,7 +23,7 @@ amadeus-core = { version = "=0.1.2", path = "../amadeus-core" }
 amadeus-types = { version = "=0.1.2", path = "../amadeus-types" }
 brotli = "3.3"
 byteorder = "1.2"
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false }
 flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = false }
 fxhash = "0.2"
 linked-hash-map = "0.5"

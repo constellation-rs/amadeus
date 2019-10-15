@@ -1578,7 +1578,9 @@ where
 	T: Into<Self>,
 {
 	default fn from(value: List<T>) -> Self {
-		Self::List(List(value.0.into_iter().map(Into::into).collect()))
+		Self::List(List::from(
+			value.into_iter().map(Into::into).collect::<Vec<_>>(),
+		))
 	}
 }
 impl From<List<Self>> for Value {
@@ -1592,11 +1594,12 @@ where
 	V: Into<Self>,
 {
 	default fn from(value: Map<K, V>) -> Self {
-		Self::Map(Map(value
-			.0
-			.into_iter()
-			.map(|(k, v)| (k.into(), v.into()))
-			.collect()))
+		Self::Map(Map::from(
+			value
+				.into_iter()
+				.map(|(k, v)| (k.into(), v.into()))
+				.collect::<HashMap<_, _>>(),
+		))
 	}
 }
 impl From<Map<Self, Self>> for Value {
@@ -1807,11 +1810,10 @@ where
 {
 	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list().and_then(|list| {
-			list.0
-				.into_iter()
+			list.into_iter()
 				.map(Downcast::downcast)
 				.collect::<Result<Vec<_>, _>>()
-				.map(List)
+				.map(List::from)
 		})
 	}
 }
@@ -1827,11 +1829,10 @@ where
 {
 	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map().and_then(|map| {
-			map.0
-				.into_iter()
+			map.into_iter()
 				.map(|(k, v)| Ok((k.downcast()?, v.downcast()?)))
 				.collect::<Result<HashMap<_, _>, _>>()
-				.map(Map)
+				.map(Map::from)
 		})
 	}
 }
@@ -2065,20 +2066,18 @@ where
 	fn eq(&self, other: &Map<K, V>) -> bool {
 		self.as_map()
 			.map(|map| {
-				if map.0.len() != other.0.len() {
+				if map.len() != other.len() {
 					return false;
 				}
 
 				// This comparison unfortunately requires a bit of a hack. This could be
 				// eliminated by ensuring that Value::X hashes identically to X. TODO.
 				let other = other
-					.0
 					.iter()
 					.map(|(k, v)| (k.clone().into(), v))
 					.collect::<HashMap<Self, _>>();
 
-				map.0
-					.iter()
+				map.iter()
 					.all(|(key, value)| other.get(key).map_or(false, |v| value == *v))
 			})
 			.unwrap_or(false)

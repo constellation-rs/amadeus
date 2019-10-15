@@ -20,7 +20,7 @@
 //! Though some common methods are available on enum, use pattern match to extract
 //! actual min and max values from statistics, see below:
 //!
-//! ```rust
+//! ```ignore
 //! use amadeus_parquet::internal::file::statistics::Statistics;
 //!
 //! let stats = Statistics::int32(Some(1), Some(10), None, 3, true);

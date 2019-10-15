@@ -20,7 +20,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use amadeus_parquet::internal::{
 //!     file::reader::{FileReader, SerializedFileReader},
 //!     schema::printer::{print_file_metadata, print_parquet_metadata, print_schema},

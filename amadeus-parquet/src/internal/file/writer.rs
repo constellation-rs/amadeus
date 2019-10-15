@@ -507,8 +507,9 @@ mod tests {
 	use crate::internal::{
 		basic::{Compression, Encoding, Repetition, Type}, column::page::PageReader, compression::{create_codec, Codec}, file::{
 			properties::WriterProperties, reader::{FileReader, RowGroupReader, SerializedFileReader, SerializedPageReader}, statistics::{from_thrift, to_thrift, Statistics}
-		}, record::types::Row, util::{memory::ByteBufferPtr, test_common::get_temp_file}
+		}, util::{memory::ByteBufferPtr, test_common::get_temp_file}
 	};
+	use amadeus_types::Group;
 
 	#[test]
 	fn test_file_writer_error_after_close() {
@@ -643,7 +644,7 @@ mod tests {
 		let reader = SerializedFileReader::new(file).unwrap();
 		assert_eq!(
 			reader
-				.get_row_iter::<Row>(None)
+				.get_row_iter::<Group>(None)
 				.unwrap()
 				.map(Result::unwrap)
 				.count(),
@@ -923,7 +924,7 @@ mod tests {
 		assert_eq!(reader.num_row_groups(), data.len());
 		for i in 0..reader.num_row_groups() {
 			let row_group_reader = reader.get_row_group(i).unwrap();
-			let iter = row_group_reader.get_row_iter::<Row>(None).unwrap();
+			let iter = row_group_reader.get_row_iter::<Group>(None).unwrap();
 			let res = iter
 				.map(Result::unwrap)
 				.map(|elem| elem[0].as_i32().unwrap())

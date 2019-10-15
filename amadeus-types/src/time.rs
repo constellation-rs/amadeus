@@ -380,7 +380,14 @@ impl Date {
 /// Corresponds to RFC 3339 and ISO 8601 string `%Y-%m-%d%:z`
 impl Display for Date {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		self.as_chrono().expect(TODO).fmt(f)
+		write!(
+			f,
+			"{:04}-{:02}-{:02} {}",
+			self.year(),
+			self.month(),
+			self.day(),
+			self.timezone()
+		)
 	}
 }
 impl FromStr for Date {
@@ -443,7 +450,7 @@ impl Display for Time {
 		write!(
 			f,
 			"{}{}",
-			self.time.as_chrono().expect(TODO),
+			self.time.as_chrono().expect(TODO).format("%H:%M:%S%.9f"),
 			ChronoTimezone(self.timezone)
 		)
 	}
@@ -544,7 +551,13 @@ impl DateTime {
 /// Corresponds to RFC 3339 and ISO 8601 string `%Y-%m-%dT%H:%M:%S%.9f%:z`
 impl Display for DateTime {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		self.as_chrono().expect(TODO).fmt(f)
+		write!(
+			f,
+			"{}",
+			self.as_chrono()
+				.expect(TODO)
+				.format("%Y-%m-%d %H:%M:%S%.9f %:z")
+		)
 	}
 }
 impl FromStr for DateTime {

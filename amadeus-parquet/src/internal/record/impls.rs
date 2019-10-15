@@ -1044,6 +1044,10 @@ via_string!(
 	"Corresponds to RFC 3339 and ISO 8601 string `%Y-%m-%dT%H:%M:%S%.9f%:z`" DateTimeWithoutTimezone
 );
 
+fn date_from_parquet(days: i32) -> Result<Date> {
+	Ok(Date::from_days(i64::from(days), Timezone::UTC).unwrap())
+}
+
 /// Corresponds to the UTC [Date logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#date).
 impl ParquetData for Date {
 	type Schema = DateSchema;
@@ -1059,8 +1063,29 @@ impl ParquetData for Date {
 	) -> Self::Reader {
 		MapReader(
 			i32::reader(&I32Schema, path, def_level, rep_level, paths, batch_size),
-			|days| Ok(Date::from_days(i64::from(days), Timezone::UTC).unwrap()),
+			|days| date_from_parquet(days),
 		)
+	}
+}
+
+fn time_from_parquet(time: Sum2<i64, i32>) -> Result<Time> {
+	match time {
+		Sum2::A(micros) => {
+			let err = || ParquetError::General(format!("Invalid Time Micros {}", micros));
+			let micros: u64 = micros.try_into().ok().ok_or_else(err)?;
+			let divisor = MICROS_PER_MILLI * MILLIS_PER_SECOND;
+			let seconds = (micros / divisor).try_into().ok().ok_or_else(err)?;
+			let nanos = u32::try_from(micros % divisor).unwrap() * NANOS_PER_MICRO as u32;
+			Time::from_seconds(seconds, nanos, Timezone::UTC).ok_or_else(err)
+		}
+		Sum2::B(millis) => {
+			let err = || ParquetError::General(format!("Invalid Time Millis {}", millis));
+			let millis: u32 = millis.try_into().ok().ok_or_else(err)?;
+			let divisor = MILLIS_PER_SECOND as u32;
+			let seconds = (millis / divisor).try_into().ok().ok_or_else(err)?;
+			let nanos = (millis % divisor) * (MICROS_PER_MILLI * NANOS_PER_MICRO) as u32;
+			Time::from_seconds(seconds, nanos, Timezone::UTC).ok_or_else(err)
+		}
 	}
 }
 
@@ -1080,26 +1105,63 @@ impl ParquetData for Time {
 		match schema {
 			TimeSchema::Micros => Sum2::A(MapReader(
 				i64::reader(&I64Schema, path, def_level, rep_level, paths, batch_size),
-				|micros: i64| {
-					let err = || ParquetError::General(format!("Invalid Time Micros {}", micros));
-					let micros: u64 = micros.try_into().ok().ok_or_else(err)?;
-					let divisor = MICROS_PER_MILLI * MILLIS_PER_SECOND;
-					let seconds = (micros / divisor).try_into().ok().ok_or_else(err)?;
-					let nanos = u32::try_from(micros % divisor).unwrap() * NANOS_PER_MICRO as u32;
-					Time::from_seconds(seconds, nanos, Timezone::UTC).ok_or_else(err)
-				},
+				|micros: i64| time_from_parquet(Sum2::A(micros)),
 			)),
 			TimeSchema::Millis => Sum2::B(MapReader(
 				i32::reader(&I32Schema, path, def_level, rep_level, paths, batch_size),
-				|millis: i32| {
-					let err = || ParquetError::General(format!("Invalid Time Millis {}", millis));
-					let millis: u32 = millis.try_into().ok().ok_or_else(err)?;
-					let divisor = MILLIS_PER_SECOND as u32;
-					let seconds = (millis / divisor).try_into().ok().ok_or_else(err)?;
-					let nanos = (millis % divisor) * (MICROS_PER_MILLI * NANOS_PER_MICRO) as u32;
-					Time::from_seconds(seconds, nanos, Timezone::UTC).ok_or_else(err)
-				},
+				|millis: i32| time_from_parquet(Sum2::B(millis)),
 			)),
+		}
+	}
+}
+
+fn date_time_from_parquet(date_time: Sum3<Int96, i64, i64>) -> Result<DateTime> {
+	match date_time {
+		Sum3::A(date_time) => {
+			let mut day = i64::from(date_time.data()[2]);
+			let nanoseconds =
+				(i64::from(date_time.data()[1]) << 32) + i64::from(date_time.data()[0]);
+			let nanos_per_second = NANOS_PER_MICRO * MICROS_PER_MILLI * MILLIS_PER_SECOND;
+			let nanos_per_day = (nanos_per_second * SECONDS_PER_DAY) as i64;
+			day += nanoseconds.div_euclid(nanos_per_day);
+			let nanoseconds: u64 = nanoseconds.rem_euclid(nanos_per_day).try_into().unwrap();
+			let date =
+				Date::from_days(day.checked_sub(JULIAN_DAY_OF_EPOCH).unwrap(), Timezone::UTC)
+					.unwrap();
+			let time = Time::from_seconds(
+				(nanoseconds / nanos_per_second).try_into().unwrap(),
+				(nanoseconds % nanos_per_second).try_into().unwrap(),
+				Timezone::UTC,
+			)
+			.unwrap();
+			Ok(DateTime::from_date_time(date, time).unwrap())
+		}
+		Sum3::B(millis) => {
+			let millis_per_day = (MILLIS_PER_SECOND * SECONDS_PER_DAY) as i64;
+			let days = millis.div_euclid(millis_per_day);
+			let millis: u32 = millis.rem_euclid(millis_per_day).try_into().unwrap();
+			let date = Date::from_days(days, Timezone::UTC).unwrap();
+			let time = Time::from_seconds(
+				(millis / MILLIS_PER_SECOND as u32).try_into().unwrap(),
+				(millis % MILLIS_PER_SECOND as u32).try_into().unwrap(),
+				Timezone::UTC,
+			)
+			.unwrap();
+			Ok(DateTime::from_date_time(date, time).unwrap())
+		}
+		Sum3::C(micros) => {
+			let micros_per_day = (MICROS_PER_MILLI * MILLIS_PER_SECOND * SECONDS_PER_DAY) as i64;
+			let micros_per_second = (MICROS_PER_MILLI * MILLIS_PER_SECOND) as u64;
+			let days = micros.div_euclid(micros_per_day);
+			let micros: u64 = micros.rem_euclid(micros_per_day).try_into().unwrap();
+			let date = Date::from_days(days, Timezone::UTC).unwrap();
+			let time = Time::from_seconds(
+				(micros / micros_per_second).try_into().unwrap(),
+				(micros % micros_per_second).try_into().unwrap(),
+				Timezone::UTC,
+			)
+			.unwrap();
+			Ok(DateTime::from_date_time(date, time).unwrap())
 		}
 	}
 }
@@ -1128,62 +1190,15 @@ impl ParquetData for DateTime {
 						),
 					}
 				},
-				|date_time: Int96| {
-					let mut day = i64::from(date_time.data()[2]);
-					let nanoseconds =
-						(i64::from(date_time.data()[1]) << 32) + i64::from(date_time.data()[0]);
-					let nanos_per_second = NANOS_PER_MICRO * MICROS_PER_MILLI * MILLIS_PER_SECOND;
-					let nanos_per_day = (nanos_per_second * SECONDS_PER_DAY) as i64;
-					day += nanoseconds.div_euclid(nanos_per_day);
-					let nanoseconds: u64 =
-						nanoseconds.rem_euclid(nanos_per_day).try_into().unwrap();
-					let date = Date::from_days(
-						day.checked_sub(JULIAN_DAY_OF_EPOCH).unwrap(),
-						Timezone::UTC,
-					)
-					.unwrap();
-					let time = Time::from_seconds(
-						(nanoseconds / nanos_per_second).try_into().unwrap(),
-						(nanoseconds % nanos_per_second).try_into().unwrap(),
-						Timezone::UTC,
-					)
-					.unwrap();
-					Ok(DateTime::from_date_time(date, time).unwrap())
-				},
+				|date_time: Int96| date_time_from_parquet(Sum3::A(date_time)),
 			)),
 			DateTimeSchema::Millis => Sum3::B(MapReader(
 				i64::reader(&I64Schema, path, def_level, rep_level, paths, batch_size),
-				|millis: i64| {
-					let millis_per_day = (MILLIS_PER_SECOND * SECONDS_PER_DAY) as i64;
-					let days = millis.div_euclid(millis_per_day);
-					let millis: u32 = millis.rem_euclid(millis_per_day).try_into().unwrap();
-					let date = Date::from_days(days, Timezone::UTC).unwrap();
-					let time = Time::from_seconds(
-						(millis / MILLIS_PER_SECOND as u32).try_into().unwrap(),
-						(millis % MILLIS_PER_SECOND as u32).try_into().unwrap(),
-						Timezone::UTC,
-					)
-					.unwrap();
-					Ok(DateTime::from_date_time(date, time).unwrap())
-				},
+				|millis: i64| date_time_from_parquet(Sum3::B(millis)),
 			)),
 			DateTimeSchema::Micros => Sum3::C(MapReader(
 				i64::reader(&I64Schema, path, def_level, rep_level, paths, batch_size),
-				|micros: i64| {
-					let micros_per_day =
-						(MICROS_PER_MILLI * MILLIS_PER_SECOND * SECONDS_PER_DAY) as i64;
-					let micros_per_second = (MICROS_PER_MILLI * MILLIS_PER_SECOND) as u64;
-					let days = micros.div_euclid(micros_per_day);
-					let micros: u64 = micros.rem_euclid(micros_per_day).try_into().unwrap();
-					let date = Date::from_days(days, Timezone::UTC).unwrap();
-					let time = Time::from_seconds(
-						(micros / micros_per_second).try_into().unwrap(),
-						(micros % micros_per_second).try_into().unwrap(),
-						Timezone::UTC,
-					)
-					.unwrap();
-					Ok(DateTime::from_date_time(date, time).unwrap())
-				},
+				|micros: i64| date_time_from_parquet(Sum3::C(micros)),
 			)),
 		}
 	}
@@ -1422,29 +1437,31 @@ impl ParquetData for DateTime {
 mod tests {
 	use super::*;
 
-	use chrono::NaiveDate;
+	use amadeus_types::Timezone;
+	use chrono::{offset::TimeZone, NaiveDate, NaiveTime, Utc};
 
 	#[test]
 	fn test_int96() {
-		let value = DateTime(Int96::new(0, 0, 2454923));
-		assert_eq!(value.as_millis().unwrap(), 1238544000000);
+		let value = date_time_from_parquet(Sum3::A(Int96::new(0, 0, 2454923))).unwrap();
+		assert_eq!(value.as_chrono().unwrap().timestamp_millis(), 1238544000000);
 
-		let value = DateTime(Int96::new(4165425152, 13, 2454923));
-		assert_eq!(value.as_millis().unwrap(), 1238544060000);
+		let value = date_time_from_parquet(Sum3::A(Int96::new(4165425152, 13, 2454923))).unwrap();
+		assert_eq!(value.as_chrono().unwrap().timestamp_millis(), 1238544060000);
 
-		let value = DateTime(Int96::new(0, 0, 0));
-		assert_eq!(value.as_millis().unwrap(), -210866803200000);
+		let value = date_time_from_parquet(Sum3::A(Int96::new(0, 0, 0))).unwrap();
+		assert_eq!(
+			value.as_chrono().unwrap().timestamp_millis(),
+			-210866803200000
+		);
 	}
 
 	#[test]
 	fn test_convert_date_to_string() {
 		fn check_date_conversion(y: i32, m: u32, d: u32) {
 			let datetime = NaiveDate::from_ymd(y, m, d).and_hms(0, 0, 0);
-			let dt = Local.from_utc_datetime(&datetime);
-			let date = Date((dt.timestamp() / SECONDS_PER_DAY) as i32);
+			let dt = Utc.from_utc_datetime(&datetime);
+			let date = date_from_parquet((dt.timestamp() / SECONDS_PER_DAY as i64) as i32).unwrap();
 			assert_eq!(date.to_string(), dt.format("%Y-%m-%d %:z").to_string());
-			let date2 = Date::from(<chrono::Date<Utc>>::from(date));
-			assert_eq!(date, date2);
 		}
 
 		check_date_conversion(2010, 01, 02);
@@ -1458,10 +1475,10 @@ mod tests {
 	fn test_convert_time_to_string() {
 		fn check_time_conversion(h: u32, mi: u32, s: u32) {
 			let chrono_time = NaiveTime::from_hms(h, mi, s);
-			let time = Time::from(chrono_time);
+			let time = TimeWithoutTimezone::from_chrono(&chrono_time).with_timezone(Timezone::UTC);
 			assert_eq!(
 				time.to_string(),
-				chrono_time.format("%H:%M:%S%.9f").to_string()
+				format!("{}+00:00", chrono_time.format("%H:%M:%S%.9f").to_string())
 			);
 		}
 
@@ -1476,8 +1493,8 @@ mod tests {
 	fn test_convert_timestamp_to_string() {
 		fn check_datetime_conversion(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) {
 			let datetime = NaiveDate::from_ymd(y, m, d).and_hms(h, mi, s);
-			let dt = Local.from_utc_datetime(&datetime);
-			let res = DateTime::from_nanos(dt.timestamp_nanos()).to_string();
+			let dt = Utc.from_utc_datetime(&datetime);
+			let res = DateTime::from_chrono(&dt).to_string();
 			let exp = dt.format("%Y-%m-%d %H:%M:%S%.9f %:z").to_string();
 			assert_eq!(res, exp);
 		}

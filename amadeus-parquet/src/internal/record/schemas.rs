@@ -8,9 +8,10 @@
 //! They can be printed as a Parquet schema string with [`Schema::fmt`], or more
 //! conveniently [`RootSchema`](super::RootSchema) also implements [`Display`].
 //!
-//! ```
+//! ```ignore
 //! # use amadeus_parquet::internal::errors::Result;
-//! use amadeus_parquet::internal::record::{RootSchema, types::Value};
+//! use amadeus_parquet::internal::record::RootSchema;
+//! use amadeus_types::Value;
 //!
 //! #
 //! # fn main() -> Result<()> {
@@ -1654,10 +1655,11 @@ where
 /// It implements [`FromStr`] and [`Display`] so it can be converted from and to a Parquet
 /// schema string like so:
 ///
-/// ```
+/// ```ignore
 /// # use amadeus_parquet::internal::errors::Result;
 /// use amadeus_parquet::internal;
-/// use internal::record::{RootSchema, types::Value};
+/// use internal::record::RootSchema;
+/// use amadeus_types::Value;
 ///
 /// #
 /// # fn main() -> Result<()> {
@@ -1747,7 +1749,7 @@ pub struct TupleSchema<T>(pub(super) T);
 mod tests {
 	use super::*;
 
-	use crate::internal::record::types::Value;
+	use amadeus_types::Value;
 
 	#[test]
 	fn schema_printing() {

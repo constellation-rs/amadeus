@@ -21,7 +21,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use amadeus_parquet::internal::schema::parser::parse_message_type;
 //!
 //! let message_type = "

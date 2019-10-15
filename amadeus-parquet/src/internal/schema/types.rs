@@ -540,7 +540,7 @@ impl ColumnPath {
 	}
 
 	/// Returns string representation of this column path.
-	/// ```rust
+	/// ```ignore
 	/// use amadeus_parquet::internal;
 	/// use internal::schema::types::ColumnPath;
 	///

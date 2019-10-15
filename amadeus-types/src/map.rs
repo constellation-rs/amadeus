@@ -19,12 +19,19 @@ use std::{
 
 /// [`Map<K, V>`](Map) corresponds to the [Map logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#maps).
 #[derive(Clone, Eq, Serialize, Deserialize)]
-pub struct Map<K: Hash + Eq, V>(pub(crate) HashMap<K, V>);
+pub struct Map<K: Hash + Eq, V>(HashMap<K, V>);
 
 impl<K, V> Map<K, V>
 where
 	K: Hash + Eq,
 {
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
 	/// Returns a reference to the value corresponding to the key.
 	pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
 	where
