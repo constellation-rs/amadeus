@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-core"
-version = "0.1.2"
+version = "0.1.3"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -10,7 +10,7 @@ Harmonious distributed data analysis in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.2"
+documentation = "https://docs.rs/amadeus/0.1.3"
 readme = "README.md"
 edition = "2018"
 
@@ -20,12 +20,12 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 either = { version = "1.5", features = ["serde"] }
-futures-preview = "=0.3.0-alpha.18"
+futures-preview = "=0.3.0-alpha.19"
 owned_chars = "0.3"
 rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.1"
+serde_closure = "0.2"
 streaming_algorithms = "0.1"
 sum = { version = "0.1", features = ["serde"] }
 walkdir = "2.2"

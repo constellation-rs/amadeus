@@ -93,42 +93,42 @@ fn token(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 named!(init_line <&[u8], (&str, &str)>,
-    do_parse!(
-        opt!(tag!("\r"))            >>
-        opt!(tag!("\n"))            >>
-        tag!("WARC")                >>
-        tag!("/")                   >>
-        opt!(space)                 >>
-        version: map_res!(version_number, str::from_utf8) >>
-        opt!(tag!("\r"))            >>
-        tag!("\n")                  >>
-        (("WARCVERSION", version))
-    )
+	do_parse!(
+		opt!(tag!("\r"))            >>
+		opt!(tag!("\n"))            >>
+		tag!("WARC")                >>
+		tag!("/")                   >>
+		opt!(space)                 >>
+		version: map_res!(version_number, str::from_utf8) >>
+		opt!(tag!("\r"))            >>
+		tag!("\n")                  >>
+		(("WARCVERSION", version))
+	)
 );
 
 named!(header_match <&[u8], (&str, &str)>,
-    do_parse!(
-        name: map_res!(token, str::from_utf8) >>
-        opt!(space)                 >>
-        tag!(":")                   >>
-        opt!(space)                 >>
-        value: map_res!(utf8_allowed, str::from_utf8) >>
-        opt!(tag!("\r"))            >>
-        tag!("\n")                  >>
-        ((name, value))
-    )
+	do_parse!(
+		name: map_res!(token, str::from_utf8) >>
+		opt!(space)                 >>
+		tag!(":")                   >>
+		opt!(space)                 >>
+		value: map_res!(utf8_allowed, str::from_utf8) >>
+		opt!(tag!("\r"))            >>
+		tag!("\n")                  >>
+		((name, value))
+	)
 );
 
 named!(header_aggregator<&[u8], Vec<(&str,&str)> >, many1!(header_match));
 
 named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
-    do_parse!(
-        version: init_line          >>
-        headers: header_aggregator  >>
-        opt!(tag!("\r"))            >>
-        tag!("\n")                  >>
-        ((version, headers))
-    )
+	do_parse!(
+		version: init_line          >>
+		headers: header_aggregator  >>
+		opt!(tag!("\r"))            >>
+		tag!("\n")                  >>
+		((version, headers))
+	)
 );
 
 /// Parses one record and returns an IResult from nom
@@ -202,16 +202,16 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
 }
 
 named!(record_complete <&[u8], Record >,
-    complete!(
-        do_parse!(
-            entry: record              >>
-            opt!(tag!("\r"))           >>
-            tag!("\n")                 >>
-            opt!(tag!("\r"))           >>
-            tag!("\n")                 >>
-            (entry)
-        )
-    )
+	complete!(
+		do_parse!(
+		    entry: record              >>
+		    opt!(tag!("\r"))           >>
+		    tag!("\n")                 >>
+		    opt!(tag!("\r"))           >>
+		    tag!("\n")                 >>
+		    (entry)
+		)
+	)
 );
 
 // Parses many record and returns an IResult with a Vec of Record

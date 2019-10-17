@@ -4,7 +4,7 @@
 //!
 //! This library is very nascent. 3 parts: process pool; sources/sinks (Data/Value); analytics;
 
-#![doc(html_root_url = "https://docs.rs/amadeus/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus/0.1.3")]
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
 )]
@@ -16,7 +16,6 @@
 	step_trait,
 	test,
 	// type_alias_impl_trait,
-	bind_by_move_pattern_guards
 )]
 #![warn(
 	// missing_copy_implementations,
@@ -47,9 +46,6 @@
 	clippy::match_same_arms
 )]
 
-#[macro_use]
-extern crate serde_closure;
-
 pub mod data;
 pub mod pool;
 pub mod source;
@@ -58,7 +54,7 @@ pub use amadeus_core::{dist_iter, into_dist_iter};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1
+	data::{Data, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1, source::Source
 };
 
 pub mod prelude {
@@ -70,7 +66,9 @@ pub mod prelude {
 	pub use super::source::aws::{AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File};
 	#[doc(inline)]
 	pub use super::{
-		data, data::{Date, Decimal, Downcast, DowncastImpl, Enum, Group, List, Map, Time, Timestamp}, dist_iter::{DistributedIteratorMulti, Identity}, pool::LocalPool, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, FutureExt1, IntoDistributedIterator, IteratorExt, Value
+		data, data::{
+			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastImpl, Enum, Group, List, Map, Time, TimeWithoutTimezone, Timezone
+		}, dist_iter::{DistributedIteratorMulti, Identity}, pool::LocalPool, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, FutureExt1, IntoDistributedIterator, IteratorExt, Value
 	};
 	#[doc(inline)]
 	pub use amadeus_core::pool::{LocalPool as _, ProcessPool as _, ThreadPool as _};

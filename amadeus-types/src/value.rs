@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::{
-	Bson, Date, Decimal, Downcast, DowncastError, DowncastImpl, Enum, Group, Json, List, Map, Time, Timestamp, ValueRequired
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastImpl, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -27,8 +27,12 @@ pub enum SchemaIncomplete {
 	F32,
 	F64,
 	Date,
+	DateWithoutTimezone,
 	Time,
-	Timestamp,
+	TimeWithoutTimezone,
+	DateTime,
+	DateTimeWithoutTimezone,
+	Timezone,
 	Decimal,
 	ByteArray,
 	Bson,
@@ -60,8 +64,12 @@ pub enum Schema {
 	F32,
 	F64,
 	Date,
+	DateWithoutTimezone,
 	Time,
-	Timestamp,
+	TimeWithoutTimezone,
+	DateTime,
+	DateTimeWithoutTimezone,
+	Timezone,
 	Decimal,
 	ByteArray,
 	Bson,
@@ -106,10 +114,19 @@ pub enum Value {
 	/// Date without a time of day, stores the number of days from the Unix epoch, 1
 	/// January 1970.
 	Date(Date),
+	/// Date without a time of day, stores the number of days from the Unix epoch, 1
+	/// January 1970.
+	DateWithoutTimezone(DateWithoutTimezone),
 	/// Time of day, stores the number of microseconds from midnight.
 	Time(Time),
+	/// Time of day, stores the number of microseconds from midnight.
+	TimeWithoutTimezone(TimeWithoutTimezone),
 	/// Milliseconds from the Unix epoch, 1 January 1970.
-	Timestamp(Timestamp),
+	DateTime(DateTime),
+	/// Milliseconds from the Unix epoch, 1 January 1970.
+	DateTimeWithoutTimezone(DateTimeWithoutTimezone),
+	/// Timezone.
+	Timezone(Timezone),
 	/// Decimal value.
 	Decimal(Decimal),
 	/// General binary value.
@@ -122,6 +139,12 @@ pub enum Value {
 	Json(Json),
 	/// Enum string.
 	Enum(Enum),
+	/// URL
+	Url(Url),
+	/// Webpage
+	Webpage(Webpage<'static>),
+	/// Ip Address
+	IpAddr(IpAddr),
 
 	// Complex types
 	/// List of elements.
@@ -156,14 +179,21 @@ mod optional_value {
 				ValueRequired::F32(value) => serializer.serialize_some(&value),
 				ValueRequired::F64(value) => serializer.serialize_some(&value),
 				ValueRequired::Date(value) => serializer.serialize_some(&value),
+				ValueRequired::DateWithoutTimezone(value) => serializer.serialize_some(&value),
 				ValueRequired::Time(value) => serializer.serialize_some(&value),
-				ValueRequired::Timestamp(value) => serializer.serialize_some(&value),
+				ValueRequired::TimeWithoutTimezone(value) => serializer.serialize_some(&value),
+				ValueRequired::DateTime(value) => serializer.serialize_some(&value),
+				ValueRequired::DateTimeWithoutTimezone(value) => serializer.serialize_some(&value),
+				ValueRequired::Timezone(value) => serializer.serialize_some(&value),
 				ValueRequired::Decimal(value) => serializer.serialize_some(&value),
 				ValueRequired::ByteArray(value) => serializer.serialize_some(&value),
 				ValueRequired::Bson(value) => serializer.serialize_some(&value),
 				ValueRequired::String(value) => serializer.serialize_some(&value),
 				ValueRequired::Json(value) => serializer.serialize_some(&value),
 				ValueRequired::Enum(value) => serializer.serialize_some(&value),
+				ValueRequired::Url(value) => serializer.serialize_some(&value),
+				ValueRequired::Webpage(value) => serializer.serialize_some(&value),
+				ValueRequired::IpAddr(value) => serializer.serialize_some(&value),
 				ValueRequired::List(value) => serializer.serialize_some(&value),
 				ValueRequired::Map(value) => serializer.serialize_some(&value),
 				ValueRequired::Group(value) => serializer.serialize_some(&value),
@@ -229,11 +259,27 @@ impl Hash for Value {
 				11u8.hash(state);
 				value.hash(state);
 			}
+			Self::DateWithoutTimezone(value) => {
+				11u8.hash(state);
+				value.hash(state);
+			}
 			Self::Time(value) => {
 				12u8.hash(state);
 				value.hash(state);
 			}
-			Self::Timestamp(value) => {
+			Self::TimeWithoutTimezone(value) => {
+				12u8.hash(state);
+				value.hash(state);
+			}
+			Self::DateTime(value) => {
+				13u8.hash(state);
+				value.hash(state);
+			}
+			Self::DateTimeWithoutTimezone(value) => {
+				13u8.hash(state);
+				value.hash(state);
+			}
+			Self::Timezone(value) => {
 				13u8.hash(state);
 				value.hash(state);
 			}
@@ -257,6 +303,18 @@ impl Hash for Value {
 				value.hash(state);
 			}
 			Self::Enum(value) => {
+				19u8.hash(state);
+				value.hash(state);
+			}
+			Self::Url(value) => {
+				19u8.hash(state);
+				value.hash(state);
+			}
+			Self::Webpage(value) => {
+				19u8.hash(state);
+				value.hash(state);
+			}
+			Self::IpAddr(value) => {
 				19u8.hash(state);
 				value.hash(state);
 			}
@@ -293,14 +351,23 @@ impl PartialOrd for Value {
 			(Self::F32(a), Self::F32(b)) => a.partial_cmp(b),
 			(Self::F64(a), Self::F64(b)) => a.partial_cmp(b),
 			(Self::Date(a), Self::Date(b)) => a.partial_cmp(b),
+			(Self::DateWithoutTimezone(a), Self::DateWithoutTimezone(b)) => a.partial_cmp(b),
 			(Self::Time(a), Self::Time(b)) => a.partial_cmp(b),
-			(Self::Timestamp(a), Self::Timestamp(b)) => a.partial_cmp(b),
+			(Self::TimeWithoutTimezone(a), Self::TimeWithoutTimezone(b)) => a.partial_cmp(b),
+			(Self::DateTime(a), Self::DateTime(b)) => a.partial_cmp(b),
+			(Self::DateTimeWithoutTimezone(a), Self::DateTimeWithoutTimezone(b)) => {
+				a.partial_cmp(b)
+			}
+			(Self::Timezone(a), Self::Timezone(b)) => a.partial_cmp(b),
 			(Self::Decimal(a), Self::Decimal(b)) => a.partial_cmp(b),
 			(Self::ByteArray(a), Self::ByteArray(b)) => a.partial_cmp(b),
 			(Self::Bson(a), Self::Bson(b)) => a.partial_cmp(b),
 			(Self::String(a), Self::String(b)) => a.partial_cmp(b),
 			(Self::Json(a), Self::Json(b)) => a.partial_cmp(b),
 			(Self::Enum(a), Self::Enum(b)) => a.partial_cmp(b),
+			(Self::Url(a), Self::Url(b)) => a.partial_cmp(b),
+			(Self::Webpage(a), Self::Webpage(b)) => a.partial_cmp(b),
+			(Self::IpAddr(a), Self::IpAddr(b)) => a.partial_cmp(b),
 			(Self::List(a), Self::List(b)) => a.partial_cmp(b),
 			(Self::Map(_a), Self::Map(_b)) => None, // TODO?
 			(Self::Group(a), Self::Group(b)) => a.partial_cmp(b),
@@ -325,14 +392,21 @@ impl Value {
 			Self::F32(_value) => "f32",
 			Self::F64(_value) => "f64",
 			Self::Date(_value) => "date",
+			Self::DateWithoutTimezone(_value) => "date_without_timezone",
 			Self::Time(_value) => "time",
-			Self::Timestamp(_value) => "timestamp",
+			Self::TimeWithoutTimezone(_value) => "time_without_timezone",
+			Self::DateTime(_value) => "date_time",
+			Self::DateTimeWithoutTimezone(_value) => "date_time_without_timezone",
+			Self::Timezone(_value) => "timezone",
 			Self::Decimal(_value) => "decimal",
 			Self::ByteArray(_value) => "byte_array",
 			Self::Bson(_value) => "bson",
 			Self::String(_value) => "string",
 			Self::Json(_value) => "json",
 			Self::Enum(_value) => "enum",
+			Self::Url(_value) => "url",
+			Self::Webpage(_value) => "webpage",
+			Self::IpAddr(_value) => "ip_addr",
 			Self::List(_value) => "list",
 			Self::Map(_value) => "map",
 			Self::Group(_value) => "group",
@@ -736,6 +810,39 @@ impl Value {
 		}
 	}
 
+	/// Returns true if the `Value` is an DateWithoutTimezone. Returns false otherwise.
+	pub fn is_date_without_timezone(&self) -> bool {
+		if let Self::DateWithoutTimezone(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// If the `Value` is an DateWithoutTimezone, return a reference to it. Returns Err otherwise.
+	pub fn as_date_without_timezone(&self) -> Result<&DateWithoutTimezone, DowncastError> {
+		if let Self::DateWithoutTimezone(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "date_without_timezone",
+			})
+		}
+	}
+
+	/// If the `Value` is an DateWithoutTimezone, return it. Returns Err otherwise.
+	pub fn into_date_without_timezone(self) -> Result<DateWithoutTimezone, DowncastError> {
+		if let Self::DateWithoutTimezone(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "date_without_timezone",
+			})
+		}
+	}
+
 	/// Returns true if the `Value` is an Time. Returns false otherwise.
 	pub fn is_time(&self) -> bool {
 		if let Self::Time(_) = self {
@@ -769,35 +876,134 @@ impl Value {
 		}
 	}
 
-	/// Returns true if the `Value` is an Timestamp. Returns false otherwise.
-	pub fn is_timestamp(&self) -> bool {
-		if let Self::Timestamp(_) = self {
+	/// Returns true if the `Value` is an TimeWithoutTimezone. Returns false otherwise.
+	pub fn is_time_without_timezone(&self) -> bool {
+		if let Self::TimeWithoutTimezone(_) = self {
 			true
 		} else {
 			false
 		}
 	}
 
-	/// If the `Value` is an Timestamp, return a reference to it. Returns Err otherwise.
-	pub fn as_timestamp(&self) -> Result<&Timestamp, DowncastError> {
-		if let Self::Timestamp(ret) = self {
+	/// If the `Value` is an TimeWithoutTimezone, return a reference to it. Returns Err otherwise.
+	pub fn as_time_without_timezone(&self) -> Result<&TimeWithoutTimezone, DowncastError> {
+		if let Self::TimeWithoutTimezone(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
 				from: self.type_name(),
-				to: "timestamp",
+				to: "time_without_timezone",
 			})
 		}
 	}
 
-	/// If the `Value` is an Timestamp, return it. Returns Err otherwise.
-	pub fn into_timestamp(self) -> Result<Timestamp, DowncastError> {
-		if let Self::Timestamp(ret) = self {
+	/// If the `Value` is an TimeWithoutTimezone, return it. Returns Err otherwise.
+	pub fn into_time_without_timezone(self) -> Result<TimeWithoutTimezone, DowncastError> {
+		if let Self::TimeWithoutTimezone(ret) = self {
 			Ok(ret)
 		} else {
 			Err(DowncastError {
 				from: self.type_name(),
-				to: "timestamp",
+				to: "time_without_timezone",
+			})
+		}
+	}
+
+	/// Returns true if the `Value` is an DateTime. Returns false otherwise.
+	pub fn is_date_time(&self) -> bool {
+		if let Self::DateTime(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// If the `Value` is an DateTime, return a reference to it. Returns Err otherwise.
+	pub fn as_date_time(&self) -> Result<&DateTime, DowncastError> {
+		if let Self::DateTime(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "date_time",
+			})
+		}
+	}
+
+	/// If the `Value` is an DateTime, return it. Returns Err otherwise.
+	pub fn into_date_time(self) -> Result<DateTime, DowncastError> {
+		if let Self::DateTime(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "date_time",
+			})
+		}
+	}
+
+	/// Returns true if the `Value` is an DateTimeWithoutTimezone. Returns false otherwise.
+	pub fn is_date_time_without_timezone(&self) -> bool {
+		if let Self::DateTimeWithoutTimezone(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// If the `Value` is an DateTimeWithoutTimezone, return a reference to it. Returns Err otherwise.
+	pub fn as_date_time_without_timezone(&self) -> Result<&DateTimeWithoutTimezone, DowncastError> {
+		if let Self::DateTimeWithoutTimezone(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "date_time_without_timezone",
+			})
+		}
+	}
+
+	/// If the `Value` is an DateTimeWithoutTimezone, return it. Returns Err otherwise.
+	pub fn into_date_time_without_timezone(self) -> Result<DateTimeWithoutTimezone, DowncastError> {
+		if let Self::DateTimeWithoutTimezone(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "date_time_without_timezone",
+			})
+		}
+	}
+
+	/// Returns true if the `Value` is an Timezone. Returns false otherwise.
+	pub fn is_timezone(&self) -> bool {
+		if let Self::Timezone(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// If the `Value` is an Timezone, return a reference to it. Returns Err otherwise.
+	pub fn as_timezone(&self) -> Result<&Timezone, DowncastError> {
+		if let Self::Timezone(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "timezone",
+			})
+		}
+	}
+
+	/// If the `Value` is an Timezone, return it. Returns Err otherwise.
+	pub fn into_timezone(self) -> Result<Timezone, DowncastError> {
+		if let Self::Timezone(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "timezone",
 			})
 		}
 	}
@@ -1000,6 +1206,105 @@ impl Value {
 		}
 	}
 
+	/// Returns true if the `Value` is an Url. Returns false otherwise.
+	pub fn is_url(&self) -> bool {
+		if let Self::Url(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// If the `Value` is an Url, return a reference to it. Returns Err otherwise.
+	pub fn as_url(&self) -> Result<&Url, DowncastError> {
+		if let Self::Url(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "url",
+			})
+		}
+	}
+
+	/// If the `Value` is an Url, return it. Returns Err otherwise.
+	pub fn into_url(self) -> Result<Url, DowncastError> {
+		if let Self::Url(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "url",
+			})
+		}
+	}
+
+	/// Returns true if the `Value` is an Webpage. Returns false otherwise.
+	pub fn is_webpage(&self) -> bool {
+		if let Self::Webpage(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// If the `Value` is an Webpage, return a reference to it. Returns Err otherwise.
+	pub fn as_webpage(&self) -> Result<&Webpage, DowncastError> {
+		if let Self::Webpage(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "webpage",
+			})
+		}
+	}
+
+	/// If the `Value` is an Webpage, return it. Returns Err otherwise.
+	pub fn into_webpage(self) -> Result<Webpage<'static>, DowncastError> {
+		if let Self::Webpage(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "webpage",
+			})
+		}
+	}
+
+	/// Returns true if the `Value` is an IpAddr. Returns false otherwise.
+	pub fn is_ip_addr(&self) -> bool {
+		if let Self::IpAddr(_) = self {
+			true
+		} else {
+			false
+		}
+	}
+
+	/// If the `Value` is an IpAddr, return a reference to it. Returns Err otherwise.
+	pub fn as_ip_addr(&self) -> Result<&IpAddr, DowncastError> {
+		if let Self::IpAddr(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "ip_addr",
+			})
+		}
+	}
+
+	/// If the `Value` is an IpAddr, return it. Returns Err otherwise.
+	pub fn into_ip_addr(self) -> Result<IpAddr, DowncastError> {
+		if let Self::IpAddr(ret) = self {
+			Ok(ret)
+		} else {
+			Err(DowncastError {
+				from: self.type_name(),
+				to: "ip_addr",
+			})
+		}
+	}
+
 	/// Returns true if the `Value` is an List. Returns false otherwise.
 	pub fn is_list(&self) -> bool {
 		if let Self::List(_) = self {
@@ -1193,14 +1498,34 @@ impl From<Date> for Value {
 		Self::Date(value)
 	}
 }
+impl From<DateWithoutTimezone> for Value {
+	fn from(value: DateWithoutTimezone) -> Self {
+		Self::DateWithoutTimezone(value)
+	}
+}
 impl From<Time> for Value {
 	fn from(value: Time) -> Self {
 		Self::Time(value)
 	}
 }
-impl From<Timestamp> for Value {
-	fn from(value: Timestamp) -> Self {
-		Self::Timestamp(value)
+impl From<TimeWithoutTimezone> for Value {
+	fn from(value: TimeWithoutTimezone) -> Self {
+		Self::TimeWithoutTimezone(value)
+	}
+}
+impl From<DateTime> for Value {
+	fn from(value: DateTime) -> Self {
+		Self::DateTime(value)
+	}
+}
+impl From<DateTimeWithoutTimezone> for Value {
+	fn from(value: DateTimeWithoutTimezone) -> Self {
+		Self::DateTimeWithoutTimezone(value)
+	}
+}
+impl From<Timezone> for Value {
+	fn from(value: Timezone) -> Self {
+		Self::Timezone(value)
 	}
 }
 impl From<Decimal> for Value {
@@ -1233,12 +1558,29 @@ impl From<Enum> for Value {
 		Self::Enum(value)
 	}
 }
+impl From<Url> for Value {
+	fn from(value: Url) -> Self {
+		Self::Url(value)
+	}
+}
+impl From<Webpage<'static>> for Value {
+	fn from(value: Webpage<'static>) -> Self {
+		Self::Webpage(value)
+	}
+}
+impl From<IpAddr> for Value {
+	fn from(value: IpAddr) -> Self {
+		Self::IpAddr(value)
+	}
+}
 impl<T> From<List<T>> for Value
 where
 	T: Into<Self>,
 {
 	default fn from(value: List<T>) -> Self {
-		Self::List(List(value.0.into_iter().map(Into::into).collect()))
+		Self::List(List::from(
+			value.into_iter().map(Into::into).collect::<Vec<_>>(),
+		))
 	}
 }
 impl From<List<Self>> for Value {
@@ -1252,11 +1594,12 @@ where
 	V: Into<Self>,
 {
 	default fn from(value: Map<K, V>) -> Self {
-		Self::Map(Map(value
-			.0
-			.into_iter()
-			.map(|(k, v)| (k.into(), v.into()))
-			.collect()))
+		Self::Map(Map::from(
+			value
+				.into_iter()
+				.map(|(k, v)| (k.into(), v.into()))
+				.collect::<HashMap<_, _>>(),
+		))
 	}
 }
 impl From<Map<Self, Self>> for Value {
@@ -1294,7 +1637,7 @@ where
 		(*value).into()
 	}
 }
-macro_rules! impl_parquet_record_array1 {
+macro_rules! array_from {
 	($($i:tt)*) => {$(
 		impl From<[u8; $i]> for Value {
 			fn from(value: [u8; $i]) -> Self {
@@ -1305,83 +1648,18 @@ macro_rules! impl_parquet_record_array1 {
 		}
 	)*}
 }
-impl_parquet_record_array1!(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32);
-
-macro_rules! impl_parquet_record_tuple {
+array!(array_from);
+macro_rules! tuple_from {
 	($len:tt $($t:ident $i:tt)*) => (
-		 impl<$($t,)*> DowncastImpl<Value> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
-			fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
-				#[allow(unused_mut, unused_variables)]
-				let mut fields = self_.into_group()?.into_fields().into_iter();
-				if fields.len() != $len {
-					return Err(DowncastError{from:"",to:""});
-				}
-				Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
-			}
-		}
-		impl<$($t,)*> DowncastImpl<Group> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
-			fn downcast_impl(self_: Group) -> Result<Self, DowncastError> {
-				#[allow(unused_mut, unused_variables)]
-				let mut fields = self_.into_fields().into_iter();
-				if fields.len() != $len {
-					return Err(DowncastError{from:"",to:""});
-				}
-				Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
-			}
-		}
 		impl<$($t,)*> From<($($t,)*)> for Value where $($t: Into<Value>,)* {
 			#[allow(unused_variables)]
 			fn from(value: ($($t,)*)) -> Self {
 				Value::Group(Group::new(vec![$(value.$i.into(),)*], None))
 			}
 		}
-	   impl<$($t,)*> PartialEq<($($t,)*)> for Value where Value: $(PartialEq<$t> +)* {
-			#[allow(unused_variables)]
-			fn eq(&self, other: &($($t,)*)) -> bool {
-				self.is_group() $(&& self.as_group().unwrap()[$i] == other.$i)*
-			}
-		}
-		impl<$($t,)*> PartialEq<($($t,)*)> for Group where Value: $(PartialEq<$t> +)* {
-			#[allow(unused_variables)]
-			fn eq(&self, other: &($($t,)*)) -> bool {
-				$(self[$i] == other.$i && )* true
-			}
-		}
 	);
 }
-impl_parquet_record_tuple!(0);
-impl_parquet_record_tuple!(1 A 0);
-impl_parquet_record_tuple!(2 A 0 B 1);
-impl_parquet_record_tuple!(3 A 0 B 1 C 2);
-impl_parquet_record_tuple!(4 A 0 B 1 C 2 D 3);
-impl_parquet_record_tuple!(5 A 0 B 1 C 2 D 3 E 4);
-impl_parquet_record_tuple!(6 A 0 B 1 C 2 D 3 E 4 F 5);
-impl_parquet_record_tuple!(7 A 0 B 1 C 2 D 3 E 4 F 5 G 6);
-impl_parquet_record_tuple!(8 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7);
-impl_parquet_record_tuple!(9 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8);
-impl_parquet_record_tuple!(10 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9);
-impl_parquet_record_tuple!(11 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10);
-impl_parquet_record_tuple!(12 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11);
-impl_parquet_record_tuple!(13 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12);
-impl_parquet_record_tuple!(14 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13);
-impl_parquet_record_tuple!(15 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14);
-impl_parquet_record_tuple!(16 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15);
-impl_parquet_record_tuple!(17 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16);
-impl_parquet_record_tuple!(18 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17);
-impl_parquet_record_tuple!(19 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18);
-impl_parquet_record_tuple!(20 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19);
-impl_parquet_record_tuple!(21 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20);
-impl_parquet_record_tuple!(22 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21);
-impl_parquet_record_tuple!(23 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22);
-impl_parquet_record_tuple!(24 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23);
-impl_parquet_record_tuple!(25 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24);
-impl_parquet_record_tuple!(26 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25);
-impl_parquet_record_tuple!(27 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26);
-impl_parquet_record_tuple!(28 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27);
-impl_parquet_record_tuple!(29 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28);
-impl_parquet_record_tuple!(30 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29);
-impl_parquet_record_tuple!(31 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30);
-impl_parquet_record_tuple!(32 A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8 J 9 K 10 L 11 M 12 N 13 O 14 P 15 Q 16 R 17 S 18 T 19 U 20 V 21 W 22 X 23 Y 24 Z 25 AA 26 AB 27 AC 28 AD 29 AE 30 AF 31);
+tuple!(tuple_from);
 
 // Downcast implementations for Value so we can try downcasting it to a specific type if
 // we know it.
@@ -1451,14 +1729,34 @@ impl DowncastImpl<Value> for Date {
 		self_.into_date()
 	}
 }
+impl DowncastImpl<Value> for DateWithoutTimezone {
+	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		self_.into_date_without_timezone()
+	}
+}
 impl DowncastImpl<Value> for Time {
 	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_time()
 	}
 }
-impl DowncastImpl<Value> for Timestamp {
+impl DowncastImpl<Value> for TimeWithoutTimezone {
 	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
-		self_.into_timestamp()
+		self_.into_time_without_timezone()
+	}
+}
+impl DowncastImpl<Value> for DateTime {
+	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		self_.into_date_time()
+	}
+}
+impl DowncastImpl<Value> for DateTimeWithoutTimezone {
+	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		self_.into_date_time_without_timezone()
+	}
+}
+impl DowncastImpl<Value> for Timezone {
+	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		self_.into_timezone()
 	}
 }
 impl DowncastImpl<Value> for Decimal {
@@ -1491,17 +1789,31 @@ impl DowncastImpl<Value> for Enum {
 		self_.into_enum()
 	}
 }
+impl DowncastImpl<Value> for Url {
+	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		self_.into_url()
+	}
+}
+impl DowncastImpl<Value> for Webpage<'static> {
+	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		self_.into_webpage()
+	}
+}
+impl DowncastImpl<Value> for IpAddr {
+	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		self_.into_ip_addr()
+	}
+}
 impl<T> DowncastImpl<Value> for List<T>
 where
 	T: DowncastImpl<Value>,
 {
 	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list().and_then(|list| {
-			list.0
-				.into_iter()
+			list.into_iter()
 				.map(Downcast::downcast)
 				.collect::<Result<Vec<_>, _>>()
-				.map(List)
+				.map(List::from)
 		})
 	}
 }
@@ -1517,11 +1829,10 @@ where
 {
 	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map().and_then(|map| {
-			map.0
-				.into_iter()
+			map.into_iter()
 				.map(|(k, v)| Ok((k.downcast()?, v.downcast()?)))
 				.collect::<Result<HashMap<_, _>, _>>()
-				.map(Map)
+				.map(Map::from)
 		})
 	}
 }
@@ -1551,7 +1862,7 @@ impl DowncastImpl<Value> for Option<Value> {
 		self_.into_option()
 	}
 }
-macro_rules! impl_parquet_record_array {
+macro_rules! array_downcast {
 	($($i:tt)*) => {$(
 		impl DowncastImpl<Value> for [u8; $i] {
 			fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
@@ -1565,7 +1876,22 @@ macro_rules! impl_parquet_record_array {
 		}
 	)*}
 }
-impl_parquet_record_array!(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32);
+array!(array_downcast);
+macro_rules! tuple_downcast {
+	($len:tt $($t:ident $i:tt)*) => (
+		 impl<$($t,)*> DowncastImpl<Value> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
+			fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+				#[allow(unused_mut, unused_variables)]
+				let mut fields = self_.into_group()?.into_fields().into_iter();
+				if fields.len() != $len {
+					return Err(DowncastError{from:"",to:""});
+				}
+				Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
+			}
+		}
+	);
+}
+tuple!(tuple_downcast);
 
 // PartialEq implementations for Value so we can compare it with typed values
 
@@ -1629,15 +1955,43 @@ impl PartialEq<Date> for Value {
 		self.as_date().map(|date| date == other).unwrap_or(false)
 	}
 }
+impl PartialEq<DateWithoutTimezone> for Value {
+	fn eq(&self, other: &DateWithoutTimezone) -> bool {
+		self.as_date_without_timezone()
+			.map(|date_without_timezone| date_without_timezone == other)
+			.unwrap_or(false)
+	}
+}
 impl PartialEq<Time> for Value {
 	fn eq(&self, other: &Time) -> bool {
 		self.as_time().map(|time| time == other).unwrap_or(false)
 	}
 }
-impl PartialEq<Timestamp> for Value {
-	fn eq(&self, other: &Timestamp) -> bool {
-		self.as_timestamp()
-			.map(|timestamp| timestamp == other)
+impl PartialEq<TimeWithoutTimezone> for Value {
+	fn eq(&self, other: &TimeWithoutTimezone) -> bool {
+		self.as_time_without_timezone()
+			.map(|time_without_timezone| time_without_timezone == other)
+			.unwrap_or(false)
+	}
+}
+impl PartialEq<DateTime> for Value {
+	fn eq(&self, other: &DateTime) -> bool {
+		self.as_date_time()
+			.map(|date_time| date_time == other)
+			.unwrap_or(false)
+	}
+}
+impl PartialEq<DateTimeWithoutTimezone> for Value {
+	fn eq(&self, other: &DateTimeWithoutTimezone) -> bool {
+		self.as_date_time_without_timezone()
+			.map(|date_time_without_timezone| date_time_without_timezone == other)
+			.unwrap_or(false)
+	}
+}
+impl PartialEq<Timezone> for Value {
+	fn eq(&self, other: &Timezone) -> bool {
+		self.as_timezone()
+			.map(|timezone| timezone == other)
 			.unwrap_or(false)
 	}
 }
@@ -1677,6 +2031,25 @@ impl PartialEq<Enum> for Value {
 		self.as_enum().map(|enum_| enum_ == other).unwrap_or(false)
 	}
 }
+impl PartialEq<Url> for Value {
+	fn eq(&self, other: &Url) -> bool {
+		self.as_url().map(|url| url == other).unwrap_or(false)
+	}
+}
+impl<'a> PartialEq<Webpage<'a>> for Value {
+	fn eq(&self, other: &Webpage<'a>) -> bool {
+		self.as_webpage()
+			.map(|webpage| webpage == other)
+			.unwrap_or(false)
+	}
+}
+impl PartialEq<IpAddr> for Value {
+	fn eq(&self, other: &IpAddr) -> bool {
+		self.as_ip_addr()
+			.map(|ip_addr| ip_addr == other)
+			.unwrap_or(false)
+	}
+}
 impl<T> PartialEq<List<T>> for Value
 where
 	Value: PartialEq<T>,
@@ -1693,20 +2066,18 @@ where
 	fn eq(&self, other: &Map<K, V>) -> bool {
 		self.as_map()
 			.map(|map| {
-				if map.0.len() != other.0.len() {
+				if map.len() != other.len() {
 					return false;
 				}
 
 				// This comparison unfortunately requires a bit of a hack. This could be
 				// eliminated by ensuring that Value::X hashes identically to X. TODO.
 				let other = other
-					.0
 					.iter()
 					.map(|(k, v)| (k.clone().into(), v))
 					.collect::<HashMap<Self, _>>();
 
-				map.0
-					.iter()
+				map.iter()
 					.all(|(key, value)| other.get(key).map_or(false, |v| value == *v))
 			})
 			.unwrap_or(false)
@@ -1739,6 +2110,24 @@ where
 		self == other
 	}
 }
+
+macro_rules! tuple_partialeq {
+	($len:tt $($t:ident $i:tt)*) => (
+		impl<$($t,)*> PartialEq<($($t,)*)> for Value where Value: $(PartialEq<$t> +)* {
+			#[allow(unused_variables)]
+			fn eq(&self, other: &($($t,)*)) -> bool {
+				self.is_group() $(&& self.as_group().unwrap()[$i] == other.$i)*
+			}
+		}
+		impl<$($t,)*> PartialEq<($($t,)*)> for Group where Value: $(PartialEq<$t> +)* {
+			#[allow(unused_variables)]
+			fn eq(&self, other: &($($t,)*)) -> bool {
+				$(self[$i] == other.$i && )* true
+			}
+		}
+	);
+}
+tuple!(tuple_partialeq);
 
 // impl Serialize for Value {
 // 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

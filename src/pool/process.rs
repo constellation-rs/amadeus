@@ -1,4 +1,5 @@
 use constellation::*;
+use serde_closure::FnOnce;
 use serde_traitobject as st;
 use std::{
 	any, collections::VecDeque, fmt, future::Future, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}
@@ -68,9 +69,9 @@ impl ProcessPoolInner {
 		for _ in 0..processes {
 			let child = spawn(
 				resources,
-				FnOnce!([threads] move |parent| {
+				FnOnce!(move |parent| {
 					let receiver = Receiver::<Option<Request>>::new(parent);
-					let sender = Sender::<Result<Response,Panicked>>::new(parent);
+					let sender = Sender::<Result<Response, Panicked>>::new(parent);
 
 					let _ = threads;
 
@@ -121,13 +122,11 @@ impl ProcessPoolInner {
 	) -> Result<T, Panicked> {
 		let process_index = self.i.get();
 		let process = &self.processes[process_index];
-		process
-			.sender
-			.send(Some(Box::new(FnOnce!([work] move || {
-				let work: F = work;
-				Box::new(work()) as Response
-			})) as Request))
-			.await;
+		let x = process.sender.send(Some(Box::new(FnOnce!(move || {
+			let work: F = work;
+			Box::new(work()) as Response
+		})) as Request));
+		x.await;
 		let index;
 		{
 			// https://github.com/rust-lang/rust/issues/57478

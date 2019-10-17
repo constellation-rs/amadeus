@@ -1,51 +1,20 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use flate2::read::MultiGzDecoder;
 use http::{Method, StatusCode};
-
+use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::identity, io::{self, BufRead, BufReader}, iter, net, time::Duration, vec
+	convert::identity, io::{self, BufRead, BufReader}, iter, time::Duration
 };
-use url::Url;
 
 use amadeus_core::{
 	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
 };
+use amadeus_types::{DateTime, IpAddr, Url};
 
 use super::{block_on_01, list, retry, AwsError, AwsRegion};
-
-type Closure<Env, Args, Output> =
-	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
-
-type CloudfrontInner = amadeus_core::dist_iter::Map<
-	amadeus_core::dist_iter::FlatMap<
-		amadeus_core::into_dist_iter::IterIter<vec::IntoIter<String>>,
-		Closure<
-			(String, AwsRegion),
-			(String,),
-			ResultExpand<
-				iter::Map<
-					iter::Filter<
-						io::Lines<BufReader<MultiGzDecoder<Box<dyn io::Read + Send>>>>,
-						serde_closure::FnMut<
-							(),
-							for<'r, 'a> fn(&'r mut (), (&'a Result<String, io::Error>,)) -> bool,
-						>,
-					>,
-					Closure<(), (Result<String, io::Error>,), Result<CloudfrontRow, AwsError>>,
-				>,
-				AwsError,
-			>,
-		>,
-	>,
-	Closure<
-		(),
-		(Result<Result<CloudfrontRow, AwsError>, AwsError>,),
-		Result<CloudfrontRow, AwsError>,
-	>,
->;
 
 pub struct Cloudfront {
 	region: AwsRegion,
@@ -73,53 +42,71 @@ impl Source for Cloudfront {
 	type Item = CloudfrontRow;
 	type Error = AwsError;
 
-	// type DistIter = impl DistributedIterator<Item = Result<CloudfrontRow, AwsError>>; //, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
-	type DistIter = CloudfrontInner;
-	type Iter = iter::Empty<Result<CloudfrontRow, AwsError>>;
+	#[cfg(not(feature = "doc"))]
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
+	#[allow(clippy::let_and_return)]
 	fn dist_iter(self) -> Self::DistIter {
 		let Self {
 			bucket,
 			region,
 			objects,
 		} = self;
-		objects
+		let ret = objects
 			.into_dist_iter()
-			.flat_map(FnMut!([bucket, region] move |key:String| {
+			.flat_map(FnMut!(move |key: String| {
 				let client = S3Client::new(region.clone());
 				ResultExpand(
-					block_on_01(retry(||client
-						.get_object(GetObjectRequest {
-							bucket: bucket.clone(),
-							key: key.clone(),
-							..GetObjectRequest::default()
-						})
+					loop {
+						match self::block_on_01(self::retry(|| {
+							client.get_object(GetObjectRequest {
+								bucket: bucket.clone(),
+								key: key.clone(),
+								..GetObjectRequest::default()
+							})
+						})) {
+							Err(RusotoError::HttpDispatch(_)) => continue,
+							Err(RusotoError::Unknown(response))
+								if response.status.is_server_error() =>
+							{
+								continue
+							}
+							res => break res,
+						}
+					}
+					.map_err(AwsError::from)
+					.map(|res| {
+						let body = res.body.unwrap().into_blocking_read();
+						BufReader::new(MultiGzDecoder::new(
+							Box::new(body) as Box<dyn io::Read + Send>
 						))
-						.map_err(AwsError::from)
-						.map(|res| {
-							let body = res.body.unwrap().into_blocking_read();
-							BufReader::new(MultiGzDecoder::new(Box::new(body) as Box<dyn io::Read + Send>))
-								.lines()
-								.filter(FnMut!(|x:&Result<String,io::Error>| {
-									if let Ok(x) = x {
-										x.chars().filter(|x| !x.is_whitespace()).nth(0) != Some('#')
-									} else {
-										true
-									}
-								}))
-								.map(FnMut!(|x:Result<String,io::Error>| {
-									if let Ok(x) = x {
-										Ok(CloudfrontRow::from_line(&x))
-									} else {
-										Err(AwsError::from(x.err().unwrap()))
-									}
-								}))
-						}),
+						.lines()
+						.filter(|x: &Result<String, io::Error>| {
+							if let Ok(x) = x {
+								x.chars().filter(|x| !x.is_whitespace()).nth(0) != Some('#')
+							} else {
+								true
+							}
+						})
+						.map(|x: Result<String, io::Error>| {
+							if let Ok(x) = x {
+								Ok(CloudfrontRow::from_line(&x))
+							} else {
+								Err(AwsError::from(x.err().unwrap()))
+							}
+						})
+					}),
 				)
 			}))
 			.map(FnMut!(
-				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(identity)
-			))
+				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(self::identity)
+			));
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
 	}
 
 	fn iter(self) -> Self::Iter {
@@ -129,10 +116,10 @@ impl Source for Cloudfront {
 
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub struct CloudfrontRow {
-	pub time: DateTime<Utc>,
+	pub time: DateTime,
 	pub edge_location: String,
 	pub response_bytes: u64,
-	pub remote_ip: net::IpAddr,
+	pub remote_ip: IpAddr,
 	#[serde(with = "http_serde")]
 	pub method: Method,
 	pub host: String,
@@ -154,6 +141,7 @@ pub struct CloudfrontRow {
 	pub fle_encrypted_fields: Option<String>,
 }
 impl CloudfrontRow {
+	#[inline(always)]
 	fn from_line(line: &str) -> Self {
 		let mut values = line.split('\t');
 		let date = values.next().unwrap();
@@ -183,10 +171,10 @@ impl CloudfrontRow {
 		let fle_status = values.next().unwrap();
 		let fle_encrypted_fields = values.next().unwrap();
 		assert_eq!(values.next(), None);
-		let time = Utc.from_utc_datetime(&NaiveDateTime::new(
+		let time = DateTime::from_chrono(&Utc.from_utc_datetime(&NaiveDateTime::new(
 			NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(),
 			NaiveTime::parse_from_str(&time, "%H:%M:%S").unwrap(),
-		));
+		)));
 		let status = if sc_status != "000" {
 			Some(StatusCode::from_bytes(sc_status.as_bytes()).unwrap())
 		} else {

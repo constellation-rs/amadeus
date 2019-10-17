@@ -1,173 +1,37 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.1.3")]
+#![feature(bufreader_seek_relative)]
+#![feature(read_initializer)]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
-#![feature(read_initializer)]
-#![feature(bufreader_seek_relative)]
+#![cfg_attr(test, feature(test))]
+#[cfg(test)]
+extern crate test;
 
-mod impls;
-
-pub mod internal;
+mod internal;
 
 use internal::{
-	basic::Repetition, column::reader::ColumnReader, errors::ParquetError as InternalParquetError, file::reader::{FileReader, SerializedFileReader}, record::{Reader as ParquetReader, RowIter, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
+	errors::ParquetError as InternalParquetError, file::reader::{FileReader, ParquetReader, SerializedFileReader}
 };
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	collections::HashMap, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::FnMut, vec
+	error, fmt::{self, Debug, Display}, iter, marker::PhantomData, ops::FnMut
 };
 
 use amadeus_core::{
 	dist_iter::DistributedIterator, file::{Directory, File, Page, Partition, PathBuf}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
 };
 
-type Closure<Env, Args, Output> =
-	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
+pub use internal::record::ParquetData;
 
-pub trait ParquetData
-where
-	Self: Clone + PartialEq + Debug + 'static,
-{
-	type Schema: ParquetSchema;
-	type Reader: ParquetReader<Item = Self>;
-
-	fn parse(
-		schema: &Type, repetition: Option<Repetition>,
-	) -> Result<(String, Self::Schema), InternalParquetError>;
-	fn reader(
-		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
-		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
-	) -> Self::Reader;
-}
-
-pub type ParquetInner<F, Row> = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<<F as File>::Partition>>,
-	Closure<
-		(),
-		(<F as File>::Partition,),
-		iter::Map<
-			iter::FlatMap<
-				amadeus_core::util::ResultExpandIter<
-					vec::IntoIter<<<F as File>::Partition as Partition>::Page>,
-					ParquetError<F>,
-				>,
-				ResultExpand<
-					iter::Map<
-						RowIter<
-							SerializedFileReader<
-								ParquetReaderWrap<<<F as File>::Partition as Partition>::Page>,
-							>,
-							Record<Row>,
-						>,
-						Closure<
-							(),
-							(Result<Record<Row>, InternalParquetError>,),
-							Result<Row, InternalParquetError>,
-						>,
-					>,
-					ParquetError<F>,
-				>,
-				Closure<
-					(),
-					(Result<<<F as File>::Partition as Partition>::Page, ParquetError<F>>,),
-					ResultExpand<
-						iter::Map<
-							RowIter<
-								SerializedFileReader<
-									ParquetReaderWrap<<<F as File>::Partition as Partition>::Page>,
-								>,
-								Record<Row>,
-							>,
-							Closure<
-								(),
-								(Result<Record<Row>, InternalParquetError>,),
-								Result<Row, InternalParquetError>,
-							>,
-						>,
-						ParquetError<F>,
-					>,
-				>,
-			>,
-			Closure<
-				(),
-				(Result<Result<Row, InternalParquetError>, ParquetError<F>>,),
-				Result<Row, ParquetError<F>>,
-			>,
-		>,
-	>,
->;
-
-mod wrap {
-	use super::{internal, ParquetData};
-	use internal::{
-		basic::Repetition, column::reader::ColumnReader, errors::Result, schema::types::{ColumnPath, Type}
+#[doc(hidden)]
+pub mod derive {
+	pub use super::{
+		internal::{
+			basic::Repetition, column::reader::ColumnReader, errors::{ParquetError, Result as ParquetResult}, record::{DisplaySchemaGroup, Reader, Schema as ParquetSchema}, schema::types::{ColumnPath, Type}
+		}, ParquetData
 	};
-	use std::collections::HashMap;
-
-	#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-	#[repr(transparent)]
-	pub struct Record<T>(pub T)
-	where
-		T: ParquetData;
-	impl<T> internal::record::Record for Record<T>
-	where
-		T: ParquetData,
-	{
-		type Reader = RecordReader<T::Reader>;
-		type Schema = T::Schema;
-
-		#[inline]
-		fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-			T::parse(schema, repetition)
-		}
-
-		#[inline]
-		fn reader(
-			schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
-			paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
-		) -> Self::Reader {
-			RecordReader(T::reader(
-				schema, path, def_level, rep_level, paths, batch_size,
-			))
-		}
-	}
-
-	/// A Reader that wraps a Reader, wrapping the read value in a `Record`.
-	pub struct RecordReader<T>(T);
-	impl<T> internal::record::Reader for RecordReader<T>
-	where
-		T: internal::record::Reader,
-		T::Item: ParquetData,
-	{
-		type Item = Record<T::Item>;
-
-		#[inline]
-		fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item> {
-			self.0.read(def_level, rep_level).map(Record)
-		}
-
-		#[inline]
-		fn advance_columns(&mut self) -> Result<()> {
-			self.0.advance_columns()
-		}
-
-		#[inline]
-		fn has_next(&self) -> bool {
-			self.0.has_next()
-		}
-
-		#[inline]
-		fn current_def_level(&self) -> i16 {
-			self.0.current_def_level()
-		}
-
-		#[inline]
-		fn current_rep_level(&self) -> i16 {
-			self.0.current_rep_level()
-		}
-	}
 }
-pub use wrap::Record;
 
 pub struct Parquet<File, Row>
 where
@@ -192,74 +56,50 @@ where
 impl<F, Row> Source for Parquet<F, Row>
 where
 	F: File,
-	Row: ParquetData,
+	Row: ParquetData + 'static,
 {
 	type Item = Row;
 	type Error = ParquetError<F>;
 
-	// type DistIter = impl DistributedIterator<Item = Result<Row, Self::Error>>; //, <Self as super::super::DistributedIterator>::Task: Serialize + for<'de> Deserialize<'de>
-	type DistIter = ParquetInner<F, Row>;
-	type Iter = iter::Empty<Result<Row, Self::Error>>;
+	#[cfg(not(feature = "doc"))]
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
+	#[allow(clippy::let_and_return)]
 	fn dist_iter(self) -> Self::DistIter {
-		self.partitions
+		let ret = self
+			.partitions
 			.into_dist_iter()
 			.flat_map(FnMut!(|partition: F::Partition| {
 				ResultExpand(partition.pages().map_err(ParquetError::<F>::Partition))
 					.into_iter()
-					.flat_map(FnMut!(|page: Result<_, _>| {
+					.flat_map(|page: Result<_, _>| {
 						ResultExpand(page.and_then(
 							|page: <<F as File>::Partition as Partition>::Page| {
-								Ok(SerializedFileReader::new(ParquetReaderWrap(Page::reader(
-									page,
-								)))?
-								.get_row_iter(None)?
-								.map(FnMut!(|x: Result<
-										Record<Row>,
-										InternalParquetError,
-									>|
-									 -> Result<Row, InternalParquetError> {
-										Ok(x?.0)
-									})))
+								Ok(SerializedFileReader::new(Page::reader(page))?
+									.get_row_iter(None)?)
 							},
 						))
-					}))
-					.map(FnMut!(|row: Result<Result<Row, _>, _>| Ok(row??)))
-			}))
+					})
+					.map(|row: Result<Result<Row, _>, _>| Ok(row??))
+			}));
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
 	}
 	fn iter(self) -> Self::Iter {
 		iter::empty()
 	}
 }
 
-pub struct ParquetReaderWrap<P>(amadeus_core::file::Reader<P>)
-where
-	P: Page;
-impl<P> io::Read for ParquetReaderWrap<P>
-where
-	P: Page,
-{
-	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-		self.0.read(buf)
-	}
-	unsafe fn initializer(&self) -> io::Initializer {
-		io::Initializer::nop()
-	}
-}
-impl<P> io::Seek for ParquetReaderWrap<P>
-where
-	P: Page,
-{
-	fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-		self.0.seek(pos)
-	}
-}
-impl<P> internal::file::reader::ParquetReader for ParquetReaderWrap<P>
+impl<P> ParquetReader for amadeus_core::file::Reader<P>
 where
 	P: Page,
 {
 	fn len(&self) -> u64 {
-		self.0.len()
+		self.len()
 	}
 }
 

@@ -1,42 +1,27 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.1.3")]
+#![feature(type_alias_impl_trait)]
 
 mod commoncrawl;
 mod parser;
 
 use flate2::read::MultiGzDecoder;
 use reqwest_resume::ClientExt;
-use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	io::{self, BufRead, BufReader}, iter, ops::FnMut, time
+	io::{self, BufRead, BufReader}, iter, time
 };
 
-use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IteratorExt
-};
+use amadeus_core::{dist_iter::DistributedIterator, into_dist_iter::IteratorExt, Source};
 use amadeus_types::Webpage;
 
 use commoncrawl::WarcParser;
 
-type Closure<Env, Args, Output> =
-	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
-
-type CommonCrawlInner = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<
-		iter::Map<
-			io::Lines<BufReader<MultiGzDecoder<reqwest_resume::Response>>>,
-			Closure<(), (Result<String, io::Error>,), String>,
-		>,
-	>,
-	Closure<(), (String,), WarcParser<MultiGzDecoder<reqwest_resume::Response>>>,
->;
-
+/// See https://commoncrawl.s3.amazonaws.com/crawl-data/index.html
+/// CC-MAIN-2018-43
 pub struct CommonCrawl {
-	i: CommonCrawlInner,
+	body: reqwest_resume::Response,
 }
 impl CommonCrawl {
-	/// See https://commoncrawl.s3.amazonaws.com/crawl-data/index.html
-	/// CC-MAIN-2018-43
 	pub fn new(id: &str) -> Result<Self, reqwest::Error> {
 		let url = format!(
 			"https://commoncrawl.s3.amazonaws.com/crawl-data/{}/warc.paths.gz",
@@ -49,9 +34,25 @@ impl CommonCrawl {
 			.resumable()
 			.get(url.parse().unwrap())
 			.send()?;
-		let body = MultiGzDecoder::new(body); // Content-Encoding isn't set, so decode manually
+		Ok(Self { body })
+	}
+}
 
-		let i = BufReader::new(body)
+impl Source for CommonCrawl {
+	type Item = Webpage<'static>;
+	type Error = io::Error;
+
+	#[cfg(not(feature = "doc"))]
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
+
+	#[allow(clippy::let_and_return)]
+	fn dist_iter(self) -> Self::DistIter {
+		let body = MultiGzDecoder::new(self.body); // Content-Encoding isn't set, so decode manually
+
+		let ret = BufReader::new(body)
 			.lines()
 			.map(FnMut!(|url: Result<String, io::Error>| -> String {
 				format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap())
@@ -69,31 +70,11 @@ impl CommonCrawl {
 				let body = MultiGzDecoder::new(body);
 				WarcParser::new(body)
 			}));
-		Ok(Self { i })
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
 	}
-}
-
-impl DistributedIterator for CommonCrawl {
-	type Item = Result<Webpage<'static>, io::Error>;
-	type Task = CommonCrawlConsumer;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.i.size_hint()
-	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| CommonCrawlConsumer { task })
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct CommonCrawlConsumer {
-	task: <CommonCrawlInner as DistributedIterator>::Task,
-}
-
-impl Consumer for CommonCrawlConsumer {
-	type Item = Result<Webpage<'static>, io::Error>;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		self.task.run(i)
+	fn iter(self) -> Self::Iter {
+		iter::empty()
 	}
 }

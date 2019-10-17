@@ -56,29 +56,29 @@ struct Jkl<M> {
 struct Mno {}
 
 macro_rules! list {
-    ( $( $e:expr ), * ) => {
-        {
-            #[allow(unused_mut)]
-            let mut result = Vec::new();
-            $(
-                result.push($e);
-            )*
-            List::from(result)
-        }
-    }
+	( $( $e:expr ), * ) => {
+		{
+			#[allow(unused_mut)]
+			let mut result = Vec::new();
+			$(
+				result.push($e);
+			)*
+			List::from(result)
+		}
+	}
 }
 
 macro_rules! map {
-    ( $( ($k:expr, $v:expr) ), * ) => {
-        {
-            #[allow(unused_mut)]
-            let mut result = HashMap::new();
-            $(
-                result.insert($k, $v);
-            )*
-            Map::from(result)
-        }
-    }
+	( $( ($k:expr, $v:expr) ), * ) => {
+		{
+			#[allow(unused_mut)]
+			let mut result = HashMap::new();
+			$(
+				result.insert($k, $v);
+			)*
+			Map::from(result)
+		}
+	}
 }
 
 #[test]
@@ -255,9 +255,9 @@ fn test_file_reader_rows_invalid_projection_derived() {
 	let res = test_file_reader_rows::<SparkSchema>("nested_maps.snappy.parquet", None);
 
 	assert_eq!(
-        res.unwrap_err(),
-        ParquetError::General("Types don't match schema.\nSchema is:\nmessage spark_schema {\n    OPTIONAL group a (MAP) {\n        REPEATED group key_value {\n            REQUIRED byte_array key (UTF8);\n            OPTIONAL group value (MAP) {\n                REPEATED group key_value {\n                    REQUIRED int32 key (INT_32);\n                    REQUIRED boolean value;\n                }\n            }\n        }\n    }\n    REQUIRED int32 b (INT_32);\n    REQUIRED double c;\n}\nBut types require:\nmessage <name> {\n    REQUIRED int32 key (INT_32);\n    REQUIRED boolean value;\n}\nError: Parquet error: Struct \"SparkSchema\" has field \"key\" not in the schema".to_string())
-    );
+		res.unwrap_err(),
+		ParquetError::General("Types don't match schema.\nSchema is:\nmessage spark_schema {\n    OPTIONAL group a (MAP) {\n        REPEATED group key_value {\n            REQUIRED byte_array key (UTF8);\n            OPTIONAL group value (MAP) {\n                REPEATED group key_value {\n                    REQUIRED int32 key (INT_32);\n                    REQUIRED boolean value;\n                }\n            }\n        }\n    }\n    REQUIRED int32 b (INT_32);\n    REQUIRED double c;\n}\nBut types require:\nmessage <name> {\n    REQUIRED int32 key (INT_32);\n    REQUIRED boolean value;\n}\nError: Parquet error: Struct \"SparkSchema\" has field \"key\" not in the schema".to_string())
+	);
 }
 
 #[test]
@@ -271,9 +271,9 @@ fn test_row_group_rows_invalid_projection_derived() {
 	let res = test_row_group_rows::<SparkSchema>("nested_maps.snappy.parquet", None);
 
 	assert_eq!(
-        res.unwrap_err(),
-        ParquetError::General("Types don't match schema.\nSchema is:\nmessage spark_schema {\n    OPTIONAL group a (MAP) {\n        REPEATED group key_value {\n            REQUIRED byte_array key (UTF8);\n            OPTIONAL group value (MAP) {\n                REPEATED group key_value {\n                    REQUIRED int32 key (INT_32);\n                    REQUIRED boolean value;\n                }\n            }\n        }\n    }\n    REQUIRED int32 b (INT_32);\n    REQUIRED double c;\n}\nBut types require:\nmessage <name> {\n    REQUIRED int32 key (INT_32);\n    REQUIRED boolean value;\n}\nError: Parquet error: Struct \"SparkSchema\" has field \"key\" not in the schema".to_string())
-    );
+		res.unwrap_err(),
+		ParquetError::General("Types don't match schema.\nSchema is:\nmessage spark_schema {\n    OPTIONAL group a (MAP) {\n        REPEATED group key_value {\n            REQUIRED byte_array key (UTF8);\n            OPTIONAL group value (MAP) {\n                REPEATED group key_value {\n                    REQUIRED int32 key (INT_32);\n                    REQUIRED boolean value;\n                }\n            }\n        }\n    }\n    REQUIRED int32 b (INT_32);\n    REQUIRED double c;\n}\nBut types require:\nmessage <name> {\n    REQUIRED int32 key (INT_32);\n    REQUIRED boolean value;\n}\nError: Parquet error: Struct \"SparkSchema\" has field \"key\" not in the schema".to_string())
+	);
 }
 
 fn test_file_reader_rows<T>(file_name: &str, schema: Option<()>) -> Result<Vec<T>, ParquetError>

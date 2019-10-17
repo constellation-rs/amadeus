@@ -344,11 +344,10 @@ impl<'a> PrimitiveTypeBuilder<'a> {
 
 						if self.precision > max_precision {
 							return Err(general_err!(
-                "Cannot represent FIXED_LEN_BYTE_ARRAY as DECIMAL with length {} and \
-                 precision {}",
-                self.length,
-                self.precision
-              ));
+								"Cannot represent FIXED_LEN_BYTE_ARRAY as DECIMAL with length {} and precision {}",
+								self.length,
+								self.precision
+							));
 						}
 					}
 					_ => (), // For BYTE_ARRAY precision is not limited
@@ -541,7 +540,7 @@ impl ColumnPath {
 	}
 
 	/// Returns string representation of this column path.
-	/// ```rust
+	/// ```ignore
 	/// use amadeus_parquet::internal;
 	/// use internal::schema::types::ColumnPath;
 	///

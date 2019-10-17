@@ -44,7 +44,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct BitcoinDerived {
-		date: Date,
+		date: DateWithoutTimezone,
 		#[amadeus(name = "txVolume(USD)")]
 		tx_volume_usd: Option<String>,
 		#[amadeus(name = "adjustedTxVolume(USD)")]

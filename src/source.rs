@@ -1,3 +1,5 @@
+use ::serde::{Deserialize, Serialize};
+
 #[cfg(feature = "aws")]
 #[doc(inline)]
 pub use amadeus_aws::Cloudfront;
@@ -77,9 +79,42 @@ where
 		<Self as amadeus_core::Source>::iter(self)
 	}
 }
+#[cfg(feature = "postgres")]
+impl<Row> Source for Postgres<Row>
+where
+	Row: super::data::Data,
+{
+	type Item = <Self as amadeus_core::Source>::Item;
+	type Error = <Self as amadeus_core::Source>::Error;
+
+	type DistIter = <Self as amadeus_core::Source>::DistIter;
+	type Iter = <Self as amadeus_core::Source>::Iter;
+
+	fn dist_iter(self) -> Self::DistIter {
+		<Self as amadeus_core::Source>::dist_iter(self)
+	}
+	fn iter(self) -> Self::Iter {
+		<Self as amadeus_core::Source>::iter(self)
+	}
+}
 #[cfg(feature = "aws")]
 impl Source for Cloudfront {
 	type Item = crate::data::CloudfrontRow;
+	type Error = <Self as amadeus_core::Source>::Error;
+
+	type DistIter = IntoIter<<Self as amadeus_core::Source>::DistIter, Self::Item>;
+	type Iter = IntoIter<<Self as amadeus_core::Source>::Iter, Self::Item>;
+
+	fn dist_iter(self) -> Self::DistIter {
+		IntoIter(<Self as amadeus_core::Source>::dist_iter(self), PhantomData)
+	}
+	fn iter(self) -> Self::Iter {
+		IntoIter(<Self as amadeus_core::Source>::iter(self), PhantomData)
+	}
+}
+#[cfg(feature = "commoncrawl")]
+impl Source for CommonCrawl {
+	type Item = amadeus_types::Webpage<'static>;
 	type Error = <Self as amadeus_core::Source>::Error;
 
 	type DistIter = IntoIter<<Self as amadeus_core::Source>::DistIter, Self::Item>;
@@ -114,8 +149,10 @@ where
 	}
 }
 #[derive(Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct IntoConsumer<I, U> {
 	task: I,
+	#[serde(skip)]
 	marker: PhantomData<fn() -> U>,
 }
 impl<I, T, E, U> amadeus_core::dist_iter::Consumer for IntoConsumer<I, U>

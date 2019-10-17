@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-types"
-version = "0.1.2"
+version = "0.1.3"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "date-and-time", "data-structures"]
@@ -10,7 +10,7 @@ Harmonious distributed data analysis in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.2"
+documentation = "https://docs.rs/amadeus/0.1.3"
 readme = "README.md"
 edition = "2018"
 
@@ -19,8 +19,10 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false, features = ["serde"] }
+chrono-tz = { version = "0.5", features = ["serde"] }
 fxhash = "0.2"
 linked-hash-map = "0.5"
+once_cell = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 url = { version = "2.1", features = ["serde"] }

@@ -73,19 +73,19 @@ impl From<ParquetError> for io::Error {
 // Convenient macros for different errors
 
 macro_rules! general_err {
-    ($fmt:expr) => (ParquetError::General($fmt.to_owned()));
-    ($fmt:expr, $($args:expr),*) => (ParquetError::General(format!($fmt, $($args),*)));
-    ($e:expr, $fmt:expr) => (ParquetError::General($fmt.to_owned(), $e));
-    ($e:ident, $fmt:expr, $($args:tt),*) => (
-        ParquetError::General(&format!($fmt, $($args),*), $e));
+	($fmt:expr) => (ParquetError::General($fmt.to_owned()));
+	($fmt:expr, $($args:expr),*) => (ParquetError::General(format!($fmt, $($args),*)));
+	($e:expr, $fmt:expr) => (ParquetError::General($fmt.to_owned(), $e));
+	($e:ident, $fmt:expr, $($args:tt),*) => (
+	    ParquetError::General(&format!($fmt, $($args),*), $e));
 }
 
 macro_rules! nyi_err {
-    ($fmt:expr) => (ParquetError::NYI($fmt.to_owned()));
-    ($fmt:expr, $($args:expr),*) => (ParquetError::NYI(format!($fmt, $($args),*)));
+	($fmt:expr) => (ParquetError::NYI($fmt.to_owned()));
+	($fmt:expr, $($args:expr),*) => (ParquetError::NYI(format!($fmt, $($args),*)));
 }
 
 macro_rules! eof_err {
-    ($fmt:expr) => (ParquetError::EOF($fmt.to_owned()));
-    ($fmt:expr, $($args:expr),*) => (ParquetError::EOF(format!($fmt, $($args),*)));
+	($fmt:expr) => (ParquetError::EOF($fmt.to_owned()));
+	($fmt:expr, $($args:expr),*) => (ParquetError::EOF(format!($fmt, $($args),*)));
 }

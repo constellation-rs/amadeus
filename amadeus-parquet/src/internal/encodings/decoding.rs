@@ -910,9 +910,14 @@ mod tests {
 	use super::{super::encoding::*, *};
 
 	use std::{mem, rc::Rc};
+	use test::Bencher;
 
 	use crate::internal::{
-		schema::types::{ColumnDescPtr, ColumnDescriptor, ColumnPath, Type as SchemaType}, util::{bit_util::set_array_bit, memory::MemTracker, test_common::RandGen}
+		schema::types::{ColumnDescPtr, ColumnDescriptor, ColumnPath, Type as SchemaType}, util::{
+			bit_util::set_array_bit, memory::MemTracker, test_common::{
+				benches::{col_desc, gen_1000, gen_test_strs}, RandGen
+			}
+		}
 	};
 
 	#[test]
@@ -1478,4 +1483,177 @@ mod tests {
 			v
 		}
 	}
+
+	// Benches
+
+	macro_rules! plain {
+		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $pty:expr, $gen_data_fn:expr) => {
+			#[bench]
+			fn $fname(bench: &mut Bencher) {
+				let mem_tracker = Rc::new(MemTracker::new());
+				let mut encoder =
+					PlainEncoder::<$ty>::new(Rc::new(col_desc(0, $pty)), mem_tracker, vec![]);
+
+				let (_, values) = $gen_data_fn($num_values);
+				encoder.put(&values[..]).expect("put() should be OK");
+				let buffer = encoder.flush_buffer().expect("flush_buffer() should be OK");
+
+				let decoder = PlainDecoder::<$ty>::new(0);
+				bench_decoding(bench, $num_values, $batch_size, buffer, Box::new(decoder));
+			}
+		};
+	}
+
+	macro_rules! dict {
+		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $pty:expr,
+	   $gen_data_fn:expr) => {
+			#[bench]
+			fn $fname(bench: &mut Bencher) {
+				let mem_tracker = Rc::new(MemTracker::new());
+				let mut encoder = DictEncoder::<$ty>::new(Rc::new(col_desc(0, $pty)), mem_tracker);
+
+				let (_, values) = $gen_data_fn($num_values);
+				encoder.put(&values[..]).expect("put() should be OK");
+				let mut dict_decoder = PlainDecoder::<$ty>::new(0);
+				dict_decoder
+					.set_data(
+						encoder.write_dict().expect("write_dict() should be OK"),
+						encoder.num_entries(),
+					)
+					.expect("set_data() should be OK");
+
+				let buffer = encoder.flush_buffer().expect("flush_buffer() should be OK");
+				let mut decoder = DictDecoder::<$ty>::new();
+				decoder
+					.set_dict(Box::new(dict_decoder))
+					.expect("set_dict() should be OK");
+
+				bench_decoding(bench, $num_values, $batch_size, buffer, Box::new(decoder));
+			}
+		};
+	}
+
+	macro_rules! delta_bit_pack {
+		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $gen_data_fn:expr) => {
+			#[bench]
+			fn $fname(bench: &mut Bencher) {
+				let mut encoder = DeltaBitPackEncoder::<$ty>::new();
+
+				let (_, values) = $gen_data_fn($num_values);
+				encoder.put(&values[..]).expect("put() should be OK");
+				let buffer = encoder.flush_buffer().expect("flush_buffer() should be OK");
+
+				let decoder = DeltaBitPackDecoder::<$ty>::new();
+				bench_decoding(bench, $num_values, $batch_size, buffer, Box::new(decoder));
+			}
+		};
+	}
+
+	fn bench_decoding<T: DataType>(
+		bench: &mut Bencher, num_values: usize, batch_size: usize, buffer: ByteBufferPtr,
+		mut decoder: Box<dyn Decoder<T>>,
+	) {
+		bench.bytes = buffer.len() as u64;
+		bench.iter(|| {
+			decoder
+				.set_data(buffer.clone(), num_values)
+				.expect("set_data() should be OK");
+			let mut values = vec![T::Type::default(); batch_size];
+			loop {
+				if decoder.get(&mut values[..]).expect("get() should be OK") < batch_size {
+					break;
+				}
+			}
+		})
+	}
+
+	plain!(plain_i32_1k_32, 1024, 32, Int32Type, Type::Int32, gen_1000);
+	plain!(plain_i32_1k_64, 1024, 64, Int32Type, Type::Int32, gen_1000);
+	plain!(
+		plain_i32_1k_128,
+		1024,
+		128,
+		Int32Type,
+		Type::Int32,
+		gen_1000
+	);
+	plain!(plain_i32_1m_32, 1024, 32, Int32Type, Type::Int32, gen_1000);
+	plain!(plain_i32_1m_64, 1024, 64, Int32Type, Type::Int32, gen_1000);
+	plain!(
+		plain_i32_1m_128,
+		1024,
+		128,
+		Int32Type,
+		Type::Int32,
+		gen_1000
+	);
+	plain!(
+		plain_str_1m_128,
+		1024,
+		128,
+		ByteArrayType,
+		Type::ByteArray,
+		gen_test_strs
+	);
+
+	dict!(dict_i32_1k_32, 1024, 32, Int32Type, Type::Int32, gen_1000);
+	dict!(dict_i32_1k_64, 1024, 64, Int32Type, Type::Int32, gen_1000);
+	dict!(dict_i32_1k_128, 1024, 128, Int32Type, Type::Int32, gen_1000);
+	dict!(
+		dict_i32_1m_32,
+		1024 * 1024,
+		32,
+		Int32Type,
+		Type::Int32,
+		gen_1000
+	);
+	dict!(
+		dict_i32_1m_64,
+		1024 * 1024,
+		64,
+		Int32Type,
+		Type::Int32,
+		gen_1000
+	);
+	dict!(
+		dict_i32_1m_128,
+		1024 * 1024,
+		128,
+		Int32Type,
+		Type::Int32,
+		gen_1000
+	);
+	dict!(
+		dict_str_1m_128,
+		1024 * 1024,
+		128,
+		ByteArrayType,
+		Type::ByteArray,
+		gen_test_strs
+	);
+
+	delta_bit_pack!(delta_bit_pack_i32_1k_32, 1024, 32, Int32Type, gen_1000);
+	delta_bit_pack!(delta_bit_pack_i32_1k_64, 1024, 64, Int32Type, gen_1000);
+	delta_bit_pack!(delta_bit_pack_i32_1k_128, 1024, 128, Int32Type, gen_1000);
+	delta_bit_pack!(
+		delta_bit_pack_i32_1m_32,
+		1024 * 1024,
+		32,
+		Int32Type,
+		gen_1000
+	);
+	delta_bit_pack!(
+		delta_bit_pack_i32_1m_64,
+		1024 * 1024,
+		64,
+		Int32Type,
+		gen_1000
+	);
+	delta_bit_pack!(
+		delta_bit_pack_i32_1m_128,
+		1024 * 1024,
+		128,
+		Int32Type,
+		gen_1000
+	);
 }

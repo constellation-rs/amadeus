@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-	Harmonious distributed data analysis in Rust
+	Harmonious distributed data processing & analysis in Rust
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-	<a href="https://docs.rs/amadeus/0.1.2">Docs</a>
+	<a href="https://docs.rs/amadeus/0.1.3">Docs</a>
 </p>
 
 

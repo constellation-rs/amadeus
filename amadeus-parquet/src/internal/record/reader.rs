@@ -30,15 +30,14 @@ use std::{
 };
 use sum::derive_sum;
 
-use super::{
-	triplet::TypedTripletIter, types::{
-		Bson, Date, Enum, Group, Json, List, Map, Root, Time, Timestamp, Value, ValueRequired
-	}, Predicate, Reader, Record
-};
+use super::{triplet::TypedTripletIter, types::Root, ParquetData, Predicate, Reader};
 use crate::internal::{
 	column::reader::ColumnReader, data_type::{
-		BoolType, ByteArrayType, Decimal, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
+		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
 	}, errors::{ParquetError, Result}, file::reader::{FileReader, RowGroupReader}, schema::types::{ColumnPath, SchemaDescPtr, SchemaDescriptor, Type}
+};
+use amadeus_types::{
+	Bson, Date, DateTime, Decimal, Enum, Group, Json, List, Map, Time, Value, ValueRequired
 };
 
 /// Default batch size for a reader
@@ -50,60 +49,60 @@ const DEFAULT_BATCH_SIZE: usize = 1024;
 // than creating several new enums and implementing `Reader` on each.
 
 derive_sum!(impl Reader for Sum {
-    type Item;
+	type Item;
 
-    mut fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item>;
-    mut fn advance_columns(&mut self) -> Result<()>;
-    fn has_next(&self) -> bool;
-    fn current_def_level(&self) -> i16;
-    fn current_rep_level(&self) -> i16;
+	mut fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item>;
+	mut fn advance_columns(&mut self) -> Result<()>;
+	fn has_next(&self) -> bool;
+	fn current_def_level(&self) -> i16;
+	fn current_rep_level(&self) -> i16;
 });
 
 // ----------------------------------------------------------------------
 // Readers that simply wrap `TypedTripletIter<DataType>`s
 
 macro_rules! reader_passthrough {
-    ($inner:tt) => (
-        #[inline]
-        fn advance_columns(&mut self) -> Result<()> {
-            self.$inner.advance_columns()
-        }
+	($inner:tt) => (
+		#[inline]
+		fn advance_columns(&mut self) -> Result<()> {
+			self.$inner.advance_columns()
+		}
 
-        #[inline]
-        fn has_next(&self) -> bool {
-            self.$inner.has_next()
-        }
+		#[inline]
+		fn has_next(&self) -> bool {
+			self.$inner.has_next()
+		}
 
-        #[inline]
-        fn current_def_level(&self) -> i16 {
-            self.$inner.current_def_level()
-        }
+		#[inline]
+		fn current_def_level(&self) -> i16 {
+			self.$inner.current_def_level()
+		}
 
-        #[inline]
-        fn current_rep_level(&self) -> i16 {
-            self.$inner.current_rep_level()
-        }
-    )
+		#[inline]
+		fn current_rep_level(&self) -> i16 {
+			self.$inner.current_rep_level()
+		}
+	)
 }
 
 macro_rules! triplet_readers {
-    ( $( $reader:ident ( $triplet:ty ) -> $item:ident ,)* ) => {
-        $(
-        pub struct $reader {
-            pub(super) column: $triplet,
-        }
-        impl Reader for $reader {
-            type Item = $item;
+	( $( $reader:ident ( $triplet:ty ) -> $item:ident ,)* ) => {
+		$(
+		pub struct $reader {
+			pub(super) column: $triplet,
+		}
+		impl Reader for $reader {
+			type Item = $item;
 
-            #[inline]
-            fn read(&mut self, _def_level: i16, _rep_level: i16) -> Result<Self::Item> {
-                self.column.read()
-            }
+			#[inline]
+			fn read(&mut self, _def_level: i16, _rep_level: i16) -> Result<Self::Item> {
+				self.column.read()
+			}
 
-            reader_passthrough!(column);
-        }
-        )*
-    };
+			reader_passthrough!(column);
+		}
+		)*
+	};
 }
 
 triplet_readers!(
@@ -123,10 +122,7 @@ impl Reader for ByteArrayReader {
 
 	#[inline]
 	fn read(&mut self, _def_level: i16, _rep_level: i16) -> Result<Self::Item> {
-		self.column.read().map(|data| {
-			data.try_unwrap()
-				.unwrap_or_else(|data| data.data().to_owned())
-		})
+		self.column.read().map(|data| data.into())
 	}
 
 	reader_passthrough!(column);
@@ -169,9 +165,7 @@ impl<T> Reader for BoxFixedLenByteArrayReader<T> {
 	#[inline]
 	fn read(&mut self, _def_level: i16, _rep_level: i16) -> Result<Self::Item> {
 		self.column.read().map(|data| {
-			let data = data
-				.try_unwrap()
-				.unwrap_or_else(|data| data.data().to_owned());
+			let data: Vec<u8> = data.into();
 			assert_eq!(data.len(), mem::size_of::<T>());
 			unsafe { Box::from_raw(Box::into_raw(data.into_boxed_slice()) as *mut T) }
 		})
@@ -309,7 +303,7 @@ impl Reader for GroupReader {
 		for reader in self.readers.iter_mut() {
 			fields.push(reader.read(def_level, rep_level)?);
 		}
-		Ok(Group(fields, self.fields.clone()))
+		Ok(Group::new(fields, Some(self.fields.clone())))
 	}
 
 	fn advance_columns(&mut self) -> Result<()> {
@@ -344,30 +338,30 @@ impl Reader for GroupReader {
 /// A Reader that can read any valid Parquet type into the [`Value`] enum. This is how
 /// "untyped readers" can be built atop "typed readers".
 pub enum ValueReader {
-	Bool(<bool as Record>::Reader),
-	U8(<u8 as Record>::Reader),
-	I8(<i8 as Record>::Reader),
-	U16(<u16 as Record>::Reader),
-	I16(<i16 as Record>::Reader),
-	U32(<u32 as Record>::Reader),
-	I32(<i32 as Record>::Reader),
-	U64(<u64 as Record>::Reader),
-	I64(<i64 as Record>::Reader),
-	F32(<f32 as Record>::Reader),
-	F64(<f64 as Record>::Reader),
-	Date(<Date as Record>::Reader),
-	Time(<Time as Record>::Reader),
-	Timestamp(<Timestamp as Record>::Reader),
-	Decimal(<Decimal as Record>::Reader),
-	ByteArray(<Vec<u8> as Record>::Reader),
-	Bson(<Bson as Record>::Reader),
-	String(<String as Record>::Reader),
-	Json(<Json as Record>::Reader),
-	Enum(<Enum as Record>::Reader),
-	List(Box<<List<Value> as Record>::Reader>),
-	Map(Box<<Map<Value, Value> as Record>::Reader>),
-	Group(<Group as Record>::Reader),
-	Option(Box<<Option<Value> as Record>::Reader>),
+	Bool(<bool as ParquetData>::Reader),
+	U8(<u8 as ParquetData>::Reader),
+	I8(<i8 as ParquetData>::Reader),
+	U16(<u16 as ParquetData>::Reader),
+	I16(<i16 as ParquetData>::Reader),
+	U32(<u32 as ParquetData>::Reader),
+	I32(<i32 as ParquetData>::Reader),
+	U64(<u64 as ParquetData>::Reader),
+	I64(<i64 as ParquetData>::Reader),
+	F32(<f32 as ParquetData>::Reader),
+	F64(<f64 as ParquetData>::Reader),
+	Date(<Date as ParquetData>::Reader),
+	Time(<Time as ParquetData>::Reader),
+	DateTime(<DateTime as ParquetData>::Reader),
+	Decimal(<Decimal as ParquetData>::Reader),
+	ByteArray(<Vec<u8> as ParquetData>::Reader),
+	Bson(<Bson as ParquetData>::Reader),
+	String(<String as ParquetData>::Reader),
+	Json(<Json as ParquetData>::Reader),
+	Enum(<Enum as ParquetData>::Reader),
+	List(Box<<List<Value> as ParquetData>::Reader>),
+	Map(Box<<Map<Value, Value> as ParquetData>::Reader>),
+	Group(<Group as ParquetData>::Reader),
+	Option(Box<<Option<Value> as ParquetData>::Reader>),
 }
 impl Reader for ValueReader {
 	type Item = Value;
@@ -387,8 +381,8 @@ impl Reader for ValueReader {
 			ValueReader::F64(ref mut reader) => reader.read(def_level, rep_level).map(Value::F64),
 			ValueReader::Date(ref mut reader) => reader.read(def_level, rep_level).map(Value::Date),
 			ValueReader::Time(ref mut reader) => reader.read(def_level, rep_level).map(Value::Time),
-			ValueReader::Timestamp(ref mut reader) => {
-				reader.read(def_level, rep_level).map(Value::Timestamp)
+			ValueReader::DateTime(ref mut reader) => {
+				reader.read(def_level, rep_level).map(Value::DateTime)
 			}
 			ValueReader::Decimal(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::Decimal)
@@ -428,7 +422,7 @@ impl Reader for ValueReader {
 			ValueReader::F64(ref mut reader) => reader.advance_columns(),
 			ValueReader::Date(ref mut reader) => reader.advance_columns(),
 			ValueReader::Time(ref mut reader) => reader.advance_columns(),
-			ValueReader::Timestamp(ref mut reader) => reader.advance_columns(),
+			ValueReader::DateTime(ref mut reader) => reader.advance_columns(),
 			ValueReader::Decimal(ref mut reader) => reader.advance_columns(),
 			ValueReader::ByteArray(ref mut reader) => reader.advance_columns(),
 			ValueReader::Bson(ref mut reader) => reader.advance_columns(),
@@ -457,7 +451,7 @@ impl Reader for ValueReader {
 			ValueReader::F64(ref reader) => reader.has_next(),
 			ValueReader::Date(ref reader) => reader.has_next(),
 			ValueReader::Time(ref reader) => reader.has_next(),
-			ValueReader::Timestamp(ref reader) => reader.has_next(),
+			ValueReader::DateTime(ref reader) => reader.has_next(),
 			ValueReader::Decimal(ref reader) => reader.has_next(),
 			ValueReader::ByteArray(ref reader) => reader.has_next(),
 			ValueReader::Bson(ref reader) => reader.has_next(),
@@ -486,7 +480,7 @@ impl Reader for ValueReader {
 			ValueReader::F64(ref reader) => reader.current_def_level(),
 			ValueReader::Date(ref reader) => reader.current_def_level(),
 			ValueReader::Time(ref reader) => reader.current_def_level(),
-			ValueReader::Timestamp(ref reader) => reader.current_def_level(),
+			ValueReader::DateTime(ref reader) => reader.current_def_level(),
 			ValueReader::Decimal(ref reader) => reader.current_def_level(),
 			ValueReader::ByteArray(ref reader) => reader.current_def_level(),
 			ValueReader::Bson(ref reader) => reader.current_def_level(),
@@ -515,7 +509,7 @@ impl Reader for ValueReader {
 			ValueReader::F64(ref reader) => reader.current_rep_level(),
 			ValueReader::Date(ref reader) => reader.current_rep_level(),
 			ValueReader::Time(ref reader) => reader.current_rep_level(),
-			ValueReader::Timestamp(ref reader) => reader.current_rep_level(),
+			ValueReader::DateTime(ref reader) => reader.current_rep_level(),
 			ValueReader::Decimal(ref reader) => reader.current_rep_level(),
 			ValueReader::ByteArray(ref reader) => reader.current_rep_level(),
 			ValueReader::Bson(ref reader) => reader.current_rep_level(),
@@ -682,9 +676,9 @@ where
 pub struct RowIter<R, T>
 where
 	R: FileReader,
-	T: Record,
+	T: ParquetData,
 {
-	schema: <Root<T> as Record>::Schema,
+	schema: <Root<T> as ParquetData>::Schema,
 	file_reader: Option<R>,
 	current_row_group: usize,
 	num_row_groups: usize,
@@ -694,12 +688,12 @@ where
 impl<R, T> RowIter<R, T>
 where
 	R: FileReader,
-	T: Record,
+	T: ParquetData,
 {
 	/// Creates a new iterator of [`Row`](crate::internal::record::api::Row)s.
 	fn new(
 		file_reader: Option<R>, row_iter: Option<ReaderIter<T>>,
-		schema: <Root<T> as Record>::Schema,
+		schema: <Root<T> as ParquetData>::Schema,
 	) -> Self {
 		let num_row_groups = match file_reader {
 			Some(ref r) => r.num_row_groups(),
@@ -719,7 +713,7 @@ where
 	pub fn from_file(_proj: Option<Predicate>, reader: R) -> Result<Self> {
 		let file_schema = reader.metadata().file_metadata().schema_descr_ptr();
 		let file_schema = file_schema.root_schema();
-		let schema = <Root<T> as Record>::parse(file_schema, None)?.1;
+		let schema = <Root<T> as ParquetData>::parse(file_schema, None)?.1;
 
 		Ok(Self::new(Some(reader), None, schema))
 	}
@@ -730,7 +724,7 @@ where
 	) -> Result<Self> {
 		let file_schema = row_group_reader.metadata().schema_descr_ptr();
 		let file_schema = file_schema.root_schema();
-		let schema = <Root<T> as Record>::parse(file_schema, None)?.1;
+		let schema = <Root<T> as ParquetData>::parse(file_schema, None)?.1;
 
 		let row_iter = Self::get_reader_iter(&schema, row_group_reader)?;
 
@@ -746,7 +740,7 @@ where
 	}
 
 	fn get_reader_iter(
-		schema: &<Root<T> as Record>::Schema, row_group_reader: &dyn RowGroupReader,
+		schema: &<Root<T> as ParquetData>::Schema, row_group_reader: &dyn RowGroupReader,
 	) -> Result<ReaderIter<T>> {
 		// Prepare lookup table of column path -> original column index
 		// This allows to prune columns and map schema leaf nodes to the column readers
@@ -778,7 +772,7 @@ where
 	//         .schema_descr_ptr();
 
 	//     let schema = descr.root_schema();
-	//     let schema = <Root<T> as Record>::parse(schema, None)?.1;
+	//     let schema = <Root<T> as ParquetData>::parse(schema, None)?.1;
 
 	//     Ok(RowIter::new(Some(reader), None, schema))
 	// }
@@ -795,7 +789,7 @@ where
 				let descr = Self::get_proj_descr(proj, schema)?;
 
 				let schema = descr.root_schema();
-				let schema = <Root<T> as Record>::parse(schema, None)?.1;
+				let schema = <Root<T> as ParquetData>::parse(schema, None)?.1;
 
 				Ok(Self::new(self.file_reader, None, schema))
 			}
@@ -824,7 +818,7 @@ where
 impl<R, T> Iterator for RowIter<R, T>
 where
 	R: FileReader,
-	T: Record,
+	T: ParquetData,
 {
 	type Item = Result<T>;
 
@@ -862,18 +856,18 @@ where
 /// Internal row iterator for a reader.
 struct ReaderIter<T>
 where
-	T: Record,
+	T: ParquetData,
 {
-	root_reader: <Root<T> as Record>::Reader,
+	root_reader: <Root<T> as ParquetData>::Reader,
 	records_left: u64,
 	marker: PhantomData<fn() -> T>,
 }
 
 impl<T> ReaderIter<T>
 where
-	T: Record,
+	T: ParquetData,
 {
-	fn new(mut root_reader: <Root<T> as Record>::Reader, num_records: u64) -> Result<Self> {
+	fn new(mut root_reader: <Root<T> as ParquetData>::Reader, num_records: u64) -> Result<Self> {
 		// Prepare root reader by advancing all column vectors
 		root_reader.advance_columns()?;
 		Ok(Self {
@@ -886,7 +880,7 @@ where
 
 impl<T> Iterator for ReaderIter<T>
 where
-	T: Record,
+	T: ParquetData,
 {
 	type Item = Result<T>;
 
@@ -908,74 +902,75 @@ mod tests {
 	use std::{collections::HashMap, sync::Arc};
 
 	use crate::internal::{
-		errors::Result, file::reader::{FileReader, SerializedFileReader}, record::types::{Row, Value}, util::test_common::get_test_file
+		errors::Result, file::reader::{FileReader, SerializedFileReader}, util::test_common::get_test_file
 	};
+	use amadeus_types::{Group, Value};
 
 	// Convenient macros to assemble row, list, map, and group.
 
 	macro_rules! group {
-        ( $( ($name:expr, $e:expr) ), * ) => {
-            {
-                #[allow(unused_mut)]
-                let mut result = Vec::new();
-                #[allow(unused_mut)]
-                let mut keys = LinkedHashMap::default();
-                $(
-                    let res = keys.insert($name, result.len());
-                    assert!(res.is_none());
-                    result.push($e);
-                )*
-                Group(result, Arc::new(keys))
-            }
-        }
-    }
+		( $( ($name:expr, $e:expr) ), * ) => {
+			{
+				#[allow(unused_mut)]
+				let mut result = Vec::new();
+				#[allow(unused_mut)]
+				let mut keys = LinkedHashMap::default();
+				$(
+					let res = keys.insert($name, result.len());
+					assert!(res.is_none());
+					result.push($e);
+				)*
+				Group::new(result, Some(Arc::new(keys)))
+			}
+		}
+	}
 	macro_rules! groupv {
-        ( $( ($name:expr, $e:expr) ), * ) => {
-            Value::Group(group!($( ($name, $e) ), *))
-        }
-    }
+		( $( ($name:expr, $e:expr) ), * ) => {
+			Value::Group(group!($( ($name, $e) ), *))
+		}
+	}
 	macro_rules! row {
-        ( $( ($name:expr, $e:expr) ), * ) => {
-            group!($(($name,$e)),*)
-        }
-    }
+		( $( ($name:expr, $e:expr) ), * ) => {
+			group!($(($name,$e)),*)
+		}
+	}
 
 	macro_rules! list {
-        ( $( $e:expr ), * ) => {
-            {
-                #[allow(unused_mut)]
-                let mut result = Vec::new();
-                $(
-                    result.push($e);
-                )*
-                List(result)
-            }
-        }
-    }
+		( $( $e:expr ), * ) => {
+			{
+				#[allow(unused_mut)]
+				let mut result = Vec::new();
+				$(
+					result.push($e);
+				)*
+				List::from(result)
+			}
+		}
+	}
 	macro_rules! listv {
-        ( $( $e:expr ), * ) => {
-            Value::List(list!($($e),*))
-        }
-    }
+		( $( $e:expr ), * ) => {
+			Value::List(list!($($e),*))
+		}
+	}
 
 	macro_rules! map {
-        ( $( ($k:expr, $v:expr) ), * ) => {
-            {
-                #[allow(unused_mut)]
-                let mut result = HashMap::new();
-                $(
-                    let res = result.insert($k, $v);
-                    assert!(res.is_none());
-                )*
-                Map(result)
-            }
-        }
-    }
+		( $( ($k:expr, $v:expr) ), * ) => {
+			{
+				#[allow(unused_mut)]
+				let mut result = HashMap::new();
+				$(
+					let res = result.insert($k, $v);
+					assert!(res.is_none());
+				)*
+				Map::from(result)
+			}
+		}
+	}
 	macro_rules! mapv {
-        ( $( ($k:expr, $v:expr) ), * ) => {
-            Value::Map(map!($(($k,$v)),*))
-        }
-    }
+		( $( ($k:expr, $v:expr) ), * ) => {
+			Value::Map(map!($(($k,$v)),*))
+		}
+	}
 
 	macro_rules! somev {
 		( $e:expr ) => {
@@ -990,7 +985,7 @@ mod tests {
 
 	#[test]
 	fn test_file_reader_rows_nulls() {
-		let rows = test_file_reader_rows::<Row>("nulls.snappy.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("nulls.snappy.parquet", None).unwrap();
 
 		let expected_rows = vec![
 			row![(
@@ -1052,7 +1047,7 @@ mod tests {
 
 	#[test]
 	fn test_file_reader_rows_nonnullable() {
-		let rows = test_file_reader_rows::<Row>("nonnullable.impala.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("nonnullable.impala.parquet", None).unwrap();
 
 		let expected_rows = vec![row![
 			("ID".to_string(), Value::I64(8)),
@@ -1134,7 +1129,7 @@ mod tests {
 
 	#[test]
 	fn test_file_reader_rows_nullable() {
-		let rows = test_file_reader_rows::<Row>("nullable.impala.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("nullable.impala.parquet", None).unwrap();
 
 		let expected_rows = vec![
 			row![
@@ -1641,7 +1636,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let rows =
-	//         test_file_reader_rows::<Row>("nested_maps.snappy.parquet", Some(schema))
+	//         test_file_reader_rows::<Group>("nested_maps.snappy.parquet", Some(schema))
 	//             .unwrap();
 	//     let expected_rows = vec![
 	//         row![
@@ -1691,7 +1686,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let rows =
-	//         test_file_reader_rows::<Row>("nested_maps.snappy.parquet", Some(schema))
+	//         test_file_reader_rows::<Group>("nested_maps.snappy.parquet", Some(schema))
 	//             .unwrap();
 	//     let expected_rows = vec![
 	//         row![(
@@ -1762,7 +1757,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let rows =
-	//         test_file_reader_rows::<Row>("nested_lists.snappy.parquet", Some(schema))
+	//         test_file_reader_rows::<Group>("nested_lists.snappy.parquet", Some(schema))
 	//             .unwrap();
 	//     let expected_rows = vec![
 	//         row![(
@@ -1825,7 +1820,7 @@ mod tests {
 	// ";
 	//     let schema = parse_message_type(&schema).unwrap();
 	//     let res =
-	//         test_file_reader_rows::<Row>("nested_maps.snappy.parquet", Some(schema));
+	//         test_file_reader_rows::<Group>("nested_maps.snappy.parquet", Some(schema));
 	//     assert!(res.is_err());
 	//     assert_eq!(
 	//         res.unwrap_err(),
@@ -1912,7 +1907,7 @@ mod tests {
 
 		// Array field `phoneNumbers` does not contain LIST annotation.
 		// We parse it as struct with `phone` repeated field as array.
-		let rows = test_file_reader_rows::<Row>("repeated_no_annotation.parquet", None).unwrap();
+		let rows = test_file_reader_rows::<Group>("repeated_no_annotation.parquet", None).unwrap();
 		let rows_typed =
 			test_file_reader_rows::<RepeatedNoAnnotation>("repeated_no_annotation.parquet", None)
 				.unwrap();
@@ -1999,7 +1994,7 @@ mod tests {
 
 	fn test_file_reader_rows<T>(file_name: &str, schema: Option<Predicate>) -> Result<Vec<T>>
 	where
-		T: Record,
+		T: ParquetData,
 	{
 		let file = get_test_file(file_name);
 		let file_reader: SerializedFileReader<_> = SerializedFileReader::new(file)?;
@@ -2009,7 +2004,7 @@ mod tests {
 
 	fn test_row_group_rows<T>(file_name: &str, schema: Option<Predicate>) -> Result<Vec<T>>
 	where
-		T: Record,
+		T: ParquetData,
 	{
 		let file = get_test_file(file_name);
 		let file_reader: SerializedFileReader<_> = SerializedFileReader::new(file)?;

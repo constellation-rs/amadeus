@@ -31,7 +31,7 @@ use thrift::protocol::TCompactInputProtocol;
 use crate::internal::{
 	basic::{ColumnOrder, Compression, Encoding, Type}, column::{
 		page::{Page, PageReader}, reader::{ColumnReader, ColumnReaderImpl}
-	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, record::{Predicate, Record, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
+	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, record::{ParquetData, Predicate, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
 		io::{BufReader, FileSource}, memory::ByteBufferPtr
 	}
 };
@@ -65,7 +65,7 @@ pub trait FileReader {
 	/// full file schema is assumed.
 	fn get_row_iter<T>(self, projection: Option<Predicate>) -> Result<RowIter<Self, T>>
 	where
-		T: Record,
+		T: ParquetData,
 		Self: Sized,
 	{
 		RowIter::from_file(projection, self)
@@ -137,7 +137,7 @@ pub trait RowGroupReader {
 		&self, projection: Option<Predicate>,
 	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
-		T: Record,
+		T: ParquetData,
 		Self: Sized;
 }
 
@@ -440,7 +440,7 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
 		&self, projection: Option<Predicate>,
 	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
-		T: Record,
+		T: ParquetData,
 		Self: Sized,
 	{
 		RowIter::from_row_group(projection, self)
@@ -667,12 +667,15 @@ impl<T: Read> PageReader for SerializedPageReader<T> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-
 	use parquet_format::TypeDefinedOrder;
+	use std::collections::HashMap;
+	use test::Bencher;
 
+	use amadeus_types::{DateTime, Group};
+
+	use super::*;
 	use crate::internal::{
-		basic::SortOrder, schema::types::Type as SchemaType, util::test_common::{get_temp_file, get_test_file, get_test_path}
+		basic::SortOrder, column::reader::{get_typed_column_reader, ColumnReader}, data_type::*, file::reader::{FileReader, RowGroupReader, SerializedFileReader}, schema::types::{ColumnPath, Type as SchemaType}, util::test_common::{get_temp_file, get_test_file, get_test_path}
 	};
 
 	#[test]
@@ -686,7 +689,7 @@ mod tests {
 		);
 	}
 
-	// use crate::internal::record::types::Row;
+	// use crate::internal::record::types::Group;
 	// #[test]
 	// fn test_cursor_and_file_has_the_same_behaviour() {
 	//     let path = get_test_path("alltypes_plain.parquet");
@@ -697,8 +700,8 @@ mod tests {
 	//     let read_from_file = SerializedFileReader::new(test_file).unwrap();
 	//     let read_from_cursor = SerializedFileReader::new(cursor).unwrap();
 
-	//     let file_iter = read_from_file.get_row_iter::<Row>(None).unwrap();
-	//     let cursor_iter = read_from_cursor.get_row_iter::<Row>(None).unwrap();
+	//     let file_iter = read_from_file.get_row_iter::<Group>(None).unwrap();
+	//     let cursor_iter = read_from_cursor.get_row_iter::<Group>(None).unwrap();
 
 	//     assert!(file_iter.eq(cursor_iter));
 	// }
@@ -1095,4 +1098,174 @@ mod tests {
 	//     let page = page_iterator.next();
 	//     assert!(page.is_none());
 	// }
+
+	// Benches
+
+	#[bench]
+	fn record_reader_10k(bench: &mut Bencher) {
+		let file = get_test_file("10k-v2.parquet");
+		let len = file.metadata().unwrap().len();
+		let parquet_reader = SerializedFileReader::new(file).unwrap();
+
+		bench.bytes = len;
+		bench.iter(move || {
+			(&parquet_reader)
+				.get_row_iter::<Group>(None)
+				.unwrap()
+				.for_each(drop);
+		})
+	}
+
+	#[bench]
+	fn record_reader_10k_typed(bench: &mut Bencher) {
+		let file = get_test_file("10k-v2.parquet");
+		let len = file.metadata().unwrap().len();
+		let parquet_reader = SerializedFileReader::new(file).unwrap();
+
+		bench.bytes = len;
+		bench.iter(|| {
+			type RowTyped = (Vec<u8>, i32, i64, bool, f32, f64, Vec<u8>, DateTime); // [u8; 1024]
+			(&parquet_reader)
+				.get_row_iter::<RowTyped>(None)
+				.unwrap()
+				.for_each(drop);
+		})
+	}
+
+	#[bench]
+	fn record_reader_stock_simulated(bench: &mut Bencher) {
+		let file = get_test_file("stock_simulated.parquet");
+		let len = file.metadata().unwrap().len();
+		let parquet_reader = SerializedFileReader::new(file).unwrap();
+
+		bench.bytes = len;
+		bench.iter(|| {
+			(&parquet_reader)
+				.get_row_iter::<Group>(None)
+				.unwrap()
+				.for_each(drop);
+		})
+	}
+
+	#[bench]
+	#[ignore]
+	fn record_reader_stock_simulated_typed(bench: &mut Bencher) {
+		let file = get_test_file("stock_simulated.parquet");
+		let len = file.metadata().unwrap().len();
+		let parquet_reader = SerializedFileReader::new(file).unwrap();
+
+		bench.bytes = len;
+		bench.iter(|| {
+			type RowTyped = (
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				Option<f64>,
+				// Option<f64>, // commented out as ParquetData not implemented for tuples len > 12
+				// Option<f64>,
+				// Option<f64>,
+				// Option<f64>,
+				// Option<f64>,
+				// Option<f64>,
+				// Option<f64>,
+				// Option<f64>,
+				// Option<f64>,
+				// Option<i64>,
+			);
+			(&parquet_reader)
+				.get_row_iter::<RowTyped>(None)
+				.unwrap()
+				.for_each(drop);
+		})
+	}
+
+	#[bench]
+	fn record_reader_stock_simulated_column(bench: &mut Bencher) {
+		// WARNING THIS BENCH IS INTENDED FOR THIS DATA FILE ONLY
+		// COPY OR CHANGE THE DATA FILE MAY NOT WORK AS YOU WISH
+		let file = get_test_file("stock_simulated.parquet");
+		let len = file.metadata().unwrap().len();
+		let parquet_reader = SerializedFileReader::new(file).unwrap();
+
+		let descr = parquet_reader.metadata().file_metadata().schema_descr_ptr();
+		let num_row_groups = parquet_reader.num_row_groups();
+		let batch_size = 256;
+
+		bench.bytes = len;
+		bench.iter(|| {
+			let mut current_row_group = 0;
+
+			while current_row_group < num_row_groups {
+				let row_group_reader = parquet_reader.get_row_group(current_row_group).unwrap();
+				let num_rows = row_group_reader.metadata().num_rows() as usize;
+
+				let mut paths = HashMap::new();
+				let row_group_metadata = row_group_reader.metadata();
+
+				for col_index in 0..row_group_reader.num_columns() {
+					let col_meta = row_group_metadata.column(col_index);
+					let col_path = col_meta.column_path().clone();
+					let _ = paths.insert(col_path, col_index);
+				}
+
+				let mut readers = Vec::new();
+				for field in descr.root_schema().get_fields() {
+					let col_path = ColumnPath::new(vec![field.name().to_owned()]);
+					let orig_index = *paths.get(&col_path).unwrap();
+					let col_reader = row_group_reader.get_column_reader(orig_index).unwrap();
+					readers.push(col_reader);
+				}
+
+				let mut def_levels = Some(vec![0; batch_size]);
+				let mut rep_levels = None::<Vec<i16>>;
+
+				for col_reader in readers.into_iter() {
+					match col_reader {
+						r @ ColumnReader::Int64ColumnReader(..) => {
+							let mut data_collected = Vec::with_capacity(num_rows);
+							let mut val = vec![0; batch_size];
+							let mut typed_reader = get_typed_column_reader::<Int64Type>(r);
+							while let Ok((values_read, _levels_read)) = typed_reader.read_batch(
+								batch_size,
+								def_levels.as_mut().map(|x| &mut x[..]),
+								rep_levels.as_mut().map(|x| &mut x[..]),
+								&mut val,
+							) {
+								data_collected.extend_from_slice(&val);
+								if values_read < batch_size {
+									break;
+								}
+							}
+						}
+						r @ ColumnReader::DoubleColumnReader(..) => {
+							let mut data_collected = Vec::with_capacity(num_rows);
+							let mut val = vec![0.0; batch_size];
+							let mut typed_reader = get_typed_column_reader::<DoubleType>(r);
+							while let Ok((values_read, _levels_read)) = typed_reader.read_batch(
+								batch_size,
+								def_levels.as_mut().map(|x| &mut x[..]),
+								rep_levels.as_mut().map(|x| &mut x[..]),
+								&mut val,
+							) {
+								data_collected.extend_from_slice(&val);
+								if values_read < batch_size {
+									break;
+								}
+							}
+						}
+						_ => unimplemented!(),
+					}
+				}
+				current_row_group += 1;
+			}
+		})
+	}
 }

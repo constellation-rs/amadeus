@@ -1,33 +1,16 @@
-// Licensed to the Apache Software Foundation (ASF) under one
-// or more contributor license agreements.  See the NOTICE file
-// distributed with this work for additional information
-// regarding copyright ownership.  The ASF licenses this file
-// to you under the Apache License, Version 2.0 (the
-// "License"); you may not use this file except in compliance
-// with the License.  You may obtain a copy of the License at
-//
-//   http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing,
-// software distributed under the License is distributed on an
-// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied.  See the License for the
-// specific language governing permissions and limitations
-// under the License.
-
 //! Contains record-based API for reading Parquet files.
 //!
 //! Example usage of reading data untyped:
 //!
-//! ```no_run
+//! ```ignore
 //! use std::fs::File;
 //! use std::path::Path;
 //! use amadeus_parquet::internal::file::reader::{FileReader, SerializedFileReader};
-//! use amadeus_parquet::internal::record::types::Row;
+//! use amadeus_types::Group;
 //!
 //! let file = File::open(&Path::new("/path/to/file")).unwrap();
 //! let reader = SerializedFileReader::new(file).unwrap();
-//! let iter = reader.get_row_iter::<Row>(None).unwrap();
+//! let iter = reader.get_row_iter::<Group>(None).unwrap();
 //! for record in iter.map(Result::unwrap) {
 //!     println!("{:?}", record);
 //! }
@@ -39,7 +22,7 @@
 //! use std::fs::File;
 //! use std::path::Path;
 //! use amadeus_parquet::internal::file::reader::{FileReader, SerializedFileReader};
-//! use amadeus_parquet::internal::record::{Record, types::Timestamp};
+//! use amadeus_parquet::internal::record::{ParquetData, types::Timestamp};
 //!
 //! #[derive(Data, Debug)]
 //! struct MyRow {
@@ -57,6 +40,7 @@
 //! ```
 
 mod display;
+mod impls;
 mod reader;
 mod schemas;
 mod triplet;
@@ -70,13 +54,11 @@ use crate::internal::{
 	basic::Repetition, column::reader::ColumnReader, errors::Result, schema::types::{ColumnPath, Type}
 };
 
+/// This is used by `#[derive(Data)]`
+pub use display::DisplaySchemaGroup;
 pub use reader::RowIter;
 pub use schemas::RootSchema;
-#[doc(hidden)]
-pub mod _private {
-	/// This is used by `#[derive(Data)]`
-	pub use super::display::DisplaySchemaGroup;
-}
+
 mod predicate {
 	/// This is for forward compatibility when Predicate pushdown and dynamic schemas are
 	/// implemented.
@@ -134,15 +116,15 @@ pub(crate) use self::predicate::Predicate;
 /// above correspondance.
 ///
 /// The implementation for tuples is only for those up to length 32. The implementation
-/// for arrays is only for common array lengths. See [`Record`] for more details.
+/// for arrays is only for common array lengths. See [`ParquetData`] for more details.
 ///
 /// ## `#[derive(Data)]`
 ///
-/// The easiest way to implement `Record` on a new type is using `#[derive(Data)]`:
+/// The easiest way to implement `ParquetData` on a new type is using `#[derive(Data)]`:
 ///
 /// ```ignore
 /// use amadeus_parquet::internal;
-/// use internal::record::{types::Timestamp, Record};
+/// use internal::record::{types::Timestamp, ParquetData};
 ///
 /// #[derive(Data, Debug)]
 /// struct MyRow {
@@ -155,7 +137,7 @@ pub(crate) use self::predicate::Predicate;
 /// If the Rust field name and the Parquet field name differ, say if the latter is not an idiomatic or valid identifier in Rust, then an automatic rename can be made like so:
 ///
 /// ```ignore
-/// # use amadeus_parquet::internal::record::{types::Timestamp, Record};
+/// # use amadeus_parquet::internal::record::{types::Timestamp, ParquetData};
 /// #[derive(Data, Debug)]
 /// struct MyRow {
 ///     #[amadeus(name = "ID")]
@@ -164,7 +146,8 @@ pub(crate) use self::predicate::Predicate;
 ///     event: String,
 /// }
 /// ```
-pub trait Record: Sized {
+pub trait ParquetData: Sized {
+	// Clone + PartialEq + Debug + 'static
 	type Schema: Schema;
 	type Reader: Reader<Item = Self>;
 

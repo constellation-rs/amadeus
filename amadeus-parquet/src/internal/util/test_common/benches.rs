@@ -16,10 +16,9 @@
 // under the License.
 
 use rand::{thread_rng, Rng};
-use std::{env, fs::File, path::PathBuf, rc::Rc, str::FromStr};
+use std::rc::Rc;
 
-use amadeus_parquet::internal;
-use internal::{
+use crate::internal::{
 	basic::*, data_type::*, schema::types::{ColumnDescriptor, ColumnPath, Type as SchemaType}
 };
 
@@ -54,7 +53,7 @@ pub fn gen_test_strs(total: usize) -> (usize, Vec<ByteArray>) {
 	words.push("iiiiiiiiii");
 	words.push("jjjjjjjjjj");
 
-	let mut rnd = rand::thread_rng();
+	let mut rnd = thread_rng();
 	let mut values = Vec::new();
 	for _ in 0..total {
 		let idx = rnd.gen_range(0usize, 10);
@@ -70,19 +69,4 @@ pub fn col_desc(type_length: i32, primitive_ty: Type) -> ColumnDescriptor {
 		.build()
 		.unwrap();
 	ColumnDescriptor::new(Rc::new(ty), None, 0, 0, ColumnPath::new(vec![]))
-}
-
-pub fn get_test_file(file_name: &str) -> File {
-	let file = File::open(get_test_path(file_name).as_path());
-	if file.is_err() {
-		panic!("Test file {} not found", file_name)
-	}
-	file.unwrap()
-}
-
-fn get_test_path(file_name: &str) -> PathBuf {
-	let mut pathbuf = env::current_dir().unwrap();
-	pathbuf.push(PathBuf::from_str("../amadeus-testing/parquet").unwrap());
-	pathbuf.push(file_name);
-	pathbuf
 }

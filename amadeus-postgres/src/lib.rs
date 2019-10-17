@@ -1,5 +1,6 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.3")]
 #![feature(specialization)]
+#![feature(type_alias_impl_trait)]
 
 mod impls;
 
@@ -8,11 +9,11 @@ use postgres::{params::IntoConnectParams, Error as PostgresError};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::TryFrom, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::{Fn, FnMut}, path::PathBuf, str, vec
+	convert::TryFrom, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::Fn, path::PathBuf, str
 };
 
 use amadeus_core::{
-	dist_iter::{Consumer, DistributedIterator}, into_dist_iter::IntoDistributedIterator, util::IoError
+	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::IoError, Source as DSource
 };
 
 pub trait PostgresData
@@ -38,22 +39,6 @@ where
 		T::decode(type_, buf).map(Box::new)
 	}
 }
-
-type Closure<Env, Args, Output> =
-	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
-
-type PostgresInner<Row> = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<(ConnectParams, Vec<Source>)>>,
-	Closure<
-		(),
-		((ConnectParams, Vec<Source>),),
-		iter::FlatMap<
-			vec::IntoIter<Source>,
-			vec::IntoIter<Result<Row, Error>>,
-			Closure<(postgres::Connection,), (Source,), vec::IntoIter<Result<Row, Error>>>,
-		>,
-	>,
->;
 
 #[derive(Serialize, Deserialize)]
 pub enum Source {
@@ -156,56 +141,90 @@ pub struct Postgres<Row>
 where
 	Row: PostgresData,
 {
-	i: PostgresInner<Row>,
+	files: Vec<(ConnectParams, Vec<Source>)>,
+	marker: PhantomData<fn() -> Row>,
 }
 impl<Row> Postgres<Row>
 where
 	Row: PostgresData,
 {
-	pub fn new<I>(files: I) -> Result<Self, ()>
+	pub fn new<I>(files: I) -> Self
 	where
 		I: IntoIterator<Item = (ConnectParams, Vec<Source>)>,
 	{
-		let i = files
-			.into_iter()
-			.collect::<Vec<_>>()
+		Self {
+			files: files.into_iter().collect(),
+			marker: PhantomData,
+		}
+	}
+}
+
+impl<Row> DSource for Postgres<Row>
+where
+	Row: PostgresData,
+{
+	type Item = Row;
+	type Error = Error;
+
+	#[cfg(not(feature = "doc"))]
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
+
+	#[allow(clippy::let_and_return)]
+	fn dist_iter(self) -> Self::DistIter {
+		let ret = self
+			.files
 			.into_dist_iter()
 			.flat_map(FnMut!(|(connect, tables)| {
-				let (connect, tables): (ConnectParams,Vec<Source>) = (connect, tables);
-				let connection = postgres::Connection::connect(connect, postgres::TlsMode::None).unwrap();
-				tables.into_iter().flat_map(FnMut!([connection] move |table:Source| {
-					// let stmt = connection.prepare("SELECT $1::\"public\".\"weather\"").unwrap();
-					// let type_ = stmt.param_types()[0].clone();
-					// let stmt = connection.prepare("SELECT ROW(city, temp_lo, temp_hi, prcp, date, CASE WHEN invent IS NOT NULL THEN ROW((invent).name, (invent).supplier_id, (invent).price) ELSE NULL END) FROM \"public\".\"weather\"").unwrap();
-					// let type_ = stmt.columns()[0].type_().clone();
-					// println!("{:?}", type_);
-					// println!("{:?}", type_.kind());
-					// let stmt = connection.execute("SELECT $1::weather", &[&A::default()]).unwrap();
+				let (connect, tables): (ConnectParams, Vec<Source>) = (connect, tables);
+				let connection =
+					postgres::Connection::connect(connect, postgres::TlsMode::None).unwrap();
+				tables.into_iter().flat_map(
+					(move |table: Source| {
+						// let stmt = connection.prepare("SELECT $1::\"public\".\"weather\"").unwrap();
+						// let type_ = stmt.param_types()[0].clone();
+						// let stmt = connection.prepare("SELECT ROW(city, temp_lo, temp_hi, prcp, date, CASE WHEN invent IS NOT NULL THEN ROW((invent).name, (invent).supplier_id, (invent).price) ELSE NULL END) FROM \"public\".\"weather\"").unwrap();
+						// let type_ = stmt.columns()[0].type_().clone();
+						// println!("{:?}", type_);
+						// println!("{:?}", type_.kind());
+						// let stmt = connection.execute("SELECT $1::weather", &[&A::default()]).unwrap();
 
-					let mut vec = Vec::new();
+						let mut vec = Vec::new();
 
-					let writer = |row: Option<&[u8]>, _: &postgres::stmt::CopyInfo| {
-						println!("{:?}", row);
-						let row = Row::decode(&postgres::types::RECORD, row).unwrap();
-						println!("{:?}", row);
-						vec.push(Ok(row));
-						Ok(())
-					};
+						let writer = |row: Option<&[u8]>, _: &postgres::stmt::CopyInfo| {
+							println!("{:?}", row);
+							let row = Row::decode(&postgres::types::RECORD, row).unwrap();
+							println!("{:?}", row);
+							vec.push(Ok(row));
+							Ok(())
+						};
 
-					let mut writer = postgres_binary_copy::BinaryCopyWriter::new(writer);
+						let mut writer = postgres_binary_copy::BinaryCopyWriter::new(writer);
 
-					let table = match table {
-						Source::Table(table) => table.to_string(),
-						Source::Query(query) => format!("({}) _", query),
-					};
-					let query = format!("COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)", DisplayFmt::new(|f| Row::query(f, None)), table);
-					println!("{}", query);
-					let stmt = connection.prepare(&query).unwrap();
-					let _ = stmt.copy_out(&[], &mut writer).unwrap();
-					vec.into_iter()
-				}))
+						let table = match table {
+							Source::Table(table) => table.to_string(),
+							Source::Query(query) => format!("({}) _", query),
+						};
+						let query = format!(
+							"COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)",
+							DisplayFmt::new(|f| Row::query(f, None)),
+							table
+						);
+						println!("{}", query);
+						let stmt = connection.prepare(&query).unwrap();
+						let _ = stmt.copy_out(&[], &mut writer).unwrap();
+						vec.into_iter()
+					}),
+				)
 			}));
-		Ok(Self { i })
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
+	}
+	fn iter(self) -> Self::Iter {
+		iter::empty()
 	}
 }
 
@@ -380,45 +399,6 @@ impl From<io::Error> for Error {
 impl From<PostgresError> for Error {
 	fn from(err: PostgresError) -> Self {
 		Self::Postgres(err)
-	}
-}
-
-impl<Row> DistributedIterator for Postgres<Row>
-where
-	Row: PostgresData,
-{
-	type Item = Result<Row, Error>;
-	type Task = PostgresConsumer<Row>;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.i.size_hint()
-	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| PostgresConsumer::<Row> {
-			task,
-			marker: PhantomData,
-		})
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "")]
-pub struct PostgresConsumer<Row>
-where
-	Row: PostgresData,
-{
-	task: <PostgresInner<Row> as DistributedIterator>::Task,
-	marker: PhantomData<fn() -> Row>,
-}
-
-impl<Row> Consumer for PostgresConsumer<Row>
-where
-	Row: PostgresData,
-{
-	type Item = Result<Row, Error>;
-
-	fn run(self, i: &mut impl FnMut(Result<Row, Error>) -> bool) -> bool {
-		self.task.run(i)
 	}
 }
 

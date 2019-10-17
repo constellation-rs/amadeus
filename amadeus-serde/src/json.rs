@@ -2,76 +2,14 @@ use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use serde_json::Error as SerdeJsonError;
 use std::{
-	error, fmt::{self, Debug, Display}, io::BufReader, iter, marker::PhantomData, vec
+	error, fmt::{self, Debug, Display}, io::BufReader, iter, marker::PhantomData
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, file::{File, Page, Partition, Reader}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
+	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
 };
 
 use super::{SerdeData, SerdeDeserialize};
-
-type Closure<Env, Args, Output> =
-	serde_closure::FnMut<Env, for<'r> fn(&'r mut Env, Args) -> Output>;
-
-pub type JsonInner<F, Row> = amadeus_core::dist_iter::FlatMap<
-	amadeus_core::into_dist_iter::IterIter<vec::IntoIter<<F as File>::Partition>>,
-	Closure<
-		(),
-		(<F as File>::Partition,),
-		iter::Map<
-			iter::FlatMap<
-				amadeus_core::util::ResultExpandIter<
-					vec::IntoIter<<<F as File>::Partition as Partition>::Page>,
-					JsonError<F>,
-				>,
-				ResultExpand<
-					iter::Map<
-						serde_json::StreamDeserializer<
-							'static,
-							serde_json::de::IoRead<
-								BufReader<Reader<<<F as File>::Partition as Partition>::Page>>,
-							>,
-							SerdeDeserialize<Row>,
-						>,
-						Closure<
-							(),
-							(Result<SerdeDeserialize<Row>, SerdeJsonError>,),
-							Result<Row, SerdeJsonError>,
-						>,
-					>,
-					JsonError<F>,
-				>,
-				Closure<
-					(),
-					(Result<<<F as File>::Partition as Partition>::Page, JsonError<F>>,),
-					ResultExpand<
-						iter::Map<
-							serde_json::StreamDeserializer<
-								'static,
-								serde_json::de::IoRead<
-									BufReader<Reader<<<F as File>::Partition as Partition>::Page>>,
-								>,
-								SerdeDeserialize<Row>,
-							>,
-							Closure<
-								(),
-								(Result<SerdeDeserialize<Row>, SerdeJsonError>,),
-								Result<Row, SerdeJsonError>,
-							>,
-						>,
-						JsonError<F>,
-					>,
-				>,
-			>,
-			Closure<
-				(),
-				(Result<Result<Row, SerdeJsonError>, JsonError<F>>,),
-				Result<Row, JsonError<F>>,
-			>,
-		>,
-	>,
->;
 
 #[derive(Clone)]
 pub struct Json<File, Row>
@@ -102,32 +40,33 @@ where
 	type Item = Row;
 	type Error = JsonError<F>;
 
-	// type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
-	type DistIter = JsonInner<F, Self::Item>;
+	#[cfg(not(feature = "doc"))]
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
+	#[allow(clippy::let_and_return)]
 	fn dist_iter(self) -> Self::DistIter {
-		self.partitions
+		let ret = self
+			.partitions
 			.into_dist_iter()
 			.flat_map(FnMut!(|partition: F::Partition| {
 				ResultExpand(partition.pages().map_err(JsonError::<F>::Partition))
 					.into_iter()
-					.flat_map(FnMut!(|page: Result<_, _>| ResultExpand(page.map(
-						|page| {
+					.flat_map(|page: Result<_, _>| {
+						ResultExpand(page.map(|page| {
 							let reader = BufReader::new(Page::reader(page));
 							serde_json::Deserializer::from_reader(reader)
 								.into_iter()
-								.map(FnMut!(|x: Result<
-									SerdeDeserialize<Row>,
-									SerdeJsonError,
-								>| Ok(x?.0)))
-						}
-					))))
-					.map(FnMut!(|row: Result<
-						Result<Row, SerdeJsonError>,
-						Self::Error,
-					>| Ok(row??)))
-			}))
+								.map(|x: Result<SerdeDeserialize<Row>, SerdeJsonError>| Ok(x?.0))
+						}))
+					})
+					.map(|row: Result<Result<Row, SerdeJsonError>, Self::Error>| Ok(row??))
+			}));
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
 	}
 	fn iter(self) -> Self::Iter {
 		iter::empty()

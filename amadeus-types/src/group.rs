@@ -7,22 +7,13 @@ use std::{
 	cmp, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc
 };
 
-use super::Value;
+use super::{Downcast, DowncastError, DowncastImpl, Value};
 
-// use internal::{
-//     basic::Repetition,
-//     column::reader::ColumnReader,
-//     errors::{ParquetError, Result},
-//     record::{
-//         reader::GroupReader,
-//         schemas::{GroupSchema, ValueSchema},
-//         types::Value,
-//         Record,
-//     },
-//     schema::types::{ColumnPath, Type},
-// };
-
-/// A Rust type corresponding to Parquet groups of fields.
+/// Corresponds to Parquet groups of named fields.
+///
+/// Its fields can be accessed by name via
+/// [`get()`](Group::get)/[`get_mut()`](Self::get_mut) and via name or ordinal with
+/// [`group[index]`](#impl-Index<usize>).
 #[derive(Clone, PartialEq)]
 pub struct Group {
 	fields: Vec<Value>,
@@ -130,6 +121,7 @@ impl Debug for Group {
 		}
 	}
 }
+
 impl From<LinkedHashMap<String, Value, FxBuildHasher>> for Group {
 	fn from(hashmap: LinkedHashMap<String, Value, FxBuildHasher>) -> Self {
 		let mut keys = LinkedHashMap::with_capacity_and_hasher(hashmap.len(), Default::default());
@@ -147,6 +139,35 @@ impl From<LinkedHashMap<String, Value, FxBuildHasher>> for Group {
 		)
 	}
 }
+
+macro_rules! tuple_downcast {
+	($len:tt $($t:ident $i:tt)*) => (
+		impl<$($t,)*> DowncastImpl<Group> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
+			fn downcast_impl(self_: Group) -> Result<Self, DowncastError> {
+				#[allow(unused_mut, unused_variables)]
+				let mut fields = self_.into_fields().into_iter();
+				if fields.len() != $len {
+					return Err(DowncastError{from:"",to:""});
+				}
+				Ok(($({let _ = $i;fields.next().unwrap().downcast()?},)*))
+			}
+		}
+	);
+}
+tuple!(tuple_downcast);
+
+macro_rules! tuple_from {
+	($len:tt $($t:ident $i:tt)*) => (
+		impl<$($t,)*> From<($($t,)*)> for Group where $($t: Into<Value>,)* {
+			#[allow(unused_variables)]
+			fn from(value: ($($t,)*)) -> Self {
+				Group::new(vec![$(value.$i.into(),)*], None)
+			}
+		}
+	);
+}
+tuple!(tuple_from);
+
 // impl From<Group> for LinkedHashMap<String, Value, FxBuildHasher> {
 // 	fn from(group: Group) -> Self {
 // 		group

@@ -18,8 +18,9 @@
 use std::{iter, mem};
 
 use crate::internal::{
-	basic::Repetition, column::reader::{get_typed_column_reader, ColumnReader, ColumnReaderImpl}, data_type::*, errors::{ParquetError, Result}, record::{reader::ValueReader, types::Value, Reader, Record}, schema::types::{ColumnDescPtr, ColumnPath}
+	basic::Repetition, column::reader::{get_typed_column_reader, ColumnReader, ColumnReaderImpl}, data_type::*, errors::{ParquetError, Result}, record::{reader::ValueReader, ParquetData, Reader}, schema::types::{ColumnDescPtr, ColumnPath}
 };
+use amadeus_types::Value;
 
 /// High level API wrapper on column reader.
 /// Provides per-element access for each primitive column.

@@ -1,14 +1,13 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.1.3")]
+#![feature(type_alias_impl_trait)]
 
 mod cloudfront;
 mod file;
 
 use futures::future::FutureExt;
-
 use once_cell::sync::Lazy;
 use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectError, ListObjectsV2Error, ListObjectsV2Request, Object, S3Client, S3};
-
 use std::{
 	cell::RefCell, error, fmt::{self, Display}, future::Future, io, iter, mem::transmute, ops::FnMut
 };
@@ -16,9 +15,10 @@ use tokio::runtime::Runtime;
 
 use amadeus_core::util::{IoError, ResultExpand};
 
+#[doc(inline)]
 pub use cloudfront::{Cloudfront, CloudfrontRow};
+#[doc(inline)]
 pub use file::{S3Directory, S3File};
-
 #[doc(inline)]
 pub use rusoto_core::Region as AwsRegion;
 

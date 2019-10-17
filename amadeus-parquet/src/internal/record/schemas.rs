@@ -1,33 +1,17 @@
-// Licensed to the Apache Software Foundation (ASF) under one
-// or more contributor license agreements.  See the NOTICE file
-// distributed with this work for additional information
-// regarding copyright ownership.  The ASF licenses this file
-// to you under the Apache License, Version 2.0 (the
-// "License"); you may not use this file except in compliance
-// with the License.  You may obtain a copy of the License at
-//
-//   http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing,
-// software distributed under the License is distributed on an
-// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied.  See the License for the
-// specific language governing permissions and limitations
-// under the License.
-
 //! Structs to represent types of fields in a Parquet schema.
 //!
 //! These structs should be sufficient to represent any valid Parquet schema.
 //!
-//! They can be created from [`Type`](crate::internal::schema::types::Type) with [`Record::parse`],
+//! They can be created from [`Type`](crate::internal::schema::types::Type) with [`ParquetData::parse`],
 //! or from a Parquet schema string with [`str::parse`].
 //!
 //! They can be printed as a Parquet schema string with [`Schema::fmt`], or more
 //! conveniently [`RootSchema`](super::RootSchema) also implements [`Display`].
 //!
-//! ```
+//! ```ignore
 //! # use amadeus_parquet::internal::errors::Result;
-//! use amadeus_parquet::internal::record::{RootSchema, types::Value};
+//! use amadeus_parquet::internal::record::RootSchema;
+//! use amadeus_types::Value;
 //!
 //! #
 //! # fn main() -> Result<()> {
@@ -53,7 +37,7 @@ use std::{
 };
 
 use super::{
-	display::{DisplayFmt, DisplaySchemaGroup}, types::{Downcast, Root}, Record, Schema
+	display::{DisplayFmt, DisplaySchemaGroup}, types::{Downcast, Root}, ParquetData, Schema
 };
 use crate::internal::{
 	basic::{LogicalType, Repetition}, errors::{ParquetError, Result}, schema::parser::parse_message_type
@@ -401,32 +385,32 @@ impl Schema for TimeSchema {
 }
 
 #[derive(Debug)]
-pub enum TimestampSchema {
+pub enum DateTimeSchema {
 	Int96,
 	Millis,
 	Micros,
 }
-impl Default for TimestampSchema {
+impl Default for DateTimeSchema {
 	fn default() -> Self {
-		TimestampSchema::Int96
+		DateTimeSchema::Int96
 	}
 }
-impl Schema for TimestampSchema {
+impl Schema for DateTimeSchema {
 	fn fmt(
 		self_: Option<&Self>, r: Option<Repetition>, name: Option<&str>, f: &mut fmt::Formatter,
 	) -> fmt::Result {
 		match self_ {
-			Some(TimestampSchema::Int96) => f.write_fmt(format_args!(
+			Some(DateTimeSchema::Int96) => f.write_fmt(format_args!(
 				"{} int96 {};",
 				r.unwrap(),
 				name.unwrap_or("<name>")
 			)),
-			Some(TimestampSchema::Millis) => f.write_fmt(format_args!(
+			Some(DateTimeSchema::Millis) => f.write_fmt(format_args!(
 				"{} int64 {} (TIMESTAMP_MILLIS);",
 				r.unwrap(),
 				name.unwrap_or("<name>")
 			)),
-			Some(TimestampSchema::Micros) => f.write_fmt(format_args!(
+			Some(DateTimeSchema::Micros) => f.write_fmt(format_args!(
 				"{} int64 {} (TIMESTAMP_MICROS);",
 				r.unwrap(),
 				name.unwrap_or("<name>")
@@ -724,7 +708,7 @@ pub enum ValueSchema {
 	F64(F64Schema),
 	Date(DateSchema),
 	Time(TimeSchema),
-	Timestamp(TimestampSchema),
+	DateTime(DateTimeSchema),
 	Decimal(DecimalSchema),
 	ByteArray(ByteArraySchema),
 	Bson(BsonSchema),
@@ -755,7 +739,7 @@ impl Schema for ValueSchema {
 				ValueSchema::F64(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Date(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Time(schema) => Schema::fmt(Some(schema), r, name, f),
-				ValueSchema::Timestamp(schema) => Schema::fmt(Some(schema), r, name, f),
+				ValueSchema::DateTime(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Decimal(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::ByteArray(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Bson(schema) => Schema::fmt(Some(schema), r, name, f),
@@ -1164,15 +1148,15 @@ impl ValueSchema {
 	}
 
 	pub fn is_timestamp(&self) -> bool {
-		if let ValueSchema::Timestamp(_) = self {
+		if let ValueSchema::DateTime(_) = self {
 			true
 		} else {
 			false
 		}
 	}
 
-	pub fn as_timestamp(&self) -> Result<&TimestampSchema> {
-		if let ValueSchema::Timestamp(ret) = self {
+	pub fn as_timestamp(&self) -> Result<&DateTimeSchema> {
+		if let ValueSchema::DateTime(ret) = self {
 			Ok(ret)
 		} else {
 			Err(ParquetError::General(format!(
@@ -1182,8 +1166,8 @@ impl ValueSchema {
 		}
 	}
 
-	pub fn into_timestamp(self) -> Result<TimestampSchema> {
-		if let ValueSchema::Timestamp(ret) = self {
+	pub fn into_timestamp(self) -> Result<DateTimeSchema> {
+		if let ValueSchema::DateTime(ret) = self {
 			Ok(ret)
 		} else {
 			Err(ParquetError::General(format!(
@@ -1564,8 +1548,8 @@ impl Downcast<TimeSchema> for ValueSchema {
 		self.into_time()
 	}
 }
-impl Downcast<TimestampSchema> for ValueSchema {
-	fn downcast(self) -> Result<TimestampSchema> {
+impl Downcast<DateTimeSchema> for ValueSchema {
+	fn downcast(self) -> Result<DateTimeSchema> {
 		self.into_timestamp()
 	}
 }
@@ -1671,10 +1655,11 @@ where
 /// It implements [`FromStr`] and [`Display`] so it can be converted from and to a Parquet
 /// schema string like so:
 ///
-/// ```
+/// ```ignore
 /// # use amadeus_parquet::internal::errors::Result;
 /// use amadeus_parquet::internal;
-/// use internal::record::{RootSchema, types::Value};
+/// use internal::record::RootSchema;
+/// use amadeus_types::Value;
 ///
 /// #
 /// # fn main() -> Result<()> {
@@ -1694,10 +1679,10 @@ where
 /// ```
 pub struct RootSchema<T>(pub String, pub T::Schema, pub PhantomData<fn(T)>)
 where
-	T: Record;
+	T: ParquetData;
 impl<T> Default for RootSchema<T>
 where
-	T: Record,
+	T: ParquetData,
 	T::Schema: Default,
 {
 	fn default() -> Self {
@@ -1710,7 +1695,7 @@ where
 }
 impl<T> Debug for RootSchema<T>
 where
-	T: Record,
+	T: ParquetData,
 	T::Schema: Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -1722,7 +1707,7 @@ where
 }
 impl<T> Schema for RootSchema<T>
 where
-	T: Record,
+	T: ParquetData,
 {
 	fn fmt(
 		self_: Option<&Self>, r: Option<Repetition>, _name: Option<&str>, f: &mut fmt::Formatter,
@@ -1738,19 +1723,19 @@ where
 }
 impl<T> FromStr for RootSchema<T>
 where
-	T: Record,
+	T: ParquetData,
 {
 	type Err = ParquetError;
 
 	fn from_str(s: &str) -> Result<Self> {
 		parse_message_type(s)
-			.and_then(|x| <Root<T> as Record>::parse(&x, None))
+			.and_then(|x| <Root<T> as ParquetData>::parse(&x, None))
 			.map(|x| x.1)
 	}
 }
 impl<T> Display for RootSchema<T>
 where
-	T: Record,
+	T: ParquetData,
 {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		<Self as Schema>::fmt(Some(&self), None, None, fmt)
@@ -1764,7 +1749,7 @@ pub struct TupleSchema<T>(pub(super) T);
 mod tests {
 	use super::*;
 
-	use crate::internal::record::types::Value;
+	use amadeus_types::Value;
 
 	#[test]
 	fn schema_printing() {

@@ -1,7 +1,6 @@
 #![allow(where_clauses_object_safety)]
 
-#[macro_use]
-extern crate serde_closure;
+use serde_closure::FnMut;
 
 #[cfg(feature = "constellation")]
 use constellation::*;
@@ -47,14 +46,17 @@ fn main() {
 fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	CommonCrawl::new("CC-MAIN-2018-43").unwrap().all(
-		pool,
-		FnMut!([start] move |x: Result<Webpage<'static>,_>| -> bool {
-			let _x = x.unwrap();
-			// println!("{}", x.url);
-			start.elapsed().unwrap() < Duration::new(10,0)
-		}),
-	);
+	CommonCrawl::new("CC-MAIN-2018-43")
+		.unwrap()
+		.dist_iter()
+		.all(
+			pool,
+			FnMut!(move |x: Result<Webpage<'static>, _>| -> bool {
+				let _x = x.unwrap();
+				// println!("{}", x.url);
+				start.elapsed().unwrap() < Duration::new(10, 0)
+			}),
+		);
 
 	start.elapsed().unwrap()
 }
