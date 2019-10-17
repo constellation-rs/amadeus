@@ -55,26 +55,10 @@ impl Source for Cloudfront {
 			region,
 			objects,
 		} = self;
-		let region: (String, Option<String>) = (
-			region.name().to_owned(),
-			if let AwsRegion::Custom { endpoint, .. } = region {
-				Some(endpoint)
-			} else {
-				None
-			},
-		);
 		let ret = objects
 			.into_dist_iter()
 			.flat_map(FnMut!(move |key: String| {
-				let region = if let Some(endpoint) = &region.1 {
-					AwsRegion::Custom {
-						name: region.0.clone(),
-						endpoint: endpoint.clone(),
-					}
-				} else {
-					region.0.parse().unwrap()
-				};
-				let client = S3Client::new(region);
+				let client = S3Client::new(region.clone());
 				ResultExpand(
 					loop {
 						match self::block_on_01(self::retry(|| {
