@@ -52,7 +52,7 @@ serde_closure = "0.2"
 serde_traitobject = "0.1.6"
 
 # pin; broken for some reason
-bincode = "=1.0.1"
+bincode = "=1.2.0"
 
 [dev-dependencies]
 either = { version = "1.5", features = ["serde"] }
