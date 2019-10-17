@@ -61,8 +61,8 @@ where
 	type Item = Row;
 	type Error = ParquetError<F>;
 
-	type DistIter = impl DistributedIterator<Item = Result<Row, Self::Error>>;
-	type Iter = iter::Empty<Result<Row, Self::Error>>;
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter {
 		self.partitions

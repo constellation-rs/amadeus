@@ -42,8 +42,8 @@ impl Source for Cloudfront {
 	type Item = CloudfrontRow;
 	type Error = AwsError;
 
-	type DistIter = impl DistributedIterator<Item = Result<CloudfrontRow, AwsError>>;
-	type Iter = iter::Empty<Result<CloudfrontRow, AwsError>>;
+	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	fn dist_iter(self) -> Self::DistIter {
 		let Self {

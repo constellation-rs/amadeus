@@ -1,6 +1,6 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-serde/0.1.2")]
-#![feature(type_alias_impl_trait)]
 #![feature(specialization)]
+#![feature(type_alias_impl_trait)]
 
 mod csv;
 mod impls;
