@@ -215,8 +215,12 @@ impl Page for S3Page {
 					..GetObjectRequest::default()
 				}));
 				let res = res.await;
-				if let Err(RusotoError::HttpDispatch(_)) = res {
-					continue;
+				match res {
+					Err(RusotoError::HttpDispatch(_)) => continue,
+					Err(RusotoError::Unknown(response)) if response.status.is_server_error() => {
+						continue
+					}
+					_ => (),
 				}
 				let mut read = res.unwrap().body.unwrap().into_async_read();
 				while len - cursor.position() > 0 {

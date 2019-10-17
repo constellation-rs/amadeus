@@ -51,10 +51,10 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		.dist_iter()
 		.all(
 			pool,
-			FnMut!([start] move |x: Result<Webpage<'static>,_>| -> bool {
+			FnMut!(move |x: Result<Webpage<'static>, _>| -> bool {
 				let _x = x.unwrap();
 				// println!("{}", x.url);
-				start.elapsed().unwrap() < Duration::new(10,0)
+				start.elapsed().unwrap() < Duration::new(10, 0)
 			}),
 		);
 

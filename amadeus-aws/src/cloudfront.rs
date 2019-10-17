@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use flate2::read::MultiGzDecoder;
 use http::{Method, StatusCode};
-
+use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
@@ -53,36 +53,48 @@ impl Source for Cloudfront {
 		} = self;
 		objects
 			.into_dist_iter()
-			.flat_map(FnMut!([bucket, region] move |key:String| {
+			.flat_map(FnMut!(move |key: String| {
 				let client = S3Client::new(region.clone());
 				ResultExpand(
-					self::block_on_01(self::retry(||client
-						.get_object(GetObjectRequest {
-							bucket: bucket.clone(),
-							key: key.clone(),
-							..GetObjectRequest::default()
-						})
+					loop {
+						match self::block_on_01(self::retry(|| {
+							client.get_object(GetObjectRequest {
+								bucket: bucket.clone(),
+								key: key.clone(),
+								..GetObjectRequest::default()
+							})
+						})) {
+							Err(RusotoError::HttpDispatch(_)) => continue,
+							Err(RusotoError::Unknown(response))
+								if response.status.is_server_error() =>
+							{
+								continue
+							}
+							res => break res,
+						}
+					}
+					.map_err(AwsError::from)
+					.map(|res| {
+						let body = res.body.unwrap().into_blocking_read();
+						BufReader::new(MultiGzDecoder::new(
+							Box::new(body) as Box<dyn io::Read + Send>
 						))
-						.map_err(AwsError::from)
-						.map(|res| {
-							let body = res.body.unwrap().into_blocking_read();
-							BufReader::new(MultiGzDecoder::new(Box::new(body) as Box<dyn io::Read + Send>))
-								.lines()
-								.filter((|x:&Result<String,io::Error>| {
-									if let Ok(x) = x {
-										x.chars().filter(|x| !x.is_whitespace()).nth(0) != Some('#')
-									} else {
-										true
-									}
-								}))
-								.map((|x:Result<String,io::Error>| {
-									if let Ok(x) = x {
-										Ok(CloudfrontRow::from_line(&x))
-									} else {
-										Err(AwsError::from(x.err().unwrap()))
-									}
-								}))
-						}),
+						.lines()
+						.filter(|x: &Result<String, io::Error>| {
+							if let Ok(x) = x {
+								x.chars().filter(|x| !x.is_whitespace()).nth(0) != Some('#')
+							} else {
+								true
+							}
+						})
+						.map(|x: Result<String, io::Error>| {
+							if let Ok(x) = x {
+								Ok(CloudfrontRow::from_line(&x))
+							} else {
+								Err(AwsError::from(x.err().unwrap()))
+							}
+						})
+					}),
 				)
 			}))
 			.map(FnMut!(

@@ -149,8 +149,10 @@ where
 	}
 }
 #[derive(Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct IntoConsumer<I, U> {
 	task: I,
+	#[serde(skip)]
 	marker: PhantomData<fn() -> U>,
 }
 impl<I, T, E, U> amadeus_core::dist_iter::Consumer for IntoConsumer<I, U>

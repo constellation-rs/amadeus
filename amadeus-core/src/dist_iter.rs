@@ -165,18 +165,14 @@ pub trait DistributedIterator {
 			.into_iter()
 			.map(|tasks| {
 				let reduce1 = reduce1factory.make();
-				pool.spawn(
-					FnOnce!([tasks,reduce1] move || -> <R1 as ReducerA>::Output {
-						let mut reduce1: R1 = reduce1;
-						let tasks: Vec<Self::Task> = tasks;
-						for task in tasks {
-							if !task.run(&mut |item| reduce1.push(item)) {
-								break;
-							}
-						};
-						reduce1.ret()
-					}),
-				)
+				pool.spawn(FnOnce!(move || -> <R1 as ReducerA>::Output {
+					for task in tasks {
+						if !task.run(&mut |item| reduce1.push(item)) {
+							break;
+						}
+					}
+					reduce1.ret()
+				}))
 			})
 			.collect::<futures::stream::FuturesUnordered<_>>();
 		let mut more = true;

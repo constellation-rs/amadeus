@@ -49,9 +49,9 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, parallel: usize) -> Duratio
 
 	let handles = (0..parallel)
 		.map(|i| {
-			pool.spawn(FnOnce!([i] move || -> String {
+			pool.spawn(FnOnce!(move || -> String {
 				let mut rng = rand::rngs::SmallRng::seed_from_u64(i.try_into().unwrap());
-				thread::sleep(rng.gen_range(time::Duration::new(0,0),time::Duration::new(2,0)));
+				thread::sleep(rng.gen_range(time::Duration::new(0, 0), time::Duration::new(2, 0)));
 				format!("warm greetings from job {}", i)
 			}))
 		})

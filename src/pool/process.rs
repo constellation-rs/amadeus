@@ -69,9 +69,9 @@ impl ProcessPoolInner {
 		for _ in 0..processes {
 			let child = spawn(
 				resources,
-				FnOnce!([threads] move |parent| {
+				FnOnce!(move |parent| {
 					let receiver = Receiver::<Option<Request>>::new(parent);
-					let sender = Sender::<Result<Response,Panicked>>::new(parent);
+					let sender = Sender::<Result<Response, Panicked>>::new(parent);
 
 					let _ = threads;
 
@@ -122,7 +122,7 @@ impl ProcessPoolInner {
 	) -> Result<T, Panicked> {
 		let process_index = self.i.get();
 		let process = &self.processes[process_index];
-		let x = process.sender.send(Some(Box::new(FnOnce!([work] move || {
+		let x = process.sender.send(Some(Box::new(FnOnce!(move || {
 			let work: F = work;
 			Box::new(work()) as Response
 		})) as Request));
