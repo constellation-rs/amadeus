@@ -4,7 +4,7 @@
 //!
 //! This library is very nascent. 3 parts: process pool; sources/sinks (Data/Value); analytics;
 
-#![doc(html_root_url = "https://docs.rs/amadeus/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus/0.1.3")]
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
 )]

@@ -2,7 +2,7 @@
 
 [package]
 name = "amadeus"
-version = "0.1.2"
+version = "0.1.3"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -14,7 +14,7 @@ parquet postgres aws s3 cloudfront elb json csv logs hadoop hdfs arrow common cr
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.2"
+documentation = "https://docs.rs/amadeus/0.1.3"
 readme = "README.md"
 edition = "2018"
 
@@ -36,14 +36,14 @@ doc = ["amadeus-aws/doc", "amadeus-commoncrawl/doc", "amadeus-parquet/doc", "ama
 features = ["doc", "constellation", "aws", "commoncrawl", "postgres", "csv", "json"]
 
 [dependencies]
-amadeus-core = { version = "=0.1.2", path = "amadeus-core" }
-amadeus-derive = { version = "=0.1.2", path = "amadeus-derive" }
-amadeus-types = { version = "=0.1.2", path = "amadeus-types" }
-amadeus-aws = { version = "=0.1.2", path = "amadeus-aws", optional = true }
-amadeus-commoncrawl = { version = "=0.1.2", path = "amadeus-commoncrawl", optional = true }
-amadeus-parquet = { version = "=0.1.2", path = "amadeus-parquet", optional = true }
-amadeus-postgres = { version = "=0.1.2", path = "amadeus-postgres", optional = true }
-amadeus-serde = { version = "=0.1.2", path = "amadeus-serde", optional = true }
+amadeus-core = { version = "=0.1.3", path = "amadeus-core" }
+amadeus-derive = { version = "=0.1.3", path = "amadeus-derive" }
+amadeus-types = { version = "=0.1.3", path = "amadeus-types" }
+amadeus-aws = { version = "=0.1.3", path = "amadeus-aws", optional = true }
+amadeus-commoncrawl = { version = "=0.1.3", path = "amadeus-commoncrawl", optional = true }
+amadeus-parquet = { version = "=0.1.3", path = "amadeus-parquet", optional = true }
+amadeus-postgres = { version = "=0.1.3", path = "amadeus-postgres", optional = true }
+amadeus-serde = { version = "=0.1.3", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
 futures-preview = "=0.3.0-alpha.19"
 pin-utils = "0.1.0-alpha.4"

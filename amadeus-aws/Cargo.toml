@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-aws"
-version = "0.1.2"
+version = "0.1.3"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -10,7 +10,7 @@ Harmonious distributed data analysis in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.2"
+documentation = "https://docs.rs/amadeus/0.1.3"
 readme = "README.md"
 edition = "2018"
 
@@ -22,8 +22,8 @@ maintenance = { status = "actively-developed" }
 doc = []
 
 [dependencies]
-amadeus-core = { version = "=0.1.2", path = "../amadeus-core" }
-amadeus-types = { version = "=0.1.2", path = "../amadeus-types" }
+amadeus-core = { version = "=0.1.3", path = "../amadeus-core" }
+amadeus-types = { version = "=0.1.3", path = "../amadeus-types" }
 chrono = { version = "0.4", default-features = false }
 flate2 = "1.0"
 futures-01 = { package = "futures", version = "0.1" }
