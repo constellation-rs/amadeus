@@ -166,11 +166,16 @@ where
 	type Item = Row;
 	type Error = Error;
 
+	#[cfg(not(feature = "doc"))]
 	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
+	#[allow(clippy::let_and_return)]
 	fn dist_iter(self) -> Self::DistIter {
-		self.files
+		let ret = self
+			.files
 			.into_dist_iter()
 			.flat_map(FnMut!(|(connect, tables)| {
 				let (connect, tables): (ConnectParams, Vec<Source>) = (connect, tables);
@@ -213,7 +218,10 @@ where
 						vec.into_iter()
 					}),
 				)
-			}))
+			}));
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
 	}
 	fn iter(self) -> Self::Iter {
 		iter::empty()

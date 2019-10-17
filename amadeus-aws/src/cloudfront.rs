@@ -42,9 +42,13 @@ impl Source for Cloudfront {
 	type Item = CloudfrontRow;
 	type Error = AwsError;
 
+	#[cfg(not(feature = "doc"))]
 	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
+	#[allow(clippy::let_and_return)]
 	fn dist_iter(self) -> Self::DistIter {
 		let Self {
 			bucket,
@@ -59,7 +63,7 @@ impl Source for Cloudfront {
 				None
 			},
 		);
-		objects
+		let ret = objects
 			.into_dist_iter()
 			.flat_map(FnMut!(move |key: String| {
 				let region = if let Some(endpoint) = &region.1 {
@@ -115,7 +119,10 @@ impl Source for Cloudfront {
 			}))
 			.map(FnMut!(
 				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(self::identity)
-			))
+			));
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
 	}
 
 	fn iter(self) -> Self::Iter {

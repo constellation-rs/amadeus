@@ -30,9 +30,10 @@ parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
 postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
+doc = ["amadeus-aws/doc", "amadeus-commoncrawl/doc", "amadeus-parquet/doc", "amadeus-postgres/doc", "amadeus-serde/doc"]
 
 [package.metadata.docs.rs]
-features = ["constellation", "aws", "commoncrawl", "postgres", "csv", "json"]
+features = ["doc", "constellation", "aws", "commoncrawl", "postgres", "csv", "json"]
 
 [dependencies]
 amadeus-core = { version = "=0.1.2", path = "amadeus-core" }

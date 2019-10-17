@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::{error, fmt, io, sync::Arc};
+use std::{error, fmt, io, marker::PhantomData, sync::Arc};
+
+use crate::dist_iter::{Consumer, DistributedIterator};
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
 impl<T, E> IntoIterator for ResultExpand<T, E>
@@ -57,5 +59,36 @@ impl From<io::Error> for IoError {
 impl From<IoError> for io::Error {
 	fn from(err: IoError) -> Self {
 		Arc::try_unwrap(err.0).unwrap()
+	}
+}
+
+pub struct ImplDistributedIterator<T>(PhantomData<fn(T)>);
+impl<T> ImplDistributedIterator<T> {
+	pub fn new<U>(_drop: U) -> Self
+	where
+		U: DistributedIterator<Item = T>,
+	{
+		Self(PhantomData)
+	}
+}
+impl<T: 'static> DistributedIterator for ImplDistributedIterator<T> {
+	type Item = T;
+	type Task = ImplConsumer<T>;
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		unreachable!()
+	}
+	fn next_task(&mut self) -> Option<Self::Task> {
+		unreachable!()
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ImplConsumer<T>(PhantomData<fn(T)>);
+impl<T: 'static> Consumer for ImplConsumer<T> {
+	type Item = T;
+
+	fn run(self, _i: &mut impl FnMut(Self::Item) -> bool) -> bool {
+		unreachable!()
 	}
 }

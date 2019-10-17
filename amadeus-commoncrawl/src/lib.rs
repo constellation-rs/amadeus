@@ -42,13 +42,17 @@ impl Source for CommonCrawl {
 	type Item = Webpage<'static>;
 	type Error = io::Error;
 
+	#[cfg(not(feature = "doc"))]
 	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
+	#[allow(clippy::let_and_return)]
 	fn dist_iter(self) -> Self::DistIter {
 		let body = MultiGzDecoder::new(self.body); // Content-Encoding isn't set, so decode manually
 
-		BufReader::new(body)
+		let ret = BufReader::new(body)
 			.lines()
 			.map(FnMut!(|url: Result<String, io::Error>| -> String {
 				format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap())
@@ -65,7 +69,10 @@ impl Source for CommonCrawl {
 					.unwrap();
 				let body = MultiGzDecoder::new(body);
 				WarcParser::new(body)
-			}))
+			}));
+		#[cfg(feature = "doc")]
+		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		ret
 	}
 	fn iter(self) -> Self::Iter {
 		iter::empty()

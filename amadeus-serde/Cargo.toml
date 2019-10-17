@@ -18,6 +18,9 @@ edition = "2018"
 azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
+[features]
+doc = []
+
 [dependencies]
 amadeus-core = { version = "=0.1.2", path = "../amadeus-core" }
 amadeus-types = { version = "=0.1.2", path = "../amadeus-types" }
