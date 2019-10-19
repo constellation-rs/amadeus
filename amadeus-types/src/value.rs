@@ -2095,7 +2095,44 @@ where
 	fn eq(&self, other: &Option<T>) -> bool {
 		self.as_option()
 			.map(|option| match (&option, other) {
-				(Some(a), Some(b)) if a.eq(b) => true,
+				(Some(a), Some(b)) => match a {
+					ValueRequired::Bool(value) => &Value::Bool(*value) == b,
+					ValueRequired::U8(value) => &Value::U8(*value) == b,
+					ValueRequired::I8(value) => &Value::I8(*value) == b,
+					ValueRequired::U16(value) => &Value::U16(*value) == b,
+					ValueRequired::I16(value) => &Value::I16(*value) == b,
+					ValueRequired::U32(value) => &Value::U32(*value) == b,
+					ValueRequired::I32(value) => &Value::I32(*value) == b,
+					ValueRequired::U64(value) => &Value::U64(*value) == b,
+					ValueRequired::I64(value) => &Value::I64(*value) == b,
+					ValueRequired::F32(value) => &Value::F32(*value) == b,
+					ValueRequired::F64(value) => &Value::F64(*value) == b,
+					ValueRequired::Date(value) => &Value::Date(*value) == b,
+					ValueRequired::DateWithoutTimezone(value) => {
+						&Value::DateWithoutTimezone(*value) == b
+					}
+					ValueRequired::Time(value) => &Value::Time(*value) == b,
+					ValueRequired::TimeWithoutTimezone(value) => {
+						&Value::TimeWithoutTimezone(*value) == b
+					}
+					ValueRequired::DateTime(value) => &Value::DateTime(*value) == b,
+					ValueRequired::DateTimeWithoutTimezone(value) => {
+						&Value::DateTimeWithoutTimezone(*value) == b
+					}
+					ValueRequired::Timezone(value) => &Value::Timezone(*value) == b,
+					ValueRequired::Decimal(value) => &Value::Decimal(value.clone()) == b,
+					ValueRequired::ByteArray(value) => &Value::ByteArray(value.clone()) == b,
+					ValueRequired::Bson(value) => &Value::Bson(value.clone()) == b,
+					ValueRequired::String(value) => &Value::String(value.clone()) == b,
+					ValueRequired::Json(value) => &Value::Json(value.clone()) == b,
+					ValueRequired::Enum(value) => &Value::Enum(value.clone()) == b,
+					ValueRequired::Url(value) => &Value::Url(value.clone()) == b,
+					ValueRequired::Webpage(value) => &Value::Webpage(value.clone()) == b,
+					ValueRequired::IpAddr(value) => &Value::IpAddr(*value) == b,
+					ValueRequired::List(value) => &Value::List(value.clone()) == b,
+					ValueRequired::Map(value) => &Value::Map(value.clone()) == b,
+					ValueRequired::Group(value) => &Value::Group(value.clone()) == b,
+				},
 				(None, None) => true,
 				_ => false,
 			})

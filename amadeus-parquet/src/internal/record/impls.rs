@@ -4,6 +4,11 @@ use std::{
 };
 use sum::{Sum2, Sum3};
 
+use amadeus_core::util::type_coerce;
+use amadeus_types::{
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+};
+
 #[cfg(debug_assertions)]
 use crate::internal::schema::parser::parse_message_type;
 use crate::internal::{
@@ -16,9 +21,6 @@ use crate::internal::{
 			BoolSchema, BoxSchema, BsonSchema, ByteArraySchema, DateSchema, DateTimeSchema, DecimalSchema, EnumSchema, F32Schema, F64Schema, FixedByteArraySchema, GroupSchema, I16Schema, I32Schema, I64Schema, I8Schema, JsonSchema, ListSchema, ListSchemaType, MapSchema, OptionSchema, RootSchema, StringSchema, TimeSchema, TupleSchema, U16Schema, U32Schema, U64Schema, U8Schema, ValueSchema
 		}, triplet::TypedTripletIter, types::{downcast, Downcast, Root}, ParquetData, Reader, Schema
 	}, schema::types::{ColumnPath, Type}
-};
-use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -232,32 +234,19 @@ where
 	default fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema)> {
-		T::parse(schema, repetition)
-			.map(|(name, schema)| (name, unsafe { known_type(BoxSchema(schema)) }))
+		T::parse(schema, repetition).map(|(name, schema)| (name, type_coerce(BoxSchema(schema))))
 	}
 
 	default fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		let schema = unsafe { known_type::<&Self::Schema, &BoxSchema<T::Schema>>(schema) };
+		let schema = type_coerce::<&Self::Schema, &BoxSchema<T::Schema>>(schema);
 		let ret = BoxReader(T::reader(
 			&schema.0, path, def_level, rep_level, paths, batch_size,
 		));
-		unsafe { known_type(ret) }
+		type_coerce(ret)
 	}
-}
-
-/// This is used until specialization can handle groups of items together
-unsafe fn known_type<A, B>(a: A) -> B {
-	use std::mem;
-	assert_eq!(
-		(mem::size_of::<A>(), mem::align_of::<A>()),
-		(mem::size_of::<B>(), mem::align_of::<B>())
-	);
-	let ret = mem::transmute_copy(&a);
-	mem::forget(a);
-	ret
 }
 
 ////////////////////////////////////////////////////////////////////////////////

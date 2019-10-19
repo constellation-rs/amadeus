@@ -14,7 +14,7 @@ jobs:
     endpoint: alecmocatta
     default:
       rust_toolchain: nightly
-      rust_lint_toolchain: nightly-2019-10-15
+      rust_lint_toolchain: nightly-2019-10-19
       rust_flags: ''
       rust_features: 'aws;commoncrawl;parquet;postgres;csv;json;constellation aws commoncrawl parquet postgres csv json'
       rust_doc_features: 'doc constellation aws commoncrawl postgres csv json'

@@ -243,27 +243,6 @@ impl PartialOrd for ValueRequired {
 	}
 }
 
-impl ValueRequired {
-	pub(crate) fn eq<T>(&self, other: &T) -> bool
-	where
-		Value: PartialEq<T>,
-	{
-		let self_ = unsafe { std::ptr::read(self) };
-		let self_: Value = self_.into();
-		let ret = &self_ == other;
-		std::mem::forget(self_);
-		ret
-	}
-	// pub(crate) fn as_value<F, O>(&self, f: F) -> O
-	// where
-	// 	F: FnOnce(&Value) -> O,
-	// {
-	// 	let self_ = unsafe { std::ptr::read(self) };
-	// 	let self_: ManuallyDrop<Value> = ManuallyDrop::new(self_.into());
-	// 	f(&self_)
-	// }
-}
-
 impl From<ValueRequired> for Value {
 	fn from(value: ValueRequired) -> Self {
 		match value {

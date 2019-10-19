@@ -43,7 +43,8 @@
 	clippy::module_inception,
 	clippy::unreadable_literal,
 	clippy::default_trait_access,
-	clippy::match_same_arms
+	clippy::match_same_arms,
+	clippy::must_use_candidate
 )]
 
 pub mod data;
