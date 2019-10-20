@@ -10,6 +10,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
 pub trait ProcessPool: Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 	fn processes(&self) -> usize;
+	fn threads(&self) -> usize;
 	fn spawn<F, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
 	where
 		F: FnOnce() -> T + ProcessSend,
@@ -37,6 +38,9 @@ where
 {
 	fn processes(&self) -> usize {
 		(*self).processes()
+	}
+	fn threads(&self) -> usize {
+		(*self).threads()
 	}
 	fn spawn<F, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
 	where

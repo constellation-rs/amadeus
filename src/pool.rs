@@ -26,6 +26,9 @@ mod process_pool_impls {
 		fn processes(&self) -> usize {
 			ProcessPool::processes(self)
 		}
+		fn threads(&self) -> usize {
+			ProcessPool::threads(self)
+		}
 		fn spawn<F, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
 		where
 			F: FnOnce() -> T + ProcessSend,
@@ -37,6 +40,9 @@ mod process_pool_impls {
 
 	impl Pool for ThreadPool {
 		fn processes(&self) -> usize {
+			1
+		}
+		fn threads(&self) -> usize {
 			ThreadPool::threads(self)
 		}
 		fn spawn<F, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
@@ -50,14 +56,17 @@ mod process_pool_impls {
 
 	impl Pool for LocalPool {
 		fn processes(&self) -> usize {
-			LocalPool::processes()
+			1
+		}
+		fn threads(&self) -> usize {
+			1
 		}
 		fn spawn<F, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
 		where
 			F: FnOnce() -> T + ProcessSend,
 			T: ProcessSend,
 		{
-			Box::pin(LocalPool::spawn(work).map_err(|e| Box::new(e) as _))
+			Box::pin(LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 }
@@ -87,14 +96,14 @@ mod thread_pool_impls {
 
 	impl Pool for LocalPool {
 		fn threads(&self) -> usize {
-			LocalPool::processes()
+			1
 		}
 		fn spawn<F, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
 		where
 			F: FnOnce() -> T + Send + 'static,
 			T: Send + 'static,
 		{
-			Box::pin(LocalPool::spawn(work).map_err(|e| Box::new(e) as _))
+			Box::pin(LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 }
@@ -115,7 +124,7 @@ mod local_pool_impls {
 			F: FnOnce() -> T + 'static,
 			T: Send + 'static,
 		{
-			Box::pin(LocalPool::spawn(work).map_err(|e| Box::new(e) as _))
+			Box::pin(LocalPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 		}
 	}
 }
