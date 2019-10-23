@@ -25,9 +25,9 @@ where
 	F: File,
 	Row: SerdeData,
 {
-	pub fn new(file: F) -> Result<Self, JsonError<F>> {
+	pub fn new(file: F) -> Result<Self, <Self as Source>::Error> {
 		Ok(Self {
-			partitions: file.partitions().map_err(JsonError::<F>::File)?,
+			partitions: file.partitions().map_err(JsonError::File)?,
 			marker: PhantomData,
 		})
 	}
@@ -38,7 +38,12 @@ where
 	Row: SerdeData,
 {
 	type Item = Row;
-	type Error = JsonError<F>;
+	#[allow(clippy::type_complexity)]
+	type Error = JsonError<
+		<F as File>::Error,
+		<<F as File>::Partition as Partition>::Error,
+		<<<F as File>::Partition as Partition>::Page as Page>::Error,
+	>;
 
 	#[cfg(not(feature = "doc"))]
 	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
@@ -52,7 +57,7 @@ where
 			.partitions
 			.into_dist_iter()
 			.flat_map(FnMut!(|partition: F::Partition| {
-				ResultExpand(partition.pages().map_err(JsonError::<F>::Partition))
+				ResultExpand(partition.pages().map_err(JsonError::Partition))
 					.into_iter()
 					.flat_map(|page: Result<_, _>| {
 						ResultExpand(page.map(|page| {
@@ -110,20 +115,14 @@ mod jsonerror {
 	}
 }
 
-pub type JsonError<F> = JsonErrorInternal<
-	<F as File>::Error,
-	<<F as File>::Partition as Partition>::Error,
-	<<<F as File>::Partition as Partition>::Page as Page>::Error,
->;
-
 #[derive(Serialize, Deserialize, Debug)]
-pub enum JsonErrorInternal<A, B, C> {
+pub enum JsonError<A, B, C> {
 	File(A),
 	Partition(B),
 	Page(C),
 	Json(#[serde(with = "jsonerror")] SerdeJsonError),
 }
-impl<A, B, C> Clone for JsonErrorInternal<A, B, C>
+impl<A, B, C> Clone for JsonError<A, B, C>
 where
 	A: Clone,
 	B: Clone,
@@ -138,7 +137,7 @@ where
 		}
 	}
 }
-impl<A, B, C> PartialEq for JsonErrorInternal<A, B, C>
+impl<A, B, C> PartialEq for JsonError<A, B, C>
 where
 	A: PartialEq,
 	B: PartialEq,
@@ -154,14 +153,14 @@ where
 		}
 	}
 }
-impl<A, B, C> error::Error for JsonErrorInternal<A, B, C>
+impl<A, B, C> error::Error for JsonError<A, B, C>
 where
 	A: error::Error,
 	B: error::Error,
 	C: error::Error,
 {
 }
-impl<A, B, C> Display for JsonErrorInternal<A, B, C>
+impl<A, B, C> Display for JsonError<A, B, C>
 where
 	A: Display,
 	B: Display,
@@ -176,7 +175,7 @@ where
 		}
 	}
 }
-impl<A, B, C> From<SerdeJsonError> for JsonErrorInternal<A, B, C> {
+impl<A, B, C> From<SerdeJsonError> for JsonError<A, B, C> {
 	fn from(err: SerdeJsonError) -> Self {
 		Self::Json(err)
 	}

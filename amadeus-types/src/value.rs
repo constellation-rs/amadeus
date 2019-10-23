@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastImpl, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1583,6 +1583,7 @@ where
 		))
 	}
 }
+#[doc(hidden)]
 impl From<List<Self>> for Value {
 	fn from(value: List<Self>) -> Self {
 		Self::List(value)
@@ -1602,6 +1603,7 @@ where
 		))
 	}
 }
+#[doc(hidden)]
 impl From<Map<Self, Self>> for Value {
 	fn from(value: Map<Self, Self>) -> Self {
 		Self::Map(value)
@@ -1624,6 +1626,7 @@ where
 		)
 	}
 }
+#[doc(hidden)]
 impl From<Option<Self>> for Value {
 	fn from(value: Option<Self>) -> Self {
 		Self::Option(value.map(|x| <Option<ValueRequired>>::from(x).unwrap()))
@@ -1664,151 +1667,151 @@ tuple!(tuple_from);
 // Downcast implementations for Value so we can try downcasting it to a specific type if
 // we know it.
 
-impl DowncastImpl<Self> for Value {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Self> for Value {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		Ok(self_)
 	}
 }
-impl DowncastImpl<Value> for bool {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for bool {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_bool()
 	}
 }
-impl DowncastImpl<Value> for u8 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u8 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u8()
 	}
 }
-impl DowncastImpl<Value> for i8 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i8 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i8()
 	}
 }
-impl DowncastImpl<Value> for u16 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u16 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u16()
 	}
 }
-impl DowncastImpl<Value> for i16 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i16 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i16()
 	}
 }
-impl DowncastImpl<Value> for u32 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u32 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u32()
 	}
 }
-impl DowncastImpl<Value> for i32 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i32 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i32()
 	}
 }
-impl DowncastImpl<Value> for u64 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u64 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u64()
 	}
 }
-impl DowncastImpl<Value> for i64 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i64 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i64()
 	}
 }
-impl DowncastImpl<Value> for f32 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for f32 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_f32()
 	}
 }
-impl DowncastImpl<Value> for f64 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for f64 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_f64()
 	}
 }
-impl DowncastImpl<Value> for Date {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Date {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date()
 	}
 }
-impl DowncastImpl<Value> for DateWithoutTimezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for DateWithoutTimezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date_without_timezone()
 	}
 }
-impl DowncastImpl<Value> for Time {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Time {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_time()
 	}
 }
-impl DowncastImpl<Value> for TimeWithoutTimezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for TimeWithoutTimezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_time_without_timezone()
 	}
 }
-impl DowncastImpl<Value> for DateTime {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for DateTime {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date_time()
 	}
 }
-impl DowncastImpl<Value> for DateTimeWithoutTimezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for DateTimeWithoutTimezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date_time_without_timezone()
 	}
 }
-impl DowncastImpl<Value> for Timezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Timezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_timezone()
 	}
 }
-impl DowncastImpl<Value> for Decimal {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Decimal {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_decimal()
 	}
 }
-impl DowncastImpl<Value> for Vec<u8> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Vec<u8> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_byte_array()
 	}
 }
-impl DowncastImpl<Value> for Bson {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Bson {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_bson()
 	}
 }
-impl DowncastImpl<Value> for String {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for String {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_string()
 	}
 }
-impl DowncastImpl<Value> for Json {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Json {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_json()
 	}
 }
-impl DowncastImpl<Value> for Enum {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Enum {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_enum()
 	}
 }
-impl DowncastImpl<Value> for Url {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Url {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_url()
 	}
 }
-impl DowncastImpl<Value> for Webpage<'static> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Webpage<'static> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_webpage()
 	}
 }
-impl DowncastImpl<Value> for IpAddr {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for IpAddr {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_ip_addr()
 	}
 }
-impl<T> DowncastImpl<Value> for List<T>
+impl<T> DowncastFrom<Value> for List<T>
 where
-	T: DowncastImpl<Value>,
+	T: DowncastFrom<Value>,
 {
-	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list().and_then(|list| {
 			list.into_iter()
 				.map(Downcast::downcast)
@@ -1817,17 +1820,18 @@ where
 		})
 	}
 }
-impl DowncastImpl<Value> for List<Value> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+#[doc(hidden)]
+impl DowncastFrom<Value> for List<Value> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list()
 	}
 }
-impl<K, V> DowncastImpl<Value> for Map<K, V>
+impl<K, V> DowncastFrom<Value> for Map<K, V>
 where
-	K: DowncastImpl<Value> + Hash + Eq,
-	V: DowncastImpl<Value>,
+	K: DowncastFrom<Value> + Hash + Eq,
+	V: DowncastFrom<Value>,
 {
-	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map().and_then(|map| {
 			map.into_iter()
 				.map(|(k, v)| Ok((k.downcast()?, v.downcast()?)))
@@ -1836,36 +1840,38 @@ where
 		})
 	}
 }
-impl DowncastImpl<Value> for Map<Value, Value> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+#[doc(hidden)]
+impl DowncastFrom<Value> for Map<Value, Value> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map()
 	}
 }
-impl DowncastImpl<Value> for Group {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Group {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_group()
 	}
 }
-impl<T> DowncastImpl<Value> for Option<T>
+impl<T> DowncastFrom<Value> for Option<T>
 where
-	T: DowncastImpl<Value>,
+	T: DowncastFrom<Value>,
 {
-	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		match self_.into_option()? {
 			Some(t) => t.downcast().map(Some),
 			None => Ok(None),
 		}
 	}
 }
-impl DowncastImpl<Value> for Option<Value> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+#[doc(hidden)]
+impl DowncastFrom<Value> for Option<Value> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_option()
 	}
 }
 macro_rules! array_downcast {
 	($($i:tt)*) => {$(
-		impl DowncastImpl<Value> for [u8; $i] {
-			fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		impl DowncastFrom<Value> for [u8; $i] {
+			fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 				let err = DowncastError {
 					from: self_.type_name(),
 					to: stringify!([u8; $i]),
@@ -1879,8 +1885,8 @@ macro_rules! array_downcast {
 array!(array_downcast);
 macro_rules! tuple_downcast {
 	($len:tt $($t:ident $i:tt)*) => (
-		 impl<$($t,)*> DowncastImpl<Value> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
-			fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		 impl<$($t,)*> DowncastFrom<Value> for ($($t,)*) where $($t: DowncastFrom<Value>,)* {
+			fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 				#[allow(unused_mut, unused_variables)]
 				let mut fields = self_.into_group()?.into_fields().into_iter();
 				if fields.len() != $len {

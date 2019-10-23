@@ -60,17 +60,17 @@ pub use crate::{
 
 pub mod prelude {
 	#[cfg(feature = "constellation")]
-	#[doc(inline)]
+	#[doc(no_inline)]
 	pub use super::pool::ProcessPool;
 	#[cfg(feature = "aws")]
-	#[doc(inline)]
+	#[doc(no_inline)]
 	pub use super::source::aws::{AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File};
-	#[doc(inline)]
+	#[doc(no_inline)]
 	pub use super::{
 		data, data::{
-			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastImpl, Enum, Group, List, Map, Time, TimeWithoutTimezone, Timezone
+			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, List, Map, Time, TimeWithoutTimezone, Timezone
 		}, dist_iter::{DistributedIteratorMulti, Identity}, pool::LocalPool, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, FutureExt1, IntoDistributedIterator, IteratorExt, Value
 	};
-	#[doc(inline)]
-	pub use amadeus_core::pool::{LocalPool as _, ProcessPool as _, ThreadPool as _};
+	#[doc(no_inline)]
+	pub use serde_closure::{Fn, FnMut, FnOnce};
 }

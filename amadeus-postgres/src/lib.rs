@@ -4,7 +4,9 @@
 
 mod impls;
 
+#[doc(hidden)]
 pub use postgres as _internal;
+
 use postgres::{params::IntoConnectParams, Error as PostgresError};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;

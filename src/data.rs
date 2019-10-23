@@ -19,7 +19,7 @@ use std::any::Any as SerdeData;
 
 pub use amadeus_derive::Data;
 pub use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastImpl, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 pub trait Data:
@@ -29,7 +29,7 @@ pub trait Data:
 	+ ParquetData
 	+ PostgresData
 	+ SerdeData
-	+ DowncastImpl<Value>
+	+ DowncastFrom<Value>
 	+ Into<Value>
 	+ Debug
 	+ Send
@@ -90,6 +90,7 @@ macro_rules! tuple {
 amadeus_types::tuple!(tuple);
 
 #[cfg(feature = "amadeus-serde")]
+#[doc(hidden)]
 pub mod serde_data {
 	use super::Data;
 	use serde::{Deserializer, Serializer};

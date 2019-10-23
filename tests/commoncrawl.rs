@@ -1,7 +1,5 @@
 #![allow(where_clauses_object_safety)]
 
-use serde_closure::FnMut;
-
 #[cfg(feature = "constellation")]
 use constellation::*;
 use std::{

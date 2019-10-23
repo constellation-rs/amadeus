@@ -7,7 +7,7 @@ use std::{
 	cmp, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc
 };
 
-use super::{Downcast, DowncastError, DowncastImpl, Value};
+use super::{Downcast, DowncastError, DowncastFrom, Value};
 
 /// Corresponds to Parquet groups of named fields.
 ///
@@ -142,8 +142,8 @@ impl From<LinkedHashMap<String, Value, FxBuildHasher>> for Group {
 
 macro_rules! tuple_downcast {
 	($len:tt $($t:ident $i:tt)*) => (
-		impl<$($t,)*> DowncastImpl<Group> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
-			fn downcast_impl(self_: Group) -> Result<Self, DowncastError> {
+		impl<$($t,)*> DowncastFrom<Group> for ($($t,)*) where $($t: DowncastFrom<Value>,)* {
+			fn downcast_from(self_: Group) -> Result<Self, DowncastError> {
 				#[allow(unused_mut, unused_variables)]
 				let mut fields = self_.into_fields().into_iter();
 				if fields.len() != $len {

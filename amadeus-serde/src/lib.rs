@@ -6,6 +6,7 @@ mod csv;
 mod impls;
 mod json;
 
+#[doc(hidden)]
 pub use serde as _internal;
 
 use amadeus_types::SchemaIncomplete;

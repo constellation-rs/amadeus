@@ -451,7 +451,7 @@ fn impl_struct(
 			#parquet_includes
 			#postgres_includes
 			#serde_includes
-			pub use ::amadeus_types::{DowncastImpl, Downcast, DowncastError, Value, Group, SchemaIncomplete};
+			pub use ::amadeus_types::{DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete};
 			pub use #amadeus_path::data::Data;
 			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::PartialEq, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
@@ -463,8 +463,8 @@ fn impl_struct(
 		#[automatically_derived]
 		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {}
 
-		impl #impl_generics __::DowncastImpl<__::Value> for #name #ty_generics #where_clause_with_data {
-			fn downcast_impl(t: __::Value) -> __::Result<Self, __::DowncastError> {
+		impl #impl_generics __::DowncastFrom<__::Value> for #name #ty_generics #where_clause_with_data {
+			fn downcast_from(t: __::Value) -> __::Result<Self, __::DowncastError> {
 				let group = t.into_group()?;
 				let field_names = group.field_names().map(__::Clone::clone);
 				let mut fields = group.into_fields().into_iter();
