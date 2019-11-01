@@ -6,11 +6,11 @@ use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::Ordering, collections::HashMap, hash::{Hash, Hasher}, sync::Arc
+	cmp::Ordering, collections::HashMap, convert::TryInto, hash::{BuildHasher, Hash, Hasher}, sync::Arc
 };
 
 use super::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, Map, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
+	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -146,7 +146,7 @@ pub enum Value {
 	/// List of elements.
 	List(Vec<Value>),
 	/// Map of key-value pairs.
-	Map(Map<Value, Value>),
+	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
 	Group(Group),
 	/// Optional element.
@@ -363,6 +363,45 @@ impl PartialOrd for Value {
 			(Self::Group(a), Self::Group(b)) => a.partial_cmp(b),
 			(Self::Option(a), Self::Option(b)) => a.partial_cmp(b),
 			_ => None,
+		}
+	}
+}
+impl AmadeusOrd for Value {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		match (self, other) {
+			(Self::Bool(a), Self::Bool(b)) => a.amadeus_cmp(b),
+			(Self::U8(a), Self::U8(b)) => a.amadeus_cmp(b),
+			(Self::I8(a), Self::I8(b)) => a.amadeus_cmp(b),
+			(Self::U16(a), Self::U16(b)) => a.amadeus_cmp(b),
+			(Self::I16(a), Self::I16(b)) => a.amadeus_cmp(b),
+			(Self::U32(a), Self::U32(b)) => a.amadeus_cmp(b),
+			(Self::I32(a), Self::I32(b)) => a.amadeus_cmp(b),
+			(Self::U64(a), Self::U64(b)) => a.amadeus_cmp(b),
+			(Self::I64(a), Self::I64(b)) => a.amadeus_cmp(b),
+			(Self::F32(a), Self::F32(b)) => a.amadeus_cmp(b),
+			(Self::F64(a), Self::F64(b)) => a.amadeus_cmp(b),
+			(Self::Date(a), Self::Date(b)) => a.amadeus_cmp(b),
+			(Self::DateWithoutTimezone(a), Self::DateWithoutTimezone(b)) => a.amadeus_cmp(b),
+			(Self::Time(a), Self::Time(b)) => a.amadeus_cmp(b),
+			(Self::TimeWithoutTimezone(a), Self::TimeWithoutTimezone(b)) => a.amadeus_cmp(b),
+			(Self::DateTime(a), Self::DateTime(b)) => a.amadeus_cmp(b),
+			(Self::DateTimeWithoutTimezone(a), Self::DateTimeWithoutTimezone(b)) => {
+				a.amadeus_cmp(b)
+			}
+			(Self::Timezone(a), Self::Timezone(b)) => a.amadeus_cmp(b),
+			(Self::Decimal(a), Self::Decimal(b)) => a.amadeus_cmp(b),
+			(Self::Bson(a), Self::Bson(b)) => a.amadeus_cmp(b),
+			(Self::String(a), Self::String(b)) => a.amadeus_cmp(b),
+			(Self::Json(a), Self::Json(b)) => a.amadeus_cmp(b),
+			(Self::Enum(a), Self::Enum(b)) => a.amadeus_cmp(b),
+			(Self::Url(a), Self::Url(b)) => a.amadeus_cmp(b),
+			(Self::Webpage(a), Self::Webpage(b)) => a.amadeus_cmp(b),
+			(Self::IpAddr(a), Self::IpAddr(b)) => a.amadeus_cmp(b),
+			(Self::List(a), Self::List(b)) => a.amadeus_cmp(b),
+			(Self::Map(a), Self::Map(b)) => a.amadeus_cmp(b),
+			(Self::Group(a), Self::Group(b)) => a.amadeus_cmp(b),
+			(Self::Option(a), Self::Option(b)) => a.amadeus_cmp(b),
+			_ => unimplemented!(),
 		}
 	}
 }
@@ -1304,7 +1343,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an Map, return a reference to it. Returns Err otherwise.
-	pub fn as_map(&self) -> Result<&Map<Self, Self>, DowncastError> {
+	pub fn as_map(&self) -> Result<&HashMap<Self, Self>, DowncastError> {
 		if let Self::Map(ret) = self {
 			Ok(ret)
 		} else {
@@ -1316,7 +1355,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an Map, return it. Returns Err otherwise.
-	pub fn into_map(self) -> Result<Map<Self, Self>, DowncastError> {
+	pub fn into_map(self) -> Result<HashMap<Self, Self>, DowncastError> {
 		if let Self::Map(ret) = self {
 			Ok(ret)
 		} else {
@@ -1538,23 +1577,24 @@ impl From<Vec<Self>> for Value {
 		Self::List(value)
 	}
 }
-impl<K, V> From<Map<K, V>> for Value
+impl<K, V, S> From<HashMap<K, V, S>> for Value
 where
 	K: Into<Self> + Hash + Eq,
 	V: Into<Self>,
+	S: BuildHasher,
 {
-	default fn from(value: Map<K, V>) -> Self {
-		Self::Map(Map::from(
+	default fn from(value: HashMap<K, V, S>) -> Self {
+		Self::Map(
 			value
 				.into_iter()
 				.map(|(k, v)| (k.into(), v.into()))
-				.collect::<HashMap<_, _>>(),
-		))
+				.collect(),
+		)
 	}
 }
 #[doc(hidden)]
-impl From<Map<Self, Self>> for Value {
-	fn from(value: Map<Self, Self>) -> Self {
+impl From<HashMap<Self, Self>> for Value {
+	fn from(value: HashMap<Self, Self>) -> Self {
 		Self::Map(value)
 	}
 }
@@ -1591,10 +1631,13 @@ where
 }
 macro_rules! array_from {
 	($($i:tt)*) => {$(
-		impl From<[u8; $i]> for Value {
-			fn from(value: [u8; $i]) -> Self {
-				let x: Box<[u8]> = Box::new(value);
-				let x: Vec<u8> = x.into();
+		impl<T> From<[T; $i]> for Value
+		where
+			T: Into<Self>
+		{
+			fn from(value: [T; $i]) -> Self {
+				let x: Box<[T]> = Box::new(value);
+				let x: Vec<T> = x.into();
 				x.into()
 			}
 		}
@@ -1769,22 +1812,23 @@ impl DowncastFrom<Value> for Vec<Value> {
 		self_.into_list()
 	}
 }
-impl<K, V> DowncastFrom<Value> for Map<K, V>
+impl<K, V, S> DowncastFrom<Value> for HashMap<K, V, S>
 where
 	K: DowncastFrom<Value> + Hash + Eq,
 	V: DowncastFrom<Value>,
+	S: BuildHasher + Default,
 {
 	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map().and_then(|map| {
 			map.into_iter()
 				.map(|(k, v)| Ok((k.downcast()?, v.downcast()?)))
-				.collect::<Result<HashMap<_, _>, _>>()
-				.map(Map::from)
+				.collect()
 		})
 	}
 }
 #[doc(hidden)]
-impl DowncastFrom<Value> for Map<Value, Value> {
+#[allow(clippy::implicit_hasher)]
+impl DowncastFrom<Value> for HashMap<Value, Value> {
 	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map()
 	}
@@ -1823,13 +1867,7 @@ macro_rules! array_downcast {
 					to: stringify!([T; $i]),
 				};
 				let x: Box<[T]> = <Vec<T>>::downcast_from(self_).map_err(|_| err)?.into_boxed_slice();
-				// x.try_into().map_err(|_| err) // Switch to this when it's implemented
-				if x.len() != $i {
-					return Err(err);
-				}
-				let x: Box<[T; $i]> = unsafe{
-					Box::from_raw(Box::into_raw(x) as *mut [T] as *mut [T; $i])
-				};
+				let x: Box<Self> = x.try_into().map_err(|_| err)?;
 				Ok(*x)
 			}
 		}
@@ -2017,12 +2055,13 @@ where
 		self.as_list().map(|list| list == other).unwrap_or(false)
 	}
 }
-impl<K, V> PartialEq<Map<K, V>> for Value
+impl<K, V, S> PartialEq<HashMap<K, V, S>> for Value
 where
 	Value: PartialEq<K> + PartialEq<V>,
 	K: Hash + Eq + Clone + Into<Value>,
+	S: BuildHasher,
 {
-	fn eq(&self, other: &Map<K, V>) -> bool {
+	fn eq(&self, other: &HashMap<K, V, S>) -> bool {
 		self.as_map()
 			.map(|map| {
 				if map.len() != other.len() {

@@ -1,12 +1,12 @@
 use linked_hash_map::LinkedHashMap;
 use std::{
-	collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::Hash, marker::PhantomData, string::FromUtf8Error, sync::Arc
+	collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::{BuildHasher, Hash}, marker::PhantomData, string::FromUtf8Error, sync::Arc
 };
 use sum::{Sum2, Sum3};
 
 use amadeus_core::util::type_coerce;
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 #[cfg(debug_assertions)]
@@ -642,14 +642,15 @@ pub(super) fn parse_map<K: ParquetData, V: ParquetData>(
 		}
 	}
 	Err(ParquetError::General(String::from(
-		"Couldn't parse Map<K,V>",
+		"Couldn't parse HashMap<K,V>",
 	)))
 }
 
-impl<K, V> ParquetData for Map<K, V>
+impl<K, V, S> ParquetData for HashMap<K, V, S>
 where
 	K: ParquetData + Hash + Eq,
 	V: ParquetData,
+	S: BuildHasher + Default,
 {
 	type Schema = MapSchema<K::Schema, V::Schema>;
 	type Reader = impl Reader<Item = Self>;
@@ -659,7 +660,7 @@ where
 			return parse_map::<K, V>(schema).map(|schema2| (schema.name().to_owned(), schema2));
 		}
 		Err(ParquetError::General(String::from(
-			"Couldn't parse Map<K,V>",
+			"Couldn't parse HashMap<K,V>",
 		)))
 	}
 
@@ -699,7 +700,7 @@ where
 				keys_reader,
 				values_reader,
 			},
-			|x: Vec<_>| Ok(From::from(x.into_iter().collect::<HashMap<_, _>>())),
+			|x: Vec<_>| Ok(From::from(x.into_iter().collect::<HashMap<_, _, S>>())),
 		)
 	}
 }
@@ -1922,7 +1923,7 @@ impl ParquetData for Value {
 				)))
 			}
 			ValueSchema::Map(ref schema) => {
-				ValueReader::Map(Box::new(<Map<Value, Value> as ParquetData>::reader(
+				ValueReader::Map(Box::new(<HashMap<Value, Value> as ParquetData>::reader(
 					schema, path, def_level, rep_level, paths, batch_size,
 				)))
 			}

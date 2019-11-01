@@ -36,9 +36,7 @@ use crate::internal::{
 		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
 	}, errors::{ParquetError, Result}, file::reader::{FileReader, RowGroupReader}, schema::types::{ColumnPath, SchemaDescPtr, SchemaDescriptor, Type}
 };
-use amadeus_types::{
-	Bson, Date, DateTime, Decimal, Enum, Group, Json, Map, Time, Value, ValueRequired
-};
+use amadeus_types::{Bson, Date, DateTime, Decimal, Enum, Group, Json, Time, Value, ValueRequired};
 
 /// Default batch size for a reader
 const DEFAULT_BATCH_SIZE: usize = 1024;
@@ -409,7 +407,7 @@ pub enum ValueReader {
 	Json(<Json as ParquetData>::Reader),
 	Enum(<Enum as ParquetData>::Reader),
 	List(Box<<Vec<Value> as ParquetData>::Reader>),
-	Map(Box<<Map<Value, Value> as ParquetData>::Reader>),
+	Map(Box<<HashMap<Value, Value> as ParquetData>::Reader>),
 	Group(<Group as ParquetData>::Reader),
 	Option(Box<<Option<Value> as ParquetData>::Reader>),
 }
@@ -1012,7 +1010,7 @@ mod tests {
 					let res = result.insert($k, $v);
 					assert!(res.is_none());
 				)*
-				Map::from(result)
+				result
 			}
 		}
 	}
@@ -1148,13 +1146,13 @@ mod tests {
 			i64,
 			Vec<i32>,
 			Vec<Vec<i32>>,
-			Map<String, i32>,
-			Vec<Map<String, i32>>,
+			HashMap<String, i32>,
+			Vec<HashMap<String, i32>>,
 			(
 				i32,
 				Vec<i32>,
 				(Vec<Vec<(i32, String)>>,),
-				Map<String, ((Vec<f64>,),)>,
+				HashMap<String, ((Vec<f64>,),)>,
 			),
 		);
 
@@ -1537,13 +1535,13 @@ mod tests {
 			Option<i64>,
 			Option<Vec<Option<i32>>>,
 			Option<Vec<Option<Vec<Option<i32>>>>>,
-			Option<Map<String, Option<i32>>>,
-			Option<Vec<Option<Map<String, Option<i32>>>>>,
+			Option<HashMap<String, Option<i32>>>,
+			Option<Vec<Option<HashMap<String, Option<i32>>>>>,
 			Option<(
 				Option<i32>,
 				Option<Vec<Option<i32>>>,
 				Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
-				Option<Map<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
+				Option<HashMap<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
 			)>,
 		);
 

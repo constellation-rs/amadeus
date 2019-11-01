@@ -10,6 +10,8 @@ use std::{
 	cmp::Ordering, convert::TryInto, error::Error, fmt::{self, Display}, str::FromStr
 };
 
+use super::AmadeusOrd;
+
 const JULIAN_DAY_OF_EPOCH: i64 = 2_440_588;
 const GREGORIAN_DAY_OF_EPOCH: i64 = 719_163;
 
@@ -237,7 +239,7 @@ impl Timezone {
 }
 impl PartialOrd for Timezone {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
+		Some(Ord::cmp(self, other))
 	}
 }
 impl Ord for Timezone {
@@ -248,6 +250,11 @@ impl Ord for Timezone {
 			(TimezoneInner::Variable(_), _) => Ordering::Less,
 			(TimezoneInner::Fixed(_), _) => Ordering::Greater,
 		}
+	}
+}
+impl AmadeusOrd for Timezone {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
 	}
 }
 impl Display for Timezone {
@@ -377,6 +384,11 @@ impl Date {
 		)
 	}
 }
+impl AmadeusOrd for Date {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
+	}
+}
 /// Corresponds to RFC 3339 and ISO 8601 string `%Y-%m-%d%:z`
 impl Display for Date {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -442,6 +454,11 @@ impl Time {
 	}
 	pub fn timezone(&self) -> Timezone {
 		self.timezone
+	}
+}
+impl AmadeusOrd for Time {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
 	}
 }
 /// Corresponds to RFC 3339 and ISO 8601 string `%H:%M:%S%.9f%:z`
@@ -548,6 +565,11 @@ impl DateTime {
 		)
 	}
 }
+impl AmadeusOrd for DateTime {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
+	}
+}
 /// Corresponds to RFC 3339 and ISO 8601 string `%Y-%m-%dT%H:%M:%S%.9f%:z`
 impl Display for DateTime {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -576,6 +598,11 @@ pub struct Duration {
 	months: i64,
 	days: i64,
 	nanos: i64,
+}
+impl AmadeusOrd for Duration {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
+	}
 }
 
 // Parquet's [Date logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#date) is i32 days from Unix epoch
@@ -639,6 +666,11 @@ impl DateWithoutTimezone {
 	#[doc(hidden)]
 	pub fn as_chrono(&self) -> Option<NaiveDate> {
 		NaiveDate::from_num_days_from_ce_opt((self.0 + GREGORIAN_DAY_OF_EPOCH).try_into().ok()?)
+	}
+}
+impl AmadeusOrd for DateWithoutTimezone {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
 	}
 }
 impl Display for DateWithoutTimezone {
@@ -754,6 +786,11 @@ impl TimeWithoutTimezone {
 	// pub fn as_nanos(&self) -> u64 {
 	// 	self.0
 	// }
+}
+impl AmadeusOrd for TimeWithoutTimezone {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
+	}
 }
 impl Display for TimeWithoutTimezone {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -915,6 +952,11 @@ impl DateTimeWithoutTimezone {
 	// 			.checked_add(i64::try_from(self.time.as_nanos()).unwrap())?,
 	// 	)
 	// }
+}
+impl AmadeusOrd for DateTimeWithoutTimezone {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
+	}
 }
 impl Display for DateTimeWithoutTimezone {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

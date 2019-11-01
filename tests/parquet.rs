@@ -7,7 +7,7 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
 use std::{
-	env, path::PathBuf, time::{Duration, SystemTime}
+	collections::HashMap, env, path::PathBuf, time::{Duration, SystemTime}
 };
 // use test::Bencher;
 
@@ -115,7 +115,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		);
 	}
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct StockSimulatedDerived {
 		bp1: Option<f64>,
 		bp2: Option<f64>,
@@ -166,7 +166,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		42_000
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct StockSimulatedDerivedProjection1 {
 		bs5: Option<f64>,
 		__index_level_0__: Option<i64>,
@@ -198,7 +198,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		42_000
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct StockSimulatedDerivedProjection2 {}
 
 	let rows = Parquet::<_, StockSimulatedDerivedProjection2>::new(vec![PathBuf::from(
@@ -238,7 +238,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		DateTime,
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct TenKayVeeTwoDerived {
 		binary_field: Vec<u8>,
 		int32_field: i32,
@@ -302,7 +302,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<DateTime>,
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct AlltypesDictionaryDerived {
 		id: Option<i32>,
 		bool_col: Option<bool>,
@@ -369,7 +369,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<DateTime>,
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct AlltypesPlainDerived {
 		id: Option<i32>,
 		bool_col: Option<bool>,
@@ -436,7 +436,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<DateTime>,
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct AlltypesPlainSnappyDerived {
 		id: Option<i32>,
 		bool_col: Option<bool>,
@@ -518,7 +518,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	// );
 
 	type NestedLists = (Option<Vec<Option<Vec<Option<Vec<Option<String>>>>>>>, i32);
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NestedListsDerived {
 		a: Option<Vec<Option<Vec<Option<Vec<Option<String>>>>>>>,
 		b: i32,
@@ -561,10 +561,14 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		3
 	);
 
-	type NestedMaps = (Option<Map<String, Option<Map<i32, bool>>>>, i32, f64);
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	type NestedMaps = (
+		Option<HashMap<String, Option<HashMap<i32, bool>>>>,
+		i32,
+		f64,
+	);
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NestedMapsDerived {
-		a: Option<Map<String, Option<Map<i32, bool>>>>,
+		a: Option<HashMap<String, Option<HashMap<i32, bool>>>>,
 		b: i32,
 		c: f64,
 	}
@@ -610,17 +614,17 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		i64,
 		Vec<i32>,
 		Vec<Vec<i32>>,
-		Map<String, i32>,
-		Vec<Map<String, i32>>,
+		HashMap<String, i32>,
+		Vec<HashMap<String, i32>>,
 		(
 			i32,
 			Vec<i32>,
 			(Vec<Vec<(i32, String)>>,),
-			Map<String, ((Vec<f64>,),)>,
+			HashMap<String, ((Vec<f64>,),)>,
 		),
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerived {
 		#[amadeus(name = "ID")]
 		id: i64,
@@ -628,29 +632,29 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		int_array: Vec<i32>,
 		int_array_array: Vec<Vec<i32>>,
 		#[amadeus(name = "Int_Map")]
-		int_map: Map<String, i32>,
-		int_map_array: Vec<Map<String, i32>>,
+		int_map: HashMap<String, i32>,
+		int_map_array: Vec<HashMap<String, i32>>,
 		#[amadeus(name = "nested_Struct")]
 		nested_struct: NonnullableDerivedInner,
 	}
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerivedInner {
 		a: i32,
 		#[amadeus(name = "B")]
 		b: Vec<i32>,
 		c: NonnullableDerivedInnerInner,
 		#[amadeus(name = "G")]
-		g: Map<String, ((Vec<f64>,),)>,
+		g: HashMap<String, ((Vec<f64>,),)>,
 	}
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerivedInnerInner {
 		#[amadeus(name = "D")]
 		d: Vec<Vec<NonnullableDerivedInnerInnerInner>>,
 	}
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerivedInnerInnerInner {
 		e: i32,
 		f: String,
@@ -698,29 +702,29 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<i64>,
 		Option<Vec<Option<i32>>>,
 		Option<Vec<Option<Vec<Option<i32>>>>>,
-		Option<Map<String, Option<i32>>>,
-		Option<Vec<Option<Map<String, Option<i32>>>>>,
+		Option<HashMap<String, Option<i32>>>,
+		Option<Vec<Option<HashMap<String, Option<i32>>>>>,
 		Option<(
 			Option<i32>,
 			Option<Vec<Option<i32>>>,
 			Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
-			Option<Map<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
+			Option<HashMap<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
 		)>,
 	);
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NullableDerived {
 		id: Option<i64>,
 		int_array: Option<Vec<Option<i32>>>,
 		#[amadeus(name = "int_array_Array")]
 		int_array_array: Option<Vec<Option<Vec<Option<i32>>>>>,
-		int_map: Option<Map<String, Option<i32>>>,
+		int_map: Option<HashMap<String, Option<i32>>>,
 		#[amadeus(name = "int_Map_Array")]
-		int_map_array: Option<Vec<Option<Map<String, Option<i32>>>>>,
+		int_map_array: Option<Vec<Option<HashMap<String, Option<i32>>>>>,
 		nested_struct: Option<(
 			Option<i32>,
 			Option<Vec<Option<i32>>>,
 			Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
-			Option<Map<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
+			Option<HashMap<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
 		)>,
 	}
 	let rows = Parquet::<_, Nullable>::new(vec![PathBuf::from(
@@ -762,7 +766,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	);
 
 	type Nulls = (Option<(Option<i32>,)>,);
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NullsDerived {
 		b_struct: Option<(Option<i32>,)>,
 	}
@@ -805,7 +809,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	);
 
 	type Repeated = (i32, Option<(Vec<(i64, Option<String>)>,)>);
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct RepeatedDerived {
 		id: i32,
 		#[amadeus(name = "phoneNumbers")]
@@ -850,7 +854,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	);
 
 	type TestDatapage = (Option<String>, i32, f64, bool, Option<Vec<i32>>);
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct TestDatapageDerived {
 		a: Option<String>,
 		b: i32,
@@ -896,7 +900,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		5
 	);
 
-	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
+	#[derive(Data, Clone, PartialEq, Debug)]
 	struct CommitsDerived {
 		id: Option<String>,
 		delay: Option<i32>,
