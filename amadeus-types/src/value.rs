@@ -6,11 +6,11 @@ use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::Ordering, collections::HashMap, convert::TryInto, hash::{Hash, Hasher}, sync::Arc
+	cmp::Ordering, collections::HashMap, hash::{Hash, Hasher}, sync::Arc
 };
 
 use super::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, Map, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -34,7 +34,6 @@ pub enum SchemaIncomplete {
 	DateTimeWithoutTimezone,
 	Timezone,
 	Decimal,
-	ByteArray,
 	Bson,
 	String,
 	Json,
@@ -71,7 +70,6 @@ pub enum Schema {
 	DateTimeWithoutTimezone,
 	Timezone,
 	Decimal,
-	ByteArray,
 	Bson,
 	String,
 	Json,
@@ -129,8 +127,6 @@ pub enum Value {
 	Timezone(Timezone),
 	/// Decimal value.
 	Decimal(Decimal),
-	/// General binary value.
-	ByteArray(Vec<u8>),
 	/// BSON binary value.
 	Bson(Bson),
 	/// UTF-8 encoded character string.
@@ -148,7 +144,7 @@ pub enum Value {
 
 	// Complex types
 	/// List of elements.
-	List(List<Value>),
+	List(Vec<Value>),
 	/// Map of key-value pairs.
 	Map(Map<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
@@ -186,7 +182,6 @@ mod optional_value {
 				ValueRequired::DateTimeWithoutTimezone(value) => serializer.serialize_some(&value),
 				ValueRequired::Timezone(value) => serializer.serialize_some(&value),
 				ValueRequired::Decimal(value) => serializer.serialize_some(&value),
-				ValueRequired::ByteArray(value) => serializer.serialize_some(&value),
 				ValueRequired::Bson(value) => serializer.serialize_some(&value),
 				ValueRequired::String(value) => serializer.serialize_some(&value),
 				ValueRequired::Json(value) => serializer.serialize_some(&value),
@@ -286,24 +281,20 @@ impl Hash for Value {
 			Self::Decimal(_value) => {
 				14u8.hash(state);
 			}
-			Self::ByteArray(value) => {
+			Self::Bson(value) => {
 				15u8.hash(state);
 				value.hash(state);
 			}
-			Self::Bson(value) => {
+			Self::String(value) => {
 				16u8.hash(state);
 				value.hash(state);
 			}
-			Self::String(value) => {
+			Self::Json(value) => {
 				17u8.hash(state);
 				value.hash(state);
 			}
-			Self::Json(value) => {
-				18u8.hash(state);
-				value.hash(state);
-			}
 			Self::Enum(value) => {
-				19u8.hash(state);
+				18u8.hash(state);
 				value.hash(state);
 			}
 			Self::Url(value) => {
@@ -311,25 +302,25 @@ impl Hash for Value {
 				value.hash(state);
 			}
 			Self::Webpage(value) => {
-				19u8.hash(state);
-				value.hash(state);
-			}
-			Self::IpAddr(value) => {
-				19u8.hash(state);
-				value.hash(state);
-			}
-			Self::List(value) => {
 				20u8.hash(state);
 				value.hash(state);
 			}
-			Self::Map(_value) => {
+			Self::IpAddr(value) => {
 				21u8.hash(state);
+				value.hash(state);
+			}
+			Self::List(value) => {
+				22u8.hash(state);
+				value.hash(state);
+			}
+			Self::Map(_value) => {
+				23u8.hash(state);
 			}
 			Self::Group(_value) => {
-				22u8.hash(state);
+				24u8.hash(state);
 			}
 			Self::Option(value) => {
-				23u8.hash(state);
+				25u8.hash(state);
 				value.hash(state);
 			}
 		}
@@ -360,7 +351,6 @@ impl PartialOrd for Value {
 			}
 			(Self::Timezone(a), Self::Timezone(b)) => a.partial_cmp(b),
 			(Self::Decimal(a), Self::Decimal(b)) => a.partial_cmp(b),
-			(Self::ByteArray(a), Self::ByteArray(b)) => a.partial_cmp(b),
 			(Self::Bson(a), Self::Bson(b)) => a.partial_cmp(b),
 			(Self::String(a), Self::String(b)) => a.partial_cmp(b),
 			(Self::Json(a), Self::Json(b)) => a.partial_cmp(b),
@@ -399,7 +389,6 @@ impl Value {
 			Self::DateTimeWithoutTimezone(_value) => "date_time_without_timezone",
 			Self::Timezone(_value) => "timezone",
 			Self::Decimal(_value) => "decimal",
-			Self::ByteArray(_value) => "byte_array",
 			Self::Bson(_value) => "bson",
 			Self::String(_value) => "string",
 			Self::Json(_value) => "json",
@@ -1041,39 +1030,6 @@ impl Value {
 		}
 	}
 
-	/// Returns true if the `Value` is an ByteArray. Returns false otherwise.
-	pub fn is_byte_array(&self) -> bool {
-		if let Self::ByteArray(_) = self {
-			true
-		} else {
-			false
-		}
-	}
-
-	/// If the `Value` is an ByteArray, return a reference to it. Returns Err otherwise.
-	pub fn as_byte_array(&self) -> Result<&Vec<u8>, DowncastError> {
-		if let Self::ByteArray(ret) = self {
-			Ok(ret)
-		} else {
-			Err(DowncastError {
-				from: self.type_name(),
-				to: "byte_array",
-			})
-		}
-	}
-
-	/// If the `Value` is an ByteArray, return it. Returns Err otherwise.
-	pub fn into_byte_array(self) -> Result<Vec<u8>, DowncastError> {
-		if let Self::ByteArray(ret) = self {
-			Ok(ret)
-		} else {
-			Err(DowncastError {
-				from: self.type_name(),
-				to: "byte_array",
-			})
-		}
-	}
-
 	/// Returns true if the `Value` is an Bson. Returns false otherwise.
 	pub fn is_bson(&self) -> bool {
 		if let Self::Bson(_) = self {
@@ -1315,7 +1271,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return a reference to it. Returns Err otherwise.
-	pub fn as_list(&self) -> Result<&List<Self>, DowncastError> {
+	pub fn as_list(&self) -> Result<&Vec<Self>, DowncastError> {
 		if let Self::List(ret) = self {
 			Ok(ret)
 		} else {
@@ -1327,7 +1283,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return it. Returns Err otherwise.
-	pub fn into_list(self) -> Result<List<Self>, DowncastError> {
+	pub fn into_list(self) -> Result<Vec<Self>, DowncastError> {
 		if let Self::List(ret) = self {
 			Ok(ret)
 		} else {
@@ -1533,11 +1489,6 @@ impl From<Decimal> for Value {
 		Self::Decimal(value)
 	}
 }
-impl From<Vec<u8>> for Value {
-	fn from(value: Vec<u8>) -> Self {
-		Self::ByteArray(value)
-	}
-}
 impl From<Bson> for Value {
 	fn from(value: Bson) -> Self {
 		Self::Bson(value)
@@ -1573,19 +1524,17 @@ impl From<IpAddr> for Value {
 		Self::IpAddr(value)
 	}
 }
-impl<T> From<List<T>> for Value
+impl<T> From<Vec<T>> for Value
 where
 	T: Into<Self>,
 {
-	default fn from(value: List<T>) -> Self {
-		Self::List(List::from(
-			value.into_iter().map(Into::into).collect::<Vec<_>>(),
-		))
+	default fn from(value: Vec<T>) -> Self {
+		Self::List(value.into_iter().map(Into::into).collect::<Vec<_>>())
 	}
 }
 #[doc(hidden)]
-impl From<List<Self>> for Value {
-	fn from(value: List<Self>) -> Self {
+impl From<Vec<Self>> for Value {
+	fn from(value: Vec<Self>) -> Self {
 		Self::List(value)
 	}
 }
@@ -1767,11 +1716,6 @@ impl DowncastFrom<Value> for Decimal {
 		self_.into_decimal()
 	}
 }
-impl DowncastFrom<Value> for Vec<u8> {
-	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
-		self_.into_byte_array()
-	}
-}
 impl DowncastFrom<Value> for Bson {
 	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_bson()
@@ -1807,7 +1751,7 @@ impl DowncastFrom<Value> for IpAddr {
 		self_.into_ip_addr()
 	}
 }
-impl<T> DowncastFrom<Value> for List<T>
+impl<T> DowncastFrom<Value> for Vec<T>
 where
 	T: DowncastFrom<Value>,
 {
@@ -1816,12 +1760,11 @@ where
 			list.into_iter()
 				.map(Downcast::downcast)
 				.collect::<Result<Vec<_>, _>>()
-				.map(List::from)
 		})
 	}
 }
 #[doc(hidden)]
-impl DowncastFrom<Value> for List<Value> {
+impl DowncastFrom<Value> for Vec<Value> {
 	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list()
 	}
@@ -1870,14 +1813,24 @@ impl DowncastFrom<Value> for Option<Value> {
 }
 macro_rules! array_downcast {
 	($($i:tt)*) => {$(
-		impl DowncastFrom<Value> for [u8; $i] {
+		impl<T> DowncastFrom<Value> for [T; $i]
+		where
+			T: DowncastFrom<Value>
+		{
 			fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 				let err = DowncastError {
 					from: self_.type_name(),
-					to: stringify!([u8; $i]),
+					to: stringify!([T; $i]),
 				};
-				let x: Box<[u8]> = self_.into_byte_array().map_err(|_| err)?.into_boxed_slice();
-				(&*x).try_into().map_err(|_| err)
+				let x: Box<[T]> = <Vec<T>>::downcast_from(self_).map_err(|_| err)?.into_boxed_slice();
+				// x.try_into().map_err(|_| err) // Switch to this when it's implemented
+				if x.len() != $i {
+					return Err(err);
+				}
+				let x: Box<[T; $i]> = unsafe{
+					Box::from_raw(Box::into_raw(x) as *mut [T] as *mut [T; $i])
+				};
+				Ok(*x)
 			}
 		}
 	)*}
@@ -2008,13 +1961,13 @@ impl PartialEq<Decimal> for Value {
 			.unwrap_or(false)
 	}
 }
-impl PartialEq<Vec<u8>> for Value {
-	fn eq(&self, other: &Vec<u8>) -> bool {
-		self.as_byte_array()
-			.map(|byte_array| byte_array == other)
-			.unwrap_or(false)
-	}
-}
+// impl PartialEq<Vec<u8>> for Value {
+// 	fn eq(&self, other: &Vec<u8>) -> bool {
+// 		self.as_byte_array()
+// 			.map(|byte_array| byte_array == other)
+// 			.unwrap_or(false)
+// 	}
+// }
 impl PartialEq<Bson> for Value {
 	fn eq(&self, other: &Bson) -> bool {
 		self.as_bson().map(|bson| bson == other).unwrap_or(false)
@@ -2056,11 +2009,11 @@ impl PartialEq<IpAddr> for Value {
 			.unwrap_or(false)
 	}
 }
-impl<T> PartialEq<List<T>> for Value
+impl<T> PartialEq<Vec<T>> for Value
 where
 	Value: PartialEq<T>,
 {
-	fn eq(&self, other: &List<T>) -> bool {
+	fn eq(&self, other: &Vec<T>) -> bool {
 		self.as_list().map(|list| list == other).unwrap_or(false)
 	}
 }
@@ -2127,7 +2080,6 @@ where
 					}
 					ValueRequired::Timezone(value) => &Value::Timezone(*value) == b,
 					ValueRequired::Decimal(value) => &Value::Decimal(value.clone()) == b,
-					ValueRequired::ByteArray(value) => &Value::ByteArray(value.clone()) == b,
 					ValueRequired::Bson(value) => &Value::Bson(value.clone()) == b,
 					ValueRequired::String(value) => &Value::String(value.clone()) == b,
 					ValueRequired::Json(value) => &Value::Json(value.clone()) == b,

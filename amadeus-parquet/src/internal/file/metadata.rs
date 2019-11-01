@@ -35,10 +35,8 @@
 
 use std::rc::Rc;
 
-use parquet_format::{ColumnChunk, ColumnMetaData, RowGroup};
-
 use crate::internal::{
-	basic::{ColumnOrder, Compression, Encoding, Type}, errors::{ParquetError, Result}, file::statistics::{self, Statistics}, schema::types::{
+	basic::{ColumnOrder, Compression, Encoding, Type}, errors::{ParquetError, Result}, file::statistics::{self, Statistics}, format::{ColumnChunk, ColumnMetaData, RowGroup}, schema::types::{
 		ColumnDescPtr, ColumnDescriptor, ColumnPath, SchemaDescPtr, SchemaDescriptor, Type as SchemaType, TypePtr
 	}
 };
@@ -248,6 +246,9 @@ impl RowGroupMetaData {
 			total_byte_size: self.total_byte_size,
 			num_rows: self.num_rows,
 			sorting_columns: None,
+			file_offset: None,
+			total_compressed_size: None,
+			ordinal: None,
 		}
 	}
 }
@@ -483,6 +484,7 @@ impl ColumnChunkMetaData {
 			dictionary_page_offset: self.dictionary_page_offset,
 			statistics: statistics::to_thrift(self.statistics.as_ref()),
 			encoding_stats: None,
+			bloom_filter_offset: None,
 		};
 
 		ColumnChunk {
@@ -493,6 +495,8 @@ impl ColumnChunkMetaData {
 			offset_index_length: None,
 			column_index_offset: None,
 			column_index_length: None,
+			crypto_metadata: None,
+			encrypted_column_metadata: None,
 		}
 	}
 }

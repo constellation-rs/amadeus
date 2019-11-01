@@ -206,6 +206,7 @@ impl Page for S3Page {
 		Box::pin(async move {
 			let len: u64 = buf.len().try_into().unwrap();
 			let mut cursor = io::Cursor::new(buf);
+			let mut errors = 0;
 			while len - cursor.position() > 0 {
 				let (start, end) = (offset + cursor.position(), offset + len - 1);
 				let res = Compat01As03::new(self.client.get_object(GetObjectRequest {
@@ -216,9 +217,15 @@ impl Page for S3Page {
 				}));
 				let res = res.await;
 				match res {
-					Err(RusotoError::HttpDispatch(_)) => continue,
-					Err(RusotoError::Unknown(response)) if response.status.is_server_error() => {
-						continue
+					Err(RusotoError::HttpDispatch(_)) if errors < 10 => {
+						errors += 1;
+						continue;
+					}
+					Err(RusotoError::Unknown(response))
+						if response.status.is_server_error() && errors < 10 =>
+					{
+						errors += 1;
+						continue;
 					}
 					_ => (),
 				}

@@ -51,9 +51,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
 serde_traitobject = "0.1.6"
 
-# pin; broken for some reason
-bincode = "=1.0.1"
-
 [dev-dependencies]
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"

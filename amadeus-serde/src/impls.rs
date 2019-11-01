@@ -1,6 +1,6 @@
 use super::{SerdeData, SerdeDeserialize, SerdeSerialize};
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Map, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
 };
 use linked_hash_map::LinkedHashMap;
 use serde::{
@@ -29,7 +29,7 @@ macro_rules! forward {
 	};
 }
 
-forward!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 Vec<u8> Bson String Enum Json);
+forward!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 Bson String Enum Json);
 
 macro_rules! via_string {
 	($($t:ty)*) => {
@@ -158,18 +158,18 @@ impl SerdeData for Group {
 	}
 }
 
-impl<T> SerdeData for List<T>
+impl<T> SerdeData for Vec<T>
 where
 	T: SerdeData,
 {
-	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+	default fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
 		// self.serialize(serializer)
 		unimplemented!()
 	}
-	fn deserialize<'de, D>(
+	default fn deserialize<'de, D>(
 		_deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
@@ -177,6 +177,22 @@ where
 	{
 		// Self::deserialize(deserializer)
 		unimplemented!()
+	}
+}
+impl SerdeData for Vec<u8> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		serde_bytes::Serialize::serialize(self, serializer)
+	}
+	fn deserialize<'de, D>(
+		deserializer: D, _schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		serde_bytes::Deserialize::deserialize(deserializer)
 	}
 }
 
@@ -228,7 +244,6 @@ impl SerdeData for Value {
 			Self::DateTimeWithoutTimezone(value) => SerdeData::serialize(value, serializer),
 			Self::Timezone(value) => SerdeData::serialize(value, serializer),
 			Self::Decimal(value) => SerdeData::serialize(value, serializer),
-			Self::ByteArray(value) => SerdeData::serialize(value, serializer),
 			Self::Bson(value) => SerdeData::serialize(value, serializer),
 			Self::String(value) => SerdeData::serialize(value, serializer),
 			Self::Json(value) => SerdeData::serialize(value, serializer),
@@ -270,9 +285,6 @@ impl SerdeData for Value {
 						serializer.serialize_some(&SerdeSerialize(value))
 					}
 					ValueRequired::Decimal(value) => {
-						serializer.serialize_some(&SerdeSerialize(value))
-					}
-					ValueRequired::ByteArray(value) => {
 						serializer.serialize_some(&SerdeSerialize(value))
 					}
 					ValueRequired::Bson(value) => serializer.serialize_some(&SerdeSerialize(value)),
@@ -375,12 +387,12 @@ impl SerdeData for Value {
 
 			#[inline]
 			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> {
-				Ok(Value::ByteArray(v.to_owned()))
+				Ok(v.to_owned().into())
 			}
 
 			#[inline]
 			fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> {
-				Ok(Value::ByteArray(v))
+				Ok(v.into())
 			}
 
 			#[inline]
@@ -416,7 +428,7 @@ impl SerdeData for Value {
 					vec.push(elem.0);
 				}
 
-				Ok(Value::List(vec.into()))
+				Ok(Value::List(vec))
 			}
 
 			fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>

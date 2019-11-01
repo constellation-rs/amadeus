@@ -21,9 +21,7 @@ use std::{collections::HashMap, env, fs, path::PathBuf, str::FromStr};
 
 use amadeus_parquet::internal;
 use internal::{
-	errors::ParquetError, file::reader::{FileReader, RowGroupReader, SerializedFileReader}, record::{
-		types::{List, Map}, Record
-	}
+	errors::ParquetError, file::reader::{FileReader, RowGroupReader, SerializedFileReader}, record::{types::Map, Record}
 };
 
 #[allow(dead_code)]
@@ -63,7 +61,7 @@ macro_rules! list {
 			$(
 				result.push($e);
 			)*
-			List::from(result)
+			result
 		}
 	}
 }
@@ -88,11 +86,11 @@ fn test_file_reader_rows_nonnullable_derived() {
 		#[parquet(name = "ID")]
 		id: i64,
 		#[parquet(name = "Int_Array")]
-		int_array: List<i32>,
-		int_array_array: List<List<i32>>,
+		int_array: Vec<i32>,
+		int_array_array: Vec<Vec<i32>>,
 		#[parquet(name = "Int_Map")]
 		int_map: Map<String, i32>,
-		int_map_array: List<Map<String, i32>>,
+		int_map_array: Vec<Map<String, i32>>,
 		#[parquet(name = "nested_Struct")]
 		nested_struct: RowDerivedInner,
 	}
@@ -101,16 +99,16 @@ fn test_file_reader_rows_nonnullable_derived() {
 	struct RowDerivedInner {
 		a: i32,
 		#[parquet(name = "B")]
-		b: List<i32>,
+		b: Vec<i32>,
 		c: RowDerivedInnerInner,
 		#[parquet(name = "G")]
-		g: Map<String, ((List<f64>,),)>,
+		g: Map<String, ((Vec<f64>,),)>,
 	}
 
 	#[derive(PartialEq, Record, Debug)]
 	struct RowDerivedInnerInner {
 		#[parquet(name = "D")]
-		d: List<List<RowDerivedInnerInnerInner>>,
+		d: Vec<Vec<RowDerivedInnerInnerInner>>,
 	}
 
 	#[derive(PartialEq, Record, Debug)]
@@ -205,7 +203,7 @@ fn test_file_reader_rows_projection_map_derived() {
 fn test_file_reader_rows_projection_list_derived() {
 	#[derive(PartialEq, Record, Debug)]
 	struct SparkSchema {
-		a: Option<List<Option<List<Option<List<Option<String>>>>>>>,
+		a: Option<Vec<Option<Vec<Option<Vec<Option<String>>>>>>>,
 	}
 
 	let rows = test_file_reader_rows::<SparkSchema>("nested_lists.snappy.parquet", None).unwrap();

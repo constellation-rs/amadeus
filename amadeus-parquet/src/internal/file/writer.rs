@@ -23,7 +23,6 @@ use std::{
 };
 
 use byteorder::{ByteOrder, LittleEndian};
-use parquet_format as parquet;
 use thrift::protocol::{TCompactOutputProtocol, TOutputProtocol};
 
 use crate::internal::{
@@ -31,7 +30,7 @@ use crate::internal::{
 		page::{CompressedPage, Page, PageWriteSpec, PageWriter}, writer::{get_column_writer, ColumnWriter}
 	}, errors::{ParquetError, Result}, file::{
 		metadata::*, properties::WriterPropertiesPtr, statistics::to_thrift as statistics_to_thrift, FOOTER_SIZE, PARQUET_MAGIC
-	}, schema::types::{self, SchemaDescPtr, SchemaDescriptor, TypePtr}, util::io::{FileSink, Position}
+	}, format as parquet, schema::types::{self, SchemaDescPtr, SchemaDescriptor, TypePtr}, util::io::{FileSink, Position}
 };
 
 // ----------------------------------------------------------------------
@@ -167,6 +166,8 @@ impl SerializedFileWriter {
 			key_value_metadata: None,
 			created_by: Some(self.props.created_by().to_owned()),
 			column_orders: None,
+			encryption_algorithm: None,
+			footer_signing_key_metadata: None,
 		};
 
 		// Write file metadata

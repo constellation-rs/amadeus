@@ -37,7 +37,7 @@ use crate::internal::{
 	}, errors::{ParquetError, Result}, file::reader::{FileReader, RowGroupReader}, schema::types::{ColumnPath, SchemaDescPtr, SchemaDescriptor, Type}
 };
 use amadeus_types::{
-	Bson, Date, DateTime, Decimal, Enum, Group, Json, List, Map, Time, Value, ValueRequired
+	Bson, Date, DateTime, Decimal, Enum, Group, Json, Map, Time, Value, ValueRequired
 };
 
 /// Default batch size for a reader
@@ -153,6 +153,56 @@ impl<T> Reader for FixedLenByteArrayReader<T> {
 	}
 
 	reader_passthrough!(column);
+}
+
+pub enum VecU8Reader {
+	ByteArray(ByteArrayReader),
+	List(RepeatedReader<<u8 as ParquetData>::Reader>),
+}
+impl Reader for VecU8Reader {
+	type Item = Vec<u8>;
+
+	#[inline]
+	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item> {
+		match self {
+			VecU8Reader::ByteArray(byte_array_reader) => {
+				byte_array_reader.read(def_level, rep_level)
+			}
+			VecU8Reader::List(list_reader) => list_reader.read(def_level, rep_level),
+		}
+	}
+
+	#[inline]
+	fn advance_columns(&mut self) -> Result<()> {
+		match self {
+			VecU8Reader::ByteArray(byte_array_reader) => byte_array_reader.advance_columns(),
+			VecU8Reader::List(list_reader) => list_reader.advance_columns(),
+		}
+	}
+
+	#[inline]
+	fn has_next(&self) -> bool {
+		match self {
+			VecU8Reader::ByteArray(byte_array_reader) => byte_array_reader.has_next(),
+			VecU8Reader::List(list_reader) => list_reader.has_next(),
+		}
+	}
+
+	#[inline]
+	fn current_def_level(&self) -> i16 {
+		match self {
+			VecU8Reader::ByteArray(byte_array_reader) => byte_array_reader.current_def_level(),
+			VecU8Reader::List(list_reader) => list_reader.current_def_level(),
+		}
+	}
+
+	#[inline]
+	fn current_rep_level(&self) -> i16 {
+		match self {
+			VecU8Reader::ByteArray(byte_array_reader) => byte_array_reader.current_rep_level(),
+			VecU8Reader::List(list_reader) => list_reader.current_rep_level(),
+		}
+	}
 }
 
 pub struct BoxFixedLenByteArrayReader<T> {
@@ -353,12 +403,12 @@ pub enum ValueReader {
 	Time(<Time as ParquetData>::Reader),
 	DateTime(<DateTime as ParquetData>::Reader),
 	Decimal(<Decimal as ParquetData>::Reader),
-	ByteArray(<Vec<u8> as ParquetData>::Reader),
+	ByteArray(ByteArrayReader),
 	Bson(<Bson as ParquetData>::Reader),
 	String(<String as ParquetData>::Reader),
 	Json(<Json as ParquetData>::Reader),
 	Enum(<Enum as ParquetData>::Reader),
-	List(Box<<List<Value> as ParquetData>::Reader>),
+	List(Box<<Vec<Value> as ParquetData>::Reader>),
 	Map(Box<<Map<Value, Value> as ParquetData>::Reader>),
 	Group(<Group as ParquetData>::Reader),
 	Option(Box<<Option<Value> as ParquetData>::Reader>),
@@ -388,7 +438,7 @@ impl Reader for ValueReader {
 				reader.read(def_level, rep_level).map(Value::Decimal)
 			}
 			ValueReader::ByteArray(ref mut reader) => {
-				reader.read(def_level, rep_level).map(Value::ByteArray)
+				reader.read(def_level, rep_level).map(Into::into)
 			}
 			ValueReader::Bson(ref mut reader) => reader.read(def_level, rep_level).map(Value::Bson),
 			ValueReader::String(ref mut reader) => {
@@ -943,7 +993,7 @@ mod tests {
 				$(
 					result.push($e);
 				)*
-				List::from(result)
+				result
 			}
 		}
 	}
@@ -1096,15 +1146,15 @@ mod tests {
 	fn test_file_reader_rows_nonnullable_typed() {
 		type RowTyped = (
 			i64,
-			List<i32>,
-			List<List<i32>>,
+			Vec<i32>,
+			Vec<Vec<i32>>,
 			Map<String, i32>,
-			List<Map<String, i32>>,
+			Vec<Map<String, i32>>,
 			(
 				i32,
-				List<i32>,
-				(List<List<(i32, String)>>,),
-				Map<String, ((List<f64>,),)>,
+				Vec<i32>,
+				(Vec<Vec<(i32, String)>>,),
+				Map<String, ((Vec<f64>,),)>,
 			),
 		);
 
@@ -1485,15 +1535,15 @@ mod tests {
 	fn test_file_reader_rows_nullable_typed() {
 		type RowTyped = (
 			Option<i64>,
-			Option<List<Option<i32>>>,
-			Option<List<Option<List<Option<i32>>>>>,
+			Option<Vec<Option<i32>>>,
+			Option<Vec<Option<Vec<Option<i32>>>>>,
 			Option<Map<String, Option<i32>>>,
-			Option<List<Option<Map<String, Option<i32>>>>>,
+			Option<Vec<Option<Map<String, Option<i32>>>>>,
 			Option<(
 				Option<i32>,
-				Option<List<Option<i32>>>,
-				Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
-				Option<Map<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
+				Option<Vec<Option<i32>>>,
+				Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
+				Option<Map<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
 			)>,
 		);
 
@@ -1903,7 +1953,7 @@ mod tests {
 
 	#[test]
 	fn test_tree_reader_handle_repeated_fields_with_no_annotation() {
-		type RepeatedNoAnnotation = (i32, Option<(List<(i64, Option<String>)>,)>);
+		type RepeatedNoAnnotation = (i32, Option<(Vec<(i64, Option<String>)>,)>);
 
 		// Array field `phoneNumbers` does not contain LIST annotation.
 		// We parse it as struct with `phone` repeated field as array.

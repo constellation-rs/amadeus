@@ -53,7 +53,6 @@ mod array;
 mod decimal;
 mod group;
 mod http;
-mod list;
 mod map;
 mod time;
 mod value;
@@ -64,7 +63,7 @@ use std::{
 };
 
 pub use self::{
-	array::{Bson, Enum, Json}, decimal::Decimal, group::Group, http::{IpAddr, ParseAddrError, ParseUrlError, ParseWebpageError, Url, Webpage}, list::List, map::Map, time::{
+	array::{Bson, Enum, Json}, decimal::Decimal, group::Group, http::{IpAddr, ParseAddrError, ParseUrlError, ParseWebpageError, Url, Webpage}, map::Map, time::{
 		Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, ParseDateError, Time, TimeWithoutTimezone, Timezone
 	}, value::{Schema, SchemaIncomplete, Value}, value_required::ValueRequired
 };

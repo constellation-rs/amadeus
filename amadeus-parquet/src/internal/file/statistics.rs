@@ -40,9 +40,8 @@
 use std::{fmt, ptr};
 
 use byteorder::{ByteOrder, LittleEndian};
-use parquet_format::Statistics as TStatistics;
 
-use crate::internal::{basic::Type, data_type::*};
+use crate::internal::{basic::Type, data_type::*, format::Statistics as TStatistics};
 
 // Macro to generate methods create Statistics.
 macro_rules! statistics_new_func {

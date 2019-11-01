@@ -20,9 +20,7 @@
 
 use std::{fmt, str};
 
-use parquet_format as parquet;
-
-use crate::internal::errors::ParquetError;
+use crate::internal::{errors::ParquetError, format as parquet};
 
 // ----------------------------------------------------------------------
 // Types from the Thrift definition

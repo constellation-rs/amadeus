@@ -517,13 +517,10 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	// 	))]
 	// );
 
-	type NestedLists = (
-		Option<List<Option<List<Option<List<Option<String>>>>>>>,
-		i32,
-	);
+	type NestedLists = (Option<Vec<Option<Vec<Option<Vec<Option<String>>>>>>>, i32);
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NestedListsDerived {
-		a: Option<List<Option<List<Option<List<Option<String>>>>>>>,
+		a: Option<Vec<Option<Vec<Option<Vec<Option<String>>>>>>>,
 		b: i32,
 	}
 	let rows = Parquet::<_, NestedLists>::new(vec![PathBuf::from(
@@ -611,15 +608,15 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	type Nonnullable = (
 		i64,
-		List<i32>,
-		List<List<i32>>,
+		Vec<i32>,
+		Vec<Vec<i32>>,
 		Map<String, i32>,
-		List<Map<String, i32>>,
+		Vec<Map<String, i32>>,
 		(
 			i32,
-			List<i32>,
-			(List<List<(i32, String)>>,),
-			Map<String, ((List<f64>,),)>,
+			Vec<i32>,
+			(Vec<Vec<(i32, String)>>,),
+			Map<String, ((Vec<f64>,),)>,
 		),
 	);
 
@@ -628,11 +625,11 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		#[amadeus(name = "ID")]
 		id: i64,
 		#[amadeus(name = "Int_Array")]
-		int_array: List<i32>,
-		int_array_array: List<List<i32>>,
+		int_array: Vec<i32>,
+		int_array_array: Vec<Vec<i32>>,
 		#[amadeus(name = "Int_Map")]
 		int_map: Map<String, i32>,
-		int_map_array: List<Map<String, i32>>,
+		int_map_array: Vec<Map<String, i32>>,
 		#[amadeus(name = "nested_Struct")]
 		nested_struct: NonnullableDerivedInner,
 	}
@@ -641,16 +638,16 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	struct NonnullableDerivedInner {
 		a: i32,
 		#[amadeus(name = "B")]
-		b: List<i32>,
+		b: Vec<i32>,
 		c: NonnullableDerivedInnerInner,
 		#[amadeus(name = "G")]
-		g: Map<String, ((List<f64>,),)>,
+		g: Map<String, ((Vec<f64>,),)>,
 	}
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NonnullableDerivedInnerInner {
 		#[amadeus(name = "D")]
-		d: List<List<NonnullableDerivedInnerInnerInner>>,
+		d: Vec<Vec<NonnullableDerivedInnerInnerInner>>,
 	}
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -699,31 +696,31 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	type Nullable = (
 		Option<i64>,
-		Option<List<Option<i32>>>,
-		Option<List<Option<List<Option<i32>>>>>,
+		Option<Vec<Option<i32>>>,
+		Option<Vec<Option<Vec<Option<i32>>>>>,
 		Option<Map<String, Option<i32>>>,
-		Option<List<Option<Map<String, Option<i32>>>>>,
+		Option<Vec<Option<Map<String, Option<i32>>>>>,
 		Option<(
 			Option<i32>,
-			Option<List<Option<i32>>>,
-			Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
-			Option<Map<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
+			Option<Vec<Option<i32>>>,
+			Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
+			Option<Map<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
 		)>,
 	);
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct NullableDerived {
 		id: Option<i64>,
-		int_array: Option<List<Option<i32>>>,
+		int_array: Option<Vec<Option<i32>>>,
 		#[amadeus(name = "int_array_Array")]
-		int_array_array: Option<List<Option<List<Option<i32>>>>>,
+		int_array_array: Option<Vec<Option<Vec<Option<i32>>>>>,
 		int_map: Option<Map<String, Option<i32>>>,
 		#[amadeus(name = "int_Map_Array")]
-		int_map_array: Option<List<Option<Map<String, Option<i32>>>>>,
+		int_map_array: Option<Vec<Option<Map<String, Option<i32>>>>>,
 		nested_struct: Option<(
 			Option<i32>,
-			Option<List<Option<i32>>>,
-			Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
-			Option<Map<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
+			Option<Vec<Option<i32>>>,
+			Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
+			Option<Map<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
 		)>,
 	}
 	let rows = Parquet::<_, Nullable>::new(vec![PathBuf::from(
@@ -807,12 +804,12 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		8
 	);
 
-	type Repeated = (i32, Option<(List<(i64, Option<String>)>,)>);
+	type Repeated = (i32, Option<(Vec<(i64, Option<String>)>,)>);
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct RepeatedDerived {
 		id: i32,
 		#[amadeus(name = "phoneNumbers")]
-		phone_numbers: Option<(List<(i64, Option<String>)>,)>,
+		phone_numbers: Option<(Vec<(i64, Option<String>)>,)>,
 	}
 	let rows = Parquet::<_, Repeated>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
@@ -852,14 +849,14 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		6
 	);
 
-	type TestDatapage = (Option<String>, i32, f64, bool, Option<List<i32>>);
+	type TestDatapage = (Option<String>, i32, f64, bool, Option<Vec<i32>>);
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct TestDatapageDerived {
 		a: Option<String>,
 		b: i32,
 		c: f64,
 		d: bool,
-		e: Option<List<i32>>,
+		e: Option<Vec<i32>>,
 	}
 	let rows = Parquet::<_, TestDatapage>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",

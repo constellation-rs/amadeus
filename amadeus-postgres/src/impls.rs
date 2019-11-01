@@ -1,6 +1,6 @@
 use super::{Names, PostgresData};
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use postgres::types::{FromSql, Type, WasNull};
@@ -57,6 +57,7 @@ where
 	}
 }
 
+/// BYTEA
 impl PostgresData for Vec<u8> {
 	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
 		name.unwrap().fmt(f)
@@ -138,14 +139,16 @@ impl PostgresData for Group {
 	}
 }
 
-impl<T> PostgresData for List<T>
+impl<T> PostgresData for Vec<T>
 where
 	T: PostgresData,
 {
-	fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
+	default fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
 		unimplemented!()
 	}
-	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
+	default fn decode(
+		_type_: &Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		unimplemented!()
 	}
 }
