@@ -466,8 +466,13 @@ fn impl_struct(
 		#[automatically_derived]
 		impl #impl_generics __::AmadeusOrd for #name #ty_generics #where_clause_with_data {
 			fn amadeus_cmp(&self, other: &Self) -> __::Ordering {
-				__::Ordering::Equal
-					#(.then_with(|| self.#field_names1.amadeus_cmp(&other.#field_names1)))*
+				let mut ord = __::Ordering::Equal;
+				#(
+					ord = if let __::Ordering::Equal = ord {
+						self.#field_names1.amadeus_cmp(&other.#field_names1)
+					} else { ord };
+				)*
+				ord
 			}
 		}
 

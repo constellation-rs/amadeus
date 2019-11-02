@@ -83,7 +83,7 @@ pub enum Schema {
 	Option(Box<Schema>),
 }
 
-/// Represents any valid Parquet value.
+/// Represents any valid Amadeus value.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Value {
 	// Primitive types
