@@ -2,11 +2,11 @@
 //! Parquet value.
 
 use std::{
-	cmp::Ordering, hash::{Hash, Hasher}
+	cmp::Ordering, collections::HashMap, hash::{Hash, Hasher}
 };
 
 use super::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 /// Represents any valid required Parquet value. Exists to avoid [`Value`] being recursive
@@ -54,8 +54,6 @@ pub enum ValueRequired {
 	Timezone(Timezone),
 	/// Decimal value.
 	Decimal(Decimal),
-	/// General binary value.
-	ByteArray(Vec<u8>),
 	/// BSON binary value.
 	Bson(Bson),
 	/// UTF-8 encoded character string.
@@ -73,9 +71,9 @@ pub enum ValueRequired {
 
 	// Complex types
 	/// List of elements.
-	List(List<Value>),
+	List(Vec<Value>),
 	/// Map of key-value pairs.
-	Map(Map<Value, Value>),
+	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
 	Group(Group),
 }
@@ -157,24 +155,20 @@ impl Hash for ValueRequired {
 			Self::Decimal(_value) => {
 				14u8.hash(state);
 			}
-			Self::ByteArray(value) => {
+			Self::Bson(value) => {
 				15u8.hash(state);
 				value.hash(state);
 			}
-			Self::Bson(value) => {
+			Self::String(value) => {
 				16u8.hash(state);
 				value.hash(state);
 			}
-			Self::String(value) => {
+			Self::Json(value) => {
 				17u8.hash(state);
 				value.hash(state);
 			}
-			Self::Json(value) => {
-				18u8.hash(state);
-				value.hash(state);
-			}
 			Self::Enum(value) => {
-				19u8.hash(state);
+				18u8.hash(state);
 				value.hash(state);
 			}
 			Self::Url(value) => {
@@ -182,22 +176,22 @@ impl Hash for ValueRequired {
 				value.hash(state);
 			}
 			Self::Webpage(value) => {
-				19u8.hash(state);
-				value.hash(state);
-			}
-			Self::IpAddr(value) => {
-				19u8.hash(state);
-				value.hash(state);
-			}
-			Self::List(value) => {
 				20u8.hash(state);
 				value.hash(state);
 			}
-			Self::Map(_value) => {
+			Self::IpAddr(value) => {
 				21u8.hash(state);
+				value.hash(state);
+			}
+			Self::List(value) => {
+				22u8.hash(state);
+				value.hash(state);
+			}
+			Self::Map(_value) => {
+				23u8.hash(state);
 			}
 			Self::Group(_value) => {
-				22u8.hash(state);
+				24u8.hash(state);
 			}
 		}
 	}
@@ -227,7 +221,6 @@ impl PartialOrd for ValueRequired {
 			}
 			(Self::Timezone(a), Self::Timezone(b)) => a.partial_cmp(b),
 			(Self::Decimal(a), Self::Decimal(b)) => a.partial_cmp(b),
-			(Self::ByteArray(a), Self::ByteArray(b)) => a.partial_cmp(b),
 			(Self::Bson(a), Self::Bson(b)) => a.partial_cmp(b),
 			(Self::String(a), Self::String(b)) => a.partial_cmp(b),
 			(Self::Json(a), Self::Json(b)) => a.partial_cmp(b),
@@ -242,26 +235,43 @@ impl PartialOrd for ValueRequired {
 		}
 	}
 }
-
-impl ValueRequired {
-	pub(crate) fn eq<T>(&self, other: &T) -> bool
-	where
-		Value: PartialEq<T>,
-	{
-		let self_ = unsafe { std::ptr::read(self) };
-		let self_: Value = self_.into();
-		let ret = &self_ == other;
-		std::mem::forget(self_);
-		ret
+impl AmadeusOrd for ValueRequired {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		match (self, other) {
+			(Self::Bool(a), Self::Bool(b)) => a.amadeus_cmp(b),
+			(Self::U8(a), Self::U8(b)) => a.amadeus_cmp(b),
+			(Self::I8(a), Self::I8(b)) => a.amadeus_cmp(b),
+			(Self::U16(a), Self::U16(b)) => a.amadeus_cmp(b),
+			(Self::I16(a), Self::I16(b)) => a.amadeus_cmp(b),
+			(Self::U32(a), Self::U32(b)) => a.amadeus_cmp(b),
+			(Self::I32(a), Self::I32(b)) => a.amadeus_cmp(b),
+			(Self::U64(a), Self::U64(b)) => a.amadeus_cmp(b),
+			(Self::I64(a), Self::I64(b)) => a.amadeus_cmp(b),
+			(Self::F32(a), Self::F32(b)) => a.amadeus_cmp(b),
+			(Self::F64(a), Self::F64(b)) => a.amadeus_cmp(b),
+			(Self::Date(a), Self::Date(b)) => a.amadeus_cmp(b),
+			(Self::DateWithoutTimezone(a), Self::DateWithoutTimezone(b)) => a.amadeus_cmp(b),
+			(Self::Time(a), Self::Time(b)) => a.amadeus_cmp(b),
+			(Self::TimeWithoutTimezone(a), Self::TimeWithoutTimezone(b)) => a.amadeus_cmp(b),
+			(Self::DateTime(a), Self::DateTime(b)) => a.amadeus_cmp(b),
+			(Self::DateTimeWithoutTimezone(a), Self::DateTimeWithoutTimezone(b)) => {
+				a.amadeus_cmp(b)
+			}
+			(Self::Timezone(a), Self::Timezone(b)) => a.amadeus_cmp(b),
+			(Self::Decimal(a), Self::Decimal(b)) => a.amadeus_cmp(b),
+			(Self::Bson(a), Self::Bson(b)) => a.amadeus_cmp(b),
+			(Self::String(a), Self::String(b)) => a.amadeus_cmp(b),
+			(Self::Json(a), Self::Json(b)) => a.amadeus_cmp(b),
+			(Self::Enum(a), Self::Enum(b)) => a.amadeus_cmp(b),
+			(Self::Url(a), Self::Url(b)) => a.amadeus_cmp(b),
+			(Self::Webpage(a), Self::Webpage(b)) => a.amadeus_cmp(b),
+			(Self::IpAddr(a), Self::IpAddr(b)) => a.amadeus_cmp(b),
+			(Self::List(a), Self::List(b)) => a.amadeus_cmp(b),
+			(Self::Map(a), Self::Map(b)) => a.amadeus_cmp(b),
+			(Self::Group(a), Self::Group(b)) => a.amadeus_cmp(b),
+			_ => unimplemented!(),
+		}
 	}
-	// pub(crate) fn as_value<F, O>(&self, f: F) -> O
-	// where
-	// 	F: FnOnce(&Value) -> O,
-	// {
-	// 	let self_ = unsafe { std::ptr::read(self) };
-	// 	let self_: ManuallyDrop<Value> = ManuallyDrop::new(self_.into());
-	// 	f(&self_)
-	// }
 }
 
 impl From<ValueRequired> for Value {
@@ -286,7 +296,6 @@ impl From<ValueRequired> for Value {
 			ValueRequired::DateTimeWithoutTimezone(value) => Self::DateTimeWithoutTimezone(value),
 			ValueRequired::Timezone(value) => Self::Timezone(value),
 			ValueRequired::Decimal(value) => Self::Decimal(value),
-			ValueRequired::ByteArray(value) => Self::ByteArray(value),
 			ValueRequired::Bson(value) => Self::Bson(value),
 			ValueRequired::String(value) => Self::String(value),
 			ValueRequired::Json(value) => Self::Json(value),
@@ -323,7 +332,6 @@ impl From<Value> for Option<ValueRequired> {
 			Value::DateTimeWithoutTimezone(value) => ValueRequired::DateTimeWithoutTimezone(value),
 			Value::Timezone(value) => ValueRequired::Timezone(value),
 			Value::Decimal(value) => ValueRequired::Decimal(value),
-			Value::ByteArray(value) => ValueRequired::ByteArray(value),
 			Value::Bson(value) => ValueRequired::Bson(value),
 			Value::String(value) => ValueRequired::String(value),
 			Value::Json(value) => ValueRequired::Json(value),
@@ -360,7 +368,6 @@ impl From<Value> for Option<ValueRequired> {
 // 			ValueRequired::Time(value) => value.serialize(serializer),
 // 			ValueRequired::DateTime(value) => value.serialize(serializer),
 // 			ValueRequired::Decimal(value) => value.serialize(serializer),
-// 			ValueRequired::ByteArray(value) => value.serialize(serializer),
 // 			ValueRequired::Bson(value) => value.serialize(serializer),
 // 			ValueRequired::String(value) => value.serialize(serializer),
 // 			ValueRequired::Json(value) => value.serialize(serializer),

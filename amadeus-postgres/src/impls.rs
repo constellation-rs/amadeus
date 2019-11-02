@@ -1,11 +1,11 @@
 use super::{Names, PostgresData};
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use postgres::types::{FromSql, Type, WasNull};
 use std::{
-	error::Error, fmt::{self, Display}, hash::Hash
+	collections::HashMap, error::Error, fmt::{self, Display}, hash::{BuildHasher, Hash}
 };
 
 macro_rules! forward {
@@ -57,6 +57,7 @@ where
 	}
 }
 
+/// BYTEA
 impl PostgresData for Vec<u8> {
 	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
 		name.unwrap().fmt(f)
@@ -138,22 +139,25 @@ impl PostgresData for Group {
 	}
 }
 
-impl<T> PostgresData for List<T>
+impl<T> PostgresData for Vec<T>
 where
 	T: PostgresData,
 {
-	fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
+	default fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
 		unimplemented!()
 	}
-	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
+	default fn decode(
+		_type_: &Type, _buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		unimplemented!()
 	}
 }
 
-impl<K, V> PostgresData for Map<K, V>
+impl<K, V, S> PostgresData for HashMap<K, V, S>
 where
 	K: Hash + Eq + PostgresData,
 	V: PostgresData,
+	S: BuildHasher + Clone + 'static,
 {
 	fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
 		unimplemented!()
@@ -256,8 +260,11 @@ impl PostgresData for Value {
 
 // Implement PostgresData for common array lengths, copied from arrayvec
 macro_rules! array {
-	($($i:tt)*) => {
-		$(impl PostgresData for [u8; $i] {
+	($($i:tt)*) => {$(
+		impl<T> PostgresData for [T; $i]
+		where
+			T: PostgresData
+		{
 			fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
 				name.unwrap().fmt(f)
 			}
@@ -270,14 +277,17 @@ macro_rules! array {
 
 		// Specialize the implementation to avoid passing a potentially large array around
 		// on the stack.
-		impl PostgresData for Box<[u8; $i]> {
+		impl<T> PostgresData for Box<[T; $i]>
+		where
+			T: PostgresData
+		{
 			fn decode(
 				_type_: &Type, _buf: Option<&[u8]>,
 			) -> Result<Self, Box<dyn Error + Sync + Send>> {
 				unimplemented!()
 			}
-		})*
-	};
+		}
+	)*};
 }
 amadeus_types::array!(array);
 

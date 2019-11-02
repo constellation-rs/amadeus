@@ -1,10 +1,12 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.3")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.4")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 
 mod impls;
 
+#[doc(hidden)]
 pub use postgres as _internal;
+
 use postgres::{params::IntoConnectParams, Error as PostgresError};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;

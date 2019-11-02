@@ -1,16 +1,18 @@
 use super::{SerdeData, SerdeDeserialize, SerdeSerialize};
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
 };
 use linked_hash_map::LinkedHashMap;
 use serde::{
 	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer
 };
-use std::{collections::HashMap, fmt, hash::Hash, str, sync::Arc};
+use std::{
+	collections::HashMap, fmt, hash::{BuildHasher, Hash}, str, sync::Arc
+};
 
 macro_rules! forward {
-	($($t:ty)*) => {
-		$(impl SerdeData for $t {
+	($($t:ty)*) => {$(
+		impl SerdeData for $t {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
 				S: Serializer,
@@ -25,15 +27,15 @@ macro_rules! forward {
 			{
 				serde::Deserialize::deserialize(deserializer)
 			}
-		})*
-	};
+		}
+	)*};
 }
 
-forward!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 Vec<u8> Bson String Enum Json);
+forward!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 Bson String Enum Json);
 
 macro_rules! via_string {
-	($($t:ty)*) => {
-		$(impl SerdeData for $t {
+	($($t:ty)*) => {$(
+		impl SerdeData for $t {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
 				S: Serializer,
@@ -49,8 +51,8 @@ macro_rules! via_string {
 				let s: String = serde::Deserialize::deserialize(deserializer)?;
 				s.parse().map_err(de::Error::custom)
 			}
-		})*
-	};
+		}
+	)*};
 }
 
 via_string!(Decimal Date DateWithoutTimezone Time TimeWithoutTimezone DateTime DateTimeWithoutTimezone Timezone Webpage<'static> Url IpAddr);
@@ -158,18 +160,18 @@ impl SerdeData for Group {
 	}
 }
 
-impl<T> SerdeData for List<T>
+impl<T> SerdeData for Vec<T>
 where
 	T: SerdeData,
 {
-	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+	default fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
 		// self.serialize(serializer)
 		unimplemented!()
 	}
-	fn deserialize<'de, D>(
+	default fn deserialize<'de, D>(
 		_deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
@@ -179,15 +181,32 @@ where
 		unimplemented!()
 	}
 }
+impl SerdeData for Vec<u8> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		serde_bytes::Serialize::serialize(self, serializer)
+	}
+	fn deserialize<'de, D>(
+		deserializer: D, _schema: Option<SchemaIncomplete>,
+	) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		serde_bytes::Deserialize::deserialize(deserializer)
+	}
+}
 
-impl<K, V> SerdeData for Map<K, V>
+impl<K, V, S> SerdeData for HashMap<K, V, S>
 where
 	K: Hash + Eq + SerdeData,
 	V: SerdeData,
+	S: BuildHasher + Clone + 'static,
 {
-	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+	fn serialize<S1>(&self, _serializer: S1) -> Result<S1::Ok, S1::Error>
 	where
-		S: Serializer,
+		S1: Serializer,
 	{
 		// self.serialize(serializer)
 		unimplemented!()
@@ -228,7 +247,6 @@ impl SerdeData for Value {
 			Self::DateTimeWithoutTimezone(value) => SerdeData::serialize(value, serializer),
 			Self::Timezone(value) => SerdeData::serialize(value, serializer),
 			Self::Decimal(value) => SerdeData::serialize(value, serializer),
-			Self::ByteArray(value) => SerdeData::serialize(value, serializer),
 			Self::Bson(value) => SerdeData::serialize(value, serializer),
 			Self::String(value) => SerdeData::serialize(value, serializer),
 			Self::Json(value) => SerdeData::serialize(value, serializer),
@@ -270,9 +288,6 @@ impl SerdeData for Value {
 						serializer.serialize_some(&SerdeSerialize(value))
 					}
 					ValueRequired::Decimal(value) => {
-						serializer.serialize_some(&SerdeSerialize(value))
-					}
-					ValueRequired::ByteArray(value) => {
 						serializer.serialize_some(&SerdeSerialize(value))
 					}
 					ValueRequired::Bson(value) => serializer.serialize_some(&SerdeSerialize(value)),
@@ -375,12 +390,12 @@ impl SerdeData for Value {
 
 			#[inline]
 			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> {
-				Ok(Value::ByteArray(v.to_owned()))
+				Ok(v.to_owned().into())
 			}
 
 			#[inline]
 			fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> {
-				Ok(Value::ByteArray(v))
+				Ok(v.into())
 			}
 
 			#[inline]
@@ -416,7 +431,7 @@ impl SerdeData for Value {
 					vec.push(elem.0);
 				}
 
-				Ok(Value::List(vec.into()))
+				Ok(Value::List(vec))
 			}
 
 			fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
@@ -432,7 +447,7 @@ impl SerdeData for Value {
 					}
 				}
 
-				Ok(Value::Map(values.into()))
+				Ok(Value::Map(values))
 			}
 		}
 
@@ -444,15 +459,41 @@ impl SerdeData for Value {
 	}
 }
 
+use std::convert::TryInto;
+
 /// Implement SerdeData for common array lengths, copied from arrayvec.
 macro_rules! array {
-	($($i:tt)*) => {
-		$(impl SerdeData for [u8; $i] {
+	($($i:tt)*) => {$(
+		impl<T> SerdeData for [T; $i]
+		where
+			T: SerdeData
+		{
+			default fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+			where
+				S: Serializer,
+			{
+				let self_: *const Self = self;
+				let self_: &[SerdeSerialize<T>; $i] = unsafe{ &*(self_ as *const _)};
+				serde::Serialize::serialize(self_, serializer)
+			}
+			default fn deserialize<'de, D>(
+				deserializer: D, _schema: Option<SchemaIncomplete>,
+			) -> Result<Self, D::Error>
+			where
+				D: Deserializer<'de>,
+			{
+				let self_: [SerdeDeserialize<T>; $i] = serde::Deserialize::deserialize(deserializer)?;
+				let self_: Box<Self> = std::array::IntoIter::new(self_).map(|a|a.0).collect::<Vec<T>>().into_boxed_slice().try_into().unwrap();
+				Ok(*self_)
+			}
+		}
+		impl SerdeData for [u8; $i] {
 			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
 				S: Serializer,
 			{
-				serde::Serialize::serialize(self, serializer)
+				serde_bytes::Serialize::serialize(self as &[u8], serializer)
+				// serde::Serialize::serialize(self, serializer)
 			}
 			fn deserialize<'de, D>(
 				deserializer: D, _schema: Option<SchemaIncomplete>,
@@ -460,25 +501,33 @@ macro_rules! array {
 			where
 				D: Deserializer<'de>,
 			{
-				serde::Deserialize::deserialize(deserializer)
+				<serde_bytes::ByteBuf as serde::Deserialize>::deserialize(deserializer).and_then(|buf| {
+					let len = buf.len();
+					let x: Box<Self> = buf.into_boxed_slice().try_into().map_err(|_|de::Error::invalid_length(len, &&*format!("a byte array of length {}", stringify!($i))))?;
+					Ok(*x)
+				})
+				// serde::Deserialize::deserialize(deserializer)
 			}
 		}
 
 		// Specialize the implementation to avoid passing a potentially large array around
 		// on the stack.
 		#[doc(hidden)]
-		impl SerdeData for Box<[u8; $i]> {
+		impl<T> SerdeData for Box<[T; $i]>
+		where
+			T: SerdeData
+		{
 			fn deserialize<'de, D>(
 				deserializer: D, _schema: Option<SchemaIncomplete>,
 			) -> Result<Self, D::Error>
 			where
 				D: Deserializer<'de>,
 			{
-				// TODO
-				serde::Deserialize::deserialize(deserializer)
+				let self_: Box<[SerdeDeserialize<T>; $i]> = serde::Deserialize::deserialize(deserializer)?;
+				Ok(unsafe { Box::from_raw(Box::into_raw(self_) as *mut [T; $i]) })
 			}
-		})*
-	};
+		}
+	)*};
 }
 amadeus_types::array!(array);
 

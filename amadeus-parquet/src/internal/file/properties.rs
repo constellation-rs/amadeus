@@ -63,7 +63,11 @@ const DEFAULT_DICTIONARY_PAGE_SIZE_LIMIT: usize = DEFAULT_PAGE_SIZE;
 const DEFAULT_STATISTICS_ENABLED: bool = true;
 const DEFAULT_MAX_STATISTICS_SIZE: usize = 4096;
 const DEFAULT_MAX_ROW_GROUP_SIZE: usize = 128 * 1024 * 1024;
-const DEFAULT_CREATED_BY: &str = concat!("parquet-rs version ", env!("CARGO_PKG_VERSION"));
+const DEFAULT_CREATED_BY: &str = concat!(
+	env!("CARGO_PKG_NAME"),
+	" version ",
+	env!("CARGO_PKG_VERSION")
+);
 
 /// Parquet writer version.
 ///

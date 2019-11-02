@@ -1,6 +1,6 @@
 use ::serde::{Deserialize, Serialize};
 use std::{
-	cmp::Ordering, fmt::Debug, hash::{Hash, Hasher}
+	cmp::Ordering, collections::HashMap, fmt::Debug, hash::{BuildHasher, Hash, Hasher}
 };
 
 #[cfg(feature = "parquet")]
@@ -19,17 +19,16 @@ use std::any::Any as SerdeData;
 
 pub use amadeus_derive::Data;
 pub use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastImpl, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 pub trait Data:
 	Clone
-	+ PartialEq
-	+ PartialOrd
+	+ AmadeusOrd
 	+ ParquetData
 	+ PostgresData
 	+ SerdeData
-	+ DowncastImpl<Value>
+	+ DowncastFrom<Value>
 	+ Into<Value>
 	+ Debug
 	+ Send
@@ -59,11 +58,12 @@ pub struct CastError;
 
 impl<T> Data for Option<T> where T: Data {}
 impl<T> Data for Box<T> where T: Data {}
-impl<T> Data for List<T> where T: Data {}
-impl<K, V> Data for Map<K, V>
+impl<T> Data for Vec<T> where T: Data {}
+impl<K, V, S> Data for HashMap<K, V, S>
 where
 	K: Hash + Eq + Data,
 	V: Data,
+	S: BuildHasher + Clone + Default + Send + 'static,
 {
 }
 
@@ -72,12 +72,13 @@ macro_rules! impl_data {
 		impl Data for $t {}
 	)*);
 }
-impl_data!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 String Vec<u8> Bson Json Enum Decimal Group Date DateWithoutTimezone Time TimeWithoutTimezone DateTime DateTimeWithoutTimezone Timezone Value Webpage<'static> Url IpAddr);
+impl_data!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 String Bson Json Enum Decimal Group Date DateWithoutTimezone Time TimeWithoutTimezone DateTime DateTimeWithoutTimezone Timezone Value Webpage<'static> Url IpAddr);
 
 // Implement Record for common array lengths, copied from arrayvec
 macro_rules! array {
 	($($i:tt)*) => {$(
 		impl Data for [u8; $i] {}
+		// TODO: impl<T> Data for [T; $i] where T: Data {}
 	)*};
 }
 amadeus_types::array!(array);
@@ -90,6 +91,7 @@ macro_rules! tuple {
 amadeus_types::tuple!(tuple);
 
 #[cfg(feature = "amadeus-serde")]
+#[doc(hidden)]
 pub mod serde_data {
 	use super::Data;
 	use serde::{Deserializer, Serializer};

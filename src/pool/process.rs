@@ -61,6 +61,7 @@ impl<T> Queued<T> {
 #[derive(Debug)]
 struct ProcessPoolInner {
 	processes: Vec<Process>,
+	threads: usize,
 	i: RoundRobin,
 }
 impl ProcessPoolInner {
@@ -111,11 +112,15 @@ impl ProcessPoolInner {
 		let i = RoundRobin::new(0, processes_vec.len());
 		Ok(Self {
 			processes: processes_vec,
+			threads,
 			i,
 		})
 	}
 	fn processes(&self) -> usize {
 		self.processes.len()
+	}
+	fn threads(&self) -> usize {
+		self.threads
 	}
 	async fn spawn<F: FnOnce() -> T + ProcessSend, T: ProcessSend>(
 		&self, work: F,
@@ -197,12 +202,25 @@ impl ProcessPool {
 	pub fn processes(&self) -> usize {
 		self.0.processes()
 	}
+	pub fn threads(&self) -> usize {
+		self.0.threads()
+	}
 	pub fn spawn<F: FnOnce() -> T + ProcessSend, T: ProcessSend>(
 		&self, work: F,
 	) -> impl Future<Output = Result<T, Panicked>> {
 		let inner = self.0.clone();
 		let future = async move { inner.spawn(work).await };
 		assert_sync_and_send(unsafe { ImplSync::new(future) })
+	}
+}
+
+impl Clone for ProcessPool {
+	/// Cloning a pool will create a new handle to the pool.
+	/// The behavior is similar to [Arc](https://doc.rust-lang.org/stable/std/sync/struct.Arc.html).
+	///
+	/// We could for example submit jobs from multiple threads concurrently.
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
 	}
 }
 

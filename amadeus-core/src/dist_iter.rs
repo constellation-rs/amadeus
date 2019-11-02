@@ -27,7 +27,7 @@ use serde_closure::*;
 use std::{cmp::Ordering, hash::Hash, iter, marker::PhantomData, ops::FnMut, vec};
 
 use crate::{
-	into_dist_iter::IntoDistributedIterator, pool::{ProcessPool, ProcessSend}
+	into_dist_iter::IntoDistributedIterator, pool::{ProcessPool, ProcessSend}, util::type_coerce
 };
 
 pub use self::{
@@ -263,12 +263,7 @@ pub trait DistributedIterator {
 			}
 			fn next_task(&mut self) -> Option<Self::Task> {
 				self.0.next_task().map(|task| {
-					ConnectConsumer(
-						task,
-						self.1.task(),
-						unsafe { type_transmute(self.2.task()) },
-						PhantomData,
-					)
+					ConnectConsumer(task, self.1.task(), type_coerce(self.2.task()), PhantomData)
 				})
 			}
 		}
@@ -313,7 +308,7 @@ pub trait DistributedIterator {
 						}
 					}
 					ConsumerReducerHack::<&A::Item>::run(&b, &item, &mut |item| {
-						i(Sum2::B(unsafe { type_transmute(item) }))
+						i(Sum2::B(type_coerce(item)))
 					}) | a.run(item, &mut |item| i(Sum2::A(item)))
 				})
 			}
@@ -549,13 +544,13 @@ pub trait DistributedIterator {
 	}
 }
 
+#[must_use]
 pub trait DistributedIteratorMulti<Source> {
 	type Item;
 	type Task: ConsumerMulti<Source, Item = Self::Item> + ProcessSend;
 
 	fn task(&self) -> Self::Task;
 
-	#[must_use]
 	fn for_each<F>(self, f: F) -> ForEach<Self, F>
 	where
 		F: FnMut(Self::Item) + Clone + ProcessSend,
@@ -565,7 +560,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(ForEach::new(self, f))
 	}
 
-	#[must_use]
 	fn inspect<F>(self, f: F) -> Inspect<Self, F>
 	where
 		F: FnMut(&Self::Item) + Clone + ProcessSend,
@@ -574,7 +568,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_iterator_multi(Inspect::new(self, f))
 	}
 
-	#[must_use]
 	fn update<F>(self, f: F) -> Update<Self, F>
 	where
 		F: FnMut(&mut Self::Item) + Clone + ProcessSend,
@@ -583,7 +576,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_iterator_multi(Update::new(self, f))
 	}
 
-	#[must_use]
 	fn map<B, F>(self, f: F) -> Map<Self, F>
 	where
 		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
@@ -592,7 +584,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_iterator_multi(Map::new(self, f))
 	}
 
-	#[must_use]
 	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 	where
 		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
@@ -602,7 +593,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_iterator_multi(FlatMap::new(self, f))
 	}
 
-	#[must_use]
 	fn filter<F>(self, f: F) -> Filter<Self, F>
 	where
 		F: FnMut(&Self::Item) -> bool + Clone + ProcessSend,
@@ -620,7 +610,6 @@ pub trait DistributedIteratorMulti<Source> {
 	// 	Chain::new(self, chain.into_dist_iter())
 	// }
 
-	#[must_use]
 	fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
 	where
 		ID: FnMut() -> B + Clone + ProcessSend,
@@ -632,7 +621,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(Fold::new(self, identity, op))
 	}
 
-	#[must_use]
 	fn count(self) -> Count<Self>
 	where
 		Self::Item: 'static,
@@ -641,7 +629,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(Count::new(self))
 	}
 
-	#[must_use]
 	fn sum<B>(self) -> Sum<Self, B>
 	where
 		B: iter::Sum<Self::Item> + iter::Sum<B> + ProcessSend,
@@ -651,7 +638,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(Sum::new(self))
 	}
 
-	#[must_use]
 	fn combine<F>(self, f: F) -> Combine<Self, F>
 	where
 		F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + ProcessSend,
@@ -661,7 +647,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(Combine::new(self, f))
 	}
 
-	#[must_use]
 	fn max(self) -> Max<Self>
 	where
 		Self::Item: Ord + ProcessSend,
@@ -670,7 +655,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(Max::new(self))
 	}
 
-	#[must_use]
 	fn max_by<F>(self, f: F) -> MaxBy<Self, F>
 	where
 		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
@@ -680,7 +664,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(MaxBy::new(self, f))
 	}
 
-	#[must_use]
 	fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
 	where
 		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
@@ -691,7 +674,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(MaxByKey::new(self, f))
 	}
 
-	#[must_use]
 	fn min(self) -> Min<Self>
 	where
 		Self::Item: Ord + ProcessSend,
@@ -700,7 +682,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(Min::new(self))
 	}
 
-	#[must_use]
 	fn min_by<F>(self, f: F) -> MinBy<Self, F>
 	where
 		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
@@ -710,7 +691,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(MinBy::new(self, f))
 	}
 
-	#[must_use]
 	fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
 	where
 		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
@@ -721,7 +701,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(MinByKey::new(self, f))
 	}
 
-	#[must_use]
 	fn most_frequent(self, n: usize, probability: f64, tolerance: f64) -> MostFrequent<Self>
 	where
 		Self::Item: Hash + Eq + Clone + ProcessSend,
@@ -730,7 +709,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(MostFrequent::new(self, n, probability, tolerance))
 	}
 
-	#[must_use]
 	fn most_distinct<A, B>(
 		self, n: usize, probability: f64, tolerance: f64, error_rate: f64,
 	) -> MostDistinct<Self>
@@ -748,7 +726,6 @@ pub trait DistributedIteratorMulti<Source> {
 		))
 	}
 
-	#[must_use]
 	fn sample_unstable(self, samples: usize) -> SampleUnstable<Self>
 	where
 		Self::Item: ProcessSend,
@@ -757,7 +734,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(SampleUnstable::new(self, samples))
 	}
 
-	#[must_use]
 	fn all<F>(self, f: F) -> All<Self, F>
 	where
 		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
@@ -767,7 +743,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(All::new(self, f))
 	}
 
-	#[must_use]
 	fn any<F>(self, f: F) -> Any<Self, F>
 	where
 		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
@@ -777,7 +752,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer(Any::new(self, f))
 	}
 
-	#[must_use]
 	fn collect<B>(self) -> Collect<Self, B>
 	where
 		B: FromDistributedIterator<Self::Item>,
@@ -786,7 +760,6 @@ pub trait DistributedIteratorMulti<Source> {
 		_assert_distributed_reducer::<B, _, _, _>(Collect::new(self))
 	}
 
-	#[must_use]
 	fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
 	where
 		T: Clone + 'a,
@@ -829,22 +802,4 @@ pub trait DistributedReducer<I: DistributedIteratorMulti<Source>, Source, B> {
 	type ReduceA: ReducerA<Item = <I as DistributedIteratorMulti<Source>>::Item> + ProcessSend;
 	type ReduceB: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = B>;
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB);
-}
-
-unsafe fn type_transmute<T1, T2>(t1: T1) -> T2 {
-	assert_eq!(
-		(
-			::std::intrinsics::type_name::<T1>(),
-			::std::mem::size_of::<T1>(),
-			::std::mem::align_of::<T1>()
-		),
-		(
-			::std::intrinsics::type_name::<T2>(),
-			::std::mem::size_of::<T2>(),
-			::std::mem::align_of::<T2>()
-		)
-	);
-	let ret = ::std::mem::transmute_copy(&t1);
-	::std::mem::forget(t1);
-	ret
 }

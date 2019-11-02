@@ -2,3 +2,11 @@
 	path = amadeus-testing
 	url = https://github.com/alecmocatta/amadeus-testing.git
 	branch = master
+[submodule "amadeus-parquet/thrift"]
+	path = amadeus-parquet/thrift
+	url = https://github.com/apache/thrift.git
+	branch = master
+[submodule "amadeus-parquet/parquet-format"]
+	path = amadeus-parquet/parquet-format
+	url = https://github.com/apache/parquet-format.git
+	branch = master

@@ -59,6 +59,7 @@ impl Source for Cloudfront {
 			.into_dist_iter()
 			.flat_map(FnMut!(move |key: String| {
 				let client = S3Client::new(region.clone());
+				let mut errors = 0;
 				ResultExpand(
 					loop {
 						match self::block_on_01(self::retry(|| {
@@ -68,11 +69,15 @@ impl Source for Cloudfront {
 								..GetObjectRequest::default()
 							})
 						})) {
-							Err(RusotoError::HttpDispatch(_)) => continue,
+							Err(RusotoError::HttpDispatch(_)) if errors < 10 => {
+								errors += 1;
+								continue;
+							}
 							Err(RusotoError::Unknown(response))
-								if response.status.is_server_error() =>
+								if response.status.is_server_error() && errors < 10 =>
 							{
-								continue
+								errors += 1;
+								continue;
 							}
 							res => break res,
 						}

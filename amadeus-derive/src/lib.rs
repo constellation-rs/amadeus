@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.1.3")]
+#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.1.4")]
 #![recursion_limit = "400"]
 #![allow(clippy::useless_let_if_seq)]
 
@@ -451,9 +451,9 @@ fn impl_struct(
 			#parquet_includes
 			#postgres_includes
 			#serde_includes
-			pub use ::amadeus_types::{DowncastImpl, Downcast, DowncastError, Value, Group, SchemaIncomplete};
+			pub use ::amadeus_types::{AmadeusOrd, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete};
 			pub use #amadeus_path::data::Data;
-			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::PartialEq, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
+			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
 		#parquet_derives
@@ -463,8 +463,22 @@ fn impl_struct(
 		#[automatically_derived]
 		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {}
 
-		impl #impl_generics __::DowncastImpl<__::Value> for #name #ty_generics #where_clause_with_data {
-			fn downcast_impl(t: __::Value) -> __::Result<Self, __::DowncastError> {
+		#[automatically_derived]
+		impl #impl_generics __::AmadeusOrd for #name #ty_generics #where_clause_with_data {
+			fn amadeus_cmp(&self, other: &Self) -> __::Ordering {
+				let mut ord = __::Ordering::Equal;
+				#(
+					ord = if let __::Ordering::Equal = ord {
+						self.#field_names1.amadeus_cmp(&other.#field_names1)
+					} else { ord };
+				)*
+				ord
+			}
+		}
+
+		#[automatically_derived]
+		impl #impl_generics __::DowncastFrom<__::Value> for #name #ty_generics #where_clause_with_data {
+			fn downcast_from(t: __::Value) -> __::Result<Self, __::DowncastError> {
 				let group = t.into_group()?;
 				let field_names = group.field_names().map(__::Clone::clone);
 				let mut fields = group.into_fields().into_iter();
@@ -485,6 +499,7 @@ fn impl_struct(
 			}
 		}
 
+		#[automatically_derived]
 		impl #impl_generics __::From<#name #ty_generics> for __::Value where #where_clause_with_data {
 			fn from(value: #name #ty_generics) -> Self {
 				__::Value::Group(__::Group::new(__::vec![

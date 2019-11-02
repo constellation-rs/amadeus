@@ -3,8 +3,10 @@
 // use num_bigint::{BigInt, Sign};
 use serde::{Deserialize, Serialize};
 use std::{
-	error::Error, fmt::{self, Display}, str::FromStr
+	cmp::Ordering, error::Error, fmt::{self, Display}, str::FromStr
 };
+
+use super::AmadeusOrd;
 
 // use internal::{
 //     basic::Repetition,
@@ -108,6 +110,11 @@ impl Decimal {
 	}
 }
 
+impl AmadeusOrd for Decimal {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(self, other)
+	}
+}
 impl Display for Decimal {
 	fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
 		unimplemented!()

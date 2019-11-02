@@ -1,7 +1,5 @@
 #![allow(where_clauses_object_safety)]
 
-use serde_closure::FnMut;
-
 use either::Either;
 
 use amadeus::prelude::*;

@@ -1,7 +1,5 @@
 #![allow(where_clauses_object_safety)]
 
-use serde_closure::FnOnce;
-
 #[cfg(feature = "constellation")]
 use constellation::*;
 use rand::{Rng, SeedableRng};

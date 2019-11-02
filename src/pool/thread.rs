@@ -215,6 +215,16 @@ impl ThreadPool {
 	}
 }
 
+impl Clone for ThreadPool {
+	/// Cloning a pool will create a new handle to the pool.
+	/// The behavior is similar to [Arc](https://doc.rust-lang.org/stable/std/sync/struct.Arc.html).
+	///
+	/// We could for example submit jobs from multiple threads concurrently.
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
+
 impl UnwindSafe for ThreadPool {}
 impl RefUnwindSafe for ThreadPool {}
 

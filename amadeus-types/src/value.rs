@@ -6,11 +6,11 @@ use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::Ordering, collections::HashMap, convert::TryInto, hash::{Hash, Hasher}, sync::Arc
+	cmp::Ordering, collections::HashMap, convert::TryInto, hash::{BuildHasher, Hash, Hasher}, sync::Arc
 };
 
 use super::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastImpl, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
+	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -34,7 +34,6 @@ pub enum SchemaIncomplete {
 	DateTimeWithoutTimezone,
 	Timezone,
 	Decimal,
-	ByteArray,
 	Bson,
 	String,
 	Json,
@@ -71,7 +70,6 @@ pub enum Schema {
 	DateTimeWithoutTimezone,
 	Timezone,
 	Decimal,
-	ByteArray,
 	Bson,
 	String,
 	Json,
@@ -85,7 +83,7 @@ pub enum Schema {
 	Option(Box<Schema>),
 }
 
-/// Represents any valid Parquet value.
+/// Represents any valid Amadeus value.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Value {
 	// Primitive types
@@ -129,8 +127,6 @@ pub enum Value {
 	Timezone(Timezone),
 	/// Decimal value.
 	Decimal(Decimal),
-	/// General binary value.
-	ByteArray(Vec<u8>),
 	/// BSON binary value.
 	Bson(Bson),
 	/// UTF-8 encoded character string.
@@ -148,9 +144,9 @@ pub enum Value {
 
 	// Complex types
 	/// List of elements.
-	List(List<Value>),
+	List(Vec<Value>),
 	/// Map of key-value pairs.
-	Map(Map<Value, Value>),
+	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
 	Group(Group),
 	/// Optional element.
@@ -186,7 +182,6 @@ mod optional_value {
 				ValueRequired::DateTimeWithoutTimezone(value) => serializer.serialize_some(&value),
 				ValueRequired::Timezone(value) => serializer.serialize_some(&value),
 				ValueRequired::Decimal(value) => serializer.serialize_some(&value),
-				ValueRequired::ByteArray(value) => serializer.serialize_some(&value),
 				ValueRequired::Bson(value) => serializer.serialize_some(&value),
 				ValueRequired::String(value) => serializer.serialize_some(&value),
 				ValueRequired::Json(value) => serializer.serialize_some(&value),
@@ -286,24 +281,20 @@ impl Hash for Value {
 			Self::Decimal(_value) => {
 				14u8.hash(state);
 			}
-			Self::ByteArray(value) => {
+			Self::Bson(value) => {
 				15u8.hash(state);
 				value.hash(state);
 			}
-			Self::Bson(value) => {
+			Self::String(value) => {
 				16u8.hash(state);
 				value.hash(state);
 			}
-			Self::String(value) => {
+			Self::Json(value) => {
 				17u8.hash(state);
 				value.hash(state);
 			}
-			Self::Json(value) => {
-				18u8.hash(state);
-				value.hash(state);
-			}
 			Self::Enum(value) => {
-				19u8.hash(state);
+				18u8.hash(state);
 				value.hash(state);
 			}
 			Self::Url(value) => {
@@ -311,25 +302,25 @@ impl Hash for Value {
 				value.hash(state);
 			}
 			Self::Webpage(value) => {
-				19u8.hash(state);
-				value.hash(state);
-			}
-			Self::IpAddr(value) => {
-				19u8.hash(state);
-				value.hash(state);
-			}
-			Self::List(value) => {
 				20u8.hash(state);
 				value.hash(state);
 			}
-			Self::Map(_value) => {
+			Self::IpAddr(value) => {
 				21u8.hash(state);
+				value.hash(state);
+			}
+			Self::List(value) => {
+				22u8.hash(state);
+				value.hash(state);
+			}
+			Self::Map(_value) => {
+				23u8.hash(state);
 			}
 			Self::Group(_value) => {
-				22u8.hash(state);
+				24u8.hash(state);
 			}
 			Self::Option(value) => {
-				23u8.hash(state);
+				25u8.hash(state);
 				value.hash(state);
 			}
 		}
@@ -360,7 +351,6 @@ impl PartialOrd for Value {
 			}
 			(Self::Timezone(a), Self::Timezone(b)) => a.partial_cmp(b),
 			(Self::Decimal(a), Self::Decimal(b)) => a.partial_cmp(b),
-			(Self::ByteArray(a), Self::ByteArray(b)) => a.partial_cmp(b),
 			(Self::Bson(a), Self::Bson(b)) => a.partial_cmp(b),
 			(Self::String(a), Self::String(b)) => a.partial_cmp(b),
 			(Self::Json(a), Self::Json(b)) => a.partial_cmp(b),
@@ -373,6 +363,45 @@ impl PartialOrd for Value {
 			(Self::Group(a), Self::Group(b)) => a.partial_cmp(b),
 			(Self::Option(a), Self::Option(b)) => a.partial_cmp(b),
 			_ => None,
+		}
+	}
+}
+impl AmadeusOrd for Value {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		match (self, other) {
+			(Self::Bool(a), Self::Bool(b)) => a.amadeus_cmp(b),
+			(Self::U8(a), Self::U8(b)) => a.amadeus_cmp(b),
+			(Self::I8(a), Self::I8(b)) => a.amadeus_cmp(b),
+			(Self::U16(a), Self::U16(b)) => a.amadeus_cmp(b),
+			(Self::I16(a), Self::I16(b)) => a.amadeus_cmp(b),
+			(Self::U32(a), Self::U32(b)) => a.amadeus_cmp(b),
+			(Self::I32(a), Self::I32(b)) => a.amadeus_cmp(b),
+			(Self::U64(a), Self::U64(b)) => a.amadeus_cmp(b),
+			(Self::I64(a), Self::I64(b)) => a.amadeus_cmp(b),
+			(Self::F32(a), Self::F32(b)) => a.amadeus_cmp(b),
+			(Self::F64(a), Self::F64(b)) => a.amadeus_cmp(b),
+			(Self::Date(a), Self::Date(b)) => a.amadeus_cmp(b),
+			(Self::DateWithoutTimezone(a), Self::DateWithoutTimezone(b)) => a.amadeus_cmp(b),
+			(Self::Time(a), Self::Time(b)) => a.amadeus_cmp(b),
+			(Self::TimeWithoutTimezone(a), Self::TimeWithoutTimezone(b)) => a.amadeus_cmp(b),
+			(Self::DateTime(a), Self::DateTime(b)) => a.amadeus_cmp(b),
+			(Self::DateTimeWithoutTimezone(a), Self::DateTimeWithoutTimezone(b)) => {
+				a.amadeus_cmp(b)
+			}
+			(Self::Timezone(a), Self::Timezone(b)) => a.amadeus_cmp(b),
+			(Self::Decimal(a), Self::Decimal(b)) => a.amadeus_cmp(b),
+			(Self::Bson(a), Self::Bson(b)) => a.amadeus_cmp(b),
+			(Self::String(a), Self::String(b)) => a.amadeus_cmp(b),
+			(Self::Json(a), Self::Json(b)) => a.amadeus_cmp(b),
+			(Self::Enum(a), Self::Enum(b)) => a.amadeus_cmp(b),
+			(Self::Url(a), Self::Url(b)) => a.amadeus_cmp(b),
+			(Self::Webpage(a), Self::Webpage(b)) => a.amadeus_cmp(b),
+			(Self::IpAddr(a), Self::IpAddr(b)) => a.amadeus_cmp(b),
+			(Self::List(a), Self::List(b)) => a.amadeus_cmp(b),
+			(Self::Map(a), Self::Map(b)) => a.amadeus_cmp(b),
+			(Self::Group(a), Self::Group(b)) => a.amadeus_cmp(b),
+			(Self::Option(a), Self::Option(b)) => a.amadeus_cmp(b),
+			_ => unimplemented!(),
 		}
 	}
 }
@@ -399,7 +428,6 @@ impl Value {
 			Self::DateTimeWithoutTimezone(_value) => "date_time_without_timezone",
 			Self::Timezone(_value) => "timezone",
 			Self::Decimal(_value) => "decimal",
-			Self::ByteArray(_value) => "byte_array",
 			Self::Bson(_value) => "bson",
 			Self::String(_value) => "string",
 			Self::Json(_value) => "json",
@@ -1041,39 +1069,6 @@ impl Value {
 		}
 	}
 
-	/// Returns true if the `Value` is an ByteArray. Returns false otherwise.
-	pub fn is_byte_array(&self) -> bool {
-		if let Self::ByteArray(_) = self {
-			true
-		} else {
-			false
-		}
-	}
-
-	/// If the `Value` is an ByteArray, return a reference to it. Returns Err otherwise.
-	pub fn as_byte_array(&self) -> Result<&Vec<u8>, DowncastError> {
-		if let Self::ByteArray(ret) = self {
-			Ok(ret)
-		} else {
-			Err(DowncastError {
-				from: self.type_name(),
-				to: "byte_array",
-			})
-		}
-	}
-
-	/// If the `Value` is an ByteArray, return it. Returns Err otherwise.
-	pub fn into_byte_array(self) -> Result<Vec<u8>, DowncastError> {
-		if let Self::ByteArray(ret) = self {
-			Ok(ret)
-		} else {
-			Err(DowncastError {
-				from: self.type_name(),
-				to: "byte_array",
-			})
-		}
-	}
-
 	/// Returns true if the `Value` is an Bson. Returns false otherwise.
 	pub fn is_bson(&self) -> bool {
 		if let Self::Bson(_) = self {
@@ -1315,7 +1310,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return a reference to it. Returns Err otherwise.
-	pub fn as_list(&self) -> Result<&List<Self>, DowncastError> {
+	pub fn as_list(&self) -> Result<&Vec<Self>, DowncastError> {
 		if let Self::List(ret) = self {
 			Ok(ret)
 		} else {
@@ -1327,7 +1322,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return it. Returns Err otherwise.
-	pub fn into_list(self) -> Result<List<Self>, DowncastError> {
+	pub fn into_list(self) -> Result<Vec<Self>, DowncastError> {
 		if let Self::List(ret) = self {
 			Ok(ret)
 		} else {
@@ -1348,7 +1343,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an Map, return a reference to it. Returns Err otherwise.
-	pub fn as_map(&self) -> Result<&Map<Self, Self>, DowncastError> {
+	pub fn as_map(&self) -> Result<&HashMap<Self, Self>, DowncastError> {
 		if let Self::Map(ret) = self {
 			Ok(ret)
 		} else {
@@ -1360,7 +1355,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an Map, return it. Returns Err otherwise.
-	pub fn into_map(self) -> Result<Map<Self, Self>, DowncastError> {
+	pub fn into_map(self) -> Result<HashMap<Self, Self>, DowncastError> {
 		if let Self::Map(ret) = self {
 			Ok(ret)
 		} else {
@@ -1533,11 +1528,6 @@ impl From<Decimal> for Value {
 		Self::Decimal(value)
 	}
 }
-impl From<Vec<u8>> for Value {
-	fn from(value: Vec<u8>) -> Self {
-		Self::ByteArray(value)
-	}
-}
 impl From<Bson> for Value {
 	fn from(value: Bson) -> Self {
 		Self::Bson(value)
@@ -1573,37 +1563,38 @@ impl From<IpAddr> for Value {
 		Self::IpAddr(value)
 	}
 }
-impl<T> From<List<T>> for Value
+impl<T> From<Vec<T>> for Value
 where
 	T: Into<Self>,
 {
-	default fn from(value: List<T>) -> Self {
-		Self::List(List::from(
-			value.into_iter().map(Into::into).collect::<Vec<_>>(),
-		))
+	default fn from(value: Vec<T>) -> Self {
+		Self::List(value.into_iter().map(Into::into).collect::<Vec<_>>())
 	}
 }
-impl From<List<Self>> for Value {
-	fn from(value: List<Self>) -> Self {
+#[doc(hidden)]
+impl From<Vec<Self>> for Value {
+	fn from(value: Vec<Self>) -> Self {
 		Self::List(value)
 	}
 }
-impl<K, V> From<Map<K, V>> for Value
+impl<K, V, S> From<HashMap<K, V, S>> for Value
 where
 	K: Into<Self> + Hash + Eq,
 	V: Into<Self>,
+	S: BuildHasher,
 {
-	default fn from(value: Map<K, V>) -> Self {
-		Self::Map(Map::from(
+	default fn from(value: HashMap<K, V, S>) -> Self {
+		Self::Map(
 			value
 				.into_iter()
 				.map(|(k, v)| (k.into(), v.into()))
-				.collect::<HashMap<_, _>>(),
-		))
+				.collect(),
+		)
 	}
 }
-impl From<Map<Self, Self>> for Value {
-	fn from(value: Map<Self, Self>) -> Self {
+#[doc(hidden)]
+impl From<HashMap<Self, Self>> for Value {
+	fn from(value: HashMap<Self, Self>) -> Self {
 		Self::Map(value)
 	}
 }
@@ -1624,6 +1615,7 @@ where
 		)
 	}
 }
+#[doc(hidden)]
 impl From<Option<Self>> for Value {
 	fn from(value: Option<Self>) -> Self {
 		Self::Option(value.map(|x| <Option<ValueRequired>>::from(x).unwrap()))
@@ -1639,10 +1631,13 @@ where
 }
 macro_rules! array_from {
 	($($i:tt)*) => {$(
-		impl From<[u8; $i]> for Value {
-			fn from(value: [u8; $i]) -> Self {
-				let x: Box<[u8]> = Box::new(value);
-				let x: Vec<u8> = x.into();
+		impl<T> From<[T; $i]> for Value
+		where
+			T: Into<Self>
+		{
+			fn from(value: [T; $i]) -> Self {
+				let x: Box<[T]> = Box::new(value);
+				let x: Vec<T> = x.into();
 				x.into()
 			}
 		}
@@ -1664,214 +1659,216 @@ tuple!(tuple_from);
 // Downcast implementations for Value so we can try downcasting it to a specific type if
 // we know it.
 
-impl DowncastImpl<Self> for Value {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Self> for Value {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		Ok(self_)
 	}
 }
-impl DowncastImpl<Value> for bool {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for bool {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_bool()
 	}
 }
-impl DowncastImpl<Value> for u8 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u8 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u8()
 	}
 }
-impl DowncastImpl<Value> for i8 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i8 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i8()
 	}
 }
-impl DowncastImpl<Value> for u16 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u16 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u16()
 	}
 }
-impl DowncastImpl<Value> for i16 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i16 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i16()
 	}
 }
-impl DowncastImpl<Value> for u32 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u32 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u32()
 	}
 }
-impl DowncastImpl<Value> for i32 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i32 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i32()
 	}
 }
-impl DowncastImpl<Value> for u64 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for u64 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_u64()
 	}
 }
-impl DowncastImpl<Value> for i64 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for i64 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_i64()
 	}
 }
-impl DowncastImpl<Value> for f32 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for f32 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_f32()
 	}
 }
-impl DowncastImpl<Value> for f64 {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for f64 {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_f64()
 	}
 }
-impl DowncastImpl<Value> for Date {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Date {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date()
 	}
 }
-impl DowncastImpl<Value> for DateWithoutTimezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for DateWithoutTimezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date_without_timezone()
 	}
 }
-impl DowncastImpl<Value> for Time {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Time {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_time()
 	}
 }
-impl DowncastImpl<Value> for TimeWithoutTimezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for TimeWithoutTimezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_time_without_timezone()
 	}
 }
-impl DowncastImpl<Value> for DateTime {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for DateTime {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date_time()
 	}
 }
-impl DowncastImpl<Value> for DateTimeWithoutTimezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for DateTimeWithoutTimezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_date_time_without_timezone()
 	}
 }
-impl DowncastImpl<Value> for Timezone {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Timezone {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_timezone()
 	}
 }
-impl DowncastImpl<Value> for Decimal {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Decimal {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_decimal()
 	}
 }
-impl DowncastImpl<Value> for Vec<u8> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
-		self_.into_byte_array()
-	}
-}
-impl DowncastImpl<Value> for Bson {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Bson {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_bson()
 	}
 }
-impl DowncastImpl<Value> for String {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for String {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_string()
 	}
 }
-impl DowncastImpl<Value> for Json {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Json {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_json()
 	}
 }
-impl DowncastImpl<Value> for Enum {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Enum {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_enum()
 	}
 }
-impl DowncastImpl<Value> for Url {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Url {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_url()
 	}
 }
-impl DowncastImpl<Value> for Webpage<'static> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Webpage<'static> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_webpage()
 	}
 }
-impl DowncastImpl<Value> for IpAddr {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for IpAddr {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_ip_addr()
 	}
 }
-impl<T> DowncastImpl<Value> for List<T>
+impl<T> DowncastFrom<Value> for Vec<T>
 where
-	T: DowncastImpl<Value>,
+	T: DowncastFrom<Value>,
 {
-	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list().and_then(|list| {
 			list.into_iter()
 				.map(Downcast::downcast)
 				.collect::<Result<Vec<_>, _>>()
-				.map(List::from)
 		})
 	}
 }
-impl DowncastImpl<Value> for List<Value> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+#[doc(hidden)]
+impl DowncastFrom<Value> for Vec<Value> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list()
 	}
 }
-impl<K, V> DowncastImpl<Value> for Map<K, V>
+impl<K, V, S> DowncastFrom<Value> for HashMap<K, V, S>
 where
-	K: DowncastImpl<Value> + Hash + Eq,
-	V: DowncastImpl<Value>,
+	K: DowncastFrom<Value> + Hash + Eq,
+	V: DowncastFrom<Value>,
+	S: BuildHasher + Default,
 {
-	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map().and_then(|map| {
 			map.into_iter()
 				.map(|(k, v)| Ok((k.downcast()?, v.downcast()?)))
-				.collect::<Result<HashMap<_, _>, _>>()
-				.map(Map::from)
+				.collect()
 		})
 	}
 }
-impl DowncastImpl<Value> for Map<Value, Value> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+#[doc(hidden)]
+#[allow(clippy::implicit_hasher)]
+impl DowncastFrom<Value> for HashMap<Value, Value> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map()
 	}
 }
-impl DowncastImpl<Value> for Group {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+impl DowncastFrom<Value> for Group {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_group()
 	}
 }
-impl<T> DowncastImpl<Value> for Option<T>
+impl<T> DowncastFrom<Value> for Option<T>
 where
-	T: DowncastImpl<Value>,
+	T: DowncastFrom<Value>,
 {
-	default fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		match self_.into_option()? {
 			Some(t) => t.downcast().map(Some),
 			None => Ok(None),
 		}
 	}
 }
-impl DowncastImpl<Value> for Option<Value> {
-	fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+#[doc(hidden)]
+impl DowncastFrom<Value> for Option<Value> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_option()
 	}
 }
 macro_rules! array_downcast {
 	($($i:tt)*) => {$(
-		impl DowncastImpl<Value> for [u8; $i] {
-			fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		impl<T> DowncastFrom<Value> for [T; $i]
+		where
+			T: DowncastFrom<Value>
+		{
+			fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 				let err = DowncastError {
 					from: self_.type_name(),
-					to: stringify!([u8; $i]),
+					to: stringify!([T; $i]),
 				};
-				let x: Box<[u8]> = self_.into_byte_array().map_err(|_| err)?.into_boxed_slice();
-				(&*x).try_into().map_err(|_| err)
+				let x: Box<[T]> = <Vec<T>>::downcast_from(self_).map_err(|_| err)?.into_boxed_slice();
+				let x: Box<Self> = x.try_into().map_err(|_| err)?;
+				Ok(*x)
 			}
 		}
 	)*}
@@ -1879,8 +1876,8 @@ macro_rules! array_downcast {
 array!(array_downcast);
 macro_rules! tuple_downcast {
 	($len:tt $($t:ident $i:tt)*) => (
-		 impl<$($t,)*> DowncastImpl<Value> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
-			fn downcast_impl(self_: Value) -> Result<Self, DowncastError> {
+		 impl<$($t,)*> DowncastFrom<Value> for ($($t,)*) where $($t: DowncastFrom<Value>,)* {
+			fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 				#[allow(unused_mut, unused_variables)]
 				let mut fields = self_.into_group()?.into_fields().into_iter();
 				if fields.len() != $len {
@@ -2002,13 +1999,13 @@ impl PartialEq<Decimal> for Value {
 			.unwrap_or(false)
 	}
 }
-impl PartialEq<Vec<u8>> for Value {
-	fn eq(&self, other: &Vec<u8>) -> bool {
-		self.as_byte_array()
-			.map(|byte_array| byte_array == other)
-			.unwrap_or(false)
-	}
-}
+// impl PartialEq<Vec<u8>> for Value {
+// 	fn eq(&self, other: &Vec<u8>) -> bool {
+// 		self.as_byte_array()
+// 			.map(|byte_array| byte_array == other)
+// 			.unwrap_or(false)
+// 	}
+// }
 impl PartialEq<Bson> for Value {
 	fn eq(&self, other: &Bson) -> bool {
 		self.as_bson().map(|bson| bson == other).unwrap_or(false)
@@ -2050,20 +2047,21 @@ impl PartialEq<IpAddr> for Value {
 			.unwrap_or(false)
 	}
 }
-impl<T> PartialEq<List<T>> for Value
+impl<T> PartialEq<Vec<T>> for Value
 where
 	Value: PartialEq<T>,
 {
-	fn eq(&self, other: &List<T>) -> bool {
+	fn eq(&self, other: &Vec<T>) -> bool {
 		self.as_list().map(|list| list == other).unwrap_or(false)
 	}
 }
-impl<K, V> PartialEq<Map<K, V>> for Value
+impl<K, V, S> PartialEq<HashMap<K, V, S>> for Value
 where
 	Value: PartialEq<K> + PartialEq<V>,
 	K: Hash + Eq + Clone + Into<Value>,
+	S: BuildHasher,
 {
-	fn eq(&self, other: &Map<K, V>) -> bool {
+	fn eq(&self, other: &HashMap<K, V, S>) -> bool {
 		self.as_map()
 			.map(|map| {
 				if map.len() != other.len() {
@@ -2095,7 +2093,43 @@ where
 	fn eq(&self, other: &Option<T>) -> bool {
 		self.as_option()
 			.map(|option| match (&option, other) {
-				(Some(a), Some(b)) if a.eq(b) => true,
+				(Some(a), Some(b)) => match a {
+					ValueRequired::Bool(value) => &Value::Bool(*value) == b,
+					ValueRequired::U8(value) => &Value::U8(*value) == b,
+					ValueRequired::I8(value) => &Value::I8(*value) == b,
+					ValueRequired::U16(value) => &Value::U16(*value) == b,
+					ValueRequired::I16(value) => &Value::I16(*value) == b,
+					ValueRequired::U32(value) => &Value::U32(*value) == b,
+					ValueRequired::I32(value) => &Value::I32(*value) == b,
+					ValueRequired::U64(value) => &Value::U64(*value) == b,
+					ValueRequired::I64(value) => &Value::I64(*value) == b,
+					ValueRequired::F32(value) => &Value::F32(*value) == b,
+					ValueRequired::F64(value) => &Value::F64(*value) == b,
+					ValueRequired::Date(value) => &Value::Date(*value) == b,
+					ValueRequired::DateWithoutTimezone(value) => {
+						&Value::DateWithoutTimezone(*value) == b
+					}
+					ValueRequired::Time(value) => &Value::Time(*value) == b,
+					ValueRequired::TimeWithoutTimezone(value) => {
+						&Value::TimeWithoutTimezone(*value) == b
+					}
+					ValueRequired::DateTime(value) => &Value::DateTime(*value) == b,
+					ValueRequired::DateTimeWithoutTimezone(value) => {
+						&Value::DateTimeWithoutTimezone(*value) == b
+					}
+					ValueRequired::Timezone(value) => &Value::Timezone(*value) == b,
+					ValueRequired::Decimal(value) => &Value::Decimal(value.clone()) == b,
+					ValueRequired::Bson(value) => &Value::Bson(value.clone()) == b,
+					ValueRequired::String(value) => &Value::String(value.clone()) == b,
+					ValueRequired::Json(value) => &Value::Json(value.clone()) == b,
+					ValueRequired::Enum(value) => &Value::Enum(value.clone()) == b,
+					ValueRequired::Url(value) => &Value::Url(value.clone()) == b,
+					ValueRequired::Webpage(value) => &Value::Webpage(value.clone()) == b,
+					ValueRequired::IpAddr(value) => &Value::IpAddr(*value) == b,
+					ValueRequired::List(value) => &Value::List(value.clone()) == b,
+					ValueRequired::Map(value) => &Value::Map(value.clone()) == b,
+					ValueRequired::Group(value) => &Value::Group(value.clone()) == b,
+				},
 				(None, None) => true,
 				_ => false,
 			})

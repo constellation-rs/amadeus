@@ -4,10 +4,10 @@ use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-	cmp, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc
+	cmp::Ordering, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc
 };
 
-use super::{Downcast, DowncastError, DowncastImpl, Value};
+use super::{AmadeusOrd, Downcast, DowncastError, DowncastFrom, Value};
 
 /// Corresponds to Parquet groups of named fields.
 ///
@@ -88,7 +88,7 @@ where
 	}
 }
 impl PartialOrd for Group {
-	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		if match (self.field_names.as_ref(), other.field_names.as_ref()) {
 			(Some(a), Some(b)) => a == b,
 			_ => self.fields.len() == other.fields.len(),
@@ -96,6 +96,26 @@ impl PartialOrd for Group {
 			self.fields.partial_cmp(&other.fields)
 		} else {
 			None
+		}
+	}
+}
+impl AmadeusOrd for Group {
+	fn amadeus_cmp(&self, other: &Self) -> Ordering {
+		match (self.field_names.as_ref(), other.field_names.as_ref()) {
+			(Some(a), Some(b)) => a
+				.iter()
+				.map(|(name, _index)| name)
+				.zip(&self.fields)
+				.cmp_by(
+					b.iter().map(|(name, _index)| name).zip(&other.fields),
+					|a, b| a.amadeus_cmp(&b),
+				),
+			(None, None) => self
+				.fields
+				.iter()
+				.cmp_by(&other.fields, AmadeusOrd::amadeus_cmp),
+			(Some(_), None) => Ordering::Less,
+			(None, Some(_)) => Ordering::Greater,
 		}
 	}
 }
@@ -142,8 +162,8 @@ impl From<LinkedHashMap<String, Value, FxBuildHasher>> for Group {
 
 macro_rules! tuple_downcast {
 	($len:tt $($t:ident $i:tt)*) => (
-		impl<$($t,)*> DowncastImpl<Group> for ($($t,)*) where $($t: DowncastImpl<Value>,)* {
-			fn downcast_impl(self_: Group) -> Result<Self, DowncastError> {
+		impl<$($t,)*> DowncastFrom<Group> for ($($t,)*) where $($t: DowncastFrom<Value>,)* {
+			fn downcast_from(self_: Group) -> Result<Self, DowncastError> {
 				#[allow(unused_mut, unused_variables)]
 				let mut fields = self_.into_fields().into_iter();
 				if fields.len() != $len {

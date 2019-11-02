@@ -574,6 +574,26 @@ where
 	}
 }
 
+#[derive(Debug)]
+pub enum VecU8Schema {
+	ByteArray(ByteArraySchema),
+	List(ListSchema<U8Schema>),
+}
+impl Schema for VecU8Schema {
+	fn fmt(
+		self_: Option<&Self>, r: Option<Repetition>, name: Option<&str>, f: &mut fmt::Formatter,
+	) -> fmt::Result {
+		match self_ {
+			Some(VecU8Schema::ByteArray(_)) | None => {
+				<ByteArraySchema as Schema>::fmt(None, r, name, f)
+			}
+			Some(VecU8Schema::List(list_schema)) => {
+				<ListSchema<U8Schema> as Schema>::fmt(Some(list_schema), r, name, f)
+			}
+		}
+	}
+}
+
 /// Schema for the [List logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists) and unannotated repeated elements.
 #[derive(Default, Debug)]
 pub struct ListSchema<T>(
@@ -710,11 +730,11 @@ pub enum ValueSchema {
 	Time(TimeSchema),
 	DateTime(DateTimeSchema),
 	Decimal(DecimalSchema),
-	ByteArray(ByteArraySchema),
 	Bson(BsonSchema),
 	String(StringSchema),
 	Json(JsonSchema),
 	Enum(EnumSchema),
+	ByteArray(ByteArraySchema),
 	List(Box<ListSchema<ValueSchema>>),
 	Map(Box<MapSchema<ValueSchema, ValueSchema>>),
 	Group(GroupSchema),
@@ -741,11 +761,11 @@ impl Schema for ValueSchema {
 				ValueSchema::Time(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::DateTime(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Decimal(schema) => Schema::fmt(Some(schema), r, name, f),
-				ValueSchema::ByteArray(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Bson(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::String(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Json(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::Enum(schema) => Schema::fmt(Some(schema), r, name, f),
+				ValueSchema::ByteArray(schema) => Schema::fmt(Some(schema), r, name, f),
 				ValueSchema::List(schema) => Schema::fmt(Some(&**schema), r, name, f),
 				ValueSchema::Map(schema) => Schema::fmt(Some(&**schema), r, name, f),
 				ValueSchema::Group(schema) => Schema::fmt(Some(schema), r, name, f),
@@ -1581,6 +1601,16 @@ impl Downcast<JsonSchema> for ValueSchema {
 impl Downcast<EnumSchema> for ValueSchema {
 	fn downcast(self) -> Result<EnumSchema> {
 		self.into_enum()
+	}
+}
+impl Downcast<VecU8Schema> for ValueSchema {
+	fn downcast(self) -> Result<VecU8Schema> {
+		Ok(if !self.is_list() {
+			VecU8Schema::ByteArray(self.into_byte_array()?)
+		} else {
+			let list_schema = self.into_list()?;
+			VecU8Schema::List(ListSchema(list_schema.0.downcast()?, list_schema.1))
+		})
 	}
 }
 impl<T> Downcast<ListSchema<T>> for ValueSchema

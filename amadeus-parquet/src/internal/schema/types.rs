@@ -19,10 +19,8 @@
 
 use std::{collections::HashMap, convert::From, fmt, rc::Rc};
 
-use parquet_format::SchemaElement;
-
 use crate::internal::{
-	basic::{LogicalType, Repetition, Type as PhysicalType}, errors::{ParquetError, Result}
+	basic::{LogicalType, Repetition, Type as PhysicalType}, errors::{ParquetError, Result}, format::SchemaElement
 };
 
 // ----------------------------------------------------------------------

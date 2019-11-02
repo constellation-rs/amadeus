@@ -36,8 +36,6 @@
 // #![warn(clippy::pedantic)]
 #![allow(where_clauses_object_safety, clippy::all)]
 
-use serde_closure::FnMut;
-
 use amadeus::prelude::*;
 use constellation::{init, Resources};
 use data::Webpage;

@@ -1,6 +1,5 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
-use serde_closure::FnMut;
 use std::{env, time::SystemTime};
 
 use amadeus::prelude::*;

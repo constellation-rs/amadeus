@@ -1,5 +1,6 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-types/0.1.3")]
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.1.4")]
 #![feature(specialization)]
+#![feature(iter_order_by)]
 
 //! Implementations of Rust types that correspond to Parquet logical types.
 //! [`Record`](super::Record) is implemented for each of them.
@@ -53,8 +54,7 @@ mod array;
 mod decimal;
 mod group;
 mod http;
-mod list;
-mod map;
+mod ord;
 mod time;
 mod value;
 mod value_required;
@@ -64,7 +64,7 @@ use std::{
 };
 
 pub use self::{
-	array::{Bson, Enum, Json}, decimal::Decimal, group::Group, http::{IpAddr, ParseAddrError, ParseUrlError, ParseWebpageError, Url, Webpage}, list::List, map::Map, time::{
+	array::{Bson, Enum, Json}, decimal::Decimal, group::Group, http::{IpAddr, ParseAddrError, ParseUrlError, ParseWebpageError, Url, Webpage}, ord::AmadeusOrd, time::{
 		Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, ParseDateError, Time, TimeWithoutTimezone, Timezone
 	}, value::{Schema, SchemaIncomplete, Value}, value_required::ValueRequired
 };
@@ -74,8 +74,12 @@ pub use self::{
 ///
 /// It exists, rather than for example using [`TryInto`](std::convert::TryInto), due to
 /// coherence issues with downcasting to foreign types like `Option<T>`.
-pub trait DowncastImpl<T> {
-	fn downcast_impl(t: T) -> Result<Self, DowncastError>
+pub trait DowncastFrom<T>
+where
+	T: Downcast<Self>,
+	Self: Sized,
+{
+	fn downcast_from(t: T) -> Result<Self, DowncastError>
 	where
 		Self: Sized;
 }
@@ -84,18 +88,18 @@ pub trait Downcast<T> {
 }
 impl<A, B> Downcast<A> for B
 where
-	A: DowncastImpl<B>,
+	A: DowncastFrom<B>,
 {
 	fn downcast(self) -> Result<A, DowncastError> {
-		A::downcast_impl(self)
+		A::downcast_from(self)
 	}
 }
 
-impl<A, B> DowncastImpl<A> for Box<B>
+impl<A, B> DowncastFrom<A> for Box<B>
 where
-	B: DowncastImpl<A>,
+	B: DowncastFrom<A>,
 {
-	fn downcast_impl(t: A) -> Result<Self, DowncastError>
+	fn downcast_from(t: A) -> Result<Self, DowncastError>
 	where
 		Self: Sized,
 	{

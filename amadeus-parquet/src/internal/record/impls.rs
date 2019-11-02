@@ -1,8 +1,13 @@
 use linked_hash_map::LinkedHashMap;
 use std::{
-	collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::Hash, marker::PhantomData, string::FromUtf8Error, sync::Arc
+	collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::{BuildHasher, Hash}, marker::PhantomData, string::FromUtf8Error, sync::Arc
 };
 use sum::{Sum2, Sum3};
+
+use amadeus_core::util::type_coerce;
+use amadeus_types::{
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+};
 
 #[cfg(debug_assertions)]
 use crate::internal::schema::parser::parse_message_type;
@@ -11,14 +16,11 @@ use crate::internal::{
 		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
 	}, errors::{ParquetError, Result}, record::{
 		display::{DisplayFmt, DisplaySchemaGroup}, reader::{
-			BoolReader, BoxFixedLenByteArrayReader, BoxReader, ByteArrayReader, F32Reader, F64Reader, FixedLenByteArrayReader, GroupReader, I32Reader, I64Reader, I96Reader, KeyValueReader, MapReader, OptionReader, RepeatedReader, RootReader, TryIntoReader, TupleReader, ValueReader
+			BoolReader, BoxFixedLenByteArrayReader, BoxReader, ByteArrayReader, F32Reader, F64Reader, FixedLenByteArrayReader, GroupReader, I32Reader, I64Reader, I96Reader, KeyValueReader, MapReader, OptionReader, RepeatedReader, RootReader, TryIntoReader, TupleReader, ValueReader, VecU8Reader
 		}, schemas::{
-			BoolSchema, BoxSchema, BsonSchema, ByteArraySchema, DateSchema, DateTimeSchema, DecimalSchema, EnumSchema, F32Schema, F64Schema, FixedByteArraySchema, GroupSchema, I16Schema, I32Schema, I64Schema, I8Schema, JsonSchema, ListSchema, ListSchemaType, MapSchema, OptionSchema, RootSchema, StringSchema, TimeSchema, TupleSchema, U16Schema, U32Schema, U64Schema, U8Schema, ValueSchema
+			BoolSchema, BoxSchema, BsonSchema, ByteArraySchema, DateSchema, DateTimeSchema, DecimalSchema, EnumSchema, F32Schema, F64Schema, FixedByteArraySchema, GroupSchema, I16Schema, I32Schema, I64Schema, I8Schema, JsonSchema, ListSchema, ListSchemaType, MapSchema, OptionSchema, RootSchema, StringSchema, TimeSchema, TupleSchema, U16Schema, U32Schema, U64Schema, U8Schema, ValueSchema, VecU8Schema
 		}, triplet::TypedTripletIter, types::{downcast, Downcast, Root}, ParquetData, Reader, Schema
 	}, schema::types::{ColumnPath, Type}
-};
-use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Map, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -48,28 +50,6 @@ macro_rules! via_string {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-impl ParquetData for Vec<u8> {
-	type Schema = ByteArraySchema;
-	type Reader = ByteArrayReader;
-
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
-	}
-
-	fn reader(
-		_schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
-		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
-	) -> Self::Reader {
-		let col_path = ColumnPath::new(path.to_vec());
-		let col_reader = paths.remove(&col_path).unwrap();
-		ByteArrayReader {
-			column: TypedTripletIter::<ByteArrayType>::new(
-				def_level, rep_level, col_reader, batch_size,
-			),
-		}
-	}
-}
-
 impl ParquetData for Bson {
 	type Schema = BsonSchema;
 	type Reader = impl Reader<Item = Self>;
@@ -83,7 +63,7 @@ impl ParquetData for Bson {
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
 		MapReader(
-			Vec::<u8>::reader(&schema.0, path, def_level, rep_level, paths, batch_size),
+			byte_array_reader(&schema.0, path, def_level, rep_level, paths, batch_size),
 			|x| Ok(From::from(x)),
 		)
 	}
@@ -102,7 +82,7 @@ impl ParquetData for String {
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
 		MapReader(
-			Vec::<u8>::reader(&schema.0, path, def_level, rep_level, paths, batch_size),
+			byte_array_reader(&schema.0, path, def_level, rep_level, paths, batch_size),
 			|x| {
 				String::from_utf8(x)
 					.map_err(|err: FromUtf8Error| ParquetError::General(err.to_string()))
@@ -232,32 +212,19 @@ where
 	default fn parse(
 		schema: &Type, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema)> {
-		T::parse(schema, repetition)
-			.map(|(name, schema)| (name, unsafe { known_type(BoxSchema(schema)) }))
+		T::parse(schema, repetition).map(|(name, schema)| (name, type_coerce(BoxSchema(schema))))
 	}
 
 	default fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		let schema = unsafe { known_type::<&Self::Schema, &BoxSchema<T::Schema>>(schema) };
+		let schema = type_coerce::<&Self::Schema, &BoxSchema<T::Schema>>(schema);
 		let ret = BoxReader(T::reader(
 			&schema.0, path, def_level, rep_level, paths, batch_size,
 		));
-		unsafe { known_type(ret) }
+		type_coerce(ret)
 	}
-}
-
-/// This is used until specialization can handle groups of items together
-unsafe fn known_type<A, B>(a: A) -> B {
-	use std::mem;
-	assert_eq!(
-		(mem::size_of::<A>(), mem::align_of::<A>()),
-		(mem::size_of::<B>(), mem::align_of::<B>())
-	);
-	let ret = mem::transmute_copy(&a);
-	mem::forget(a);
-	ret
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -290,7 +257,7 @@ impl ParquetData for Decimal {
 				precision,
 				scale,
 			} => DecimalReader::Array {
-				reader: <Vec<u8>>::reader(
+				reader: byte_array_reader(
 					byte_array_schema,
 					path,
 					def_level,
@@ -317,7 +284,7 @@ pub enum DecimalReader {
 		scale: u8,
 	},
 	Array {
-		reader: <Vec<u8> as ParquetData>::Reader,
+		reader: ByteArrayReader,
 		precision: u32,
 		scale: u32,
 	},
@@ -497,21 +464,22 @@ pub(super) fn parse_list<T: ParquetData>(schema: &Type) -> Result<ListSchema<T::
 			);
 		}
 	}
-	Err(ParquetError::General(String::from(
-		"Couldn't parse List<T>",
-	)))
+	Err(ParquetError::General(String::from("Couldn't parse Vec<T>")))
 }
 
-impl<T> ParquetData for List<T>
+impl<T> ParquetData for Vec<T>
 where
 	T: ParquetData,
 {
-	type Schema = ListSchema<T::Schema>;
-	type Reader = impl Reader<Item = Self>;
+	default type Schema = ListSchema<T::Schema>;
+	default type Reader = RepeatedReader<T::Reader>;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+	default fn parse(
+		schema: &Type, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
 		if repetition == Some(Repetition::Required) {
-			return parse_list::<T>(schema).map(|schema2| (schema.name().to_owned(), schema2));
+			return parse_list::<T>(schema)
+				.map(|schema2| (schema.name().to_owned(), type_coerce(schema2)));
 		}
 		// A repeated field that is neither contained by a `LIST`- or `MAP`-annotated
 		// group nor annotated by `LIST` or `MAP` should be interpreted as a
@@ -520,70 +488,114 @@ where
 		if repetition == Some(Repetition::Repeated) {
 			return Ok((
 				schema.name().to_owned(),
-				ListSchema(
+				type_coerce(ListSchema(
 					T::parse(&schema, Some(Repetition::Required))?.1,
 					ListSchemaType::Repeated,
-				),
+				)),
 			));
 		}
-		Err(ParquetError::General(String::from(
-			"Couldn't parse List<T>",
-		)))
+		Err(ParquetError::General(String::from("Couldn't parse Vec<T>")))
+	}
+
+	default fn reader(
+		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
+		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
+	) -> Self::Reader {
+		let schema: &ListSchema<T::Schema> = type_coerce(schema);
+		type_coerce(list_reader::<T>(
+			schema, path, def_level, rep_level, paths, batch_size,
+		))
+	}
+}
+
+fn list_reader<T>(
+	schema: &ListSchema<T::Schema>, path: &mut Vec<String>, def_level: i16, rep_level: i16,
+	paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
+) -> RepeatedReader<T::Reader>
+where
+	T: ParquetData,
+{
+	match &schema.1 {
+		ListSchemaType::List(ref list_name, ref element_name) => {
+			let list_name = list_name.as_ref().map(|x| &**x).unwrap_or("list");
+			let element_name = element_name.as_ref().map(|x| &**x).unwrap_or("element");
+
+			path.push(list_name.to_owned());
+			path.push(element_name.to_owned());
+			let reader = T::reader(
+				&schema.0,
+				path,
+				def_level + 1,
+				rep_level + 1,
+				paths,
+				batch_size,
+			);
+			let _ = path.pop().unwrap();
+			let _ = path.pop().unwrap();
+
+			RepeatedReader { reader }
+		}
+		ListSchemaType::ListCompat(ref element_name) => {
+			path.push(element_name.to_owned());
+			let reader = T::reader(
+				&schema.0,
+				path,
+				def_level + 1,
+				rep_level + 1,
+				paths,
+				batch_size,
+			);
+			let _ = path.pop().unwrap();
+
+			RepeatedReader { reader }
+		}
+		ListSchemaType::Repeated => {
+			let reader = T::reader(
+				&schema.0,
+				path,
+				def_level + 1,
+				rep_level + 1,
+				paths,
+				batch_size,
+			);
+			RepeatedReader { reader }
+		}
+	}
+}
+
+fn byte_array_reader(
+	_schema: &ByteArraySchema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
+	paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
+) -> ByteArrayReader {
+	let col_path = ColumnPath::new(path.to_vec());
+	let col_reader = paths.remove(&col_path).unwrap();
+	ByteArrayReader {
+		column: TypedTripletIter::<ByteArrayType>::new(
+			def_level, rep_level, col_reader, batch_size,
+		),
+	}
+}
+
+impl ParquetData for Vec<u8> {
+	type Schema = VecU8Schema;
+	type Reader = VecU8Reader;
+
+	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, repetition).and_then(downcast)
 	}
 
 	fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
-		MapReader(
-			match schema.1 {
-				ListSchemaType::List(ref list_name, ref element_name) => {
-					let list_name = list_name.as_ref().map(|x| &**x).unwrap_or("list");
-					let element_name = element_name.as_ref().map(|x| &**x).unwrap_or("element");
-
-					path.push(list_name.to_owned());
-					path.push(element_name.to_owned());
-					let reader = T::reader(
-						&schema.0,
-						path,
-						def_level + 1,
-						rep_level + 1,
-						paths,
-						batch_size,
-					);
-					let _ = path.pop().unwrap();
-					let _ = path.pop().unwrap();
-
-					RepeatedReader { reader }
-				}
-				ListSchemaType::ListCompat(ref element_name) => {
-					path.push(element_name.to_owned());
-					let reader = T::reader(
-						&schema.0,
-						path,
-						def_level + 1,
-						rep_level + 1,
-						paths,
-						batch_size,
-					);
-					let _ = path.pop().unwrap();
-
-					RepeatedReader { reader }
-				}
-				ListSchemaType::Repeated => {
-					let reader = T::reader(
-						&schema.0,
-						path,
-						def_level + 1,
-						rep_level + 1,
-						paths,
-						batch_size,
-					);
-					RepeatedReader { reader }
-				}
-			},
-			|x| Ok(From::from(x)),
-		)
+		match schema {
+			VecU8Schema::ByteArray(schema) => VecU8Reader::ByteArray(byte_array_reader(
+				schema, path, def_level, rep_level, paths, batch_size,
+			)),
+			VecU8Schema::List(schema) => VecU8Reader::List(list_reader::<u8>(
+				schema, path, def_level, rep_level, paths, batch_size,
+			)),
+		}
 	}
 }
 
@@ -630,14 +642,15 @@ pub(super) fn parse_map<K: ParquetData, V: ParquetData>(
 		}
 	}
 	Err(ParquetError::General(String::from(
-		"Couldn't parse Map<K,V>",
+		"Couldn't parse HashMap<K,V>",
 	)))
 }
 
-impl<K, V> ParquetData for Map<K, V>
+impl<K, V, S> ParquetData for HashMap<K, V, S>
 where
 	K: ParquetData + Hash + Eq,
 	V: ParquetData,
+	S: BuildHasher + Default,
 {
 	type Schema = MapSchema<K::Schema, V::Schema>;
 	type Reader = impl Reader<Item = Self>;
@@ -647,7 +660,7 @@ where
 			return parse_map::<K, V>(schema).map(|schema2| (schema.name().to_owned(), schema2));
 		}
 		Err(ParquetError::General(String::from(
-			"Couldn't parse Map<K,V>",
+			"Couldn't parse HashMap<K,V>",
 		)))
 	}
 
@@ -687,7 +700,7 @@ where
 				keys_reader,
 				values_reader,
 			},
-			|x: Vec<_>| Ok(From::from(x.into_iter().collect::<HashMap<_, _>>())),
+			|x: Vec<_>| Ok(From::from(x.into_iter().collect::<HashMap<_, _, S>>())),
 		)
 	}
 }
@@ -1882,11 +1895,9 @@ impl ParquetData for Value {
 					schema, path, def_level, rep_level, paths, batch_size,
 				))
 			}
-			ValueSchema::ByteArray(ref schema) => {
-				ValueReader::ByteArray(<Vec<u8> as ParquetData>::reader(
-					schema, path, def_level, rep_level, paths, batch_size,
-				))
-			}
+			ValueSchema::ByteArray(ref schema) => ValueReader::ByteArray(byte_array_reader(
+				schema, path, def_level, rep_level, paths, batch_size,
+			)),
 			ValueSchema::Bson(ref schema) => ValueReader::Bson(<Bson as ParquetData>::reader(
 				schema, path, def_level, rep_level, paths, batch_size,
 			)),
@@ -1902,12 +1913,17 @@ impl ParquetData for Value {
 				schema, path, def_level, rep_level, paths, batch_size,
 			)),
 			ValueSchema::List(ref schema) => {
-				ValueReader::List(Box::new(<List<Value> as ParquetData>::reader(
-					schema, path, def_level, rep_level, paths, batch_size,
+				ValueReader::List(Box::new(<Vec<Value> as ParquetData>::reader(
+					type_coerce(&**schema),
+					path,
+					def_level,
+					rep_level,
+					paths,
+					batch_size,
 				)))
 			}
 			ValueSchema::Map(ref schema) => {
-				ValueReader::Map(Box::new(<Map<Value, Value> as ParquetData>::reader(
+				ValueReader::Map(Box::new(<HashMap<Value, Value> as ParquetData>::reader(
 					schema, path, def_level, rep_level, paths, batch_size,
 				)))
 			}

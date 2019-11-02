@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{error, fmt, io, marker::PhantomData, sync::Arc};
+use std::{any::type_name, error, fmt, io, marker::PhantomData, sync::Arc};
 
 use crate::dist_iter::{Consumer, DistributedIterator};
 
@@ -91,4 +91,29 @@ impl<T: 'static> Consumer for ImplConsumer<T> {
 	fn run(self, _i: &mut impl FnMut(Self::Item) -> bool) -> bool {
 		unreachable!()
 	}
+}
+
+pub fn type_coerce<A, B>(a: A) -> B {
+	try_type_coerce(a)
+		.unwrap_or_else(|| panic!("can't coerce {} to {}", type_name::<A>(), type_name::<B>()))
+}
+pub fn try_type_coerce<A, B>(a: A) -> Option<B> {
+	trait Eq<B> {
+		fn eq(self) -> Option<B>;
+	}
+
+	struct Foo<A, B>(A, PhantomData<fn(B)>);
+
+	impl<A, B> Eq<B> for Foo<A, B> {
+		default fn eq(self) -> Option<B> {
+			None
+		}
+	}
+	impl<A> Eq<A> for Foo<A, A> {
+		fn eq(self) -> Option<A> {
+			Some(self.0)
+		}
+	}
+
+	Foo::<A, B>(a, PhantomData).eq()
 }

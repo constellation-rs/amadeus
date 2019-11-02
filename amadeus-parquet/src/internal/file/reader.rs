@@ -23,15 +23,12 @@ use std::{
 };
 
 use byteorder::{ByteOrder, LittleEndian};
-use parquet_format::{
-	ColumnOrder as TColumnOrder, FileMetaData as TFileMetaData, PageHeader, PageType
-};
 use thrift::protocol::TCompactInputProtocol;
 
 use crate::internal::{
 	basic::{ColumnOrder, Compression, Encoding, Type}, column::{
 		page::{Page, PageReader}, reader::{ColumnReader, ColumnReaderImpl}
-	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, record::{ParquetData, Predicate, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
+	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, format::{ColumnOrder as TColumnOrder, FileMetaData as TFileMetaData, PageHeader, PageType}, record::{ParquetData, Predicate, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
 		io::{BufReader, FileSource}, memory::ByteBufferPtr
 	}
 };
@@ -667,7 +664,6 @@ impl<T: Read> PageReader for SerializedPageReader<T> {
 
 #[cfg(test)]
 mod tests {
-	use parquet_format::TypeDefinedOrder;
 	use std::collections::HashMap;
 	use test::Bencher;
 
@@ -675,7 +671,7 @@ mod tests {
 
 	use super::*;
 	use crate::internal::{
-		basic::SortOrder, column::reader::{get_typed_column_reader, ColumnReader}, data_type::*, file::reader::{FileReader, RowGroupReader, SerializedFileReader}, schema::types::{ColumnPath, Type as SchemaType}, util::test_common::{get_temp_file, get_test_file, get_test_path}
+		basic::SortOrder, column::reader::{get_typed_column_reader, ColumnReader}, data_type::*, file::reader::{FileReader, RowGroupReader, SerializedFileReader}, format::TypeDefinedOrder, schema::types::{ColumnPath, Type as SchemaType}, util::test_common::{get_temp_file, get_test_file, get_test_path}
 	};
 
 	#[test]

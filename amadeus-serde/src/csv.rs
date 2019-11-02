@@ -6,7 +6,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpand
+	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
 };
 
 use super::{SerdeData, SerdeDeserializeGroup};
@@ -64,22 +64,27 @@ where
 	F: File,
 	Row: SerdeData,
 {
-	pub fn new(file: F) -> Result<Self, CsvError<F>> {
+	pub fn new(file: F) -> Result<Self, <Self as Source>::Error> {
 		Ok(Self {
-			partitions: file.partitions().map_err(CsvError::<F>::File)?,
+			partitions: file.partitions().map_err(CsvError::File)?,
 			marker: PhantomData,
 		})
 	}
 	// pub fn open<Row>(files: Vec<PathBuf>) -> Csv<Row> {}
 	// pub fn create<Row>(files: Vec<PathBuf>) -> Csv<Row> {}
 }
-impl<F, Row> amadeus_core::Source for Csv<F, Row>
+impl<F, Row> Source for Csv<F, Row>
 where
 	F: File,
 	Row: SerdeData,
 {
 	type Item = Row;
-	type Error = CsvError<F>;
+	#[allow(clippy::type_complexity)]
+	type Error = CsvError<
+		<F as File>::Error,
+		<<F as File>::Partition as Partition>::Error,
+		<<<F as File>::Partition as Partition>::Page as Page>::Error,
+	>;
 
 	#[cfg(not(feature = "doc"))]
 	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
@@ -93,7 +98,7 @@ where
 			.partitions
 			.into_dist_iter()
 			.flat_map(FnMut!(|partition: F::Partition| {
-				ResultExpand(partition.pages().map_err(CsvError::<F>::Partition))
+				ResultExpand(partition.pages().map_err(CsvError::Partition))
 					.into_iter()
 					.flat_map(|page: Result<_, _>| {
 						ResultExpand(page.map(|page| {
@@ -189,20 +194,14 @@ mod csverror {
 	// }
 }
 
-pub type CsvError<F> = CsvErrorInternal<
-	<F as File>::Error,
-	<<F as File>::Partition as Partition>::Error,
-	<<<F as File>::Partition as Partition>::Page as Page>::Error,
->;
-
 #[derive(Serialize, Deserialize, Debug)]
-pub enum CsvErrorInternal<A, B, C> {
+pub enum CsvError<A, B, C> {
 	File(A),
 	Partition(B),
 	Page(C),
 	Csv(#[serde(with = "csverror")] SerdeCsvError),
 }
-impl<A, B, C> Clone for CsvErrorInternal<A, B, C>
+impl<A, B, C> Clone for CsvError<A, B, C>
 where
 	A: Clone,
 	B: Clone,
@@ -217,7 +216,7 @@ where
 		}
 	}
 }
-impl<A, B, C> PartialEq for CsvErrorInternal<A, B, C>
+impl<A, B, C> PartialEq for CsvError<A, B, C>
 where
 	A: PartialEq,
 	B: PartialEq,
@@ -233,14 +232,14 @@ where
 		}
 	}
 }
-impl<A, B, C> error::Error for CsvErrorInternal<A, B, C>
+impl<A, B, C> error::Error for CsvError<A, B, C>
 where
 	A: error::Error,
 	B: error::Error,
 	C: error::Error,
 {
 }
-impl<A, B, C> Display for CsvErrorInternal<A, B, C>
+impl<A, B, C> Display for CsvError<A, B, C>
 where
 	A: Display,
 	B: Display,
@@ -255,7 +254,7 @@ where
 		}
 	}
 }
-impl<A, B, C> From<SerdeCsvError> for CsvErrorInternal<A, B, C> {
+impl<A, B, C> From<SerdeCsvError> for CsvError<A, B, C> {
 	fn from(err: SerdeCsvError) -> Self {
 		Self::Csv(err)
 	}

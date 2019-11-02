@@ -58,3 +58,5 @@ mod encodings;
 pub mod file;
 pub mod record;
 pub mod schema;
+#[allow(unused_results, renamed_and_removed_lints)]
+mod format;
