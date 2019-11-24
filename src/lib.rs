@@ -36,6 +36,7 @@
 	clippy::match_same_arms,
 	clippy::must_use_candidate
 )]
+#![forbid(unsafe_code)]
 
 pub mod data;
 pub mod pool;

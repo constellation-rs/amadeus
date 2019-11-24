@@ -258,7 +258,7 @@ impl PostgresData for Value {
 	}
 }
 
-// Implement PostgresData for common array lengths, copied from arrayvec
+// Implement PostgresData for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
 		impl<T> PostgresData for [T; $i]
@@ -291,7 +291,7 @@ macro_rules! array {
 }
 amadeus_types::array!(array);
 
-// Implement PostgresData for tuples up to length 32.
+// Implement PostgresData for tuples up to length 12.
 macro_rules! tuple {
 	($len:tt $($t:ident $i:tt)*) => (
 		impl<$($t,)*> PostgresData for ($($t,)*) where $($t: PostgresData,)* {

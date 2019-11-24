@@ -461,7 +461,7 @@ impl SerdeData for Value {
 
 use std::convert::TryInto;
 
-/// Implement SerdeData for common array lengths, copied from arrayvec.
+/// Implement SerdeData for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
 		impl<T> SerdeData for [T; $i]
@@ -531,7 +531,7 @@ macro_rules! array {
 }
 amadeus_types::array!(array);
 
-/// Implement SerdeData on tuples up to length 32.
+/// Implement SerdeData on tuples up to length 12.
 macro_rules! tuple {
 	($len:tt $($t:ident $i:tt)*) => (
 		impl<$($t,)*> SerdeData for ($($t,)*) where $($t: SerdeData,)* {

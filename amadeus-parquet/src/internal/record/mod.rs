@@ -115,7 +115,7 @@ pub(crate) use self::predicate::Predicate;
 /// "byte_array" is interchangeable with "fixed_len_byte_array" for the purposes of the
 /// above correspondance.
 ///
-/// The implementation for tuples is only for those up to length 32. The implementation
+/// The implementation for tuples is only for those up to length 12. The implementation
 /// for arrays is only for common array lengths. See [`ParquetData`] for more details.
 ///
 /// ## `#[derive(Data)]`

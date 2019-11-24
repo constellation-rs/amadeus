@@ -129,7 +129,7 @@ impl ParquetData for Enum {
 	}
 }
 
-// Implement ParquetData for common array lengths, copied from arrayvec
+// Implement ParquetData for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
 		impl ParquetData for [u8; $i] {
@@ -1523,7 +1523,7 @@ mod tests {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Macro to implement [`Reader`] on tuples up to length 32.
+/// Macro to implement [`Reader`] on tuples up to length 12.
 macro_rules! tuple {
 	($len:tt $($t:ident $i:tt)*) => (
 		// Tuples correspond to Parquet groups with an equal number of fields with corresponding types.

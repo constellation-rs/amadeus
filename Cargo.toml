@@ -47,7 +47,6 @@ amadeus-postgres = { version = "=0.1.4", path = "amadeus-postgres", optional = t
 amadeus-serde = { version = "=0.1.4", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
 futures = "0.3"
-pin-utils = "0.1.0-alpha.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
 serde_traitobject = "0.2"

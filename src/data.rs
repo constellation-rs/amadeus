@@ -74,7 +74,7 @@ macro_rules! impl_data {
 }
 impl_data!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 String Bson Json Enum Decimal Group Date DateWithoutTimezone Time TimeWithoutTimezone DateTime DateTimeWithoutTimezone Timezone Value Webpage<'static> Url IpAddr);
 
-// Implement Record for common array lengths, copied from arrayvec
+// Implement Record for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
 		impl Data for [u8; $i] {}
@@ -83,6 +83,7 @@ macro_rules! array {
 }
 amadeus_types::array!(array);
 
+// Implement Record on tuples up to length 12.
 macro_rules! tuple {
 	($len:tt $($t:ident $i:tt)*) => {
 		impl<$($t,)*> Data for ($($t,)*) where $($t: Data,)* {}

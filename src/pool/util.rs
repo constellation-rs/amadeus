@@ -1,8 +1,9 @@
+// use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
-	any::Any, error::Error, fmt::{self, Debug, Display}, future::Future, mem, pin::Pin, sync::{
+	any::Any, error::Error, fmt::{self, Debug, Display}, future::Future, mem, sync::{
 		atomic::{AtomicBool, AtomicUsize, Ordering}, Mutex
-	}, task::{Context, Poll, Waker}
+	}, task::{Poll, Waker}
 };
 
 #[cfg(feature = "constellation")]
@@ -160,27 +161,7 @@ impl Synchronize {
 	}
 }
 
-pub struct ImplSync<F> {
-	inner: F,
-}
-impl<F> ImplSync<F> {
-	pub unsafe fn new(f: F) -> Self {
-		Self { inner: f }
-	}
-	pin_utils::unsafe_pinned!(inner: F);
-}
-impl<F> Future for ImplSync<F>
-where
-	F: Future,
-{
-	type Output = F::Output;
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.inner().poll(cx)
-	}
-}
-impl<F: Unpin> Unpin for ImplSync<F> {}
-unsafe impl<F> Sync for ImplSync<F> {}
-
+#[allow(dead_code)]
 pub fn assert_sync_and_send<T: Send + Sync>(t: T) -> T {
 	t
 }
