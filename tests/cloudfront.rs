@@ -42,10 +42,11 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let _ = DistributedIteratorMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity);
 
-	let ((), (count, count2)) = Cloudfront::new(
+	let ((), (count, count2)) = Cloudfront::new_with(
 		AwsRegion::UsEast1,
 		"us-east-1.data-analytics",
 		"cflogworkshop/raw/cf-accesslogs/",
+		AwsCredentials::Anonymous,
 	)
 	.unwrap()
 	.dist_iter()

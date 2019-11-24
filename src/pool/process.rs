@@ -9,7 +9,8 @@ use amadeus_core::pool::ProcessSend;
 
 use super::util::{assert_sync_and_send, ImplSync, OnDrop, Panicked, RoundRobin, Synchronize};
 
-type Request = Box<dyn st::FnOnce() -> Response + Send>;
+// type Request = Box<dyn st::FnOnce() -> Response + Send>; // when #![feature(unboxed_closures)] is stable
+type Request = Box<dyn st::FnOnce<(), Output = Response> + Send>;
 type Response = Box<dyn st::Any + Send>;
 
 #[derive(Debug)]

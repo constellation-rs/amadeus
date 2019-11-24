@@ -8,15 +8,6 @@
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
 )]
-#![feature(
-	unboxed_closures,
-	never_type,
-	specialization,
-	core_intrinsics,
-	step_trait,
-	test,
-	// type_alias_impl_trait,
-)]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
