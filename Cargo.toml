@@ -46,7 +46,7 @@ amadeus-parquet = { version = "=0.1.4", path = "amadeus-parquet", optional = tru
 amadeus-postgres = { version = "=0.1.4", path = "amadeus-postgres", optional = true }
 amadeus-serde = { version = "=0.1.4", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
-futures-preview = "=0.3.0-alpha.19"
+futures = "0.3"
 pin-utils = "0.1.0-alpha.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
