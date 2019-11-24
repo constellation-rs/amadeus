@@ -7,7 +7,7 @@ pub use amadeus_aws::Cloudfront;
 pub mod aws {
 	pub use crate::data::CloudfrontRow;
 	#[doc(inline)]
-	pub use amadeus_aws::{AwsError, AwsRegion, S3Directory, S3File};
+	pub use amadeus_aws::{AwsCredentials, AwsError, AwsRegion, S3Directory, S3File};
 }
 #[cfg(feature = "commoncrawl")]
 #[doc(inline)]

@@ -14,17 +14,29 @@ use amadeus_core::{
 };
 use amadeus_types::{DateTime, IpAddr, Url};
 
-use super::{block_on_01, list, retry, AwsError, AwsRegion};
+use super::{
+	block_on_01, list, retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER
+};
 
 pub struct Cloudfront {
 	region: AwsRegion,
 	bucket: String,
 	objects: Vec<String>,
+	credentials: AwsCredentials,
 }
 impl Cloudfront {
 	pub fn new(region: AwsRegion, bucket: &str, prefix: &str) -> Result<Self, AwsError> {
+		Self::new_with(region, bucket, prefix, AwsCredentials::Environment)
+	}
+	pub fn new_with(
+		region: AwsRegion, bucket: &str, prefix: &str, credentials: AwsCredentials,
+	) -> Result<Self, AwsError> {
 		let (bucket, prefix) = (bucket.to_owned(), prefix.to_owned());
-		let client = S3Client::new(region.clone());
+		let client = S3Client::new_with(
+			Ref(&*RUSOTO_DISPATCHER),
+			credentials.clone(),
+			region.clone(),
+		);
 
 		let objects = list(&client, &bucket, &prefix)?
 			.into_iter()
@@ -35,6 +47,7 @@ impl Cloudfront {
 			region,
 			bucket,
 			objects,
+			credentials,
 		})
 	}
 }
@@ -54,11 +67,16 @@ impl Source for Cloudfront {
 			bucket,
 			region,
 			objects,
+			credentials,
 		} = self;
 		let ret = objects
 			.into_dist_iter()
 			.flat_map(FnMut!(move |key: String| {
-				let client = S3Client::new(region.clone());
+				let client = S3Client::new_with(
+					Ref(once_cell::sync::Lazy::force(&RUSOTO_DISPATCHER)),
+					credentials.clone(),
+					region.clone(),
+				);
 				let mut errors = 0;
 				ResultExpand(
 					loop {

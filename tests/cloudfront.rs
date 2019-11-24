@@ -1,5 +1,3 @@
-#![allow(where_clauses_object_safety)]
-
 use amadeus::prelude::*;
 #[cfg(feature = "constellation")]
 use constellation::*;

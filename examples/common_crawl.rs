@@ -34,7 +34,7 @@
 )]
 // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
 // #![warn(clippy::pedantic)]
-#![allow(where_clauses_object_safety, clippy::all)]
+#![allow(clippy::all)]
 
 use amadeus::prelude::*;
 use constellation::{init, Resources};

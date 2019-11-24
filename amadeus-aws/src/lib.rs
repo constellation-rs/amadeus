@@ -6,10 +6,13 @@ mod file;
 
 use futures::future::FutureExt;
 use once_cell::sync::Lazy;
-use rusoto_core::RusotoError;
+use rusoto_core::{
+	credential::StaticProvider, request::{DispatchSignedRequest, HttpClient}, signature::SignedRequest, DefaultCredentialsProvider, ProvideAwsCredentials, RusotoError
+};
 use rusoto_s3::{GetObjectError, ListObjectsV2Error, ListObjectsV2Request, Object, S3Client, S3};
+use serde::{Deserialize, Serialize};
 use std::{
-	cell::RefCell, error, fmt::{self, Display}, future::Future, io, iter, mem::transmute, ops::FnMut
+	cell::RefCell, error, fmt::{self, Display}, future::Future, io, iter, mem::transmute, ops::FnMut, time::Duration
 };
 use tokio::runtime::Runtime;
 
@@ -24,7 +27,12 @@ pub use rusoto_core::Region as AwsRegion;
 
 // https://docs.datadoghq.com/integrations/amazon_web_services/?tab=allpermissions#enable-logging-for-your-aws-service
 
-static RUNTIME: Lazy<Runtime> = Lazy::new(|| Runtime::new().unwrap());
+static RUNTIME: Lazy<Runtime> =
+	Lazy::new(|| Runtime::new().expect("failed to create tokio runtime"));
+static RUSOTO_DISPATCHER: Lazy<HttpClient> =
+	Lazy::new(|| HttpClient::new().expect("failed to create request dispatcher"));
+static RUSOTO_CREDENTIALS_PROVIDER: Lazy<DefaultCredentialsProvider> =
+	Lazy::new(|| DefaultCredentialsProvider::new().expect("failed to create credentials provider"));
 
 thread_local! {
 	static REENTRANCY_CHECK: RefCell<()> = RefCell::new(());
@@ -114,6 +122,57 @@ fn list(
 	.flatten()
 	.collect();
 	objects
+}
+
+struct Ref<T: 'static>(&'static T);
+impl<T: 'static> Copy for Ref<T> {}
+impl<T: 'static> Clone for Ref<T> {
+	fn clone(&self) -> Self {
+		Ref(self.0)
+	}
+}
+impl<D> DispatchSignedRequest for Ref<D>
+where
+	D: DispatchSignedRequest,
+{
+	type Future = D::Future;
+
+	fn dispatch(&self, request: SignedRequest, timeout: Option<Duration>) -> Self::Future {
+		D::dispatch(self.0, request, timeout)
+	}
+}
+
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
+pub enum AwsCredentials {
+	Anonymous,
+	AccessKey { id: String, secret: String },
+	Environment,
+}
+impl Default for AwsCredentials {
+	fn default() -> Self {
+		AwsCredentials::Environment
+	}
+}
+impl ProvideAwsCredentials for AwsCredentials {
+	type Future = futures_01::future::Either<
+		<StaticProvider as ProvideAwsCredentials>::Future,
+		<DefaultCredentialsProvider as ProvideAwsCredentials>::Future,
+	>;
+
+	fn credentials(&self) -> Self::Future {
+		match self {
+			AwsCredentials::Anonymous => futures_01::future::Either::A(
+				StaticProvider::from(rusoto_core::credential::AwsCredentials::default())
+					.credentials(),
+			),
+			AwsCredentials::AccessKey { id, secret } => futures_01::future::Either::A(
+				StaticProvider::new(id.clone(), secret.clone(), None, None).credentials(),
+			),
+			AwsCredentials::Environment => {
+				futures_01::future::Either::B(RUSOTO_CREDENTIALS_PROVIDER.credentials())
+			}
+		}
+	}
 }
 
 #[derive(Debug)]

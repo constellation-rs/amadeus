@@ -29,7 +29,6 @@
 	clippy::pedantic,
 )]
 #![allow(
-	where_clauses_object_safety,
 	clippy::inline_always,
 	clippy::module_name_repetitions,
 	clippy::similar_names,
@@ -64,7 +63,9 @@ pub mod prelude {
 	pub use super::pool::ProcessPool;
 	#[cfg(feature = "aws")]
 	#[doc(no_inline)]
-	pub use super::source::aws::{AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File};
+	pub use super::source::aws::{
+		AwsCredentials, AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File
+	};
 	#[doc(no_inline)]
 	pub use super::{
 		data, data::{

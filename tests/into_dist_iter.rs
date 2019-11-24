@@ -1,5 +1,3 @@
-#![allow(where_clauses_object_safety)]
-
 use either::Either;
 
 use amadeus::prelude::*;
