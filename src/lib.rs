@@ -1,8 +1,8 @@
-//! Harmonious distributed data analysis in Rust
+//! Harmonious distributed data processing & analysis in Rust.
 //!
-//! **[Crates.io](https://crates.io/crates/amadeus) │ [Repo](https://github.com/alecmocatta/amadeus)**
-//!
-//! This library is very nascent. 3 parts: process pool; sources/sinks (Data/Value); analytics;
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/alecmocatta/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
 
 #![doc(html_root_url = "https://docs.rs/amadeus/0.1.4")]
 #![doc(
