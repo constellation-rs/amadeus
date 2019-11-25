@@ -9,21 +9,30 @@ use amadeus_core::{
 	file::{Directory, File, Page, Partition, PathBuf}, util::IoError
 };
 
-use super::{block_on, block_on_01, retry, AwsError, AwsRegion};
+use super::{
+	block_on, block_on_01, retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER
+};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3Directory {
 	region: AwsRegion,
 	bucket: String,
 	prefix: String,
+	credentials: AwsCredentials,
 }
 impl S3Directory {
 	pub fn new(region: AwsRegion, bucket: &str, prefix: &str) -> Self {
+		Self::new_with(region, bucket, prefix, AwsCredentials::Environment)
+	}
+	pub fn new_with(
+		region: AwsRegion, bucket: &str, prefix: &str, credentials: AwsCredentials,
+	) -> Self {
 		let (bucket, prefix) = (bucket.to_owned(), prefix.to_owned());
 		Self {
 			region,
 			bucket,
 			prefix,
+			credentials,
 		}
 	}
 }
@@ -36,8 +45,13 @@ impl Directory for S3Directory {
 			region,
 			bucket,
 			prefix,
+			credentials,
 		} = self;
-		let client = S3Client::new(region.clone());
+		let client = S3Client::new_with(
+			Ref(&*RUSOTO_DISPATCHER),
+			credentials.clone(),
+			region.clone(),
+		);
 		let objects = super::list(&client, &bucket, &prefix)?;
 
 		let mut current_path = PathBuf::new();
@@ -87,6 +101,7 @@ impl Directory for S3Directory {
 					bucket: bucket.clone(),
 					key: object.key.unwrap(),
 					len: object.size.unwrap().try_into().unwrap(),
+					credentials: credentials.clone()
 				})
 			})
 			.collect()
@@ -107,14 +122,21 @@ pub struct S3File {
 	region: AwsRegion,
 	bucket: String,
 	key: String,
+	credentials: AwsCredentials,
 }
 impl S3File {
 	pub fn new(region: AwsRegion, bucket: &str, key: &str) -> Self {
+		Self::new_with(region, bucket, key, AwsCredentials::Environment)
+	}
+	pub fn new_with(
+		region: AwsRegion, bucket: &str, key: &str, credentials: AwsCredentials,
+	) -> Self {
 		let (bucket, key) = (bucket.to_owned(), key.to_owned());
 		Self {
 			region,
 			bucket,
 			key,
+			credentials,
 		}
 	}
 }
@@ -131,7 +153,12 @@ impl Partition for S3File {
 	type Error = IoError;
 
 	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
-		Ok(vec![S3Page::new(self.region, self.bucket, self.key)])
+		Ok(vec![S3Page::new(
+			self.region,
+			self.bucket,
+			self.key,
+			self.credentials,
+		)])
 	}
 }
 
@@ -141,13 +168,14 @@ pub struct S3Partition {
 	bucket: String,
 	key: String,
 	len: u64,
+	credentials: AwsCredentials,
 }
 impl Partition for S3Partition {
 	type Page = S3Page;
 	type Error = IoError;
 
 	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
-		let client = S3Client::new(self.region);
+		let client = S3Client::new_with(Ref(&*RUSOTO_DISPATCHER), self.credentials, self.region);
 		let (bucket, key, len) = (self.bucket, self.key, self.len);
 		Ok(vec![S3Page {
 			client,
@@ -165,8 +193,8 @@ pub struct S3Page {
 	len: u64,
 }
 impl S3Page {
-	fn new(region: AwsRegion, bucket: String, key: String) -> Self {
-		let client = S3Client::new(region);
+	fn new(region: AwsRegion, bucket: String, key: String, credentials: AwsCredentials) -> Self {
+		let client = S3Client::new_with(Ref(&*RUSOTO_DISPATCHER), credentials, region);
 		let object = block_on_01(retry(|| {
 			client.head_object(HeadObjectRequest {
 				bucket: bucket.clone(),

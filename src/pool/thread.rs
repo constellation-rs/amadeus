@@ -5,7 +5,7 @@ use std::{
 	any::Any, collections::VecDeque, fmt, future::Future, io, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}, thread::{self, JoinHandle}
 };
 
-use super::util::{assert_sync_and_send, FutureExt1, ImplSync, OnDrop, Panicked, Synchronize};
+use super::util::{assert_sync_and_send, FutureExt1, OnDrop, Panicked, Synchronize};
 
 type Request = Box<dyn FnOnce() -> Response + Send>;
 type Response = Box<dyn Any + Send>;
@@ -194,9 +194,6 @@ impl Drop for ThreadPoolInner {
 	}
 }
 
-// a Box<dyn st::Any + Send>, which is what auto un-Sync's us, can only be accessed from a single thread.
-unsafe impl Sync for ThreadPoolInner {}
-
 #[derive(Debug)]
 pub struct ThreadPool(Arc<ThreadPoolInner>);
 impl ThreadPool {
@@ -208,10 +205,10 @@ impl ThreadPool {
 	}
 	pub fn spawn<F: FnOnce() -> T + Send + 'static, T: Send + 'static>(
 		&self, work: F,
-	) -> impl Future<Output = Result<T, Panicked>> + 'static {
+	) -> impl Future<Output = Result<T, Panicked>> + Send + 'static {
+		// TODO: + Sync
 		let inner = self.0.clone();
-		let future = async move { inner.spawn(work).await };
-		assert_sync_and_send(unsafe { ImplSync::new(future) })
+		async move { inner.spawn(work).await }
 	}
 }
 

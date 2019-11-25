@@ -1,5 +1,3 @@
-#![allow(where_clauses_object_safety)]
-
 #[cfg(feature = "constellation")]
 use constellation::*;
 use rand::{Rng, SeedableRng};

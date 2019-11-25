@@ -1,21 +1,12 @@
-//! Harmonious distributed data analysis in Rust
+//! Harmonious distributed data processing & analysis in Rust.
 //!
-//! **[Crates.io](https://crates.io/crates/amadeus) │ [Repo](https://github.com/alecmocatta/amadeus)**
-//!
-//! This library is very nascent. 3 parts: process pool; sources/sinks (Data/Value); analytics;
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/alecmocatta/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
 
 #![doc(html_root_url = "https://docs.rs/amadeus/0.1.4")]
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
-)]
-#![feature(
-	unboxed_closures,
-	never_type,
-	specialization,
-	core_intrinsics,
-	step_trait,
-	test,
-	// type_alias_impl_trait,
 )]
 #![warn(
 	// missing_copy_implementations,
@@ -29,7 +20,6 @@
 	clippy::pedantic,
 )]
 #![allow(
-	where_clauses_object_safety,
 	clippy::inline_always,
 	clippy::module_name_repetitions,
 	clippy::similar_names,
@@ -46,6 +36,7 @@
 	clippy::match_same_arms,
 	clippy::must_use_candidate
 )]
+#![forbid(unsafe_code)]
 
 pub mod data;
 pub mod pool;
@@ -64,7 +55,9 @@ pub mod prelude {
 	pub use super::pool::ProcessPool;
 	#[cfg(feature = "aws")]
 	#[doc(no_inline)]
-	pub use super::source::aws::{AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File};
+	pub use super::source::aws::{
+		AwsCredentials, AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File
+	};
 	#[doc(no_inline)]
 	pub use super::{
 		data, data::{

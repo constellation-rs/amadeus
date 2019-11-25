@@ -7,9 +7,10 @@ use std::{
 
 use amadeus_core::pool::ProcessSend;
 
-use super::util::{assert_sync_and_send, ImplSync, OnDrop, Panicked, RoundRobin, Synchronize};
+use super::util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize};
 
-type Request = Box<dyn st::FnOnce() -> Response + Send>;
+// type Request = Box<dyn st::FnOnce() -> Response + Send>; // when #![feature(unboxed_closures)] is stable
+type Request = Box<dyn st::FnOnce<(), Output = Response> + Send>;
 type Response = Box<dyn st::Any + Send>;
 
 #[derive(Debug)]
@@ -188,9 +189,6 @@ impl Drop for ProcessPoolInner {
 	}
 }
 
-// an bt::Box<dyn st::Any + Send>, which is what auto un-Sync's us, can only be accessed from a single thread.
-unsafe impl Sync for ProcessPoolInner {}
-
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);
 impl ProcessPool {
@@ -207,10 +205,10 @@ impl ProcessPool {
 	}
 	pub fn spawn<F: FnOnce() -> T + ProcessSend, T: ProcessSend>(
 		&self, work: F,
-	) -> impl Future<Output = Result<T, Panicked>> {
+	) -> impl Future<Output = Result<T, Panicked>> + Send + 'static {
+		// TODO: + Sync
 		let inner = self.0.clone();
-		let future = async move { inner.spawn(work).await };
-		assert_sync_and_send(unsafe { ImplSync::new(future) })
+		async move { inner.spawn(work).await }
 	}
 }
 
