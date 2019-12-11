@@ -19,7 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-chrono = { version = "0.4", default-features = false, features = ["serde"] }
+amadeus-core = { version = "=0.1.4", path = "../amadeus-core" }
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
 chrono-tz = { version = "0.5", features = ["serde"] }
 fxhash = "0.2"
 linked-hash-map = "0.5"

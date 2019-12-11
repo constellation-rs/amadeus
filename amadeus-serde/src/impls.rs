@@ -1,14 +1,16 @@
-use super::{SerdeData, SerdeDeserialize, SerdeSerialize};
-use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
-};
 use linked_hash_map::LinkedHashMap;
 use serde::{
-	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer
+	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeSeq, SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer
 };
 use std::{
 	collections::HashMap, fmt, hash::{BuildHasher, Hash}, str, sync::Arc
 };
+
+use amadeus_types::{
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
+};
+
+use super::{SerdeData, SerdeDeserialize, SerdeSerialize};
 
 macro_rules! forward {
 	($($t:ty)*) => {$(
@@ -160,16 +162,19 @@ impl SerdeData for Group {
 	}
 }
 
-impl<T> SerdeData for Vec<T>
+impl<T> SerdeData for List<T>
 where
 	T: SerdeData,
 {
-	default fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+	default fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		// self.serialize(serializer)
-		unimplemented!()
+		let mut serializer = serializer.serialize_seq(Some(self.len()))?;
+		for item in self.iter() {
+			serializer.serialize_element(&SerdeSerialize(&*item))?;
+		}
+		serializer.end()
 	}
 	default fn deserialize<'de, D>(
 		_deserializer: D, _schema: Option<SchemaIncomplete>,
@@ -181,12 +186,12 @@ where
 		unimplemented!()
 	}
 }
-impl SerdeData for Vec<u8> {
+impl SerdeData for List<u8> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		serde_bytes::Serialize::serialize(self, serializer)
+		serde_bytes::Serialize::serialize(&**self, serializer)
 	}
 	fn deserialize<'de, D>(
 		deserializer: D, _schema: Option<SchemaIncomplete>,
@@ -194,7 +199,7 @@ impl SerdeData for Vec<u8> {
 	where
 		D: Deserializer<'de>,
 	{
-		serde_bytes::Deserialize::deserialize(deserializer)
+		serde_bytes::Deserialize::deserialize(deserializer).map(<Vec<u8>>::into)
 	}
 }
 
@@ -390,12 +395,12 @@ impl SerdeData for Value {
 
 			#[inline]
 			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> {
-				Ok(v.to_owned().into())
+				Ok(<List<u8>>::from(v.to_owned()).into())
 			}
 
 			#[inline]
 			fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> {
-				Ok(v.into())
+				Ok(<List<u8>>::from(v).into())
 			}
 
 			#[inline]
@@ -431,7 +436,7 @@ impl SerdeData for Value {
 					vec.push(elem.0);
 				}
 
-				Ok(Value::List(vec))
+				Ok(Value::List(Box::new(vec.into())))
 			}
 
 			fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>

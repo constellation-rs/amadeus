@@ -6,7 +6,7 @@ use sum::{Sum2, Sum3};
 
 use amadeus_core::util::type_coerce;
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 #[cfg(debug_assertions)]
@@ -467,7 +467,7 @@ pub(super) fn parse_list<T: ParquetData>(schema: &Type) -> Result<ListSchema<T::
 	Err(ParquetError::General(String::from("Couldn't parse Vec<T>")))
 }
 
-impl<T> ParquetData for Vec<T>
+impl<T> ParquetData for List<T>
 where
 	T: ParquetData,
 {
@@ -576,7 +576,7 @@ fn byte_array_reader(
 	}
 }
 
-impl ParquetData for Vec<u8> {
+impl ParquetData for List<u8> {
 	type Schema = VecU8Schema;
 	type Reader = VecU8Reader;
 
@@ -1913,7 +1913,7 @@ impl ParquetData for Value {
 				schema, path, def_level, rep_level, paths, batch_size,
 			)),
 			ValueSchema::List(ref schema) => {
-				ValueReader::List(Box::new(<Vec<Value> as ParquetData>::reader(
+				ValueReader::List(Box::new(<List<Value> as ParquetData>::reader(
 					type_coerce(&**schema),
 					path,
 					def_level,

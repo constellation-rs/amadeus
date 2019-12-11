@@ -1,7 +1,3 @@
-// #![feature(test)]
-
-// extern crate test;
-
 #![allow(clippy::cognitive_complexity, clippy::type_complexity)]
 
 #[cfg(feature = "constellation")]
@@ -9,7 +5,6 @@ use constellation::*;
 use std::{
 	collections::HashMap, env, path::PathBuf, time::{Duration, SystemTime}
 };
-// use test::Bencher;
 
 use amadeus::prelude::*;
 
@@ -230,25 +225,25 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	);
 
 	type TenKayVeeTwo = (
-		Vec<u8>,
+		List<u8>,
 		i32,
 		i64,
 		bool,
 		f32,
 		f64,
-		Vec<u8>, // [u8;1024],
+		List<u8>, // [u8;1024],
 		DateTime,
 	);
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct TenKayVeeTwoDerived {
-		binary_field: Vec<u8>,
+		binary_field: List<u8>,
 		int32_field: i32,
 		int64_field: i64,
 		boolean_field: bool,
 		float_field: f32,
 		double_field: f64,
-		flba_field: Vec<u8>, // [u8;1024],
+		flba_field: List<u8>, // [u8;1024],
 		int96_field: DateTime,
 	}
 
@@ -299,8 +294,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<i64>,
 		Option<f32>,
 		Option<f64>,
-		Option<Vec<u8>>,
-		Option<Vec<u8>>,
+		Option<List<u8>>,
+		Option<List<u8>>,
 		Option<DateTime>,
 	);
 
@@ -314,8 +309,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		bigint_col: Option<i64>,
 		float_col: Option<f32>,
 		double_col: Option<f64>,
-		date_string_col: Option<Vec<u8>>,
-		string_col: Option<Vec<u8>>,
+		date_string_col: Option<List<u8>>,
+		string_col: Option<List<u8>>,
 		timestamp_col: Option<DateTime>,
 	}
 
@@ -366,8 +361,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<i64>,
 		Option<f32>,
 		Option<f64>,
-		Option<Vec<u8>>,
-		Option<Vec<u8>>,
+		Option<List<u8>>,
+		Option<List<u8>>,
 		Option<DateTime>,
 	);
 
@@ -381,8 +376,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		bigint_col: Option<i64>,
 		float_col: Option<f32>,
 		double_col: Option<f64>,
-		date_string_col: Option<Vec<u8>>,
-		string_col: Option<Vec<u8>>,
+		date_string_col: Option<List<u8>>,
+		string_col: Option<List<u8>>,
 		timestamp_col: Option<DateTime>,
 	}
 
@@ -433,8 +428,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		Option<i64>,
 		Option<f32>,
 		Option<f64>,
-		Option<Vec<u8>>,
-		Option<Vec<u8>>,
+		Option<List<u8>>,
+		Option<List<u8>>,
 		Option<DateTime>,
 	);
 
@@ -448,8 +443,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		bigint_col: Option<i64>,
 		float_col: Option<f32>,
 		double_col: Option<f64>,
-		date_string_col: Option<Vec<u8>>,
-		string_col: Option<Vec<u8>>,
+		date_string_col: Option<List<u8>>,
+		string_col: Option<List<u8>>,
 		timestamp_col: Option<DateTime>,
 	}
 
@@ -493,7 +488,7 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	// TODO
 
-	// type NationDictMalformed = (Option<i32>, Option<Vec<u8>>, Option<i32>, Option<Vec<u8>>);
+	// type NationDictMalformed = (Option<i32>, Option<List<u8>>, Option<i32>, Option<List<u8>>);
 
 	// let rows = Parquet::<_,NationDictMalformed>::new(vec![PathBuf::from(
 	// 	"amadeus-testing/parquet/nation.dict-malformed.parquet",
@@ -519,10 +514,13 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	// 	))]
 	// );
 
-	type NestedLists = (Option<Vec<Option<Vec<Option<Vec<Option<String>>>>>>>, i32);
+	type NestedLists = (
+		Option<List<Option<List<Option<List<Option<String>>>>>>>,
+		i32,
+	);
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NestedListsDerived {
-		a: Option<Vec<Option<Vec<Option<Vec<Option<String>>>>>>>,
+		a: Option<List<Option<List<Option<List<Option<String>>>>>>>,
 		b: i32,
 	}
 	let rows = Parquet::<_, NestedLists>::new(vec![PathBuf::from(
@@ -614,15 +612,15 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	type Nonnullable = (
 		i64,
-		Vec<i32>,
-		Vec<Vec<i32>>,
+		List<i32>,
+		List<List<i32>>,
 		HashMap<String, i32>,
-		Vec<HashMap<String, i32>>,
+		List<HashMap<String, i32>>,
 		(
 			i32,
-			Vec<i32>,
-			(Vec<Vec<(i32, String)>>,),
-			HashMap<String, ((Vec<f64>,),)>,
+			List<i32>,
+			(List<List<(i32, String)>>,),
+			HashMap<String, ((List<f64>,),)>,
 		),
 	);
 
@@ -631,11 +629,11 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		#[amadeus(name = "ID")]
 		id: i64,
 		#[amadeus(name = "Int_Array")]
-		int_array: Vec<i32>,
-		int_array_array: Vec<Vec<i32>>,
+		int_array: List<i32>,
+		int_array_array: List<List<i32>>,
 		#[amadeus(name = "Int_Map")]
 		int_map: HashMap<String, i32>,
-		int_map_array: Vec<HashMap<String, i32>>,
+		int_map_array: List<HashMap<String, i32>>,
 		#[amadeus(name = "nested_Struct")]
 		nested_struct: NonnullableDerivedInner,
 	}
@@ -644,16 +642,16 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	struct NonnullableDerivedInner {
 		a: i32,
 		#[amadeus(name = "B")]
-		b: Vec<i32>,
+		b: List<i32>,
 		c: NonnullableDerivedInnerInner,
 		#[amadeus(name = "G")]
-		g: HashMap<String, ((Vec<f64>,),)>,
+		g: HashMap<String, ((List<f64>,),)>,
 	}
 
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NonnullableDerivedInnerInner {
 		#[amadeus(name = "D")]
-		d: Vec<Vec<NonnullableDerivedInnerInnerInner>>,
+		d: List<List<NonnullableDerivedInnerInnerInner>>,
 	}
 
 	#[derive(Data, Clone, PartialEq, Debug)]
@@ -702,31 +700,31 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	type Nullable = (
 		Option<i64>,
-		Option<Vec<Option<i32>>>,
-		Option<Vec<Option<Vec<Option<i32>>>>>,
+		Option<List<Option<i32>>>,
+		Option<List<Option<List<Option<i32>>>>>,
 		Option<HashMap<String, Option<i32>>>,
-		Option<Vec<Option<HashMap<String, Option<i32>>>>>,
+		Option<List<Option<HashMap<String, Option<i32>>>>>,
 		Option<(
 			Option<i32>,
-			Option<Vec<Option<i32>>>,
-			Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
-			Option<HashMap<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
+			Option<List<Option<i32>>>,
+			Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
+			Option<HashMap<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
 		)>,
 	);
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct NullableDerived {
 		id: Option<i64>,
-		int_array: Option<Vec<Option<i32>>>,
+		int_array: Option<List<Option<i32>>>,
 		#[amadeus(name = "int_array_Array")]
-		int_array_array: Option<Vec<Option<Vec<Option<i32>>>>>,
+		int_array_array: Option<List<Option<List<Option<i32>>>>>,
 		int_map: Option<HashMap<String, Option<i32>>>,
 		#[amadeus(name = "int_Map_Array")]
-		int_map_array: Option<Vec<Option<HashMap<String, Option<i32>>>>>,
+		int_map_array: Option<List<Option<HashMap<String, Option<i32>>>>>,
 		nested_struct: Option<(
 			Option<i32>,
-			Option<Vec<Option<i32>>>,
-			Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
-			Option<HashMap<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
+			Option<List<Option<i32>>>,
+			Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
+			Option<HashMap<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
 		)>,
 	}
 	let rows = Parquet::<_, Nullable>::new(vec![PathBuf::from(
@@ -810,12 +808,12 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		8
 	);
 
-	type Repeated = (i32, Option<(Vec<(i64, Option<String>)>,)>);
+	type Repeated = (i32, Option<(List<(i64, Option<String>)>,)>);
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct RepeatedDerived {
 		id: i32,
 		#[amadeus(name = "phoneNumbers")]
-		phone_numbers: Option<(Vec<(i64, Option<String>)>,)>,
+		phone_numbers: Option<(List<(i64, Option<String>)>,)>,
 	}
 	let rows = Parquet::<_, Repeated>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
@@ -855,14 +853,14 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		6
 	);
 
-	type TestDatapage = (Option<String>, i32, f64, bool, Option<Vec<i32>>);
+	type TestDatapage = (Option<String>, i32, f64, bool, Option<List<i32>>);
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct TestDatapageDerived {
 		a: Option<String>,
 		b: i32,
 		c: f64,
 		d: bool,
-		e: Option<Vec<i32>>,
+		e: Option<List<i32>>,
 	}
 	let rows = Parquet::<_, TestDatapage>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
@@ -957,83 +955,3 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	start.elapsed().unwrap()
 }
-
-// #[bench]
-// fn record_reader_10k_collect(bench: &mut Bencher) {
-// 	let path = Path::new("./amadeus-testing/parquet/10k-v2.parquet");
-// 	let file = File::open(&path).unwrap();
-// 	let len = file.metadata().unwrap().len();
-// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
-
-// 	bench.bytes = len;
-// 	bench.iter(|| {
-// 		let iter = parquet_reader.get_row_iter(None).unwrap();
-// 		println!("{}", iter.count());
-// 	})
-// }
-// #[bench]
-// fn record_reader_stock_simulated_collect(bench: &mut Bencher) {
-// 	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
-// 	let file = File::open(&path).unwrap();
-// 	let len = file.metadata().unwrap().len();
-// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
-
-// 	bench.bytes = len;
-// 	bench.iter(|| {
-// 		let iter = parquet_reader.get_row_iter(None).unwrap();
-// 		println!("{}", iter.count());
-// 	})
-// }
-
-// #[bench]
-// fn record_reader_10k_collect_2(bench: &mut Bencher) {
-// 	let file = File::open(&Path::new("./amadeus-testing/parquet/10k-v2.parquet")).unwrap();
-// 	let len = file.metadata().unwrap().len();
-// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
-
-// 	bench.bytes = len;
-// 	bench.iter(|| {
-// 		let iter =
-// 			read2::<_, (Vec<u8>, i32, i64, bool, f32, f64, [u8; 1024], DateTime)>(&parquet_reader);
-// 		println!("{}", iter.unwrap().count());
-// 	})
-// }
-// #[bench]
-// fn record_reader_stock_simulated_collect_2(bench: &mut Bencher) {
-// 	let path = Path::new("./amadeus-testing/parquet/stock_simulated.parquet");
-// 	let file = File::open(&path).unwrap();
-// 	let len = file.metadata().unwrap().len();
-// 	let parquet_reader = SerializedFileReader::new(file).unwrap();
-
-// 	bench.bytes = len;
-// 	bench.iter(|| {
-// 		let iter = read2::<
-// 			_,
-// 			(
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<f64>,
-// 				Option<i64>,
-// 			),
-// 		>(&parquet_reader);
-// 		println!("{}", iter.unwrap().count());
-// 	})
-// }

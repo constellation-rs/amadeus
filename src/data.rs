@@ -19,7 +19,7 @@ use std::any::Any as SerdeData;
 
 pub use amadeus_derive::Data;
 pub use amadeus_types::{
-	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 pub trait Data:
@@ -58,7 +58,7 @@ pub struct CastError;
 
 impl<T> Data for Option<T> where T: Data {}
 impl<T> Data for Box<T> where T: Data {}
-impl<T> Data for Vec<T> where T: Data {}
+impl<T> Data for List<T> where T: Data {}
 impl<K, V, S> Data for HashMap<K, V, S>
 where
 	K: Hash + Eq + Data,
