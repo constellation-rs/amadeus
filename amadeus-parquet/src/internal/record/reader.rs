@@ -36,7 +36,9 @@ use crate::internal::{
 		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
 	}, errors::{ParquetError, Result}, file::reader::{FileReader, RowGroupReader}, schema::types::{ColumnPath, SchemaDescPtr, SchemaDescriptor, Type}
 };
-use amadeus_types::{Bson, Date, DateTime, Decimal, Enum, Group, Json, Time, Value, ValueRequired};
+use amadeus_types::{
+	Bson, Date, DateTime, Decimal, Enum, Group, Json, List, Time, Value, ValueRequired
+};
 
 /// Default batch size for a reader
 const DEFAULT_BATCH_SIZE: usize = 1024;
@@ -158,13 +160,13 @@ pub enum VecU8Reader {
 	List(RepeatedReader<<u8 as ParquetData>::Reader>),
 }
 impl Reader for VecU8Reader {
-	type Item = Vec<u8>;
+	type Item = List<u8>;
 
 	#[inline]
 	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item> {
 		match self {
 			VecU8Reader::ByteArray(byte_array_reader) => {
-				byte_array_reader.read(def_level, rep_level)
+				byte_array_reader.read(def_level, rep_level).map(Into::into)
 			}
 			VecU8Reader::List(list_reader) => list_reader.read(def_level, rep_level),
 		}
@@ -249,10 +251,10 @@ pub struct RepeatedReader<R> {
 	pub(super) reader: R,
 }
 impl<R: Reader> Reader for RepeatedReader<R> {
-	type Item = Vec<R::Item>;
+	type Item = List<R::Item>;
 
 	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item> {
-		let mut elements = Vec::new();
+		let mut elements = List::new();
 		loop {
 			if self.reader.current_def_level() > def_level {
 				elements.push(self.reader.read(def_level + 1, rep_level + 1)?);
@@ -406,7 +408,7 @@ pub enum ValueReader {
 	String(<String as ParquetData>::Reader),
 	Json(<Json as ParquetData>::Reader),
 	Enum(<Enum as ParquetData>::Reader),
-	List(Box<<Vec<Value> as ParquetData>::Reader>),
+	List(Box<<List<Value> as ParquetData>::Reader>),
 	Map(Box<<HashMap<Value, Value> as ParquetData>::Reader>),
 	Group(<Group as ParquetData>::Reader),
 	Option(Box<<Option<Value> as ParquetData>::Reader>),
@@ -435,16 +437,21 @@ impl Reader for ValueReader {
 			ValueReader::Decimal(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::Decimal)
 			}
-			ValueReader::ByteArray(ref mut reader) => {
-				reader.read(def_level, rep_level).map(Into::into)
-			}
+			ValueReader::ByteArray(ref mut reader) => reader
+				.read(def_level, rep_level)
+				.map(Into::into)
+				.map(Box::new)
+				.map(Value::List),
 			ValueReader::Bson(ref mut reader) => reader.read(def_level, rep_level).map(Value::Bson),
 			ValueReader::String(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::String)
 			}
 			ValueReader::Json(ref mut reader) => reader.read(def_level, rep_level).map(Value::Json),
 			ValueReader::Enum(ref mut reader) => reader.read(def_level, rep_level).map(Value::Enum),
-			ValueReader::List(ref mut reader) => reader.read(def_level, rep_level).map(Value::List),
+			ValueReader::List(ref mut reader) => reader
+				.read(def_level, rep_level)
+				.map(Box::new)
+				.map(Value::List),
 			ValueReader::Map(ref mut reader) => reader.read(def_level, rep_level).map(Value::Map),
 			ValueReader::Group(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::Group)
@@ -952,7 +959,7 @@ mod tests {
 	use crate::internal::{
 		errors::Result, file::reader::{FileReader, SerializedFileReader}, util::test_common::get_test_file
 	};
-	use amadeus_types::{Group, Value};
+	use amadeus_types::{Group, List, Value};
 
 	// Convenient macros to assemble row, list, map, and group.
 
@@ -987,7 +994,7 @@ mod tests {
 		( $( $e:expr ), * ) => {
 			{
 				#[allow(unused_mut)]
-				let mut result = Vec::new();
+				let mut result = List::new();
 				$(
 					result.push($e);
 				)*
@@ -997,7 +1004,7 @@ mod tests {
 	}
 	macro_rules! listv {
 		( $( $e:expr ), * ) => {
-			Value::List(list!($($e),*))
+			Value::List(Box::new(list!($($e),*)))
 		}
 	}
 
@@ -1144,15 +1151,15 @@ mod tests {
 	fn test_file_reader_rows_nonnullable_typed() {
 		type RowTyped = (
 			i64,
-			Vec<i32>,
-			Vec<Vec<i32>>,
+			List<i32>,
+			List<List<i32>>,
 			HashMap<String, i32>,
-			Vec<HashMap<String, i32>>,
+			List<HashMap<String, i32>>,
 			(
 				i32,
-				Vec<i32>,
-				(Vec<Vec<(i32, String)>>,),
-				HashMap<String, ((Vec<f64>,),)>,
+				List<i32>,
+				(List<List<(i32, String)>>,),
+				HashMap<String, ((List<f64>,),)>,
 			),
 		);
 
@@ -1533,15 +1540,15 @@ mod tests {
 	fn test_file_reader_rows_nullable_typed() {
 		type RowTyped = (
 			Option<i64>,
-			Option<Vec<Option<i32>>>,
-			Option<Vec<Option<Vec<Option<i32>>>>>,
+			Option<List<Option<i32>>>,
+			Option<List<Option<List<Option<i32>>>>>,
 			Option<HashMap<String, Option<i32>>>,
-			Option<Vec<Option<HashMap<String, Option<i32>>>>>,
+			Option<List<Option<HashMap<String, Option<i32>>>>>,
 			Option<(
 				Option<i32>,
-				Option<Vec<Option<i32>>>,
-				Option<(Option<Vec<Option<Vec<Option<(Option<i32>, Option<String>)>>>>>,)>,
-				Option<HashMap<String, Option<(Option<(Option<Vec<Option<f64>>>,)>,)>>>,
+				Option<List<Option<i32>>>,
+				Option<(Option<List<Option<List<Option<(Option<i32>, Option<String>)>>>>>,)>,
+				Option<HashMap<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
 			)>,
 		);
 
@@ -1951,7 +1958,7 @@ mod tests {
 
 	#[test]
 	fn test_tree_reader_handle_repeated_fields_with_no_annotation() {
-		type RepeatedNoAnnotation = (i32, Option<(Vec<(i64, Option<String>)>,)>);
+		type RepeatedNoAnnotation = (i32, Option<(List<(i64, Option<String>)>,)>);
 
 		// Array field `phoneNumbers` does not contain LIST annotation.
 		// We parse it as struct with `phone` repeated field as array.

@@ -667,7 +667,7 @@ mod tests {
 	use std::collections::HashMap;
 	use test::Bencher;
 
-	use amadeus_types::{DateTime, Group};
+	use amadeus_types::{DateTime, Group, List};
 
 	use super::*;
 	use crate::internal::{
@@ -1120,7 +1120,7 @@ mod tests {
 
 		bench.bytes = len;
 		bench.iter(|| {
-			type RowTyped = (Vec<u8>, i32, i64, bool, f32, f64, Vec<u8>, DateTime); // [u8; 1024]
+			type RowTyped = (List<u8>, i32, i64, bool, f32, f64, List<u8>, DateTime); // [u8; 1024]
 			(&parquet_reader)
 				.get_row_iter::<RowTyped>(None)
 				.unwrap()

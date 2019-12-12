@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::{
-	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
+	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -144,7 +144,7 @@ pub enum Value {
 
 	// Complex types
 	/// List of elements.
-	List(Vec<Value>),
+	List(Box<List<Value>>),
 	/// Map of key-value pairs.
 	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
@@ -1310,7 +1310,7 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return a reference to it. Returns Err otherwise.
-	pub fn as_list(&self) -> Result<&Vec<Self>, DowncastError> {
+	pub fn as_list(&self) -> Result<&List<Self>, DowncastError> {
 		if let Self::List(ret) = self {
 			Ok(ret)
 		} else {
@@ -1322,9 +1322,9 @@ impl Value {
 	}
 
 	/// If the `Value` is an List, return it. Returns Err otherwise.
-	pub fn into_list(self) -> Result<Vec<Self>, DowncastError> {
+	pub fn into_list(self) -> Result<List<Self>, DowncastError> {
 		if let Self::List(ret) = self {
-			Ok(ret)
+			Ok(*ret)
 		} else {
 			Err(DowncastError {
 				from: self.type_name(),
@@ -1563,18 +1563,20 @@ impl From<IpAddr> for Value {
 		Self::IpAddr(value)
 	}
 }
-impl<T> From<Vec<T>> for Value
+impl<T> From<List<T>> for Value
 where
 	T: Into<Self>,
 {
-	default fn from(value: Vec<T>) -> Self {
-		Self::List(value.into_iter().map(Into::into).collect::<Vec<_>>())
+	default fn from(value: List<T>) -> Self {
+		Self::List(Box::new(
+			value.into_iter().map(Into::into).collect::<List<_>>(),
+		))
 	}
 }
 #[doc(hidden)]
-impl From<Vec<Self>> for Value {
-	fn from(value: Vec<Self>) -> Self {
-		Self::List(value)
+impl From<List<Self>> for Value {
+	fn from(value: List<Self>) -> Self {
+		Self::List(Box::new(value))
 	}
 }
 impl<K, V, S> From<HashMap<K, V, S>> for Value
@@ -1637,7 +1639,7 @@ macro_rules! array_from {
 		{
 			fn from(value: [T; $i]) -> Self {
 				let x: Box<[T]> = Box::new(value);
-				let x: Vec<T> = x.into();
+				let x: List<T> = x.into();
 				x.into()
 			}
 		}
@@ -1794,7 +1796,7 @@ impl DowncastFrom<Value> for IpAddr {
 		self_.into_ip_addr()
 	}
 }
-impl<T> DowncastFrom<Value> for Vec<T>
+impl<T> DowncastFrom<Value> for List<T>
 where
 	T: DowncastFrom<Value>,
 {
@@ -1802,12 +1804,12 @@ where
 		self_.into_list().and_then(|list| {
 			list.into_iter()
 				.map(Downcast::downcast)
-				.collect::<Result<Vec<_>, _>>()
+				.collect::<Result<List<_>, _>>()
 		})
 	}
 }
 #[doc(hidden)]
-impl DowncastFrom<Value> for Vec<Value> {
+impl DowncastFrom<Value> for List<Value> {
 	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_list()
 	}
@@ -1866,7 +1868,7 @@ macro_rules! array_downcast {
 					from: self_.type_name(),
 					to: stringify!([T; $i]),
 				};
-				let x: Box<[T]> = <Vec<T>>::downcast_from(self_).map_err(|_| err)?.into_boxed_slice();
+				let x: Box<[T]> = <List<T>>::downcast_from(self_).map_err(|_| err)?.into_boxed_slice();
 				let x: Box<Self> = x.try_into().map_err(|_| err)?;
 				Ok(*x)
 			}
@@ -1999,13 +2001,6 @@ impl PartialEq<Decimal> for Value {
 			.unwrap_or(false)
 	}
 }
-// impl PartialEq<Vec<u8>> for Value {
-// 	fn eq(&self, other: &Vec<u8>) -> bool {
-// 		self.as_byte_array()
-// 			.map(|byte_array| byte_array == other)
-// 			.unwrap_or(false)
-// 	}
-// }
 impl PartialEq<Bson> for Value {
 	fn eq(&self, other: &Bson) -> bool {
 		self.as_bson().map(|bson| bson == other).unwrap_or(false)
@@ -2047,11 +2042,11 @@ impl PartialEq<IpAddr> for Value {
 			.unwrap_or(false)
 	}
 }
-impl<T> PartialEq<Vec<T>> for Value
+impl<T> PartialEq<List<T>> for Value
 where
 	Value: PartialEq<T>,
 {
-	fn eq(&self, other: &Vec<T>) -> bool {
+	fn eq(&self, other: &List<T>) -> bool {
 		self.as_list().map(|list| list == other).unwrap_or(false)
 	}
 }

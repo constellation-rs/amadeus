@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 /// Represents any valid required Parquet value. Exists to avoid [`Value`] being recursive
@@ -71,7 +71,7 @@ pub enum ValueRequired {
 
 	// Complex types
 	/// List of elements.
-	List(Vec<Value>),
+	List(Box<List<Value>>),
 	/// Map of key-value pairs.
 	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.

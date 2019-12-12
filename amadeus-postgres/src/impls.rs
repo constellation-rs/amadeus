@@ -1,6 +1,6 @@
 use super::{Names, PostgresData};
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use postgres::types::{FromSql, Type, WasNull};
@@ -54,16 +54,6 @@ where
 			Some(buf) => T::decode(type_, Some(buf)).map(Some),
 			None => Ok(None),
 		}
-	}
-}
-
-/// BYTEA
-impl PostgresData for Vec<u8> {
-	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
-		name.unwrap().fmt(f)
-	}
-	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
 	}
 }
 
@@ -139,7 +129,7 @@ impl PostgresData for Group {
 	}
 }
 
-impl<T> PostgresData for Vec<T>
+impl<T> PostgresData for List<T>
 where
 	T: PostgresData,
 {
@@ -149,6 +139,15 @@ where
 	default fn decode(
 		_type_: &Type, _buf: Option<&[u8]>,
 	) -> Result<Self, Box<dyn Error + Sync + Send>> {
+		unimplemented!()
+	}
+}
+/// BYTEA
+impl PostgresData for List<u8> {
+	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
+		name.unwrap().fmt(f)
+	}
+	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		unimplemented!()
 	}
 }
