@@ -6,82 +6,6 @@ use std::{
 use super::{AmadeusOrd, Value};
 use amadeus_core::util::type_coerce;
 
-macro_rules! duck {
-	( $trait:ident $duck_trait:ident<$($l:lifetime),*;$($p:ident),*> { $(fn $fn:ident $duck_fn:ident<$($t:ident),*>($($args:tt)*) -> $ret:ty where ($($where:tt)*) [$($arg_names:ident),*]; )* } ) => {
-		trait $duck_trait<$($l,)*$($p,)*> {
-			$(
-				fn $duck_fn<$($t,)*>($($args)*) -> $ret where $($where)*;
-			)*
-		}
-		impl<$($l,)*$($p,)* T: ?Sized> $duck_trait<$($l,)*$($p,)*> for T {
-			$(
-				#[inline(always)]
-				default fn $duck_fn<$($t,)*>($($args)*) -> $ret where $($where)* {
-					let _ = ($($arg_names,)*);
-					unreachable!()
-				}
-			)*
-		}
-		impl<$($l,)*$($p,)* T: ?Sized> $duck_trait<$($l,)*$($p,)*> for T
-		where
-			T: $trait<$($l,)*$($p,)*>,
-		{
-			$(
-				#[inline(always)]
-				fn $duck_fn<$($t,)*>($($args)*) -> $ret where $($where)* {
-					$trait::$fn($($arg_names,)*)
-				}
-			)*
-		}
-	}
-}
-
-duck! {
-	Clone CloneDuck<;> {
-		fn clone clone_duck<>(&self) -> Self where (Self: Sized) [self];
-	}
-}
-// duck! {
-// 	PartialEq PartialEqDuck<;Rhs> {
-// 		fn eq eq_duck<>(&self, other: &Rhs) -> bool where () [self, other];
-// 	}
-// }
-// duck! {
-// 	PartialOrd PartialOrdDuck<;Rhs> {
-// 		fn partial_cmp partial_cmp_duck<>(&self, other: &Rhs) -> Option<Ordering> where () [self, other];
-// 	}
-// }
-// duck! {
-// 	Ord OrdDuck<;> {
-// 		fn cmp cmp_duck<>(&self, other: &Self) -> Ordering where () [self, other];
-// 	}
-// }
-// duck! {
-// 	AmadeusOrd AmadeusOrdDuck<;> {
-// 		fn amadeus_cmp amadeus_cmp_duck<>(&self, other: &Self) -> Ordering where () [self, other];
-// 	}
-// }
-duck! {
-	Hash HashDuck<;> {
-		fn hash hash_duck<H>(&self, state: &mut H) -> () where (H: Hasher) [self, state];
-	}
-}
-duck! {
-	Serialize SerializeDuck<;> {
-		fn serialize serialize_duck<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where (S: Serializer) [self, serializer];
-	}
-}
-duck! {
-	Deserialize DeserializeDuck<'de;> {
-		fn deserialize deserialize_duck<D>(deserializer: D) -> Result<Self, D::Error> where (D: Deserializer<'de>, Self: Sized) [deserializer];
-	}
-}
-duck! {
-	Debug DebugDuck<;> {
-		fn fmt fmt_duck<>(&self, fmt: &mut fmt::Formatter) -> fmt::Result where () [self, fmt];
-	}
-}
-
 pub struct List<T> {
 	vec: <T as ListItem>::Vec,
 }
@@ -208,7 +132,7 @@ where
 	#[inline(always)]
 	fn clone(&self) -> Self {
 		Self {
-			vec: self.vec.clone_duck(),
+			vec: self.vec.clone_a(),
 		}
 	}
 }
@@ -259,7 +183,7 @@ where
 	where
 		H: Hasher,
 	{
-		self.vec.hash_duck(state)
+		self.vec.hash_a(state)
 	}
 }
 impl<T> Serialize for List<T>
@@ -271,7 +195,7 @@ where
 	where
 		S: Serializer,
 	{
-		self.vec.serialize_duck(serializer)
+		self.vec.serialize_a(serializer)
 	}
 }
 impl<'de, T> Deserialize<'de> for List<T>
@@ -283,16 +207,15 @@ where
 	where
 		D: Deserializer<'de>,
 	{
-		DeserializeDuck::deserialize_duck(deserializer)
+		<<T as ListItem>::Vec>::deserialize_a(deserializer).map(|vec| Self { vec })
 	}
 }
 impl<T> Debug for List<T>
 where
 	T: Debug,
 {
-	#[inline(always)]
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		self.vec.fmt_duck(fmt)
+		self.vec.fmt_a(fmt)
 	}
 }
 impl<T> UnwindSafe for List<T> where T: UnwindSafe {}
@@ -304,11 +227,13 @@ unsafe impl<T> Sync for List<T> where T: Sync {}
 impl Deref for List<u8> {
 	type Target = [u8];
 
+	#[inline(always)]
 	fn deref(&self) -> &Self::Target {
 		&*type_coerce::<_, &Vec<u8>>(&self.vec)
 	}
 }
 impl DerefMut for List<u8> {
+	#[inline(always)]
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut *type_coerce::<_, &mut Vec<u8>>(&mut self.vec)
 	}
@@ -338,6 +263,25 @@ pub trait ListVec<T> {
 	fn into_vec(self) -> Vec<T>;
 	fn into_iter(self) -> Self::IntoIter;
 	fn iter(&self) -> std::vec::IntoIter<ValueRef<'_, T>>;
+	fn clone_a(&self) -> Self
+	where
+		T: Clone;
+	fn hash_a<H>(&self, state: &mut H)
+	where
+		H: Hasher,
+		T: Hash;
+	fn serialize_a<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+		T: Serialize;
+	fn deserialize_a<'de, D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+		T: Deserialize<'de>,
+		Self: Sized;
+	fn fmt_a(&self, fmt: &mut fmt::Formatter) -> fmt::Result
+	where
+		T: Debug;
 }
 impl<T> ListVec<T> for Vec<T> {
 	type IntoIter = std::vec::IntoIter<T>;
@@ -373,6 +317,44 @@ impl<T> ListVec<T> for Vec<T> {
 				.map(|next| ValueRef(ManuallyDrop::new(unsafe { ptr::read(next) }), &()))
 				.collect::<Vec<_>>(),
 		)
+	}
+	#[inline(always)]
+	fn clone_a(&self) -> Self
+	where
+		T: Clone,
+	{
+		self.clone()
+	}
+	#[inline(always)]
+	fn hash_a<H>(&self, state: &mut H)
+	where
+		H: Hasher,
+		T: Hash,
+	{
+		self.hash(state)
+	}
+	#[inline(always)]
+	fn serialize_a<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+		T: Serialize,
+	{
+		self.serialize(serializer)
+	}
+	#[inline(always)]
+	fn deserialize_a<'de, D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+		T: Deserialize<'de>,
+		Self: Sized,
+	{
+		Self::deserialize(deserializer)
+	}
+	fn fmt_a(&self, fmt: &mut fmt::Formatter) -> fmt::Result
+	where
+		T: Debug,
+	{
+		self.fmt(fmt)
 	}
 }
 #[doc(hidden)]
@@ -499,10 +481,49 @@ impl ListVec<Value> for ValueVec {
 			Self::Value(vec) => IntoIterator::into_iter(Iter(<[_]>::iter(vec)).collect::<Vec<_>>()),
 		}
 	}
+	#[inline(always)]
+	fn clone_a(&self) -> Self
+	where
+		Value: Clone,
+	{
+		self.clone()
+	}
+	#[inline(always)]
+	fn hash_a<H>(&self, state: &mut H)
+	where
+		H: Hasher,
+		Value: Hash,
+	{
+		self.hash(state)
+	}
+	#[inline(always)]
+	fn serialize_a<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+		Value: Serialize,
+	{
+		self.serialize(serializer)
+	}
+	#[inline(always)]
+	fn deserialize_a<'de, D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+		Value: Deserialize<'de>,
+		Self: Sized,
+	{
+		Self::deserialize(deserializer)
+	}
+	fn fmt_a(&self, fmt: &mut fmt::Formatter) -> fmt::Result
+	where
+		Value: Debug,
+	{
+		self.fmt(fmt)
+	}
 }
 struct Iter<'a, T>(std::slice::Iter<'a, T>);
 impl<'a> Iterator for Iter<'a, u8> {
 	type Item = ValueRef<'a, Value>;
+
 	#[inline(always)]
 	fn next(&mut self) -> Option<Self::Item> {
 		self.0
@@ -512,6 +533,7 @@ impl<'a> Iterator for Iter<'a, u8> {
 }
 impl<'a> Iterator for Iter<'a, u16> {
 	type Item = ValueRef<'a, Value>;
+
 	#[inline(always)]
 	fn next(&mut self) -> Option<Self::Item> {
 		self.0
@@ -521,6 +543,7 @@ impl<'a> Iterator for Iter<'a, u16> {
 }
 impl<'a> Iterator for Iter<'a, List<Value>> {
 	type Item = ValueRef<'a, Value>;
+
 	#[inline(always)]
 	fn next(&mut self) -> Option<Self::Item> {
 		self.0.next().map(|next| {
@@ -533,6 +556,7 @@ impl<'a> Iterator for Iter<'a, List<Value>> {
 }
 impl<'a> Iterator for Iter<'a, Value> {
 	type Item = ValueRef<'a, Value>;
+
 	#[inline(always)]
 	fn next(&mut self) -> Option<Self::Item> {
 		self.0
@@ -546,10 +570,14 @@ pub struct ValueRef<'a, T>(ManuallyDrop<T>, &'a ());
 impl<'a, T> Deref for ValueRef<'a, T> {
 	type Target = T;
 
+	#[inline(always)]
 	fn deref(&self) -> &Self::Target {
 		&*self.0
 	}
 }
+
+// TODO! Iterating a List<Value>{vec:ValueVec::List(..)} will leak a load of boxes.
+
 // impl<'a,T> Drop for ValueRef<'a,T> {
 // 	fn drop(&mut self) {
 // 		if let Some(self_) = try_type_coerce::<&mut ValueRef<'a,T>,&mut ValueRef<'a,Value>>(self) {
@@ -588,7 +616,6 @@ impl<'a, T> Deref for ValueRef<'a, T> {
 // 		}
 // 	}
 // }
-
 // fn assert_copy<T: Copy>(_t: T) {}
 
 impl<'a, T> Serialize for ValueRef<'a, T>
@@ -607,6 +634,7 @@ impl<'a, T> AmadeusOrd for ValueRef<'a, T>
 where
 	T: AmadeusOrd,
 {
+	#[inline(always)]
 	fn amadeus_cmp(&self, _other: &Self) -> Ordering {
 		unimplemented!()
 	}

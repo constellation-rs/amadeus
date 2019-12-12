@@ -20,7 +20,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 either = { version = "1.5", features = ["serde"] }
-futures-preview = "=0.3.0-alpha.19"
+futures = "0.3"
 owned_chars = "0.3"
 rand = "0.7"
 replace_with = "0.1"
