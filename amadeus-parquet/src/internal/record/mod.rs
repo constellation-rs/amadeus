@@ -59,13 +59,6 @@ pub use display::DisplaySchemaGroup;
 pub use reader::RowIter;
 pub use schemas::RootSchema;
 
-mod predicate {
-	/// This is for forward compatibility when Predicate pushdown and dynamic schemas are
-	/// implemented.
-	pub struct Predicate;
-}
-pub(crate) use self::predicate::Predicate;
-
 /// This trait is implemented on all types that can be read from/written to Parquet files.
 ///
 /// It is implemented on the following types:
@@ -150,6 +143,7 @@ pub trait ParquetData: Sized {
 	// Clone + PartialEq + Debug + 'static
 	type Schema: Schema;
 	type Reader: Reader<Item = Self>;
+	type Predicate;
 
 	/// Parse a [`Type`] into `Self::Schema`, using `repetition` instead of
 	/// `Type::get_basic_info().repetition()`. A `repetition` of `None` denotes a root

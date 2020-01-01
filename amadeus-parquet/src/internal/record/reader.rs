@@ -30,7 +30,7 @@ use std::{
 };
 use sum::derive_sum;
 
-use super::{triplet::TypedTripletIter, types::Root, ParquetData, Predicate, Reader};
+use super::{triplet::TypedTripletIter, types::Root, ParquetData, Reader};
 use crate::internal::{
 	column::reader::ColumnReader, data_type::{
 		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
@@ -765,7 +765,7 @@ where
 	}
 
 	/// Creates row iterator for all row groups in a file.
-	pub fn from_file(_proj: Option<Predicate>, reader: R) -> Result<Self> {
+	pub fn from_file(_proj: Option<T::Predicate>, reader: R) -> Result<Self> {
 		let file_schema = reader.metadata().file_metadata().schema_descr_ptr();
 		let file_schema = file_schema.root_schema();
 		let schema = <Root<T> as ParquetData>::parse(file_schema, None)?.1;
@@ -775,7 +775,7 @@ where
 
 	/// Creates row iterator for a specific row group.
 	pub fn from_row_group(
-		_proj: Option<Predicate>, row_group_reader: &dyn RowGroupReader,
+		_proj: Option<T::Predicate>, row_group_reader: &dyn RowGroupReader,
 	) -> Result<Self> {
 		let file_schema = row_group_reader.metadata().schema_descr_ptr();
 		let file_schema = file_schema.root_schema();
@@ -2047,7 +2047,7 @@ mod tests {
 		assert_eq!(expected_rows, rows_typed);
 	}
 
-	fn test_file_reader_rows<T>(file_name: &str, schema: Option<Predicate>) -> Result<Vec<T>>
+	fn test_file_reader_rows<T>(file_name: &str, schema: Option<T::Predicate>) -> Result<Vec<T>>
 	where
 		T: ParquetData,
 	{
@@ -2057,7 +2057,7 @@ mod tests {
 		Ok(iter.map(Result::unwrap).collect())
 	}
 
-	fn test_row_group_rows<T>(file_name: &str, schema: Option<Predicate>) -> Result<Vec<T>>
+	fn test_row_group_rows<T>(file_name: &str, schema: Option<T::Predicate>) -> Result<Vec<T>>
 	where
 		T: ParquetData,
 	{

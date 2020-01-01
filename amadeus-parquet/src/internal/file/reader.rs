@@ -28,7 +28,7 @@ use thrift::protocol::TCompactInputProtocol;
 use crate::internal::{
 	basic::{ColumnOrder, Compression, Encoding, Type}, column::{
 		page::{Page, PageReader}, reader::{ColumnReader, ColumnReaderImpl}
-	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, format::{ColumnOrder as TColumnOrder, FileMetaData as TFileMetaData, PageHeader, PageType}, record::{ParquetData, Predicate, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
+	}, compression::{create_codec, Codec}, errors::{ParquetError, Result}, file::{metadata::*, statistics, FOOTER_SIZE, PARQUET_MAGIC}, format::{ColumnOrder as TColumnOrder, FileMetaData as TFileMetaData, PageHeader, PageType}, record::{ParquetData, RowIter}, schema::types::{self, SchemaDescriptor}, util::{
 		io::{BufReader, FileSource}, memory::ByteBufferPtr
 	}
 };
@@ -60,7 +60,7 @@ pub trait FileReader {
 	///
 	/// Projected schema can be a subset of or equal to the file schema, when it is None,
 	/// full file schema is assumed.
-	fn get_row_iter<T>(self, projection: Option<Predicate>) -> Result<RowIter<Self, T>>
+	fn get_row_iter<T>(self, projection: Option<T::Predicate>) -> Result<RowIter<Self, T>>
 	where
 		T: ParquetData,
 		Self: Sized,
@@ -131,7 +131,7 @@ pub trait RowGroupReader {
 	/// Projected schema can be a subset of or equal to the file schema, when it is None,
 	/// full file schema is assumed.
 	fn get_row_iter<T>(
-		&self, projection: Option<Predicate>,
+		&self, projection: Option<T::Predicate>,
 	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
 		T: ParquetData,
@@ -434,7 +434,7 @@ impl<R: 'static + ParquetReader> RowGroupReader for SerializedRowGroupReader<R> 
 	}
 
 	fn get_row_iter<T>(
-		&self, projection: Option<Predicate>,
+		&self, projection: Option<T::Predicate>,
 	) -> Result<RowIter<SerializedFileReader<Never>, T>>
 	where
 		T: ParquetData,
