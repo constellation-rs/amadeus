@@ -275,7 +275,6 @@ impl CloudfrontRow {
 mod http_serde {
 	use http::{Method, StatusCode};
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-	use std::error::Error;
 
 	pub struct Serde<T>(T);
 
@@ -303,7 +302,7 @@ mod http_serde {
 			String::deserialize(deserializer)
 				.and_then(|x| {
 					x.parse::<Method>()
-						.map_err(|err| serde::de::Error::custom(err.description()))
+						.map_err(|err| serde::de::Error::custom(err.to_string()))
 				})
 				.map(Self)
 		}
@@ -317,7 +316,7 @@ mod http_serde {
 				.and_then(|x| {
 					x.map(|x| {
 						StatusCode::from_u16(x)
-							.map_err(|err| serde::de::Error::custom(err.description()))
+							.map_err(|err| serde::de::Error::custom(err.to_string()))
 					})
 					.transpose()
 				})

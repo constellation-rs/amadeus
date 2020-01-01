@@ -34,7 +34,8 @@
 	clippy::unreadable_literal,
 	clippy::default_trait_access,
 	clippy::match_same_arms,
-	clippy::must_use_candidate
+	clippy::must_use_candidate,
+	clippy::missing_errors_doc
 )]
 #![forbid(unsafe_code)]
 

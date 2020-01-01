@@ -661,7 +661,7 @@ where
 	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item> {
 		self.0.read(def_level, rep_level).and_then(|x| {
 			x.try_into()
-				.map_err(|err| ParquetError::General(err.description().to_owned()))
+				.map_err(|err| ParquetError::General(err.to_string()))
 		})
 	}
 

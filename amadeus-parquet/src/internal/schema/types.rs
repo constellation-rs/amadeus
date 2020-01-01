@@ -1052,8 +1052,6 @@ fn to_thrift_helper(schema: &Type, elements: &mut Vec<SchemaElement>) {
 mod tests {
 	use super::*;
 
-	use std::error::Error;
-
 	use crate::internal::schema::parser::parse_message_type;
 
 	#[test]
@@ -1086,7 +1084,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "BSON can only annotate BYTE_ARRAY fields");
+			assert_eq!(e.to_string(), "BSON can only annotate BYTE_ARRAY fields");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::Int96)
@@ -1098,7 +1096,7 @@ mod tests {
 		assert!(result.is_err());
 		if let Err(e) = result {
 			assert_eq!(
-				e.description(),
+				e.to_string(),
 				"DECIMAL can only annotate INT32, INT64, BYTE_ARRAY and FIXED"
 			);
 		}
@@ -1111,7 +1109,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "Invalid DECIMAL precision: -1");
+			assert_eq!(e.to_string(), "Invalid DECIMAL precision: -1");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1122,7 +1120,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "Invalid DECIMAL precision: 0");
+			assert_eq!(e.to_string(), "Invalid DECIMAL precision: 0");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1133,7 +1131,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "Invalid DECIMAL scale: -1");
+			assert_eq!(e.to_string(), "Invalid DECIMAL scale: -1");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1145,7 +1143,7 @@ mod tests {
 		assert!(result.is_err());
 		if let Err(e) = result {
 			assert_eq!(
-				e.description(),
+				e.to_string(),
 				"Invalid DECIMAL: scale (2) cannot be greater than or equal to precision (1)"
 			);
 		}
@@ -1159,7 +1157,7 @@ mod tests {
 		assert!(result.is_err());
 		if let Err(e) = result {
 			assert_eq!(
-				e.description(),
+				e.to_string(),
 				"Cannot represent INT32 as DECIMAL with precision 18"
 			);
 		}
@@ -1173,7 +1171,7 @@ mod tests {
 		assert!(result.is_err());
 		if let Err(e) = result {
 			assert_eq!(
-				e.description(),
+				e.to_string(),
 				"Cannot represent INT64 as DECIMAL with precision 32"
 			);
 		}
@@ -1188,7 +1186,7 @@ mod tests {
 		assert!(result.is_err());
 		if let Err(e) = result {
 			assert_eq!(
-				e.description(),
+				e.to_string(),
 				"Cannot represent FIXED_LEN_BYTE_ARRAY as DECIMAL with length 5 and precision 12"
 			);
 		}
@@ -1199,7 +1197,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "UINT_8 can only annotate INT32");
+			assert_eq!(e.to_string(), "UINT_8 can only annotate INT32");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::Int32)
@@ -1208,7 +1206,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "TIME_MICROS can only annotate INT64");
+			assert_eq!(e.to_string(), "TIME_MICROS can only annotate INT64");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1218,7 +1216,7 @@ mod tests {
 		assert!(result.is_err());
 		if let Err(e) = result {
 			assert_eq!(
-				e.description(),
+				e.to_string(),
 				"INTERVAL can only annotate FIXED_LEN_BYTE_ARRAY(12)"
 			);
 		}
@@ -1231,7 +1229,7 @@ mod tests {
 		assert!(result.is_err());
 		if let Err(e) = result {
 			assert_eq!(
-				e.description(),
+				e.to_string(),
 				"INTERVAL can only annotate FIXED_LEN_BYTE_ARRAY(12)"
 			);
 		}
@@ -1242,7 +1240,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "ENUM can only annotate BYTE_ARRAY fields");
+			assert_eq!(e.to_string(), "ENUM can only annotate BYTE_ARRAY fields");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::Int32)
@@ -1251,7 +1249,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "MAP cannot be applied to a primitive type");
+			assert_eq!(e.to_string(), "MAP cannot be applied to a primitive type");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::FixedLenByteArray)
@@ -1261,7 +1259,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.description(), "Invalid FIXED_LEN_BYTE_ARRAY length: -1");
+			assert_eq!(e.to_string(), "Invalid FIXED_LEN_BYTE_ARRAY length: -1");
 		}
 	}
 
@@ -1745,7 +1743,7 @@ mod tests {
 		let thrift_schema = to_thrift(&schema);
 		assert!(thrift_schema.is_err());
 		if let Err(e) = thrift_schema {
-			assert_eq!(e.description(), "Root schema must be Group type");
+			assert_eq!(e.to_string(), "Root schema must be Group type");
 		}
 	}
 
