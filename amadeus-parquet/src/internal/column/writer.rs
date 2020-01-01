@@ -808,7 +808,7 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				err.to_string(),
-				"Inconsistent length of definition and repetition levels: 3 != 2"
+				"Parquet error: Inconsistent length of definition and repetition levels: 3 != 2"
 			);
 		}
 	}
@@ -823,7 +823,7 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				err.to_string(),
-				"Definition levels are required, because max definition level = 1"
+				"Parquet error: Definition levels are required, because max definition level = 1"
 			);
 		}
 	}
@@ -838,7 +838,7 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				err.to_string(),
-				"Repetition levels are required, because max repetition level = 1"
+				"Parquet error: Repetition levels are required, because max repetition level = 1"
 			);
 		}
 	}
@@ -853,7 +853,7 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				err.to_string(),
-				"Expected to write 4 values, but have only 2"
+				"Parquet error: Expected to write 4 values, but have only 2"
 			);
 		}
 	}
@@ -886,7 +886,10 @@ mod tests {
 		let res = writer.write_dictionary_page();
 		assert!(res.is_err());
 		if let Err(err) = res {
-			assert_eq!(err.to_string(), "Dictionary encoder is not set");
+			assert_eq!(
+				err.to_string(),
+				"Parquet error: Dictionary encoder is not set"
+			);
 		}
 	}
 

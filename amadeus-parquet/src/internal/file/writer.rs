@@ -523,14 +523,14 @@ mod tests {
 			let res = writer.next_row_group();
 			assert!(res.is_err());
 			if let Err(err) = res {
-				assert_eq!(err.to_string(), "File writer is closed");
+				assert_eq!(err.to_string(), "Parquet error: File writer is closed");
 			}
 		}
 		{
 			let res = writer.close();
 			assert!(res.is_err());
 			if let Err(err) = res {
-				assert_eq!(err.to_string(), "File writer is closed");
+				assert_eq!(err.to_string(), "Parquet error: File writer is closed");
 			}
 		}
 	}
@@ -547,7 +547,7 @@ mod tests {
 		let res = row_group_writer.next_column();
 		assert!(res.is_err());
 		if let Err(err) = res {
-			assert_eq!(err.to_string(), "Row group writer is closed");
+			assert_eq!(err.to_string(), "Parquet error: Row group writer is closed");
 		}
 	}
 
@@ -570,7 +570,10 @@ mod tests {
 		let res = row_group_writer.close();
 		assert!(res.is_err());
 		if let Err(err) = res {
-			assert_eq!(err.to_string(), "Column length mismatch: 1 != 0");
+			assert_eq!(
+				err.to_string(),
+				"Parquet error: Column length mismatch: 1 != 0"
+			);
 		}
 	}
 
@@ -618,7 +621,7 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				err.to_string(),
-				"Incorrect number of rows, expected 3 != 2 rows"
+				"Parquet error: Incorrect number of rows, expected 3 != 2 rows"
 			);
 		}
 	}

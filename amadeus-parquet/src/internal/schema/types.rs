@@ -1084,7 +1084,10 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "BSON can only annotate BYTE_ARRAY fields");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: BSON can only annotate BYTE_ARRAY fields"
+			);
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::Int96)
@@ -1097,7 +1100,7 @@ mod tests {
 		if let Err(e) = result {
 			assert_eq!(
 				e.to_string(),
-				"DECIMAL can only annotate INT32, INT64, BYTE_ARRAY and FIXED"
+				"Parquet error: DECIMAL can only annotate INT32, INT64, BYTE_ARRAY and FIXED"
 			);
 		}
 
@@ -1109,7 +1112,10 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "Invalid DECIMAL precision: -1");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: Invalid DECIMAL precision: -1"
+			);
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1120,7 +1126,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "Invalid DECIMAL precision: 0");
+			assert_eq!(e.to_string(), "Parquet error: Invalid DECIMAL precision: 0");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1131,7 +1137,7 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "Invalid DECIMAL scale: -1");
+			assert_eq!(e.to_string(), "Parquet error: Invalid DECIMAL scale: -1");
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1144,7 +1150,7 @@ mod tests {
 		if let Err(e) = result {
 			assert_eq!(
 				e.to_string(),
-				"Invalid DECIMAL: scale (2) cannot be greater than or equal to precision (1)"
+				"Parquet error: Invalid DECIMAL: scale (2) cannot be greater than or equal to precision (1)"
 			);
 		}
 
@@ -1158,7 +1164,7 @@ mod tests {
 		if let Err(e) = result {
 			assert_eq!(
 				e.to_string(),
-				"Cannot represent INT32 as DECIMAL with precision 18"
+				"Parquet error: Cannot represent INT32 as DECIMAL with precision 18"
 			);
 		}
 
@@ -1172,7 +1178,7 @@ mod tests {
 		if let Err(e) = result {
 			assert_eq!(
 				e.to_string(),
-				"Cannot represent INT64 as DECIMAL with precision 32"
+				"Parquet error: Cannot represent INT64 as DECIMAL with precision 32"
 			);
 		}
 
@@ -1187,7 +1193,7 @@ mod tests {
 		if let Err(e) = result {
 			assert_eq!(
 				e.to_string(),
-				"Cannot represent FIXED_LEN_BYTE_ARRAY as DECIMAL with length 5 and precision 12"
+				"Parquet error: Cannot represent FIXED_LEN_BYTE_ARRAY as DECIMAL with length 5 and precision 12"
 			);
 		}
 
@@ -1197,7 +1203,10 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "UINT_8 can only annotate INT32");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: UINT_8 can only annotate INT32"
+			);
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::Int32)
@@ -1206,7 +1215,10 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "TIME_MICROS can only annotate INT64");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: TIME_MICROS can only annotate INT64"
+			);
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::ByteArray)
@@ -1217,7 +1229,7 @@ mod tests {
 		if let Err(e) = result {
 			assert_eq!(
 				e.to_string(),
-				"INTERVAL can only annotate FIXED_LEN_BYTE_ARRAY(12)"
+				"Parquet error: INTERVAL can only annotate FIXED_LEN_BYTE_ARRAY(12)"
 			);
 		}
 
@@ -1230,7 +1242,7 @@ mod tests {
 		if let Err(e) = result {
 			assert_eq!(
 				e.to_string(),
-				"INTERVAL can only annotate FIXED_LEN_BYTE_ARRAY(12)"
+				"Parquet error: INTERVAL can only annotate FIXED_LEN_BYTE_ARRAY(12)"
 			);
 		}
 
@@ -1240,7 +1252,10 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "ENUM can only annotate BYTE_ARRAY fields");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: ENUM can only annotate BYTE_ARRAY fields"
+			);
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::Int32)
@@ -1249,7 +1264,10 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "MAP cannot be applied to a primitive type");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: MAP cannot be applied to a primitive type"
+			);
 		}
 
 		result = Type::primitive_type_builder("foo", PhysicalType::FixedLenByteArray)
@@ -1259,7 +1277,10 @@ mod tests {
 			.build();
 		assert!(result.is_err());
 		if let Err(e) = result {
-			assert_eq!(e.to_string(), "Invalid FIXED_LEN_BYTE_ARRAY length: -1");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: Invalid FIXED_LEN_BYTE_ARRAY length: -1"
+			);
 		}
 	}
 
@@ -1743,7 +1764,10 @@ mod tests {
 		let thrift_schema = to_thrift(&schema);
 		assert!(thrift_schema.is_err());
 		if let Err(e) = thrift_schema {
-			assert_eq!(e.to_string(), "Root schema must be Group type");
+			assert_eq!(
+				e.to_string(),
+				"Parquet error: Root schema must be Group type"
+			);
 		}
 	}
 
