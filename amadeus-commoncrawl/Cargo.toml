@@ -28,7 +28,7 @@ features = ["doc"]
 amadeus-core = { version = "=0.1.6", path = "../amadeus-core" }
 amadeus-types = { version = "=0.1.6", path = "../amadeus-types" }
 flate2 = "1.0"
-reqwest = "0.9"
+reqwest = "0.10"
 reqwest_resume = "0.2"
 nom = "4.2.3"
 serde_closure = "0.2"
