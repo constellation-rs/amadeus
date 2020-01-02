@@ -337,6 +337,7 @@ fn impl_struct(
 			impl #impl_generics __::ParquetData for #name #ty_generics #where_clause_with_parquet_data {
 				type Schema = #schema_name #ty_generics;
 				type Reader = #reader_name #ty_generics;
+				type Predicate = ();
 
 				fn parse(schema: &__::Type, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::Schema)> {
 					if schema.is_group() && repetition == __::Some(__::Repetition::Required) {
