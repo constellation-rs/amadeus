@@ -4,7 +4,7 @@
 //! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/alecmocatta/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
 //! </strong></p>
 
-#![doc(html_root_url = "https://docs.rs/amadeus/0.1.5")]
+#![doc(html_root_url = "https://docs.rs/amadeus/0.1.6")]
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
 )]
@@ -34,7 +34,8 @@
 	clippy::unreadable_literal,
 	clippy::default_trait_access,
 	clippy::match_same_arms,
-	clippy::must_use_candidate
+	clippy::must_use_candidate,
+	clippy::missing_errors_doc
 )]
 #![forbid(unsafe_code)]
 

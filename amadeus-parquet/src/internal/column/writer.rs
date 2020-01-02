@@ -784,7 +784,7 @@ impl EncodingWriteSupport for ColumnWriterImpl<FixedLenByteArrayType> {
 mod tests {
 	use super::*;
 
-	use std::{cell::RefCell, error::Error, rc::Rc};
+	use std::{cell::RefCell, rc::Rc};
 
 	use rand::distributions::uniform::SampleUniform;
 
@@ -807,8 +807,8 @@ mod tests {
 		assert!(res.is_err());
 		if let Err(err) = res {
 			assert_eq!(
-				err.description(),
-				"Inconsistent length of definition and repetition levels: 3 != 2"
+				err.to_string(),
+				"Parquet error: Inconsistent length of definition and repetition levels: 3 != 2"
 			);
 		}
 	}
@@ -822,8 +822,8 @@ mod tests {
 		assert!(res.is_err());
 		if let Err(err) = res {
 			assert_eq!(
-				err.description(),
-				"Definition levels are required, because max definition level = 1"
+				err.to_string(),
+				"Parquet error: Definition levels are required, because max definition level = 1"
 			);
 		}
 	}
@@ -837,8 +837,8 @@ mod tests {
 		assert!(res.is_err());
 		if let Err(err) = res {
 			assert_eq!(
-				err.description(),
-				"Repetition levels are required, because max repetition level = 1"
+				err.to_string(),
+				"Parquet error: Repetition levels are required, because max repetition level = 1"
 			);
 		}
 	}
@@ -852,8 +852,8 @@ mod tests {
 		assert!(res.is_err());
 		if let Err(err) = res {
 			assert_eq!(
-				err.description(),
-				"Expected to write 4 values, but have only 2"
+				err.to_string(),
+				"Parquet error: Expected to write 4 values, but have only 2"
 			);
 		}
 	}
@@ -886,7 +886,10 @@ mod tests {
 		let res = writer.write_dictionary_page();
 		assert!(res.is_err());
 		if let Err(err) = res {
-			assert_eq!(err.description(), "Dictionary encoder is not set");
+			assert_eq!(
+				err.to_string(),
+				"Parquet error: Dictionary encoder is not set"
+			);
 		}
 	}
 

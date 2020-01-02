@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-derive"
-version = "0.1.5"
+version = "0.1.6"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -10,7 +10,7 @@ Harmonious distributed data analysis in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.5"
+documentation = "https://docs.rs/amadeus/0.1.6"
 readme = "README.md"
 edition = "2018"
 
