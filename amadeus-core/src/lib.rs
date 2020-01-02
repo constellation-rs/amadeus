@@ -1,5 +1,6 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-core/0.1.5")]
 #![feature(atomic_min_max)]
+#![feature(never_type)]
 #![feature(specialization)]
 #![feature(read_initializer)]
 
