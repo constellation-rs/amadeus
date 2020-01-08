@@ -30,7 +30,7 @@ amadeus-types = { version = "=0.1.6", path = "../amadeus-types" }
 flate2 = "1.0"
 reqwest = "0.9"
 reqwest_resume = "0.2"
-nom = "4.2.3"
+nom = "5.1.0"
 serde_closure = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 url = { version = "2.1", features = ["serde"] }
