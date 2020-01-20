@@ -20,7 +20,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: nightly
-        rust_lint_toolchain: nightly-2019-12-30
+        rust_lint_toolchain: nightly-2020-01-17
         rust_flags: ''
         rust_features: 'aws;commoncrawl;parquet;postgres;csv;json;constellation aws commoncrawl parquet postgres csv json'
         rust_doc_features: 'doc constellation aws commoncrawl postgres csv json'
@@ -34,9 +34,6 @@ jobs:
         mac0:
           imageName: 'macos-10.13'
           rust_target_run: 'x86_64-apple-darwin'
-        mac1:
-          imageName: 'macos-10.13'
-          rust_target_run: 'i686-apple-darwin'
         linux0:
           imageName: 'ubuntu-16.04'
           rust_target_run: 'x86_64-unknown-linux-gnu'

@@ -34,7 +34,7 @@ impl TripletIter {
 	/// Creates new triplet for column reader
 	pub fn new(descr: ColumnDescPtr, reader: ColumnReader, batch_size: usize) -> Result<Self> {
 		let schema = descr.self_type();
-		let schema = Value::parse(&schema, Some(Repetition::Required))?.1;
+		let schema = Value::parse(&schema, None, Some(Repetition::Required))?.1;
 		let (def_level, rep_level) = (descr.max_def_level(), descr.max_rep_level());
 		let reader = Value::reader(
 			&schema,
