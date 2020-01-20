@@ -1759,7 +1759,7 @@ where
 
 	fn from_str(s: &str) -> Result<Self> {
 		parse_message_type(s)
-			.and_then(|x| <Root<T> as ParquetData>::parse(&x, None))
+			.and_then(|x| <Root<T> as ParquetData>::parse(&x, None, None))
 			.map(|x| x.1)
 	}
 }

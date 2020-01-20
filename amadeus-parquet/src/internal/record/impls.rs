@@ -15,11 +15,11 @@ use crate::internal::{
 	basic::{LogicalType, Repetition, Type as PhysicalType}, column::reader::ColumnReader, data_type::{
 		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
 	}, errors::{ParquetError, Result}, record::{
-		display::{DisplayFmt, DisplaySchemaGroup}, reader::{
+		display::{DisplayFmt, DisplaySchemaGroup}, predicates::{GroupPredicate, MapPredicate, ValuePredicate}, reader::{
 			BoolReader, BoxFixedLenByteArrayReader, BoxReader, ByteArrayReader, F32Reader, F64Reader, FixedLenByteArrayReader, GroupReader, I32Reader, I64Reader, I96Reader, KeyValueReader, MapReader, OptionReader, RepeatedReader, RootReader, TryIntoReader, TupleReader, ValueReader, VecU8Reader
 		}, schemas::{
 			BoolSchema, BoxSchema, BsonSchema, ByteArraySchema, DateSchema, DateTimeSchema, DecimalSchema, EnumSchema, F32Schema, F64Schema, FixedByteArraySchema, GroupSchema, I16Schema, I32Schema, I64Schema, I8Schema, JsonSchema, ListSchema, ListSchemaType, MapSchema, OptionSchema, RootSchema, StringSchema, TimeSchema, TupleSchema, U16Schema, U32Schema, U64Schema, U8Schema, ValueSchema, VecU8Schema
-		}, triplet::TypedTripletIter, types::{downcast, Downcast, Root}, ParquetData, Reader, Schema
+		}, triplet::TypedTripletIter, types::{downcast, Downcast, Root}, ParquetData, Predicate, Reader, Schema
 	}, schema::types::{ColumnPath, Type}
 };
 
@@ -30,9 +30,10 @@ macro_rules! via_string {
 		impl ParquetData for $t {
 			type Schema = StringSchema;
 			type Reader = impl Reader<Item = Self>;
+			type Predicate = Predicate;
 
-			fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-				Value::parse(schema, repetition).and_then(downcast)
+			fn parse(schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+				Value::parse(schema, None, repetition).and_then(downcast)
 			}
 
 			fn reader(
@@ -53,9 +54,12 @@ macro_rules! via_string {
 impl ParquetData for Bson {
 	type Schema = BsonSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -72,9 +76,12 @@ impl ParquetData for Bson {
 impl ParquetData for String {
 	type Schema = StringSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -94,9 +101,12 @@ impl ParquetData for String {
 impl ParquetData for Json {
 	type Schema = JsonSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -113,9 +123,12 @@ impl ParquetData for Json {
 impl ParquetData for Enum {
 	type Schema = EnumSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -135,9 +148,10 @@ macro_rules! array {
 		impl ParquetData for [u8; $i] {
 			type Schema = FixedByteArraySchema<Self>;
 			type Reader = FixedLenByteArrayReader<Self>;
+			type Predicate = Predicate;
 
 			fn parse(
-				schema: &Type, repetition: Option<Repetition>,
+				schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
 			) -> Result<(String, Self::Schema)> {
 				if schema.is_primitive()
 					&& repetition == Some(Repetition::Required)
@@ -175,9 +189,9 @@ macro_rules! array {
 			type Reader = BoxFixedLenByteArrayReader<[u8; $i]>;
 
 			fn parse(
-				schema: &Type, repetition: Option<Repetition>,
+				schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
 			) -> Result<(String, Self::Schema)> {
-				<[u8; $i]>::parse(schema, repetition)
+				<[u8; $i]>::parse(schema, predicate, repetition)
 			}
 
 			fn reader(
@@ -208,11 +222,13 @@ where
 {
 	default type Schema = BoxSchema<T::Schema>;
 	default type Reader = BoxReader<T::Reader>;
+	type Predicate = T::Predicate;
 
 	default fn parse(
-		schema: &Type, repetition: Option<Repetition>,
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema)> {
-		T::parse(schema, repetition).map(|(name, schema)| (name, type_coerce(BoxSchema(schema))))
+		T::parse(schema, predicate, repetition)
+			.map(|(name, schema)| (name, type_coerce(BoxSchema(schema))))
 	}
 
 	default fn reader(
@@ -232,9 +248,12 @@ where
 impl ParquetData for Decimal {
 	type Schema = DecimalSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -366,27 +385,57 @@ impl Reader for DecimalReader {
 impl ParquetData for Group {
 	type Schema = GroupSchema;
 	type Reader = GroupReader;
+	type Predicate = GroupPredicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+	fn parse(
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
 		if schema.is_group() && repetition == Some(Repetition::Required) {
 			let mut map = LinkedHashMap::with_capacity_and_hasher(
 				schema.get_fields().len(),
 				Default::default(),
 			);
-			let fields = schema
-				.get_fields()
-				.iter()
-				.enumerate()
-				.map(|(i, field)| {
-					let (name, schema) = <Value as ParquetData>::parse(
-						&**field,
-						Some(field.get_basic_info().repetition()),
-					)?;
-					let x = map.insert(name, i);
-					assert!(x.is_none());
-					Ok(schema)
-				})
-				.collect::<Result<Vec<ValueSchema>>>()?;
+			let fields = schema.get_fields().iter();
+			let fields = if let Some(predicate) = predicate {
+				let fields = fields
+					.map(|field| (field.name(), field))
+					.collect::<HashMap<_, _>>();
+				predicate
+					.0
+					.iter()
+					.enumerate()
+					.map(|(i, (field, predicate))| {
+						let field = fields.get(&**field).ok_or_else(|| {
+							ParquetError::General(format!(
+								"Group has predicate field \"{}\" not in the schema",
+								field
+							))
+						})?;
+						let (name, schema) = <Value as ParquetData>::parse(
+							&**field,
+							predicate.as_ref(),
+							Some(field.get_basic_info().repetition()),
+						)?;
+						let x = map.insert(name, i);
+						assert!(x.is_none());
+						Ok(schema)
+					})
+					.collect::<Result<Vec<ValueSchema>>>()?
+			} else {
+				fields
+					.enumerate()
+					.map(|(i, field)| {
+						let (name, schema) = <Value as ParquetData>::parse(
+							&**field,
+							None,
+							Some(field.get_basic_info().repetition()),
+						)?;
+						let x = map.insert(name, i);
+						assert!(x.is_none());
+						Ok(schema)
+					})
+					.collect::<Result<Vec<ValueSchema>>>()?
+			};
 			let schema_ = GroupSchema(fields, map);
 			return Ok((schema.name().to_owned(), schema_));
 		}
@@ -425,7 +474,9 @@ impl ParquetData for Group {
 /// Used to determine legacy list types.
 /// This method is copied from Spark Parquet reader and is based on the reference:
 /// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
-pub(super) fn parse_list<T: ParquetData>(schema: &Type) -> Result<ListSchema<T::Schema>> {
+fn parse_list<T: ParquetData>(
+	schema: &Type, predicate: Option<&T::Predicate>,
+) -> Result<ListSchema<T::Schema>> {
 	if schema.is_group()
 		&& schema.get_basic_info().logical_type() == LogicalType::List
 		&& schema.get_fields().len() == 1
@@ -451,13 +502,18 @@ pub(super) fn parse_list<T: ParquetData>(schema: &Type) -> Result<ListSchema<T::
 					};
 
 					ListSchema(
-						T::parse(&*element, Some(element.get_basic_info().repetition()))?.1,
+						T::parse(
+							&*element,
+							predicate,
+							Some(element.get_basic_info().repetition()),
+						)?
+						.1,
 						ListSchemaType::List(list_name, element_name),
 					)
 				} else {
 					let element_name = sub_schema.name().to_owned();
 					ListSchema(
-						T::parse(&*sub_schema, Some(Repetition::Repeated))?.1,
+						T::parse(&*sub_schema, predicate, Some(Repetition::Repeated))?.1,
 						ListSchemaType::ListCompat(element_name),
 					)
 				},
@@ -473,12 +529,13 @@ where
 {
 	default type Schema = ListSchema<T::Schema>;
 	default type Reader = RepeatedReader<T::Reader>;
+	type Predicate = T::Predicate;
 
 	default fn parse(
-		schema: &Type, repetition: Option<Repetition>,
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema)> {
 		if repetition == Some(Repetition::Required) {
-			return parse_list::<T>(schema)
+			return parse_list::<T>(schema, predicate)
 				.map(|schema2| (schema.name().to_owned(), type_coerce(schema2)));
 		}
 		// A repeated field that is neither contained by a `LIST`- or `MAP`-annotated
@@ -489,7 +546,7 @@ where
 			return Ok((
 				schema.name().to_owned(),
 				type_coerce(ListSchema(
-					T::parse(&schema, Some(Repetition::Required))?.1,
+					T::parse(&schema, predicate, Some(Repetition::Required))?.1,
 					ListSchemaType::Repeated,
 				)),
 			));
@@ -580,8 +637,10 @@ impl ParquetData for List<u8> {
 	type Schema = VecU8Schema;
 	type Reader = VecU8Reader;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -601,51 +660,6 @@ impl ParquetData for List<u8> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
-pub(super) fn parse_map<K: ParquetData, V: ParquetData>(
-	schema: &Type,
-) -> Result<MapSchema<K::Schema, V::Schema>> {
-	if schema.is_group()
-		&& (schema.get_basic_info().logical_type() == LogicalType::Map
-			|| schema.get_basic_info().logical_type() == LogicalType::MapKeyValue)
-		&& schema.get_fields().len() == 1
-	{
-		let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
-		if sub_schema.is_group()
-			&& sub_schema.get_basic_info().repetition() == Repetition::Repeated
-			&& sub_schema.get_fields().len() == 2
-		{
-			let mut fields = sub_schema.get_fields().into_iter();
-			let (key, value) = (fields.next().unwrap(), fields.next().unwrap());
-			let key_value_name = if sub_schema.name() == "key_value" {
-				None
-			} else {
-				Some(sub_schema.name().to_owned())
-			};
-			let key_name = if key.name() == "key" {
-				None
-			} else {
-				Some(key.name().to_owned())
-			};
-			let value_name = if value.name() == "value" {
-				None
-			} else {
-				Some(value.name().to_owned())
-			};
-			return Ok(MapSchema(
-				K::parse(&*key, Some(key.get_basic_info().repetition()))?.1,
-				V::parse(&*value, Some(value.get_basic_info().repetition()))?.1,
-				key_value_name,
-				key_name,
-				value_name,
-			));
-		}
-	}
-	Err(ParquetError::General(String::from(
-		"Couldn't parse HashMap<K,V>",
-	)))
-}
-
 impl<K, V, S> ParquetData for HashMap<K, V, S>
 where
 	K: ParquetData + Hash + Eq,
@@ -654,10 +668,61 @@ where
 {
 	type Schema = MapSchema<K::Schema, V::Schema>;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = MapPredicate<K::Predicate, V::Predicate>;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		if repetition == Some(Repetition::Required) {
-			return parse_map::<K, V>(schema).map(|schema2| (schema.name().to_owned(), schema2));
+	fn parse(
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
+		if schema.is_group()
+			&& repetition == Some(Repetition::Required)
+			&& (schema.get_basic_info().logical_type() == LogicalType::Map
+				|| schema.get_basic_info().logical_type() == LogicalType::MapKeyValue)
+			&& schema.get_fields().len() == 1
+		{
+			let sub_schema = schema.get_fields().into_iter().nth(0).unwrap();
+			if sub_schema.is_group()
+				&& sub_schema.get_basic_info().repetition() == Repetition::Repeated
+				&& sub_schema.get_fields().len() == 2
+			{
+				let mut fields = sub_schema.get_fields().into_iter();
+				let (key, value) = (fields.next().unwrap(), fields.next().unwrap());
+				let key_value_name = if sub_schema.name() == "key_value" {
+					None
+				} else {
+					Some(sub_schema.name().to_owned())
+				};
+				let key_name = if key.name() == "key" {
+					None
+				} else {
+					Some(key.name().to_owned())
+				};
+				let value_name = if value.name() == "value" {
+					None
+				} else {
+					Some(value.name().to_owned())
+				};
+				return Ok((
+					schema.name().to_owned(),
+					MapSchema(
+						K::parse(
+							&*key,
+							predicate.and_then(|predicate| predicate.key.as_ref()),
+							Some(key.get_basic_info().repetition()),
+						)?
+						.1,
+						V::parse(
+							&*value,
+							predicate.and_then(|predicate| predicate.value.as_ref()),
+							Some(value.get_basic_info().repetition()),
+						)?
+						.1,
+						key_value_name,
+						key_name,
+						value_name,
+					),
+				));
+			}
 		}
 		Err(ParquetError::General(String::from(
 			"Couldn't parse HashMap<K,V>",
@@ -712,9 +777,12 @@ where
 impl ParquetData for bool {
 	type Schema = BoolSchema;
 	type Reader = BoolReader;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -732,9 +800,12 @@ impl ParquetData for bool {
 impl ParquetData for i8 {
 	type Schema = I8Schema;
 	type Reader = TryIntoReader<I32Reader, i8>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -750,9 +821,12 @@ impl ParquetData for i8 {
 impl ParquetData for u8 {
 	type Schema = U8Schema;
 	type Reader = TryIntoReader<I32Reader, u8>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -769,9 +843,12 @@ impl ParquetData for u8 {
 impl ParquetData for i16 {
 	type Schema = I16Schema;
 	type Reader = TryIntoReader<I32Reader, i16>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -787,9 +864,12 @@ impl ParquetData for i16 {
 impl ParquetData for u16 {
 	type Schema = U16Schema;
 	type Reader = TryIntoReader<I32Reader, u16>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -806,9 +886,12 @@ impl ParquetData for u16 {
 impl ParquetData for i32 {
 	type Schema = I32Schema;
 	type Reader = I32Reader;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -827,9 +910,12 @@ impl ParquetData for i32 {
 impl ParquetData for u32 {
 	type Schema = U32Schema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -846,9 +932,12 @@ impl ParquetData for u32 {
 impl ParquetData for i64 {
 	type Schema = I64Schema;
 	type Reader = I64Reader;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -867,9 +956,12 @@ impl ParquetData for i64 {
 impl ParquetData for u64 {
 	type Schema = U64Schema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -886,9 +978,12 @@ impl ParquetData for u64 {
 impl ParquetData for f32 {
 	type Schema = F32Schema;
 	type Reader = F32Reader;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -907,9 +1002,12 @@ impl ParquetData for f32 {
 impl ParquetData for f64 {
 	type Schema = F64Schema;
 	type Reader = F64Reader;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -935,10 +1033,13 @@ where
 {
 	type Schema = OptionSchema<T::Schema>;
 	type Reader = OptionReader<T::Reader>;
+	type Predicate = T::Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+	fn parse(
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
 		if repetition == Some(Repetition::Optional) {
-			return T::parse(&schema, Some(Repetition::Required))
+			return T::parse(&schema, predicate, Some(Repetition::Required))
 				.map(|(name, schema)| (name, OptionSchema(schema)));
 		}
 		Err(ParquetError::General(String::from(
@@ -971,14 +1072,17 @@ where
 {
 	type Schema = RootSchema<T>;
 	type Reader = RootReader<T::Reader>;
+	type Predicate = T::Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+	fn parse(
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
 		assert!(repetition.is_none());
 		if schema.is_schema() {
-			T::parse(schema, Some(Repetition::Required))
+			T::parse(schema, predicate, Some(Repetition::Required))
 				.map(|(name, schema_)| (String::from(""), RootSchema(name, schema_, PhantomData)))
 				.map_err(|err| {
-					let actual_schema = Value::parse(schema, Some(Repetition::Required))
+					let actual_schema = Value::parse(schema, None, Some(Repetition::Required))
 						.map(|(name, schema_)| RootSchema(name, schema_, PhantomData));
 					let actual_schema = match actual_schema {
 						Ok(actual_schema) => actual_schema,
@@ -1006,17 +1110,18 @@ where
 					#[cfg(debug_assertions)]
 					{
 						// Check parsing and printing by round-tripping both typed and untyped and checking correctness.
+						// TODO: do with predicates also
 
 						let printed = format!("{}", schema_);
 						let schema_2 = parse_message_type(&printed).unwrap();
 
-						let schema2 = T::parse(&schema_2, Some(Repetition::Required))
+						let schema2 = T::parse(&schema_2, None, Some(Repetition::Required))
 							.map(|(name, schema_)| RootSchema::<T>(name, schema_, PhantomData))
 							.unwrap();
 						let printed2 = format!("{}", schema2);
 						assert_eq!(printed, printed2, "{:#?}", schema);
 
-						let schema3 = Value::parse(&schema_2, Some(Repetition::Required))
+						let schema3 = Value::parse(&schema_2, None, Some(Repetition::Required))
 							.map(|(name, schema_)| RootSchema::<Value>(name, schema_, PhantomData))
 							.unwrap();
 						let printed3 = format!("{}", schema3);
@@ -1065,9 +1170,12 @@ fn date_from_parquet(days: i32) -> Result<Date> {
 impl ParquetData for Date {
 	type Schema = DateSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -1106,9 +1214,12 @@ fn time_from_parquet(time: Sum2<i64, i32>) -> Result<Time> {
 impl ParquetData for Time {
 	type Schema = TimeSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -1184,9 +1295,12 @@ fn date_time_from_parquet(date_time: Sum3<Int96, i64, i64>) -> Result<DateTime> 
 impl ParquetData for DateTime {
 	type Schema = DateTimeSchema;
 	type Reader = impl Reader<Item = Self>;
+	type Predicate = Predicate;
 
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
-		Value::parse(schema, repetition).and_then(downcast)
+	fn parse(
+		schema: &Type, _predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
+		Value::parse(schema, None, repetition).and_then(downcast)
 	}
 
 	fn reader(
@@ -1596,11 +1710,13 @@ macro_rules! tuple {
 		impl<$($t,)*> ParquetData for ($($t,)*) where $($t: ParquetData,)* {
 			type Schema = TupleSchema<($((String,$t::Schema,),)*)>;
 			type Reader = TupleReader<($($t::Reader,)*)>;
+			type Predicate = ($(Option<$t::Predicate>,)*);
 
-			fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+			#[allow(unused_variables)]
+			fn parse(schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
 				if schema.is_group() && repetition == Some(Repetition::Required) {
 					let mut fields = schema.get_fields().iter();
-					let schema_ = TupleSchema(($(fields.next().ok_or_else(|| ParquetError::General(String::from("Group missing field"))).and_then(|x|$t::parse(&**x, Some(x.get_basic_info().repetition())))?,)*));
+					let schema_ = TupleSchema(($(fields.next().ok_or_else(|| ParquetError::General(String::from("Group missing field"))).and_then(|x|$t::parse(&**x, predicate.and_then(|predicate| predicate.$i.as_ref()), Some(x.get_basic_info().repetition())))?,)*));
 					if fields.next().is_none() {
 						return Ok((schema.name().to_owned(), schema_))
 					}
@@ -1637,10 +1753,13 @@ amadeus_types::tuple!(tuple);
 impl ParquetData for Value {
 	type Schema = ValueSchema;
 	type Reader = ValueReader;
+	type Predicate = ValuePredicate;
 
 	/// This is reused by many of the other `ParquetData` implementations. It is the canonical
 	/// encoding of the mapping from [`Type`]s to Schemas.
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)> {
+	fn parse(
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)> {
 		let mut value = None;
 
 		// Try parsing as a primitive. See https://github.com/apache/parquet-format/blob/master/LogicalTypes.md for details.
@@ -1785,41 +1904,45 @@ impl ParquetData for Value {
 		}
 
 		// Try parsing as a list (excluding unannotated repeated fields)
-		if repetition.is_some() && value.is_none() {
-			value = parse_list::<Value>(schema)
-				.ok()
-				.map(|value| ValueSchema::List(Box::new(value)));
+		if repetition.is_some()
+			&& value.is_none()
+			&& predicate
+				.map(|predicate| predicate.is_list())
+				.unwrap_or(true)
+		{
+			value = parse_list::<Value>(
+				schema,
+				predicate.and_then(|predicate| predicate.as_list().unwrap().as_ref()),
+			)
+			.ok()
+			.map(|value| ValueSchema::List(Box::new(value)));
 		}
 
 		// Try parsing as a map
-		if repetition.is_some() && value.is_none() {
-			value = parse_map::<Value, Value>(schema)
+		if repetition.is_some()
+			&& value.is_none()
+			&& predicate
+				.map(|predicate| predicate.is_map())
+				.unwrap_or(true)
+		{
+			let predicate = predicate.and_then(|predicate| predicate.as_map().unwrap().as_ref());
+			value = HashMap::<Value, Value>::parse(schema, predicate, Some(Repetition::Required))
 				.ok()
-				.map(|value| ValueSchema::Map(Box::new(value)));
+				.map(|(_, value)| ValueSchema::Map(Box::new(value)));
 		}
 
 		// Try parsing as a group
-		if repetition.is_some() && value.is_none() && schema.is_group() {
-			let mut lookup = LinkedHashMap::with_capacity_and_hasher(
-				schema.get_fields().len(),
-				Default::default(),
-			);
-			value = Some(ValueSchema::Group(GroupSchema(
-				schema
-					.get_fields()
-					.iter()
-					.map(|schema| {
-						Value::parse(&*schema, Some(schema.get_basic_info().repetition())).map(
-							|(name, schema)| {
-								let x = lookup.insert(name, lookup.len());
-								assert!(x.is_none());
-								schema
-							},
-						)
-					})
-					.collect::<Result<Vec<_>>>()?,
-				lookup,
-			)));
+		if repetition.is_some()
+			&& value.is_none()
+			&& schema.is_group()
+			&& predicate
+				.map(|predicate| predicate.is_group())
+				.unwrap_or(true)
+		{
+			let predicate = predicate.and_then(|predicate| predicate.as_group().unwrap().as_ref());
+			value = Some(ValueSchema::Group(
+				Group::parse(schema, predicate, Some(Repetition::Required))?.1,
+			));
 		}
 
 		// If we haven't parsed it by now it's not valid

@@ -41,6 +41,7 @@
 
 mod display;
 mod impls;
+pub mod predicates;
 mod reader;
 mod schemas;
 mod triplet;
@@ -62,6 +63,7 @@ pub use schemas::RootSchema;
 mod predicate {
 	/// This is for forward compatibility when Predicate pushdown and dynamic schemas are
 	/// implemented.
+	#[derive(Clone, Debug)]
 	pub struct Predicate;
 }
 pub(crate) use self::predicate::Predicate;
@@ -150,11 +152,14 @@ pub trait ParquetData: Sized {
 	// Clone + PartialEq + Debug + 'static
 	type Schema: Schema;
 	type Reader: Reader<Item = Self>;
+	type Predicate;
 
 	/// Parse a [`Type`] into `Self::Schema`, using `repetition` instead of
 	/// `Type::get_basic_info().repetition()`. A `repetition` of `None` denotes a root
 	/// schema.
-	fn parse(schema: &Type, repetition: Option<Repetition>) -> Result<(String, Self::Schema)>;
+	fn parse(
+		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+	) -> Result<(String, Self::Schema)>;
 
 	/// Builds tree of [`Reader`]s for the specified [`Schema`] recursively.
 	fn reader(

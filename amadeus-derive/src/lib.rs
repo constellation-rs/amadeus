@@ -92,6 +92,7 @@ fn impl_struct(
 	let serde_name = Ident::new(&format!("{}Serde", name), Span::call_site());
 	let schema_name = Ident::new(&format!("{}Schema", name), Span::call_site());
 	let reader_name = Ident::new(&format!("{}Reader", name), Span::call_site());
+	let predicate_name = Ident::new(&format!("{}Predicate", name), Span::call_site());
 
 	let mut amadeus_path = None;
 
@@ -285,6 +286,9 @@ fn impl_struct(
 			#visibility struct #reader_name #impl_generics #where_clause_with_parquet_data {
 				#(#field_names1: <#field_types1 as __::ParquetData>::Reader,)*
 			}
+			#visibility struct #predicate_name #impl_generics #where_clause_with_parquet_data {
+				#(#field_names1: Option<<#field_types1 as __::ParquetData>::Predicate>,)*
+			}
 			#[automatically_derived]
 			impl #impl_generics __::Reader for #reader_name #ty_generics #where_clause_with_parquet_data {
 				type Item = #name #ty_generics;
@@ -337,13 +341,14 @@ fn impl_struct(
 			impl #impl_generics __::ParquetData for #name #ty_generics #where_clause_with_parquet_data {
 				type Schema = #schema_name #ty_generics;
 				type Reader = #reader_name #ty_generics;
+				type Predicate = #predicate_name #ty_generics;
 
-				fn parse(schema: &__::Type, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::Schema)> {
+				fn parse(schema: &__::Type, predicate: Option<&Self::Predicate>, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::Schema)> {
 					if schema.is_group() && repetition == __::Some(__::Repetition::Required) {
 						let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<__::HashMap<_,_>>();
 						let name = stringify!(#name);
 						let schema_ = #schema_name{
-							#(#field_names1: fields.get(#field_renames1).ok_or_else(|| __::ParquetError::General(format!("Struct \"{}\" has field \"{}\" not in the schema", name, #field_renames2))).and_then(|x|<#field_types1 as __::ParquetData>::parse(&**x, __::Some(x.get_basic_info().repetition())))?.1,)*
+							#(#field_names1: fields.get(#field_renames1).ok_or_else(|| __::ParquetError::General(format!("Struct \"{}\" has field \"{}\" not in the schema", name, #field_renames2))).and_then(|x|<#field_types1 as __::ParquetData>::parse(&**x, predicate.and_then(|predicate| predicate.#field_names2.as_ref()), __::Some(x.get_basic_info().repetition())))?.1,)*
 						};
 						return __::Ok((schema.name().to_owned(), schema_))
 					}
