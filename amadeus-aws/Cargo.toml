@@ -37,7 +37,7 @@ rusoto_core = "0.42"
 rusoto_s3 = "0.42"
 serde_closure = "0.2"
 serde = { version = "1.0", features = ["derive"] }
-tokio = "0.1.7"
+tokio = "0.2.20"
 tokio-retry = "0.2"
 url = { version = "2.1", features = ["serde"] }
 
