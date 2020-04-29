@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-commoncrawl"
-version = "0.1.6"
+version = "0.1.7"
 license = "MIT OR Apache-2.0"
 authors = ["Stephen Becker IV <github@deathbyescalator.com>", "Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -10,7 +10,7 @@ Harmonious distributed data analysis in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.6"
+documentation = "https://docs.rs/amadeus/0.1.7"
 readme = "README.md"
 edition = "2018"
 
@@ -25,8 +25,8 @@ doc = []
 features = ["doc"]
 
 [dependencies]
-amadeus-core = { version = "=0.1.6", path = "../amadeus-core" }
-amadeus-types = { version = "=0.1.6", path = "../amadeus-types" }
+amadeus-core = { version = "=0.1.7", path = "../amadeus-core" }
+amadeus-types = { version = "=0.1.7", path = "../amadeus-types" }
 flate2 = "1.0"
 reqwest = "0.9"
 reqwest_resume = "0.2"

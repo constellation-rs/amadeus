@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-serde/0.1.6")]
+#![doc(html_root_url = "https://docs.rs/amadeus-serde/0.1.7")]
 #![feature(array_value_iter)]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]

@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.1.6")]
+#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.1.7")]
 #![recursion_limit = "400"]
 #![allow(clippy::useless_let_if_seq)]
 

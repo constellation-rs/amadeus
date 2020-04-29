@@ -204,12 +204,12 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
 named!(record_complete <&[u8], Record >,
 	complete!(
 		do_parse!(
-		    entry: record              >>
-		    opt!(tag!("\r"))           >>
-		    tag!("\n")                 >>
-		    opt!(tag!("\r"))           >>
-		    tag!("\n")                 >>
-		    (entry)
+			entry: record              >>
+			opt!(tag!("\r"))           >>
+			tag!("\n")                 >>
+			opt!(tag!("\r"))           >>
+			tag!("\n")                 >>
+			(entry)
 		)
 	)
 );

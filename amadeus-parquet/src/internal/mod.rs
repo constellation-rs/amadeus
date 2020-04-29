@@ -56,7 +56,8 @@ pub mod column;
 pub mod compression;
 mod encodings;
 pub mod file;
+#[allow(unused_results, renamed_and_removed_lints, clippy::too_many_arguments, clippy::type_complexity, clippy::redundant_field_names)]
+#[rustfmt::skip]
+mod format;
 pub mod record;
 pub mod schema;
-#[allow(unused_results, renamed_and_removed_lints)]
-mod format;

@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.6")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.7")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 
@@ -309,7 +309,7 @@ mod misc_serde {
 			<(String, Option<String>)>::deserialize(deserializer).map(|(name, password)| {
 				Self(
 					postgres::params::ConnectParams::builder()
-						.user(&name, password.as_ref().map(|x| &**x))
+						.user(&name, password.as_deref())
 						.build(postgres::params::Host::Tcp(String::new()))
 						.user()
 						.unwrap()
