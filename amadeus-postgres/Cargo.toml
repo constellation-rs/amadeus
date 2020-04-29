@@ -28,7 +28,7 @@ features = ["doc"]
 amadeus-core = { version = "=0.1.7", path = "../amadeus-core" }
 amadeus-types = { version = "=0.1.7", path = "../amadeus-types" }
 serde = { version = "1.0", features = ["derive"] }
-postgres = { version = "0.15", features = ["with-chrono"] }
+postgres = { version = "0.17", features = ["with-chrono"] }
 serde_closure = "0.2"
 postgres-binary-copy = "0.5"
 chrono = { version = "0.4", default-features = false }
