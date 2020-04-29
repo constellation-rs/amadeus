@@ -62,7 +62,7 @@ derive_sum!(impl Reader for Sum {
 // Readers that simply wrap `TypedTripletIter<DataType>`s
 
 macro_rules! reader_passthrough {
-	($inner:tt) => (
+	($inner:tt) => {
 		#[inline]
 		fn advance_columns(&mut self) -> Result<()> {
 			self.$inner.advance_columns()
@@ -82,7 +82,7 @@ macro_rules! reader_passthrough {
 		fn current_rep_level(&self) -> i16 {
 			self.$inner.current_rep_level()
 		}
-	)
+	};
 }
 
 macro_rules! triplet_readers {

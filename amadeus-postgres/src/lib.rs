@@ -309,7 +309,7 @@ mod misc_serde {
 			<(String, Option<String>)>::deserialize(deserializer).map(|(name, password)| {
 				Self(
 					postgres::params::ConnectParams::builder()
-						.user(&name, password.as_ref().map(|x| &**x))
+						.user(&name, password.as_deref())
 						.build(postgres::params::Host::Tcp(String::new()))
 						.user()
 						.unwrap()

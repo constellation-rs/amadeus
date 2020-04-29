@@ -1619,6 +1619,7 @@ mod tests {
 
 	#[test]
 	fn test_convert_timestamp_to_string() {
+		#[allow(clippy::many_single_char_names)]
 		fn check_datetime_conversion(y: i32, m: u32, d: u32, h: u32, mi: u32, s: u32) {
 			let datetime = NaiveDate::from_ymd(y, m, d).and_hms(h, mi, s);
 			let dt = Utc.from_utc_datetime(&datetime);
