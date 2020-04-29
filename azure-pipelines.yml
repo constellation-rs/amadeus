@@ -40,6 +40,6 @@ jobs:
         # linux1:
         #   imageName: 'ubuntu-latest'
         #   rust_target_run: 'i686-unknown-linux-gnu'
-        linux2:
-          imageName: 'ubuntu-latest'
-          rust_target_run: 'x86_64-unknown-linux-musl' # i686-unknown-linux-musl silently miscompiles C
+        # linux2:
+        #   imageName: 'ubuntu-latest'
+        #   rust_target_run: 'x86_64-unknown-linux-musl' # i686-unknown-linux-musl silently miscompiles C
