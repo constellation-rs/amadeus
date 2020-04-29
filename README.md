@@ -9,11 +9,11 @@
 <p align="center">
     <a href="https://crates.io/crates/amadeus"><img src="https://img.shields.io/crates/v/amadeus.svg?maxAge=86400" alt="Crates.io" /></a>
     <a href="LICENSE.txt"><img src="https://img.shields.io/crates/l/amadeus.svg?maxAge=2592000" alt="Apache-2.0 licensed" /></a>
-    <a href="https://dev.azure.com/alecmocatta/amadeus/_build/latest?branchName=master"><img src="https://dev.azure.com/alecmocatta/amadeus/_apis/build/status/tests?branchName=master" alt="Build Status" /></a>
+    <a href="https://dev.azure.com/alecmocatta/amadeus/_build?definitionId=26"><img src="https://dev.azure.com/alecmocatta/amadeus/_apis/build/status/tests?branchName=master" alt="Build Status" /></a>
 </p>
 
 <p align="center">
-    <a href="https://docs.rs/amadeus/0.1.6">📖 Docs</a> | <a href="https://constellation.rs/amadeus">🌐 Home</a> | <a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬 Chat</a>
+    <a href="https://docs.rs/amadeus/0.1.7">📖 Docs</a> | <a href="https://constellation.rs/amadeus">🌐 Home</a> | <a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬 Chat</a>
 </p>
 
 ## Amadeus provides:
@@ -50,7 +50,7 @@ We aim to create a community that is welcoming and helpful to anyone that is int
 
 Amadeus has deep, pluggable, integration with various file formats, databases and interfaces:
 
-| Data format | [`Source`](https://docs.rs/amadeus/0.1.6/amadeus/trait.Source.html) | [`Sink`](https://docs.rs/amadeus/0.1.6/amadeus/trait.Sink.html) |
+| Data format | [`Source`](https://docs.rs/amadeus/0.1.7/amadeus/trait.Source.html) | [`Sink`](https://docs.rs/amadeus/0.1.7/amadeus/trait.Sink.html) |
 |---|---|---|
 | CSV | ✔ | ✔ |
 | JSON | ✔ | ✔ |
