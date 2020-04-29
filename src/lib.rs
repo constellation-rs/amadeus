@@ -37,7 +37,7 @@
 	clippy::must_use_candidate,
 	clippy::missing_errors_doc
 )]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod data;
 pub mod pool;
