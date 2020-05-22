@@ -104,24 +104,23 @@ impl Source for Cloudfront {
 					.map_err(AwsError::from)
 					.map(|res| {
 						let body = res.body.unwrap().into_blocking_read();
-						BufReader::new(MultiGzDecoder::new(
-							Box::new(body) as Box<dyn io::Read + Send>
-						))
-						.lines()
-						.filter(|x: &Result<String, io::Error>| {
-							if let Ok(x) = x {
-								x.chars().filter(|x| !x.is_whitespace()).nth(0) != Some('#')
-							} else {
-								true
-							}
-						})
-						.map(|x: Result<String, io::Error>| {
-							if let Ok(x) = x {
-								Ok(CloudfrontRow::from_line(&x))
-							} else {
-								Err(AwsError::from(x.err().unwrap()))
-							}
-						})
+						BufReader::new(MultiGzDecoder::new(body))
+							.lines()
+							.filter(|x: &Result<String, io::Error>| {
+								if let Ok(x) = x {
+									x.chars().filter(|x| !x.is_whitespace()).nth(0) != Some('#')
+								} else {
+									true
+								}
+							})
+							.map(|x: Result<String, io::Error>| {
+								if let Ok(x) = x {
+									println!("got row");
+									Ok(CloudfrontRow::from_line(&x))
+								} else {
+									Err(AwsError::from(x.err().unwrap()))
+								}
+							})
 					}),
 				))
 			}))

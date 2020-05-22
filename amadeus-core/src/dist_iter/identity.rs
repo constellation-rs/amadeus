@@ -1,4 +1,4 @@
-use futures::{pin_mut, stream};
+use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::{
 	pin::Pin, task::{Context, Poll}
@@ -30,11 +30,9 @@ impl<Item> ConsumerMultiAsync<Item> for IdentityMultiTask {
 	type Item = Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, source: Option<Item>,
-		sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
-		let stream = stream::iter(source);
-		pin_mut!(stream);
-		sink.poll_sink(cx, stream)
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
+		sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
+		sink.poll_forward(cx, stream)
 	}
 }

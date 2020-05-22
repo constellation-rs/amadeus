@@ -1,3 +1,4 @@
+use futures::{pin_mut, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -111,14 +112,13 @@ where
 	type Item = C::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		task.poll_run(
-			cx,
-			&mut SinkFilter::new(self_.state, sink, |item: &_| f(item)),
-		)
+		let sink = SinkFilter::new(self_.state, sink, |item: &_| f(item));
+		pin_mut!(sink);
+		task.poll_run(cx, sink)
 	}
 }
 
@@ -131,15 +131,13 @@ where
 	type Item = C::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
-		sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		task.poll_run(
-			cx,
-			source,
-			&mut SinkFilter::new(self_.state, sink, |item: &_| f(item)),
-		)
+		let sink = SinkFilter::new(self_.state, sink, |item: &_| f(item));
+		pin_mut!(sink);
+		task.poll_run(cx, stream, sink)
 	}
 }

@@ -62,8 +62,8 @@ impl ConsumerAsync for Never {
 	type Item = Self;
 
 	fn poll_run(
-		self: Pin<&mut Self>, _cx: &mut Context, _sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		unreachable!()
 	}
 }

@@ -1,3 +1,4 @@
+use futures::{pin_mut, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -81,7 +82,7 @@ where
 // 		self.task.run(&mut |item| i(item.clone()))
 // 	}
 // }
-impl<'a, C, Source, T: 'a> ConsumerMultiAsync<&'a Source> for ClonedConsumer<C>
+impl<'a, C, Source: 'a, T: 'a> ConsumerMultiAsync<&'a Source> for ClonedConsumer<C>
 where
 	C: ConsumerMultiAsync<&'a Source, Item = &'a T>,
 	T: Clone,
@@ -89,11 +90,11 @@ where
 	type Item = T;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, source: Option<&'a Source>,
-		sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
-		self.project()
-			.task
-			.poll_run(cx, source, &mut SinkMap::new(sink, |item: &T| item.clone()))
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = &'a Source>>,
+		sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
+		let sink = SinkMap::new(sink, |item: &T| item.clone());
+		pin_mut!(sink);
+		self.project().task.poll_run(cx, stream, sink)
 	}
 }

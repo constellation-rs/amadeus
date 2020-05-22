@@ -1,7 +1,13 @@
+use futures::{ready, Stream};
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
-use std::{iter, marker::PhantomData, mem};
+use std::{
+	iter, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}
+};
 
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use super::{
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+};
 use crate::pool::ProcessSend;
 
 #[must_use]
@@ -31,7 +37,7 @@ where
 		(
 			self.i,
 			SumReducerFactory(PhantomData),
-			SumReducer(iter::empty::<B>().sum(), PhantomData),
+			SumReducer(Some(iter::empty::<B>().sum()), PhantomData),
 		)
 	}
 }
@@ -44,18 +50,35 @@ where
 {
 	type Reducer = SumReducer<A, B>;
 	fn make(&self) -> Self::Reducer {
-		SumReducer(iter::empty::<B>().sum(), PhantomData)
+		SumReducer(Some(iter::empty::<B>().sum()), PhantomData)
 	}
 }
 
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 #[serde(
 	bound(serialize = "B: Serialize"),
 	bound(deserialize = "B: Deserialize<'de>")
 )]
-pub struct SumReducer<A, B>(pub(super) B, pub(super) PhantomData<fn(A)>);
-
+pub struct SumReducer<A, B>(Option<B>, PhantomData<fn(A)>);
+impl<A, B> SumReducer<A, B> {
+	pub(crate) fn new(b: B) -> Self {
+		Self(Some(b), PhantomData)
+	}
+}
 impl<A, B> Reducer for SumReducer<A, B>
+where
+	B: iter::Sum<A> + iter::Sum,
+{
+	type Item = A;
+	type Output = B;
+	type Async = Self;
+
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+impl<A, B> ReducerAsync for SumReducer<A, B>
 where
 	B: iter::Sum<A> + iter::Sum,
 {
@@ -63,14 +86,21 @@ where
 	type Output = B;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) -> bool {
-		self.0 = iter::once(mem::replace(&mut self.0, iter::empty::<A>().sum()))
-			.chain(iter::once(iter::once(item).sum()))
-			.sum();
-		true
+	fn poll_forward(
+		self: Pin<&mut Self>, cx: &mut Context,
+		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	) -> Poll<()> {
+		let self_ = self.project();
+		let self_0 = self_.0.as_mut().unwrap();
+		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
+			*self_0 = iter::once(mem::replace(self_0, iter::empty::<A>().sum()))
+				.chain(iter::once(iter::once(item).sum()))
+				.sum();
+		}
+		Poll::Ready(())
 	}
-	fn ret(self) -> Self::Output {
-		self.0
+	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+		Poll::Ready(self.project().0.take().unwrap())
 	}
 }
 impl<A, B> ReducerA for SumReducer<A, B>

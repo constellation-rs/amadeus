@@ -23,18 +23,17 @@ mod update;
 
 use ::sum::*;
 use async_trait::async_trait;
-use core::{
-	future::Future, pin::Pin, task::{Context, Poll}
-};
 use either::Either;
-use futures::{pin_mut, ready, stream::StreamExt, Stream};
+use futures::{pin_mut, ready, stream, stream::StreamExt, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
-use std::{cmp::Ordering, hash::Hash, iter, marker::PhantomData, ops::FnMut, vec};
+use std::{
+	cmp::Ordering, future::Future, hash::Hash, iter, marker::PhantomData, ops::FnMut, pin::Pin, task::{Context, Poll}, vec
+};
 
 use crate::{
-	into_dist_iter::IntoDistributedIterator, pool::{ProcessPool, ProcessSend}, sink::{Sink, SinkBuffer, SinkMap}, util::type_coerce
+	into_dist_iter::IntoDistributedIterator, pool::{ProcessPool, ProcessSend}, sink::{Sink, SinkMap}, util::type_coerce
 };
 
 pub use self::{
@@ -120,9 +119,7 @@ pub trait DistributedIterator {
 		_assert_distributed_iterator(Chain::new(self, chain.into_dist_iter()))
 	}
 
-	async fn reduce<P, B, R1F, R1, R2>(
-		mut self, pool: &P, reduce1factory: R1F, mut reduce2: R2,
-	) -> B
+	async fn reduce<P, B, R1F, R1, R2>(mut self, pool: &P, reduce1factory: R1F, reduce2: R2) -> B
 	where
 		P: ProcessPool,
 		R1F: ReduceFactory<Reducer = R1>,
@@ -171,50 +168,56 @@ pub trait DistributedIterator {
 				tasks.iter().map(Vec::len).collect::<Vec<_>>()
 			);
 		}
-		let mut handles = tasks
+		let handles = tasks
 			.into_iter()
+			.filter(|tasks| !tasks.is_empty())
 			.map(|tasks| {
 				let reduce1 = reduce1factory.make();
 				pool.spawn(FnOnce!(move || -> <R1 as ReducerA>::Output {
+					#[pin_project]
+					struct Connect<B>(#[pin] B);
+					impl<B> Sink<B::Item> for Connect<B>
+					where
+						B: ReducerAsync,
+					{
+						fn poll_forward(
+							self: Pin<&mut Self>, cx: &mut Context,
+							stream: Pin<&mut impl Stream<Item = B::Item>>,
+						) -> Poll<()> {
+							let self_ = self.project();
+							self_.0.poll_forward(cx, stream)
+						}
+					}
+
+					let sink = Connect(reduce1.into_async());
+					pin_mut!(sink);
 					futures::executor::block_on(async {
+						// TODO: short circuit
 						for task in tasks {
 							let task = task.into_async();
 							pin_mut!(task);
-							if !futures::future::poll_fn(|cx| {
-								task.as_mut().poll_run(
-									cx,
-									&mut SinkBuffer::new(
-										&mut None,
-										|_cx: &mut Context, item: &mut Option<_>| {
-											Poll::Ready(reduce1.push(item.take().unwrap()))
-										},
-									),
-								)
-							})
-							.await
-							{
-								break;
-							}
+							futures::future::poll_fn(|cx| task.as_mut().poll_run(cx, sink.as_mut()))
+								.await
 						}
-						reduce1.ret()
+						futures::future::poll_fn(|cx| {
+							sink.as_mut().project().0.as_mut().poll_output(cx)
+						})
+						.await
 					})
 				}))
 			})
 			.collect::<futures::stream::FuturesUnordered<_>>();
-		let mut more = true;
-		let mut panicked = None;
-		while let Some(res) = handles.next().await {
-			match res {
-				Ok(res) => {
-					more = more && reduce2.push(res);
-				}
-				Err(e) => panicked = Some(e),
-			}
-		}
-		if let Some(err) = panicked {
-			panic!("Amadeus: task '<unnamed>' panicked at '{}'", err)
-		}
-		reduce2.ret()
+		let stream = handles.map(|item| {
+			item.unwrap_or_else(|err| panic!("Amadeus: task '<unnamed>' panicked at '{}'", err))
+		});
+		pin_mut!(stream);
+		let reduce2 = reduce2.into_async();
+		pin_mut!(reduce2);
+		futures::future::poll_fn(|cx| {
+			ready!(reduce2.as_mut().poll_forward(cx, stream.as_mut()));
+			reduce2.as_mut().poll_output(cx)
+		})
+		.await
 	}
 
 	#[doc(hidden)]
@@ -240,39 +243,53 @@ pub trait DistributedIterator {
 					.map(|task| ConnectConsumer(task, self.1.task()))
 			}
 		}
-		#[pin_project]
 		#[derive(Serialize, Deserialize)]
 		#[serde(
 			bound(serialize = "A: Serialize, B: Serialize"),
 			bound(deserialize = "A: Deserialize<'de>, B: Deserialize<'de>")
 		)]
-		struct ConnectConsumer<A, B>(#[pin] A, #[pin] B);
-		impl<A: Consumer, B> Consumer for ConnectConsumer<A, B>
+		struct ConnectConsumer<A, B>(A, B);
+		impl<A, B> Consumer for ConnectConsumer<A, B>
 		where
+			A: Consumer,
 			B: ConsumerMulti<A::Item>,
 		{
 			type Item = B::Item;
-			type Async = ConnectConsumer<A::Async, B::Async>;
+			type Async = ConnectConsumerAsync<A::Async, B::Async>;
 			fn into_async(self) -> Self::Async {
-				ConnectConsumer(self.0.into_async(), self.1.into_async())
+				ConnectConsumerAsync(self.0.into_async(), self.1.into_async())
 			}
 		}
-		impl<A: ConsumerAsync, B> ConsumerAsync for ConnectConsumer<A, B>
+		#[pin_project]
+		struct ConnectConsumerAsync<A, B>(#[pin] A, #[pin] B);
+		impl<A, B> ConsumerAsync for ConnectConsumerAsync<A, B>
 		where
+			A: ConsumerAsync,
 			B: ConsumerMultiAsync<A::Item>,
 		{
 			type Item = B::Item;
 			fn poll_run(
-				self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
-			) -> Poll<bool> {
+				self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+			) -> Poll<()> {
+				#[pin_project]
+				struct Proxy<'a, I, B>(#[pin] I, Pin<&'a mut B>);
+				impl<'a, I, B, Item> Sink<Item> for Proxy<'a, I, B>
+				where
+					I: Sink<B::Item>,
+					B: ConsumerMultiAsync<Item>,
+				{
+					fn poll_forward(
+						self: Pin<&mut Self>, cx: &mut Context,
+						stream: Pin<&mut impl Stream<Item = Item>>,
+					) -> Poll<()> {
+						let self_ = self.project();
+						self_.1.as_mut().poll_run(cx, stream, self_.0)
+					}
+				}
 				let self_ = self.project();
-				let mut a = self_.1;
-				self_.0.poll_run(
-					cx,
-					&mut SinkBuffer::new(&mut None, |cx: &mut Context, item: &mut Option<_>| {
-						a.as_mut().poll_run(cx, item.take(), sink)
-					}),
-				)
+				let sink = Proxy(sink, self_.1);
+				pin_mut!(sink);
+				self_.0.poll_run(cx, sink)
 			}
 		}
 
@@ -316,62 +333,172 @@ pub trait DistributedIterator {
 					.map(|task| ConnectConsumer(task, self.1.task(), self.2.task(), PhantomData))
 			}
 		}
-		#[pin_project]
 		#[derive(Serialize, Deserialize)]
 		#[serde(
 			bound(serialize = "A: Serialize, B: Serialize, C: Serialize"),
 			bound(deserialize = "A: Deserialize<'de>, B: Deserialize<'de>, C: Deserialize<'de>")
 		)]
-		struct ConnectConsumer<A, B, C, RefAItem>(
-			#[pin] A,
-			#[pin] B,
-			#[pin] C,
-			PhantomData<fn(RefAItem)>,
-		);
-		impl<A: Consumer, B, C, RefAItem> Consumer for ConnectConsumer<A, B, C, RefAItem>
+		struct ConnectConsumer<A, B, C, RefAItem>(A, B, C, PhantomData<fn(RefAItem)>);
+		impl<A, B, C, RefAItem> Consumer for ConnectConsumer<A, B, C, RefAItem>
 		where
+			A: Consumer,
 			B: ConsumerMulti<A::Item>,
 			C: ConsumerMulti<RefAItem>,
 		{
 			type Item = Sum2<B::Item, C::Item>;
-			type Async = ConnectConsumer<A::Async, B::Async, C::Async, RefAItem>;
+			type Async = ConnectConsumerAsync<A::Async, B::Async, C::Async, RefAItem, A::Item>;
 			fn into_async(self) -> Self::Async {
-				ConnectConsumer(
+				ConnectConsumerAsync(
 					self.0.into_async(),
 					self.1.into_async(),
 					self.2.into_async(),
+					false,
+					None,
 					PhantomData,
 				)
 			}
 		}
-		impl<A: ConsumerAsync, B, C, RefAItem> ConsumerAsync for ConnectConsumer<A, B, C, RefAItem>
+		#[pin_project]
+		struct ConnectConsumerAsync<A, B, C, RefAItem, T>(
+			#[pin] A,
+			#[pin] B,
+			#[pin] C,
+			bool,
+			Option<Option<T>>,
+			PhantomData<fn(RefAItem)>,
+		);
+		impl<A, B, C, RefAItem> ConsumerAsync for ConnectConsumerAsync<A, B, C, RefAItem, A::Item>
 		where
+			A: ConsumerAsync,
 			B: ConsumerMultiAsync<A::Item>,
 			C: ConsumerMultiAsync<RefAItem>,
 		{
 			type Item = Sum2<B::Item, C::Item>;
 			fn poll_run(
-				self: Pin<&mut Self>, cx: &mut Context, mut sink: &mut impl Sink<Self::Item>,
-			) -> Poll<bool> {
+				self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+			) -> Poll<()> {
+				#[pin_project]
+				pub struct SinkFn<'a, S, A, B, T, RefAItem>(
+					#[pin] S,
+					Pin<&'a mut A>,
+					Pin<&'a mut B>,
+					&'a mut bool,
+					&'a mut Option<Option<T>>,
+					PhantomData<(T, RefAItem)>,
+				);
+				impl<'a, S, A, B, T, RefAItem> Sink<T> for SinkFn<'a, S, A, B, T, RefAItem>
+				where
+					S: Sink<Sum2<A::Item, B::Item>>,
+					A: ConsumerMultiAsync<T>,
+					B: ConsumerMultiAsync<RefAItem>,
+				{
+					fn poll_forward(
+						self: Pin<&mut Self>, cx: &mut Context,
+						mut stream: Pin<&mut impl Stream<Item = T>>,
+					) -> Poll<()> {
+						let mut self_ = self.project();
+						let mut ready = (false, false);
+						loop {
+							if self_.4.is_none() {
+								**self_.4 = match stream.as_mut().poll_next(cx) {
+									Poll::Ready(x) => Some(x),
+									Poll::Pending => None,
+								};
+							}
+							let given = &mut **self_.3;
+							let pending = &mut **self_.4;
+							let mut progress = false;
+							if !ready.0 {
+								let stream = stream::poll_fn(|_cx| match pending {
+									Some(x) if !*given => {
+										// println!("gergrebjh given");
+										// if x.is_some() {
+										*given = true;
+										progress = true;
+										// }
+										Poll::Ready(type_coerce(x.as_ref()))
+									}
+									_ => {
+										// println!("gergrebjh pending");
+										Poll::Pending
+									}
+								})
+								.fuse();
+								pin_mut!(stream);
+								let sink_ = SinkMap::new(self_.0.as_mut(), |item| {
+									Sum2::B(type_coerce(item))
+								});
+								pin_mut!(sink_);
+								ready.0 = self_.2.as_mut().poll_run(cx, stream, sink_).is_ready();
+								if ready.0 {
+									// println!("gergrebjh ready");
+									progress = true; // TODO
+								} else {
+									// println!("gergrebjh !ready");
+								}
+							}
+							if !ready.1 {
+								let stream = stream::poll_fn(|_cx| {
+									if !ready.0 && !*given {
+										// println!("rqhr pending");
+										return Poll::Pending;
+									}
+									match pending.take() {
+										Some(x) => {
+											// *pending = Some(None);
+											// println!("rqhr given {:?}", tuple::Debug(&x));
+											*given = false;
+											progress = true;
+											Poll::Ready(x)
+										}
+										None => {
+											// println!("rqhr pending2");
+											Poll::Pending
+										}
+									}
+								})
+								.fuse();
+								pin_mut!(stream);
+								let sink_ = SinkMap::new(self_.0.as_mut(), Sum2::A);
+								pin_mut!(sink_);
+								ready.1 = self_.1.as_mut().poll_run(cx, stream, sink_).is_ready();
+								if ready.1 {
+									progress = true; // TODO
+								} else {
+									// println!("rqhr !ready");
+								}
+							}
+							if ready.0 && ready.1 {
+								break Poll::Ready(());
+							}
+							if !progress {
+								// println!("ewgwrg pending");
+								break Poll::Pending;
+							}
+						}
+					}
+				}
+
 				let self_ = self.project();
-				let mut a = self_.1;
-				let mut b = self_.2;
-				self_.0.poll_run(
-					cx,
-					&mut SinkBuffer::new(&mut None, |cx: &mut Context, item: &mut Option<_>| {
-						let a_ = ready!(b.as_mut().poll_run(
-							cx,
-							type_coerce(item.as_ref()),
-							&mut SinkMap::new(&mut sink, |item| Sum2::B(type_coerce(item)))
-						));
-						let b_ = ready!(a.as_mut().poll_run(
-							cx,
-							item.take(),
-							&mut SinkMap::new(&mut sink, Sum2::A)
-						));
-						Poll::Ready(a_ | b_)
-					}),
-				)
+				// let a = self_.1;
+				// let b = self_.2;
+				// let sink = SinkBuffer::new(self_.3, |cx: &mut Context, item: &mut Option<_>| {
+				// 	let stream = stream::iter(type_coerce::<_, Option<_>>(item.as_ref()));
+				// 	pin_mut!(stream);
+				// 	let sink_ = SinkMap::new(&mut sink, |item| Sum2::B(type_coerce(item)));
+				// 	pin_mut!(sink_);
+				// 	ready!(b.as_mut().poll_run(cx, stream, sink_));
+				// 	let stream = stream::iter(iter::from_fn(|| item.take()));
+				// 	pin_mut!(stream);
+				// 	let sink_ = SinkMap::new(&mut sink, Sum2::A);
+				// 	pin_mut!(sink_);
+				// 	ready!(a.as_mut().poll_run(cx, stream, sink_));
+				// 	let _ = item.take();
+				// 	Poll::Ready(())
+				// });
+				let sink = SinkFn(sink, self_.1, self_.2, self_.3, self_.4, PhantomData);
+				pin_mut!(sink);
+				self_.0.poll_run(cx, sink)
 			}
 		}
 
@@ -381,7 +508,7 @@ pub trait DistributedIterator {
 			.reduce(
 				pool,
 				ReduceA2Factory(reducer_a_a, reducer_b_a),
-				ReduceB2(reducer_a_b, reducer_b_b),
+				ReduceB2::new(reducer_a_b, reducer_b_b),
 			)
 			.await
 	}
@@ -875,22 +1002,30 @@ pub trait ConsumerMulti<Source> {
 pub trait ConsumerAsync {
 	type Item;
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool>;
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()>;
 }
 pub trait ConsumerMultiAsync<Source> {
 	type Item;
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
-		sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool>;
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()>;
 }
 
 pub trait Reducer {
 	type Item;
 	type Output;
-	fn push(&mut self, item: Self::Item) -> bool;
-	fn ret(self) -> Self::Output;
+	type Async: ReducerAsync<Item = Self::Item, Output = Self::Output>;
+	fn into_async(self) -> Self::Async;
+}
+pub trait ReducerAsync {
+	type Item;
+	type Output;
+	fn poll_forward(
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	) -> Poll<()>;
+	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output>;
 }
 pub trait ReducerA: Reducer<Output = <Self as ReducerA>::Output> + ProcessSend {
 	type Output: ProcessSend;
@@ -906,7 +1041,7 @@ pub trait ReduceFactory {
 
 pub trait DistributedReducer<I: DistributedIteratorMulti<Source>, Source, B> {
 	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA>;
-	type ReduceA: ReducerA<Item = <I as DistributedIteratorMulti<Source>>::Item> + ProcessSend;
+	type ReduceA: ReducerA<Item = <I as DistributedIteratorMulti<Source>>::Item>; // + ProcessSend;
 	type ReduceB: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = B>;
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB);
 }

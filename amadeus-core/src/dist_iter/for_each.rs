@@ -1,8 +1,12 @@
+use futures::{ready, Stream};
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use std::{
+	marker::PhantomData, pin::Pin, task::{Context, Poll}
+};
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer, ReducerA
+	DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
 };
 use crate::pool::ProcessSend;
 
@@ -31,7 +35,7 @@ where
 		(
 			self.i,
 			ForEachReducerFactory(self.f, PhantomData),
-			PushReducer((), PhantomData),
+			PushReducer::new(()),
 		)
 	}
 }
@@ -48,6 +52,7 @@ where
 	}
 }
 
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 #[serde(
 	bound(serialize = "F: Serialize"),
@@ -61,13 +66,33 @@ where
 {
 	type Item = A;
 	type Output = ();
+	type Async = Self;
+
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+impl<A, F> ReducerAsync for ForEachReducer<A, F>
+where
+	F: FnMut(A) + Clone,
+{
+	type Item = A;
+	type Output = ();
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) -> bool {
-		self.0(item);
-		true
+	fn poll_forward(
+		self: Pin<&mut Self>, cx: &mut Context,
+		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	) -> Poll<()> {
+		let self_ = self.project();
+		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
+			self_.0(item);
+		}
+		Poll::Ready(())
 	}
-	fn ret(self) -> Self::Output {}
+	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+		Poll::Ready(())
+	}
 }
 impl<A, F> ReducerA for ForEachReducer<A, F>
 where

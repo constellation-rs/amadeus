@@ -1,3 +1,4 @@
+use futures::Stream;
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
@@ -72,8 +73,8 @@ impl<A: ConsumerAsync, B: ConsumerAsync<Item = A::Item>> ConsumerAsync for Sum2<
 	type Item = A::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		match self.as_pin_mut() {
 			Sum2::A(task) => task.poll_run(cx, sink),
 			Sum2::B(task) => task.poll_run(cx, sink),
@@ -87,12 +88,12 @@ impl<A: ConsumerMultiAsync<Source>, B: ConsumerMultiAsync<Source, Item = A::Item
 	type Item = A::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
-		sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		match self.as_pin_mut() {
-			Sum2::A(task) => task.poll_run(cx, source, sink),
-			Sum2::B(task) => task.poll_run(cx, source, sink),
+			Sum2::A(task) => task.poll_run(cx, stream, sink),
+			Sum2::B(task) => task.poll_run(cx, stream, sink),
 		}
 	}
 }

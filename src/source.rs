@@ -1,6 +1,7 @@
 #![allow(clippy::unsafe_derive_deserialize)]
 
 use ::serde::{Deserialize, Serialize};
+use futures::pin_mut;
 use pin_project::pin_project;
 use std::{
 	pin::Pin, task::{Context, Poll}
@@ -186,12 +187,12 @@ where
 
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context,
-		sink: &mut impl amadeus_core::sink::Sink<Self::Item>,
-	) -> Poll<bool> {
-		self.project().task.poll_run(
-			cx,
-			&mut amadeus_core::sink::SinkMap::new(sink, |item: Result<_, _>| item.map(Into::into)),
-		)
+		sink: Pin<&mut impl amadeus_core::sink::Sink<Self::Item>>,
+	) -> Poll<()> {
+		let sink =
+			amadeus_core::sink::SinkMap::new(sink, |item: Result<_, _>| item.map(Into::into));
+		pin_mut!(sink);
+		self.project().task.poll_run(cx, sink)
 	}
 }
 impl<I, T, E, U> Iterator for IntoIter<I, U>

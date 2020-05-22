@@ -1,7 +1,13 @@
+use futures::{ready, Stream};
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use std::{
+	marker::PhantomData, pin::Pin, task::{Context, Poll}
+};
 
-use super::{DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA};
+use super::{
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+};
 use crate::pool::ProcessSend;
 
 #[must_use]
@@ -46,6 +52,7 @@ where
 	}
 }
 
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 #[serde(
 	bound(serialize = "F: Serialize"),
@@ -59,14 +66,35 @@ where
 {
 	type Item = A;
 	type Output = bool;
+	type Async = Self;
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+impl<A, F> ReducerAsync for AllReducer<A, F>
+where
+	F: FnMut(A) -> bool,
+{
+	type Item = A;
+	type Output = bool;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) -> bool {
-		self.1 = self.1 && self.0(item);
-		self.1
+	fn poll_forward(
+		self: Pin<&mut Self>, cx: &mut Context,
+		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	) -> Poll<()> {
+		let self_ = self.project();
+		while *self_.1 {
+			if let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
+				*self_.1 = *self_.1 && self_.0(item);
+			} else {
+				break;
+			}
+		}
+		Poll::Ready(())
 	}
-	fn ret(self) -> Self::Output {
-		self.1
+	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+		Poll::Ready(self.1)
 	}
 }
 impl<A, F> ReducerA for AllReducer<A, F>
@@ -77,20 +105,38 @@ where
 	type Output = bool;
 }
 
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 pub struct BoolAndReducer(bool);
 
 impl Reducer for BoolAndReducer {
 	type Item = bool;
 	type Output = bool;
+	type Async = Self;
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+impl ReducerAsync for BoolAndReducer {
+	type Item = bool;
+	type Output = bool;
 
 	#[inline(always)]
-	fn push(&mut self, item: Self::Item) -> bool {
-		self.0 = self.0 && item;
-		self.0
+	fn poll_forward(
+		mut self: Pin<&mut Self>, cx: &mut Context,
+		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	) -> Poll<()> {
+		while self.0 {
+			if let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
+				self.0 = self.0 && item;
+			} else {
+				break;
+			}
+		}
+		Poll::Ready(())
 	}
-	fn ret(self) -> Self::Output {
-		self.0
+	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+		Poll::Ready(self.0)
 	}
 }
 impl ReducerA for BoolAndReducer {

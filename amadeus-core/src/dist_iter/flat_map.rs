@@ -1,4 +1,4 @@
-use futures::Stream;
+use futures::{pin_mut, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -102,20 +102,13 @@ impl<C: ConsumerAsync, F: FnMut(C::Item) -> R + Clone, R: Stream> ConsumerAsync
 	type Item = R::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		task.poll_run(cx, &mut SinkFlatMap::new(self_.fut, sink, |item| f(item)))
-		// let (task, mut f) = (self.task, self.f);
-		// task.poll_run(cx, &mut |item| {
-		// 	for x in f(item) {
-		// 		if !i(x) {
-		// 			return false;
-		// 		}
-		// 	}
-		// 	true
-		// })
+		let sink = SinkFlatMap::new(self_.fut, sink, |item| f(item));
+		pin_mut!(sink);
+		task.poll_run(cx, sink)
 	}
 }
 
@@ -127,24 +120,13 @@ where
 	type Item = R::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
-		sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		task.poll_run(
-			cx,
-			source,
-			&mut SinkFlatMap::new(self_.fut, sink, |item| f(item)),
-		)
-		// 	let (task, f) = (&self.task, &self.f);
-		// 	task.poll_run(cx, source, &mut |item| {
-		// 		for x in f.clone()(item) {
-		// 			if !i(x) {
-		// 				return false;
-		// 			}
-		// 		}
-		// 		true
-		// 	})
+		let sink = SinkFlatMap::new(self_.fut, sink, |item| f(item));
+		pin_mut!(sink);
+		task.poll_run(cx, stream, sink)
 	}
 }

@@ -53,11 +53,11 @@ impl<T> ConsumerAsync for IterIterConsumer<T> {
 	type Item = T;
 
 	fn poll_run(
-		mut self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		mut self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		let stream = stream::iter(iter::from_fn(|| self.0.take()));
 		pin_mut!(stream);
-		sink.poll_sink(cx, stream)
+		sink.poll_forward(cx, stream)
 	}
 }
 

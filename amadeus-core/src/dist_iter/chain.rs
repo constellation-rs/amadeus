@@ -65,8 +65,8 @@ impl<A: ConsumerAsync, B: ConsumerAsync<Item = A::Item>> ConsumerAsync for Chain
 
 	#[project]
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		#[project]
 		match self.project() {
 			ChainConsumer::A(a) => a.poll_run(cx, sink),

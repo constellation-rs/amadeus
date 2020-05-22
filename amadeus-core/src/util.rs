@@ -115,8 +115,8 @@ impl<T: 'static> ConsumerAsync for ImplConsumer<T> {
 	type Item = T;
 
 	fn poll_run(
-		self: Pin<&mut Self>, _cx: &mut Context, _sink: &mut impl Sink<Self::Item>,
-	) -> Poll<bool> {
+		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		unreachable!()
 	}
 }

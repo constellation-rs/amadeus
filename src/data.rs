@@ -1,4 +1,4 @@
-use ::serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{
 	cmp::Ordering, collections::HashMap, fmt::Debug, hash::{BuildHasher, Hash, Hasher}
 };

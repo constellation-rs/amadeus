@@ -42,7 +42,8 @@ use data::Webpage;
 use std::env;
 
 #[allow(unreachable_code)]
-fn main() {
+#[tokio::main]
+async fn main() {
 	init(Resources::default());
 
 	return; // TODO: runs for a long time; overflows sum
@@ -56,12 +57,6 @@ fn main() {
 	let pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
 	// let pool = amadeus::no_pool::NoPool;
 
-	// let body = reqwest::get(
-	// 	"http://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2018-30/warc.paths.gz",
-	// )
-	// .unwrap();
-	// let body = flate2::read::MultiGzDecoder::new(body); // Content-Encoding isn't set, so decode manually
-
 	let top: (
 		((
 			// Vec<u32>,
@@ -74,26 +69,7 @@ fn main() {
 			streaming_algorithms::Top<usize,streaming_algorithms::HyperLogLogMagnitude<Vec<u8>>>,
 			streaming_algorithms::SampleUnstable<u32>,
 		),
-	) =
-	/*BufReader::new(body)
-		.lines()
-		.map(|url| format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap()))
-		.take(7)
-		.dist()
-		.flat_map(FnMut!(|url: String| {
-			let body = reqwest::ClientBuilder::new()
-				.timeout(time::Duration::new(120, 0))
-				.build()
-				.unwrap()
-				.resumable()
-				.get(url.parse().unwrap())
-				.send()
-				.unwrap();
-			let body = flate2::read::MultiGzDecoder::new(body);
-			amadeus_commoncrawl::WarcParser::new(body).take(1000).map(Result::unwrap)
-		}))
-		*/
-		CommonCrawl::new("CC-MAIN-2018-30").unwrap().dist_iter().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
+	) = CommonCrawl::new("CC-MAIN-2018-30").await.unwrap().dist_iter().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
 		.multi(
 			&pool,
 			((
@@ -138,6 +114,6 @@ fn main() {
 					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
 					.sample_unstable(100),
 			),
-		);
+		).await;
 	println!("{:?}", top);
 }
