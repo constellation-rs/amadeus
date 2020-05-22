@@ -7,7 +7,8 @@ use std::{
 use amadeus::prelude::*;
 use data::Webpage;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
@@ -19,16 +20,16 @@ fn main() {
 
 	let local_pool_time = {
 		let local_pool = LocalPool::new();
-		run(&local_pool)
+		run(&local_pool).await
 	};
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool)
+		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool)
+		run(&process_pool).await
 	};
 	#[cfg(not(feature = "constellation"))]
 	let process_pool_time = "-";
@@ -39,10 +40,11 @@ fn main() {
 	);
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
 	CommonCrawl::new("CC-MAIN-2018-43")
+		.await
 		.unwrap()
 		.dist_iter()
 		.all(
@@ -52,7 +54,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				// println!("{}", x.url);
 				start.elapsed().unwrap() < Duration::new(10, 0)
 			}),
-		);
+		)
+		.await;
 
 	start.elapsed().unwrap()
 }

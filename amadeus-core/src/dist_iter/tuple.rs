@@ -1,13 +1,20 @@
+use futures::ready;
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 use sum::*;
 
 use super::{
-	ConsumerMulti, DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA
+	ConsumerMulti, ConsumerMultiAsync, DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA
 };
-use crate::pool::ProcessSend;
+use crate::{
+	pool::ProcessSend, sink::{Sink, SinkMap}
+};
 
 macro_rules! impl_iterator_multi_tuple {
-	($reduceafactory:ident $reducea:ident $reduceb:ident $enum:ident $($copy:ident)* : $($i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $num:tt $t:ident),*) => (
+	($reduceafactory:ident $reducea:ident $reduceb:ident $async:ident $enum:ident $($copy:ident)* : $($i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $num:tt $t:ident),*) => (
 		impl<
 				$($i: DistributedIteratorMulti<Source>,)*
 				Source,
@@ -42,15 +49,35 @@ macro_rules! impl_iterator_multi_tuple {
 			}
 		}
 
+		impl<Source, $($c: ConsumerMulti<Source>,)*> ConsumerMulti<Source> for ($($c,)*)
+		where
+			Source: $($copy)*,
+		{
+			type Item = $enum<$($c::Item,)*>;
+			type Async = $async<$($c::Async,)*>;
+			fn into_async(self) -> Self::Async {
+				$async($(self.$num.into_async(),)*)
+			}
+		}
+
+		#[pin_project]
+		pub struct $async<$($c,)*>($(#[pin] $c,)*);
+
 		#[allow(unused_variables)]
-		impl<Source, $($c: ConsumerMulti<Source>,)*> ConsumerMulti<Source>
-			for ($($c,)*)
-				where Source: $($copy)*,
+		impl<Source, $($c: ConsumerMultiAsync<Source>,)*> ConsumerMultiAsync<Source> for $async<$($c,)*>
+		where
+			Source: $($copy)*,
 		{
 			type Item = $enum<$($c::Item,)*>;
 
-			fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-				$(self.$num.run(source, &mut |x| i($enum::$t(x))) | )* false
+			#[allow(non_snake_case)]
+			fn poll_run(
+				self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
+				mut sink: &mut impl Sink<Self::Item>,
+			) -> Poll<bool> {
+				let self_ = self.project();
+				$(let $i = self_.$num.poll_run(cx, source, &mut SinkMap::new(&mut sink, $enum::$t));)*
+				Poll::Ready($(ready!($i) |)* false)
 			}
 		}
 
@@ -100,12 +127,12 @@ macro_rules! impl_iterator_multi_tuple {
 		}
 	);
 }
-impl_iterator_multi_tuple!(ReduceA0Factory ReduceA0 ReduceB0 Sum0:);
-impl_iterator_multi_tuple!(ReduceA1Factory ReduceA1 ReduceB1 Sum1: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A);
-impl_iterator_multi_tuple!(ReduceA2Factory ReduceA2 ReduceB2 Sum2 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B);
-impl_iterator_multi_tuple!(ReduceA3Factory ReduceA3 ReduceB3 Sum3 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C);
-impl_iterator_multi_tuple!(ReduceA4Factory ReduceA4 ReduceB4 Sum4 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D);
-impl_iterator_multi_tuple!(ReduceA5Factory ReduceA5 ReduceB5 Sum5 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E);
-impl_iterator_multi_tuple!(ReduceA6Factory ReduceA6 ReduceB6 Sum6 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F);
-impl_iterator_multi_tuple!(ReduceA7Factory ReduceA7 ReduceB7 Sum7 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F, I6 R6 O6 C6 iterator_6 reducer_a_6 reducer_b_6 6 G);
-impl_iterator_multi_tuple!(ReduceA8Factory ReduceA8 ReduceB8 Sum8 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F, I6 R6 O6 C6 iterator_6 reducer_a_6 reducer_b_6 6 G, I7 R7 O7 C7 iterator_7 reducer_a_7 reducer_b_7 7 H);
+// impl_iterator_multi_tuple!(ReduceA0Factory ReduceA0 ReduceB0 AsyncTuple0 Sum0:);
+impl_iterator_multi_tuple!(ReduceA1Factory ReduceA1 ReduceB1 AsyncTuple1 Sum1: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A);
+impl_iterator_multi_tuple!(ReduceA2Factory ReduceA2 ReduceB2 AsyncTuple2 Sum2 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B);
+impl_iterator_multi_tuple!(ReduceA3Factory ReduceA3 ReduceB3 AsyncTuple3 Sum3 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C);
+impl_iterator_multi_tuple!(ReduceA4Factory ReduceA4 ReduceB4 AsyncTuple4 Sum4 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D);
+impl_iterator_multi_tuple!(ReduceA5Factory ReduceA5 ReduceB5 AsyncTuple5 Sum5 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E);
+impl_iterator_multi_tuple!(ReduceA6Factory ReduceA6 ReduceB6 AsyncTuple6 Sum6 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F);
+impl_iterator_multi_tuple!(ReduceA7Factory ReduceA7 ReduceB7 AsyncTuple7 Sum7 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F, I6 R6 O6 C6 iterator_6 reducer_a_6 reducer_b_6 6 G);
+impl_iterator_multi_tuple!(ReduceA8Factory ReduceA8 ReduceB8 AsyncTuple8 Sum8 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F, I6 R6 O6 C6 iterator_6 reducer_a_6 reducer_b_6 6 G, I7 R7 O7 C7 iterator_7 reducer_a_7 reducer_b_7 7 H);

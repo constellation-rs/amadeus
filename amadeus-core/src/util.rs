@@ -1,7 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::{any::type_name, error, fmt, io, marker::PhantomData, sync::Arc};
 
-use crate::dist_iter::{Consumer, DistributedIterator};
+#[cfg(feature = "doc")]
+use crate::{
+	dist_iter::{Consumer, ConsumerAsync, DistributedIterator}, sink::Sink
+};
+#[cfg(feature = "doc")]
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
 impl<T, E> IntoIterator for ResultExpand<T, E>
@@ -62,7 +69,10 @@ impl From<IoError> for io::Error {
 	}
 }
 
+#[cfg(feature = "doc")]
+#[doc(hidden)]
 pub struct ImplDistributedIterator<T>(PhantomData<fn(T)>);
+#[cfg(feature = "doc")]
 impl<T> ImplDistributedIterator<T> {
 	pub fn new<U>(_drop: U) -> Self
 	where
@@ -71,6 +81,7 @@ impl<T> ImplDistributedIterator<T> {
 		Self(PhantomData)
 	}
 }
+#[cfg(feature = "doc")]
 impl<T: 'static> DistributedIterator for ImplDistributedIterator<T> {
 	type Item = T;
 	type Task = ImplConsumer<T>;
@@ -83,12 +94,29 @@ impl<T: 'static> DistributedIterator for ImplDistributedIterator<T> {
 	}
 }
 
+#[cfg(feature = "doc")]
+#[doc(hidden)]
 #[derive(Serialize, Deserialize)]
 pub struct ImplConsumer<T>(PhantomData<fn(T)>);
-impl<T: 'static> Consumer for ImplConsumer<T> {
+#[cfg(feature = "doc")]
+impl<T> Consumer for ImplConsumer<T>
+where
+	T: 'static,
+{
+	type Item = T;
+	type Async = ImplConsumer<T>;
+
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+#[cfg(feature = "doc")]
+impl<T: 'static> ConsumerAsync for ImplConsumer<T> {
 	type Item = T;
 
-	fn run(self, _i: &mut impl FnMut(Self::Item) -> bool) -> bool {
+	fn poll_run(
+		self: Pin<&mut Self>, _cx: &mut Context, _sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
 		unreachable!()
 	}
 }

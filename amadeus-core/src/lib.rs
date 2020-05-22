@@ -9,6 +9,7 @@ pub mod file;
 pub mod into_dist_iter;
 pub mod misc_serde;
 pub mod pool;
+pub mod sink;
 mod source;
 pub mod util;
 

@@ -19,7 +19,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
-doc = []
+doc = ["amadeus-core/doc"]
 
 [package.metadata.docs.rs]
 features = ["doc"]

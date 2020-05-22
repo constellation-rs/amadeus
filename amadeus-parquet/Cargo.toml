@@ -19,7 +19,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
-doc = []
+doc = ["amadeus-core/doc"]
 
 [package.metadata.docs.rs]
 features = ["doc"]
@@ -31,6 +31,7 @@ brotli = "3.3"
 byteorder = "1.2"
 chrono = { version = "0.4", default-features = false }
 flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = false }
+futures = "0.3"
 fxhash = "0.2"
 linked-hash-map = "0.5"
 lz4 = "1.23"

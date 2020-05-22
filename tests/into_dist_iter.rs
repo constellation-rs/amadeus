@@ -2,12 +2,14 @@ use either::Either;
 
 use amadeus::prelude::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	let pool = ThreadPool::new(3).unwrap();
 
 	<&[usize] as IntoDistributedIterator>::into_dist_iter(&[1, 2, 3])
 		.map(FnMut!(|a: usize| a))
-		.for_each(&pool, FnMut!(|a: usize| println!("{:?}", a)));
+		.for_each(&pool, FnMut!(|a: usize| println!("{:?}", a)))
+		.await;
 
 	// let res = [1, 2, 3].into_dist_iter().sum::<usize>(&pool);
 	// assert_eq!(res, 6);
@@ -17,11 +19,15 @@ fn main() {
 		79, 83, 89, 97,
 	];
 	for i in 0..slice.len() {
-		let res = slice[..i].dist_iter().into_dist_iter().fold(
-			&pool,
-			FnMut!(|| 0usize),
-			FnMut!(|a: usize, b: Either<usize, usize>| a + b.into_inner()),
-		);
+		let res = slice[..i]
+			.dist_iter()
+			.into_dist_iter()
+			.fold(
+				&pool,
+				FnMut!(|| 0usize),
+				FnMut!(|a: usize, b: Either<usize, usize>| a + b.into_inner()),
+			)
+			.await;
 		assert_eq!(res, slice[..i].iter().sum::<usize>());
 	}
 	// assert_eq!(

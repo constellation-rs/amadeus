@@ -8,7 +8,8 @@ use std::{
 
 use amadeus::prelude::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
@@ -20,16 +21,16 @@ fn main() {
 
 	let local_pool_time = {
 		let local_pool = LocalPool::new();
-		run(&local_pool)
+		run(&local_pool).await
 	};
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool)
+		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool)
+		run(&process_pool).await
 	};
 	#[cfg(not(feature = "constellation"))]
 	let process_pool_time = "-";
@@ -40,7 +41,7 @@ fn main() {
 	);
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
 	let rows = Parquet::<_, Value>::new(ParquetDirectory::new(PathBuf::from(
@@ -50,7 +51,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		207_535
 	);
 
@@ -61,7 +63,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			rows.unwrap()
 				.dist_iter()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			45_167 * 20
 		);
 
@@ -75,7 +78,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			rows.unwrap()
 				.dist_iter()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			207_535
 		);
 
@@ -93,7 +97,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			rows.unwrap()
 				.dist_iter()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			207_535
 		);
 
@@ -107,7 +112,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			rows.unwrap()
 				.dist_iter()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			207_535
 		);
 	}
@@ -144,7 +150,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -159,7 +166,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: StockSimulatedDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -176,7 +184,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -191,7 +200,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: StockSimulatedDerivedProjection1 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -205,7 +215,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -220,7 +231,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: StockSimulatedDerivedProjection2 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -254,7 +266,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		10_000
 	);
 
@@ -265,7 +278,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		10_000
 	);
 
@@ -281,7 +295,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: TenKayVeeTwoDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		10_000
 	);
 
@@ -321,7 +336,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -332,7 +348,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -348,7 +365,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: AlltypesDictionaryDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -388,7 +406,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -399,7 +418,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -415,7 +435,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: AlltypesPlainDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -455,7 +476,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -466,7 +488,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -482,7 +505,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: AlltypesPlainSnappyDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -530,7 +554,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		3
 	);
 
@@ -541,7 +566,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		3
 	);
 
@@ -557,7 +583,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: NestedListsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		3
 	);
 
@@ -579,7 +606,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -590,7 +618,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -606,7 +635,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: NestedMapsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -667,7 +697,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		1
 	);
 
@@ -678,7 +709,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		1
 	);
 
@@ -694,7 +726,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: NonnullableDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		1
 	);
 
@@ -734,7 +767,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		7
 	);
 
@@ -745,7 +779,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		7
 	);
 
@@ -761,7 +796,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: NullableDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		7
 	);
 
@@ -777,7 +813,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -788,7 +825,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -804,7 +842,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: NullsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -822,7 +861,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -833,7 +873,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -849,7 +890,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: RepeatedDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -869,7 +911,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		5
 	);
 
@@ -880,7 +923,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		5
 	);
 
@@ -896,7 +940,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: TestDatapageDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		5
 	);
 
@@ -934,7 +979,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		rows.unwrap()
 			.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		14_444
 	);
 
@@ -949,7 +995,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: CommitsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		14_444
 	);
 

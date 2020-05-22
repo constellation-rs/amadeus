@@ -1,4 +1,5 @@
 use csv::Error as SerdeCsvError;
+use futures::stream;
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
@@ -98,20 +99,22 @@ where
 			.partitions
 			.into_dist_iter()
 			.flat_map(FnMut!(|partition: F::Partition| {
-				ResultExpand(partition.pages().map_err(CsvError::Partition))
-					.into_iter()
-					.flat_map(|page: Result<_, _>| {
-						ResultExpand(page.map(|page| {
-							csv::ReaderBuilder::new()
-								.has_headers(false)
-								.from_reader(Page::reader(page))
-								.into_deserialize()
-								.map(
-									|x: Result<SerdeDeserializeGroup<Row>, SerdeCsvError>| Ok(x?.0),
-								)
-						}))
-					})
-					.map(|row: Result<Result<Row, SerdeCsvError>, Self::Error>| Ok(row??))
+				stream::iter(
+					ResultExpand(partition.pages().map_err(CsvError::Partition))
+						.into_iter()
+						.flat_map(|page: Result<_, _>| {
+							ResultExpand(page.map(|page| {
+								csv::ReaderBuilder::new()
+									.has_headers(false)
+									.from_reader(Page::reader(page))
+									.into_deserialize()
+									.map(|x: Result<SerdeDeserializeGroup<Row>, SerdeCsvError>| {
+										Ok(x?.0)
+									})
+							}))
+						})
+						.map(|row: Result<Result<Row, SerdeCsvError>, Self::Error>| Ok(row??)),
+				)
 			}));
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);

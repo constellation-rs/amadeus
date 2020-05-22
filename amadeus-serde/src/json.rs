@@ -1,3 +1,4 @@
+use futures::stream;
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use serde_json::Error as SerdeJsonError;
@@ -57,17 +58,21 @@ where
 			.partitions
 			.into_dist_iter()
 			.flat_map(FnMut!(|partition: F::Partition| {
-				ResultExpand(partition.pages().map_err(JsonError::Partition))
-					.into_iter()
-					.flat_map(|page: Result<_, _>| {
-						ResultExpand(page.map(|page| {
-							let reader = BufReader::new(Page::reader(page));
-							serde_json::Deserializer::from_reader(reader)
-								.into_iter()
-								.map(|x: Result<SerdeDeserialize<Row>, SerdeJsonError>| Ok(x?.0))
-						}))
-					})
-					.map(|row: Result<Result<Row, SerdeJsonError>, Self::Error>| Ok(row??))
+				stream::iter(
+					ResultExpand(partition.pages().map_err(JsonError::Partition))
+						.into_iter()
+						.flat_map(|page: Result<_, _>| {
+							ResultExpand(page.map(|page| {
+								let reader = BufReader::new(Page::reader(page));
+								serde_json::Deserializer::from_reader(reader)
+									.into_iter()
+									.map(
+										|x: Result<SerdeDeserialize<Row>, SerdeJsonError>| Ok(x?.0),
+									)
+							}))
+						})
+						.map(|row: Result<Result<Row, SerdeJsonError>, Self::Error>| Ok(row??)),
+				)
 			}));
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);

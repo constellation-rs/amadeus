@@ -1,8 +1,12 @@
+use futures::{pin_mut, stream};
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
-use std::ops::{Range, RangeFrom, RangeInclusive};
+use std::{
+	iter, ops::{Range, RangeFrom, RangeInclusive}, pin::Pin, task::{Context, Poll}
+};
 
-use super::{Consumer, DistributedIterator, IntoDistributedIterator};
-use crate::pool::ProcessSend;
+use super::{Consumer, ConsumerAsync, DistributedIterator, IntoDistributedIterator};
+use crate::{pool::ProcessSend, sink::Sink};
 
 pub trait IteratorExt: Iterator + Sized {
 	fn dist(self) -> IterIter<Self> {
@@ -24,18 +28,36 @@ where
 		self.0.size_hint()
 	}
 	fn next_task(&mut self) -> Option<Self::Task> {
-		self.0.next().map(IterIterConsumer)
+		self.0.next().map(IterIterConsumer::new)
 	}
 }
 
+#[pin_project]
 #[derive(Serialize, Deserialize)]
-pub struct IterIterConsumer<T>(T);
+pub struct IterIterConsumer<T>(Option<T>);
+impl<T> IterIterConsumer<T> {
+	fn new(t: T) -> Self {
+		Self(Some(t))
+	}
+}
 
 impl<T> Consumer for IterIterConsumer<T> {
 	type Item = T;
+	type Async = IterIterConsumer<T>;
 
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		i(self.0)
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+impl<T> ConsumerAsync for IterIterConsumer<T> {
+	type Item = T;
+
+	fn poll_run(
+		mut self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		let stream = stream::iter(iter::from_fn(|| self.0.take()));
+		pin_mut!(stream);
+		sink.poll_sink(cx, stream)
 	}
 }
 

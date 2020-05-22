@@ -5,7 +5,8 @@ use std::{
 	env, time::{Duration, SystemTime}
 };
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
@@ -17,16 +18,16 @@ fn main() {
 
 	let local_pool_time = {
 		// let local_pool = LocalPool::new();
-		0 // run(&local_pool) // cloudfront too slow
+		0 // run(&local_pool).await // cloudfront too slow
 	};
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool)
+		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool)
+		run(&process_pool).await
 	};
 	#[cfg(not(feature = "constellation"))]
 	let process_pool_time = "-";
@@ -37,7 +38,7 @@ fn main() {
 	);
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
 	let _ = DistributedIteratorMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity);
@@ -61,7 +62,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			Identity.cloned().count(),
 			// DistributedIteratorMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity),
 		),
-	);
+	)
+	.await;
 	assert_eq!(count, count2);
 	assert_eq!(count, 207_928);
 

@@ -11,7 +11,7 @@ pub trait Source {
 	fn iter(self) -> Self::Iter;
 }
 
-pub trait Sink<I>
+pub trait Destination<I>
 where
 	I: crate::dist_iter::DistributedIteratorMulti<Self::Item>,
 {

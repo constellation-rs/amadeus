@@ -1,6 +1,11 @@
+use futures::{pin_mut, stream};
 use serde::{Deserialize, Serialize};
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 
-use super::{ConsumerMulti, DistributedIteratorMulti};
+use super::{ConsumerMulti, ConsumerMultiAsync, DistributedIteratorMulti};
+use crate::sink::Sink;
 
 pub struct Identity;
 impl<Item> DistributedIteratorMulti<Item> for Identity {
@@ -14,10 +19,22 @@ impl<Item> DistributedIteratorMulti<Item> for Identity {
 
 #[derive(Serialize, Deserialize)]
 pub struct IdentityMultiTask;
-impl<Item> ConsumerMulti<Item> for IdentityMultiTask {
+impl<Source> ConsumerMulti<Source> for IdentityMultiTask {
+	type Item = Source;
+	type Async = IdentityMultiTask;
+	fn into_async(self) -> Self::Async {
+		IdentityMultiTask
+	}
+}
+impl<Item> ConsumerMultiAsync<Item> for IdentityMultiTask {
 	type Item = Item;
 
-	fn run(&self, source: Item, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		i(source)
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, source: Option<Item>,
+		sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		let stream = stream::iter(source);
+		pin_mut!(stream);
+		sink.poll_sink(cx, stream)
 	}
 }

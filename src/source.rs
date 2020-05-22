@@ -1,4 +1,10 @@
+#![allow(clippy::unsafe_derive_deserialize)]
+
 use ::serde::{Deserialize, Serialize};
+use pin_project::pin_project;
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 
 #[cfg(feature = "aws")]
 #[doc(inline)]
@@ -148,9 +154,11 @@ where
 		})
 	}
 }
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct IntoConsumer<I, U> {
+	#[pin]
 	task: I,
 	#[serde(skip)]
 	marker: PhantomData<fn() -> U>,
@@ -161,9 +169,29 @@ where
 	T: Into<U>,
 {
 	type Item = Result<U, E>;
+	type Async = IntoConsumer<I::Async, U>;
+	fn into_async(self) -> Self::Async {
+		IntoConsumer {
+			task: self.task.into_async(),
+			marker: self.marker,
+		}
+	}
+}
+impl<I, T, E, U> amadeus_core::dist_iter::ConsumerAsync for IntoConsumer<I, U>
+where
+	I: amadeus_core::dist_iter::ConsumerAsync<Item = Result<T, E>>,
+	T: Into<U>,
+{
+	type Item = Result<U, E>;
 
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		self.task.run(&mut |item| i(item.map(Into::into)))
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context,
+		sink: &mut impl amadeus_core::sink::Sink<Self::Item>,
+	) -> Poll<bool> {
+		self.project().task.poll_run(
+			cx,
+			&mut amadeus_core::sink::SinkMap::new(sink, |item: Result<_, _>| item.map(Into::into)),
+		)
 	}
 }
 impl<I, T, E, U> Iterator for IntoIter<I, U>
@@ -191,7 +219,7 @@ pub trait Source {
 	fn iter(self) -> Self::Iter;
 }
 
-pub trait Sink<I>
+pub trait Destination<I>
 where
 	I: crate::dist_iter::DistributedIteratorMulti<Self::Item>,
 {

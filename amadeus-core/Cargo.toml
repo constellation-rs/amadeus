@@ -18,10 +18,15 @@ edition = "2018"
 azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
+[features]
+doc = []
+
 [dependencies]
+async-trait = "0.1"
 either = { version = "1.5", features = ["serde"] }
 futures = "0.3"
 owned_chars = "0.3"
+pin-project = "0.4"
 rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }

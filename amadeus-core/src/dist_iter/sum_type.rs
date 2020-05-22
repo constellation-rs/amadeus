@@ -1,6 +1,12 @@
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 use sum::Sum2;
 
-use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
+use super::{
+	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedIterator, DistributedIteratorMulti
+};
+use crate::sink::Sink;
 
 impl<A: DistributedIterator, B: DistributedIterator<Item = A::Item>> DistributedIterator
 	for Sum2<A, B>
@@ -41,24 +47,52 @@ impl<
 
 impl<A: Consumer, B: Consumer<Item = A::Item>> Consumer for Sum2<A, B> {
 	type Item = A::Item;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
+	type Async = Sum2<A::Async, B::Async>;
+	fn into_async(self) -> Self::Async {
 		match self {
-			Self::A(task) => task.run(i),
-			Self::B(task) => task.run(i),
+			Sum2::A(a) => Sum2::A(a.into_async()),
+			Sum2::B(b) => Sum2::B(b.into_async()),
 		}
 	}
 }
-
 impl<A: ConsumerMulti<Source>, B: ConsumerMulti<Source, Item = A::Item>, Source>
 	ConsumerMulti<Source> for Sum2<A, B>
 {
 	type Item = A::Item;
-
-	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
+	type Async = Sum2<A::Async, B::Async>;
+	fn into_async(self) -> Self::Async {
 		match self {
-			Self::A(task) => task.run(source, i),
-			Self::B(task) => task.run(source, i),
+			Sum2::A(a) => Sum2::A(a.into_async()),
+			Sum2::B(b) => Sum2::B(b.into_async()),
+		}
+	}
+}
+
+impl<A: ConsumerAsync, B: ConsumerAsync<Item = A::Item>> ConsumerAsync for Sum2<A, B> {
+	type Item = A::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		match self.as_pin_mut() {
+			Sum2::A(task) => task.poll_run(cx, sink),
+			Sum2::B(task) => task.poll_run(cx, sink),
+		}
+	}
+}
+
+impl<A: ConsumerMultiAsync<Source>, B: ConsumerMultiAsync<Source, Item = A::Item>, Source>
+	ConsumerMultiAsync<Source> for Sum2<A, B>
+{
+	type Item = A::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
+		sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		match self.as_pin_mut() {
+			Sum2::A(task) => task.poll_run(cx, source, sink),
+			Sum2::B(task) => task.poll_run(cx, source, sink),
 		}
 	}
 }

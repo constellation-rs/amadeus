@@ -6,7 +6,8 @@ use std::{
 
 use amadeus::prelude::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
@@ -18,16 +19,16 @@ fn main() {
 
 	let local_pool_time = {
 		let local_pool = LocalPool::new();
-		run(&local_pool, 2)
+		run(&local_pool, 2).await
 	};
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool, processes * 2)
+		run(&thread_pool, processes * 2).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool, processes * 2)
+		run(&process_pool, processes * 2).await
 	};
 	#[cfg(not(feature = "constellation"))]
 	let process_pool_time = "-";
@@ -38,7 +39,7 @@ fn main() {
 	);
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 	let start = SystemTime::now();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -85,7 +86,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		3_605 * tasks
 	);
 	println!("a: {:?}", start.elapsed().unwrap());
@@ -104,7 +106,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 				let _: Result<BitcoinDerived, _> = value.clone().downcast();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		3_605 * tasks
 	);
 	println!("b: {:?}", b.elapsed().unwrap());

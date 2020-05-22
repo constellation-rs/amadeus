@@ -1,5 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use flate2::read::MultiGzDecoder;
+use futures::stream;
 use http::{Method, StatusCode};
 use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
@@ -78,7 +79,7 @@ impl Source for Cloudfront {
 					region.clone(),
 				);
 				let mut errors = 0;
-				ResultExpand(
+				stream::iter(ResultExpand(
 					loop {
 						match self::block_on_01(self::retry(|| {
 							client.get_object(GetObjectRequest {
@@ -122,7 +123,7 @@ impl Source for Cloudfront {
 							}
 						})
 					}),
-				)
+				))
 			}))
 			.map(FnMut!(
 				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(self::identity)

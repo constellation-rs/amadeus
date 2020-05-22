@@ -1,8 +1,10 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{iter, slice};
+use std::{
+	iter, pin::Pin, slice, task::{Context, Poll}
+};
 
-use super::{Consumer, DistributedIterator, IntoDistributedIterator, IterIter};
-use crate::pool::ProcessSend;
+use super::{Consumer, ConsumerAsync, DistributedIterator, IntoDistributedIterator, IterIter};
+use crate::{pool::ProcessSend, sink::Sink};
 
 impl<T> IntoDistributedIterator for [T]
 where
@@ -50,8 +52,18 @@ impl DistributedIterator for Never {
 
 impl Consumer for Never {
 	type Item = Self;
+	type Async = Self;
 
-	fn run(self, _: &mut impl FnMut(Self::Item) -> bool) -> bool {
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+impl ConsumerAsync for Never {
+	type Item = Self;
+
+	fn poll_run(
+		self: Pin<&mut Self>, _cx: &mut Context, _sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
 		unreachable!()
 	}
 }

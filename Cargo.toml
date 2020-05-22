@@ -31,7 +31,7 @@ postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
 # "doc" works around https://github.com/rust-lang/rust/issues/58011
-doc = ["amadeus-aws/doc", "amadeus-commoncrawl/doc", "amadeus-postgres/doc", "amadeus-serde/doc"] # "amadeus-parquet/doc" when https://github.com/rust-lang/cargo/issues/3494 is resolved
+doc = ["amadeus-core/doc", "amadeus-aws/doc", "amadeus-commoncrawl/doc", "amadeus-postgres/doc", "amadeus-serde/doc"] # "amadeus-parquet/doc" when https://github.com/rust-lang/cargo/issues/3494 is resolved
 
 [package.metadata.docs.rs]
 features = ["doc", "constellation", "aws", "commoncrawl", "postgres", "csv", "json"]
@@ -47,6 +47,7 @@ amadeus-postgres = { version = "=0.1.7", path = "amadeus-postgres", optional = t
 amadeus-serde = { version = "=0.1.7", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
 futures = "0.3"
+pin-project = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
 serde_traitobject = "0.2"
@@ -55,6 +56,7 @@ serde_traitobject = "0.2"
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
 streaming_algorithms = "0.1"
+tokio = { version = "0.2", features = ["macros"] }
 
 [[example]]
 name = "common_crawl"

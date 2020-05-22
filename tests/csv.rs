@@ -6,7 +6,8 @@ use std::{
 
 use amadeus::prelude::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
@@ -18,16 +19,16 @@ fn main() {
 
 	let local_pool_time = {
 		let local_pool = LocalPool::new();
-		run(&local_pool)
+		run(&local_pool).await
 	};
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool)
+		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool)
+		run(&process_pool).await
 	};
 	#[cfg(not(feature = "constellation"))]
 	let process_pool_time = "-";
@@ -38,7 +39,7 @@ fn main() {
 	);
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -56,7 +57,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		100_000
 	);
 
@@ -79,7 +81,8 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				let _: GameDerived2 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		100_000
 	);
 

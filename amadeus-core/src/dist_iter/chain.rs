@@ -1,6 +1,11 @@
+use pin_project::{pin_project, project};
 use serde::{Deserialize, Serialize};
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 
-use super::{Consumer, DistributedIterator};
+use super::{Consumer, ConsumerAsync, DistributedIterator};
+use crate::sink::Sink;
 
 #[must_use]
 pub struct Chain<A, B> {
@@ -39,18 +44,33 @@ impl<A: DistributedIterator, B: DistributedIterator<Item = A::Item>> Distributed
 	}
 }
 
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 pub enum ChainConsumer<A, B> {
-	A(A),
-	B(B),
+	A(#[pin] A),
+	B(#[pin] B),
 }
 impl<A: Consumer, B: Consumer<Item = A::Item>> Consumer for ChainConsumer<A, B> {
 	type Item = A::Item;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
+	type Async = ChainConsumer<A::Async, B::Async>;
+	fn into_async(self) -> Self::Async {
 		match self {
-			Self::A(a) => a.run(i),
-			Self::B(b) => b.run(i),
+			ChainConsumer::A(a) => ChainConsumer::A(a.into_async()),
+			ChainConsumer::B(b) => ChainConsumer::B(b.into_async()),
+		}
+	}
+}
+impl<A: ConsumerAsync, B: ConsumerAsync<Item = A::Item>> ConsumerAsync for ChainConsumer<A, B> {
+	type Item = A::Item;
+
+	#[project]
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		#[project]
+		match self.project() {
+			ChainConsumer::A(a) => a.poll_run(cx, sink),
+			ChainConsumer::B(b) => b.poll_run(cx, sink),
 		}
 	}
 }

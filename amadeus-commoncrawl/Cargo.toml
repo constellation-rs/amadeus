@@ -19,7 +19,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
-doc = []
+doc = ["amadeus-core/doc"]
 
 [package.metadata.docs.rs]
 features = ["doc"]
@@ -27,12 +27,14 @@ features = ["doc"]
 [dependencies]
 amadeus-core = { version = "=0.1.7", path = "../amadeus-core" }
 amadeus-types = { version = "=0.1.7", path = "../amadeus-types" }
-flate2 = "1.0"
+async-compression = { version = "0.3.3", features = ["gzip", "futures-bufread"] }
+futures = "0.3"
+nom = "4.2.3"
+pin-project = "0.4"
 reqwest = "0.10"
 reqwest_resume = "0.3"
-nom = "4.2.3"
-serde_closure = "0.2"
 serde = { version = "1.0", features = ["derive"] }
+serde_closure = "0.2"
 url = { version = "2.1", features = ["serde"] }
 
 # dependency of reqwest/native-tls; ensure it's vendored to simplify cross-compilation

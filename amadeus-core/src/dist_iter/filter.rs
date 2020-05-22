@@ -1,7 +1,15 @@
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
+use std::{
+	future::Future, pin::Pin, task::{Context, Poll}
+};
 
-use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
-use crate::pool::ProcessSend;
+use super::{
+	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedIterator, DistributedIteratorMulti
+};
+use crate::{
+	pool::ProcessSend, sink::{Sink, SinkFilter, SinkFilterState}
+};
 
 #[must_use]
 pub struct Filter<I, F> {
@@ -14,9 +22,10 @@ impl<I, F> Filter<I, F> {
 	}
 }
 
-impl<I: DistributedIterator, F> DistributedIterator for Filter<I, F>
+impl<I: DistributedIterator, F, Fut> DistributedIterator for Filter<I, F>
 where
-	F: FnMut(&I::Item) -> bool + Clone + ProcessSend,
+	F: FnMut(&I::Item) -> Fut + Clone + ProcessSend,
+	Fut: Future<Output = bool>,
 {
 	type Item = I::Item;
 	type Task = FilterConsumer<I::Task, F>;
@@ -32,10 +41,11 @@ where
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, F, Source> DistributedIteratorMulti<Source>
+impl<I: DistributedIteratorMulti<Source>, F, Fut, Source> DistributedIteratorMulti<Source>
 	for Filter<I, F>
 where
-	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item) -> bool + Clone + ProcessSend,
+	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item) -> Fut + Clone + ProcessSend,
+	Fut: Future<Output = bool>,
 {
 	type Item = I::Item;
 	type Task = FilterConsumer<I::Task, F>;
@@ -48,41 +58,88 @@ where
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct FilterConsumer<T, F> {
-	task: T,
+pub struct FilterConsumer<C, F> {
+	task: C,
 	f: F,
 }
 
-impl<C: Consumer, F> Consumer for FilterConsumer<C, F>
+impl<C: Consumer, F, Fut> Consumer for FilterConsumer<C, F>
 where
-	F: FnMut(&C::Item) -> bool + Clone,
+	F: FnMut(&C::Item) -> Fut + Clone,
+	Fut: Future<Output = bool>,
 {
 	type Item = C::Item;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		let (task, mut f) = (self.task, self.f);
-		task.run(&mut |item| {
-			if f(&item) {
-				return i(item);
-			}
-			true
-		})
+	type Async = FilterConsumerAsync<C::Async, F, Self::Item, Fut>;
+	fn into_async(self) -> Self::Async {
+		FilterConsumerAsync {
+			task: self.task.into_async(),
+			f: self.f,
+			state: SinkFilterState::None,
+		}
+	}
+}
+impl<C: ConsumerMulti<Source>, F, Fut, Source> ConsumerMulti<Source> for FilterConsumer<C, F>
+where
+	F: FnMut(&C::Item) -> Fut + Clone,
+	Fut: Future<Output = bool>,
+{
+	type Item = C::Item;
+	type Async = FilterConsumerAsync<C::Async, F, Self::Item, Fut>;
+	fn into_async(self) -> Self::Async {
+		FilterConsumerAsync {
+			task: self.task.into_async(),
+			f: self.f,
+			state: SinkFilterState::None,
+		}
 	}
 }
 
-impl<C: ConsumerMulti<Source>, F, Source> ConsumerMulti<Source> for FilterConsumer<C, F>
+#[pin_project]
+pub struct FilterConsumerAsync<C, F, T, Fut> {
+	#[pin]
+	task: C,
+	f: F,
+	#[pin]
+	state: SinkFilterState<T, Fut>,
+}
+
+impl<C: ConsumerAsync, F, Fut> ConsumerAsync for FilterConsumerAsync<C, F, C::Item, Fut>
 where
-	F: FnMut(&<C as ConsumerMulti<Source>>::Item) -> bool + Clone,
+	F: FnMut(&C::Item) -> Fut + Clone,
+	Fut: Future<Output = bool>,
 {
 	type Item = C::Item;
 
-	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		let (task, f) = (&self.task, &self.f);
-		task.run(source, &mut |item| {
-			if f.clone()(&item) {
-				return i(item);
-			}
-			true
-		})
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		let mut self_ = self.project();
+		let (task, f) = (self_.task, &mut self_.f);
+		task.poll_run(
+			cx,
+			&mut SinkFilter::new(self_.state, sink, |item: &_| f(item)),
+		)
+	}
+}
+
+impl<C: ConsumerMultiAsync<Source>, F, Fut, Source> ConsumerMultiAsync<Source>
+	for FilterConsumerAsync<C, F, C::Item, Fut>
+where
+	F: FnMut(&<C as ConsumerMultiAsync<Source>>::Item) -> Fut + Clone,
+	Fut: Future<Output = bool>,
+{
+	type Item = C::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
+		sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		let mut self_ = self.project();
+		let (task, f) = (self_.task, &mut self_.f);
+		task.poll_run(
+			cx,
+			source,
+			&mut SinkFilter::new(self_.state, sink, |item: &_| f(item)),
+		)
 	}
 }

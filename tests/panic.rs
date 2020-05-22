@@ -1,12 +1,14 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
+use futures::FutureExt;
 use std::{
-	env, panic, time::{Duration, SystemTime}
+	env, panic, panic::AssertUnwindSafe, time::{Duration, SystemTime}
 };
 
 use amadeus::prelude::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
@@ -18,16 +20,16 @@ fn main() {
 
 	let local_pool_time = {
 		let local_pool = LocalPool::new();
-		run(&local_pool)
+		run(&local_pool).await
 	};
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool)
+		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
 		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool)
+		run(&process_pool).await
 	};
 	#[cfg(not(feature = "constellation"))]
 	let process_pool_time = "-";
@@ -38,17 +40,17 @@ fn main() {
 	);
 }
 
-fn run<P: amadeus_core::pool::ProcessPool + std::panic::RefUnwindSafe>(pool: &P) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool + std::panic::RefUnwindSafe>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	let res = panic::catch_unwind(|| {
-		(0i32..1_000).into_dist_iter().for_each(
-			pool,
-			FnMut!(|i| if i == 500 {
-				panic!("boom")
-			}),
-		)
-	});
+	let res = AssertUnwindSafe((0i32..1_000).into_dist_iter().for_each(
+		pool,
+		FnMut!(|i| if i == 500 {
+			panic!("boom")
+		}),
+	))
+	.catch_unwind()
+	.await;
 
 	assert!(res.is_err());
 

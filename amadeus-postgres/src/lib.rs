@@ -7,6 +7,7 @@ mod impls;
 #[doc(hidden)]
 pub use postgres as _internal;
 
+use futures::stream;
 use postgres::{params::IntoConnectParams, Error as PostgresError};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
@@ -183,7 +184,7 @@ where
 				let (connect, tables): (ConnectParams, Vec<Source>) = (connect, tables);
 				let connection =
 					postgres::Connection::connect(connect, postgres::TlsMode::None).unwrap();
-				tables.into_iter().flat_map(
+				stream::iter(tables.into_iter().flat_map(
 					(move |table: Source| {
 						// let stmt = connection.prepare("SELECT $1::\"public\".\"weather\"").unwrap();
 						// let type_ = stmt.param_types()[0].clone();
@@ -219,7 +220,7 @@ where
 						let _ = stmt.copy_out(&[], &mut writer).unwrap();
 						vec.into_iter()
 					}),
-				)
+				))
 			}));
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);

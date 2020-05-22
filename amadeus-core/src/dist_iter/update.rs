@@ -1,7 +1,15 @@
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 
-use super::{Consumer, ConsumerMulti, DistributedIterator, DistributedIteratorMulti};
-use crate::pool::ProcessSend;
+use super::{
+	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedIterator, DistributedIteratorMulti
+};
+use crate::{
+	pool::ProcessSend, sink::{Sink, SinkMap}
+};
 
 #[must_use]
 pub struct Update<I, F> {
@@ -47,8 +55,10 @@ where
 	}
 }
 
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 pub struct UpdateConsumer<T, F> {
+	#[pin]
 	task: T,
 	f: F,
 }
@@ -58,27 +68,68 @@ where
 	F: FnMut(&mut C::Item) + Clone,
 {
 	type Item = C::Item;
-
-	fn run(self, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		let (task, mut f) = (self.task, self.f);
-		task.run(&mut |mut item| {
-			f(&mut item);
-			i(item)
-		})
+	type Async = UpdateConsumer<C::Async, F>;
+	fn into_async(self) -> Self::Async {
+		UpdateConsumer {
+			task: self.task.into_async(),
+			f: self.f,
+		}
 	}
 }
-
 impl<C: ConsumerMulti<Source>, F, Source> ConsumerMulti<Source> for UpdateConsumer<C, F>
 where
 	F: FnMut(&mut <C as ConsumerMulti<Source>>::Item) + Clone,
 {
 	type Item = C::Item;
+	type Async = UpdateConsumer<C::Async, F>;
+	fn into_async(self) -> Self::Async {
+		UpdateConsumer {
+			task: self.task.into_async(),
+			f: self.f,
+		}
+	}
+}
 
-	fn run(&self, source: Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		let (task, f) = (&self.task, &self.f);
-		task.run(source, &mut |mut item| {
-			f.clone()(&mut item);
-			i(item)
-		})
+impl<C: ConsumerAsync, F> ConsumerAsync for UpdateConsumer<C, F>
+where
+	F: FnMut(&mut C::Item) + Clone,
+{
+	type Item = C::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		let mut self_ = self.project();
+		let (task, f) = (self_.task, &mut self_.f);
+		task.poll_run(
+			cx,
+			&mut SinkMap::new(sink, |mut item| {
+				f(&mut item);
+				item
+			}),
+		)
+	}
+}
+
+impl<C: ConsumerMultiAsync<Source>, F, Source> ConsumerMultiAsync<Source> for UpdateConsumer<C, F>
+where
+	F: FnMut(&mut <C as ConsumerMultiAsync<Source>>::Item) + Clone,
+{
+	type Item = C::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, source: Option<Source>,
+		sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		let mut self_ = self.project();
+		let (task, f) = (self_.task, &mut self_.f);
+		task.poll_run(
+			cx,
+			source,
+			&mut SinkMap::new(sink, |mut item| {
+				f(&mut item);
+				item
+			}),
+		)
 	}
 }

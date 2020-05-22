@@ -1,4 +1,4 @@
-use crate::dist_iter::{Consumer, DistributedIterator};
+use crate::dist_iter::{Consumer, ConsumerAsync, DistributedIterator};
 
 mod collections;
 mod iterator;

@@ -9,6 +9,7 @@ extern crate test;
 
 mod internal;
 
+use futures::stream;
 use internal::{
 	errors::ParquetError as InternalParquetError, file::reader::{FileReader, ParquetReader, SerializedFileReader}
 };
@@ -73,17 +74,19 @@ where
 			.partitions
 			.into_dist_iter()
 			.flat_map(FnMut!(|partition: F::Partition| {
-				ResultExpand(partition.pages().map_err(ParquetError::<F>::Partition))
-					.into_iter()
-					.flat_map(|page: Result<_, _>| {
-						ResultExpand(page.and_then(
-							|page: <<F as File>::Partition as Partition>::Page| {
-								Ok(SerializedFileReader::new(Page::reader(page))?
-									.get_row_iter(None)?)
-							},
-						))
-					})
-					.map(|row: Result<Result<Row, _>, _>| Ok(row??))
+				stream::iter(
+					ResultExpand(partition.pages().map_err(ParquetError::<F>::Partition))
+						.into_iter()
+						.flat_map(|page: Result<_, _>| {
+							ResultExpand(page.and_then(
+								|page: <<F as File>::Partition as Partition>::Page| {
+									Ok(SerializedFileReader::new(Page::reader(page))?
+										.get_row_iter(None)?)
+								},
+							))
+						})
+						.map(|row: Result<Result<Row, _>, _>| Ok(row??)),
+				)
 			}));
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);

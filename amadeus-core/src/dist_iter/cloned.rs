@@ -1,7 +1,11 @@
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use std::{
+	marker::PhantomData, pin::Pin, task::{Context, Poll}
+};
 
-use super::{ConsumerMulti, DistributedIteratorMulti};
+use super::{ConsumerMulti, ConsumerMultiAsync, DistributedIteratorMulti};
+use crate::sink::{Sink, SinkMap};
 
 #[must_use]
 pub struct Cloned<I, T, Source> {
@@ -48,9 +52,24 @@ where
 		ClonedConsumer { task }
 	}
 }
+#[pin_project]
 #[derive(Serialize, Deserialize)]
 pub struct ClonedConsumer<T> {
+	#[pin]
 	task: T,
+}
+impl<'a, C, Source, T: 'a> ConsumerMulti<&'a Source> for ClonedConsumer<C>
+where
+	C: ConsumerMulti<&'a Source, Item = &'a T>,
+	T: Clone,
+{
+	type Item = T;
+	type Async = ClonedConsumer<C::Async>;
+	fn into_async(self) -> Self::Async {
+		ClonedConsumer {
+			task: self.task.into_async(),
+		}
+	}
 }
 // impl<'a,C,T:'a> Consumer for ClonedConsumer<C>
 // where
@@ -62,14 +81,19 @@ pub struct ClonedConsumer<T> {
 // 		self.task.run(&mut |item| i(item.clone()))
 // 	}
 // }
-impl<'a, C, Source, T: 'a> ConsumerMulti<&'a Source> for ClonedConsumer<C>
+impl<'a, C, Source, T: 'a> ConsumerMultiAsync<&'a Source> for ClonedConsumer<C>
 where
-	C: ConsumerMulti<&'a Source, Item = &'a T>,
+	C: ConsumerMultiAsync<&'a Source, Item = &'a T>,
 	T: Clone,
 {
 	type Item = T;
 
-	fn run(&self, source: &'a Source, i: &mut impl FnMut(Self::Item) -> bool) -> bool {
-		self.task.run(source, &mut |item| i(item.clone()))
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, source: Option<&'a Source>,
+		sink: &mut impl Sink<Self::Item>,
+	) -> Poll<bool> {
+		self.project()
+			.task
+			.poll_run(cx, source, &mut SinkMap::new(sink, |item: &T| item.clone()))
 	}
 }
