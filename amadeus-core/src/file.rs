@@ -1,6 +1,8 @@
 mod local;
 
+use async_trait::async_trait;
 use futures::future::FutureExt;
+use pin_project::pin_project;
 use std::{
 	convert::{TryFrom, TryInto}, error::Error, fmt, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
 };
@@ -106,35 +108,34 @@ impl PartialEq<str> for PathBuf {
 	}
 }
 
+#[async_trait(?Send)]
 pub trait Directory: File {
-	fn partitions_filter<F>(self, f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	async fn partitions_filter<F>(
+		self, f: F,
+	) -> Result<Vec<<Self as File>::Partition>, <Self as File>::Error>
 	where
 		F: FnMut(&PathBuf) -> bool;
 }
 
+#[async_trait(?Send)]
 pub trait File {
 	type Partition: Partition;
 	type Error: Error + Clone + PartialEq + 'static;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error>;
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error>;
 }
+#[async_trait(?Send)]
 pub trait Partition: ProcessSend {
 	type Page: Page;
 	type Error: Error + Clone + PartialEq + ProcessSend;
 
-	fn pages(self) -> Result<Vec<Self::Page>, Self::Error>;
+	async fn pages(self) -> Result<Vec<Self::Page>, Self::Error>;
 }
 #[allow(clippy::len_without_is_empty)]
+#[async_trait]
 pub trait Page {
 	type Error: Error + Clone + PartialEq + Into<io::Error> + ProcessSend;
 
-	fn block_on<F>(future: F) -> F::Output
-	where
-		F: Future + Send,
-		F::Output: Send,
-	{
-		futures::executor::block_on(future)
-	}
 	fn len(&self) -> u64;
 	fn set_len(&self, len: u64) -> Result<(), Self::Error>;
 	fn read<'a>(
@@ -151,19 +152,14 @@ pub trait Page {
 		Reader::new(self)
 	}
 }
+
+#[async_trait]
 impl<T: ?Sized> Page for &T
 where
 	T: Page,
 {
 	type Error = T::Error;
 
-	fn block_on<F>(future: F) -> F::Output
-	where
-		F: Future + Send,
-		F::Output: Send,
-	{
-		T::block_on(future)
-	}
 	fn len(&self) -> u64 {
 		(**self).len()
 	}
@@ -181,20 +177,13 @@ where
 		(**self).write(offset, buf)
 	}
 }
-
+#[async_trait]
 impl<T: ?Sized> Page for Arc<T>
 where
 	T: Page,
 {
 	type Error = T::Error;
 
-	fn block_on<F>(future: F) -> F::Output
-	where
-		F: Future + Send,
-		F::Output: Send,
-	{
-		T::block_on(future)
-	}
 	fn len(&self) -> u64 {
 		(**self).len()
 	}
@@ -213,11 +202,9 @@ where
 	}
 }
 
+#[pin_project]
 #[derive(Clone)]
-pub struct Reader<P>
-where
-	P: Page,
-{
+pub struct Reader<P> {
 	page: P,
 	offset: u64,
 }
@@ -233,7 +220,6 @@ where
 		self.page.len()
 	}
 }
-impl<P> Unpin for Reader<P> where P: Page {}
 impl<P> futures::io::AsyncRead for Reader<P>
 where
 	P: Page,
@@ -262,55 +248,55 @@ where
 		// ret
 	}
 }
-impl<P> io::Read for Reader<P>
-where
-	P: Page,
-{
-	fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
-		// let future = futures::io::AsyncReadExt::read(self, buf);
-		let rem = self.page.len().saturating_sub(self.offset);
-		let rem: usize = rem.try_into().unwrap();
-		let rem = rem.min(buf.len());
-		buf = &mut buf[..rem];
-		let offset = self.offset;
-		self.offset += u64::try_from(rem).unwrap();
-		let future = self
-			.page
-			.read(offset, buf)
-			.map(|x| x.map(|()| rem).map_err(Into::into));
-		P::block_on(future)
-	}
-	unsafe fn initializer(&self) -> io::Initializer {
-		io::Initializer::nop()
-	}
-}
-impl<P> io::Seek for Reader<P>
-where
-	P: Page,
-{
-	fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-		let len = self.page.len();
-		self.offset = match pos {
-			io::SeekFrom::Start(n) => Some(n),
-			io::SeekFrom::End(n) if n >= 0 => len.checked_add(u64::try_from(n).unwrap()),
-			io::SeekFrom::End(n) => {
-				let n = u64::try_from(-(n + 1)).unwrap() + 1;
-				len.checked_sub(n)
-			}
-			io::SeekFrom::Current(n) if n >= 0 => {
-				self.offset.checked_add(u64::try_from(n).unwrap())
-			}
-			io::SeekFrom::Current(n) => {
-				let n = u64::try_from(-(n + 1)).unwrap() + 1;
-				self.offset.checked_sub(n)
-			}
-		}
-		.ok_or_else(|| {
-			io::Error::new(
-				io::ErrorKind::InvalidInput,
-				"invalid seek to a negative or overflowing position",
-			)
-		})?;
-		Ok(self.offset)
-	}
-}
+// impl<P> io::Read for Reader<P>
+// where
+// 	P: Page,
+// {
+// 	fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
+// 		// let future = futures::io::AsyncReadExt::read(self, buf);
+// 		let rem = self.page.len().saturating_sub(self.offset);
+// 		let rem: usize = rem.try_into().unwrap();
+// 		let rem = rem.min(buf.len());
+// 		buf = &mut buf[..rem];
+// 		let offset = self.offset;
+// 		self.offset += u64::try_from(rem).unwrap();
+// 		let future = self
+// 			.page
+// 			.read(offset, buf)
+// 			.map(|x| x.map(|()| rem).map_err(Into::into));
+// 		P::block_on(future)
+// 	}
+// 	unsafe fn initializer(&self) -> io::Initializer {
+// 		io::Initializer::nop()
+// 	}
+// }
+// impl<P> io::Seek for Reader<P>
+// where
+// 	P: Page,
+// {
+// 	fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+// 		let len = self.page.len();
+// 		self.offset = match pos {
+// 			io::SeekFrom::Start(n) => Some(n),
+// 			io::SeekFrom::End(n) if n >= 0 => len.checked_add(u64::try_from(n).unwrap()),
+// 			io::SeekFrom::End(n) => {
+// 				let n = u64::try_from(-(n + 1)).unwrap() + 1;
+// 				len.checked_sub(n)
+// 			}
+// 			io::SeekFrom::Current(n) if n >= 0 => {
+// 				self.offset.checked_add(u64::try_from(n).unwrap())
+// 			}
+// 			io::SeekFrom::Current(n) => {
+// 				let n = u64::try_from(-(n + 1)).unwrap() + 1;
+// 				self.offset.checked_sub(n)
+// 			}
+// 		}
+// 		.ok_or_else(|| {
+// 			io::Error::new(
+// 				io::ErrorKind::InvalidInput,
+// 				"invalid seek to a negative or overflowing position",
+// 			)
+// 		})?;
+// 		Ok(self.offset)
+// 	}
+// }

@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+use futures::{stream, FutureExt, StreamExt, TryStreamExt};
 use std::{
 	convert::TryFrom, ffi::{OsStr, OsString}, fs, future::Future, io::{self, Seek, SeekFrom}, path::{Path, PathBuf}, pin::Pin, sync::atomic::{AtomicU64, Ordering}
 };
@@ -11,6 +13,7 @@ use std::os::windows::fs::FileExt;
 use super::{Directory, File, Page, Partition};
 use crate::util::{IoError, ResultExpand};
 
+#[async_trait(?Send)]
 impl<F> File for Vec<F>
 where
 	F: File,
@@ -18,12 +21,16 @@ where
 	type Partition = F::Partition;
 	type Error = F::Error;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		self.into_iter()
-			.flat_map(|file| ResultExpand(file.partitions()))
-			.collect()
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		stream::iter(self.into_iter())
+			.flat_map(|file| {
+				async { stream::iter(ResultExpand(file.partitions().await)) }.flatten_stream()
+			})
+			.try_collect()
+			.await
 	}
 }
+#[async_trait(?Send)]
 impl<F> File for &[F]
 where
 	F: File + Clone,
@@ -31,39 +38,49 @@ where
 	type Partition = F::Partition;
 	type Error = F::Error;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		self.iter()
-			.cloned()
-			.flat_map(|file| ResultExpand(file.partitions()))
-			.collect()
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		stream::iter(self.iter().cloned())
+			.flat_map(|file| {
+				async { stream::iter(ResultExpand(file.partitions().await)) }.flatten_stream()
+			})
+			.try_collect()
+			.await
 	}
 }
+#[async_trait(?Send)]
 impl File for PathBuf {
 	type Partition = Self;
 	type Error = IoError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
 		Ok(vec![self])
 	}
 }
+#[async_trait(?Send)]
 impl Directory for PathBuf {
-	fn partitions_filter<F>(self, f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	async fn partitions_filter<F>(
+		self, f: F,
+	) -> Result<Vec<<Self as File>::Partition>, <Self as File>::Error>
 	where
 		F: FnMut(&super::PathBuf) -> bool,
 	{
-		(*self).partitions_filter(f)
+		(*self).partitions_filter(f).await
 	}
 }
+#[async_trait(?Send)]
 impl Partition for PathBuf {
 	type Page = LocalFile;
 	type Error = IoError;
 
-	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
+	async fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
 		Ok(vec![LocalFile::open(self)?])
 	}
 }
+#[async_trait(?Send)]
 impl Directory for &Path {
-	fn partitions_filter<F>(self, mut f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	async fn partitions_filter<F>(
+		self, mut f: F,
+	) -> Result<Vec<<Self as File>::Partition>, <Self as File>::Error>
 	where
 		F: FnMut(&super::PathBuf) -> bool,
 	{
@@ -125,44 +142,49 @@ impl Directory for &Path {
 			.collect()
 	}
 }
+#[async_trait(?Send)]
 impl File for &Path {
 	type Partition = PathBuf;
 	type Error = IoError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		PathBuf::partitions(self.into())
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		PathBuf::partitions(self.into()).await
 	}
 }
+#[async_trait(?Send)]
 impl File for String {
 	type Partition = PathBuf;
 	type Error = IoError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		PathBuf::partitions(self.into())
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		PathBuf::partitions(self.into()).await
 	}
 }
+#[async_trait(?Send)]
 impl File for &str {
 	type Partition = PathBuf;
 	type Error = IoError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		PathBuf::partitions(self.into())
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		PathBuf::partitions(self.into()).await
 	}
 }
+#[async_trait(?Send)]
 impl File for OsString {
 	type Partition = PathBuf;
 	type Error = IoError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		PathBuf::partitions(self.into())
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		PathBuf::partitions(self.into()).await
 	}
 }
+#[async_trait(?Send)]
 impl File for &OsStr {
 	type Partition = PathBuf;
 	type Error = IoError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		PathBuf::partitions(self.into())
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		PathBuf::partitions(self.into()).await
 	}
 }
 // impl File for fs::File {
@@ -262,6 +284,7 @@ impl LocalFile {
 	}
 }
 
+#[async_trait]
 impl Page for LocalFile {
 	type Error = IoError;
 

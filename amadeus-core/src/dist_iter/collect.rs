@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -28,25 +28,36 @@ impl<I: DistributedIteratorMulti<Source>, Source, T: FromDistributedIterator<I::
 	DistributedReducer<I, Source, T> for Collect<I, T>
 {
 	type ReduceAFactory = T::ReduceAFactory;
+	type ReduceBFactory = T::ReduceBFactory;
 	type ReduceA = T::ReduceA;
 	type ReduceB = T::ReduceB;
+	type ReduceC = T::ReduceC;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
-		let (a, b) = T::reducers();
-		(self.i, a, b)
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+		let (a, b, c) = T::reducers();
+		(self.i, a, b, c)
 	}
 }
 
 pub trait FromDistributedIterator<T>: Sized {
-	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA>;
-	type ReduceA: ReducerA<Item = T> + ProcessSend;
-	type ReduceB: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self>;
+	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA> + Clone + ProcessSend;
+	type ReduceBFactory: ReduceFactory<Reducer = Self::ReduceB>;
+	type ReduceA: ReducerSend<Item = T> + ProcessSend;
+	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output>;
+	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB);
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC);
 	// 	fn from_dist_iter<I>(dist_iter: I, pool: &Pool) -> Self where T: Serialize + DeserializeOwned + Send + 'static, I: IntoDistributedIterator<Item = T>, <<I as IntoDistributedIterator>::Iter as DistributedIterator>::Task: Serialize + DeserializeOwned + Send + 'static;
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct DefaultReduceFactory<T>(PhantomData<fn(T)>);
+impl<T> DefaultReduceFactory<T> {
+	pub fn new() -> Self {
+		Self(PhantomData)
+	}
+}
 impl<T> Default for DefaultReduceFactory<T> {
 	fn default() -> Self {
 		Self(PhantomData)
@@ -56,6 +67,11 @@ impl<T: Default + Reducer> ReduceFactory for DefaultReduceFactory<T> {
 	type Reducer = T;
 	fn make(&self) -> Self::Reducer {
 		T::default()
+	}
+}
+impl<T> Clone for DefaultReduceFactory<T> {
+	fn clone(&self) -> Self {
+		Self(PhantomData)
 	}
 }
 
@@ -182,15 +198,27 @@ impl<A, T: Push<A>> ReducerAsync for PushReducer<A, T> {
 		Poll::Ready(self.0.take().unwrap())
 	}
 }
-impl<A, T: Push<A>> ReducerA for PushReducer<A, T>
+impl<A, T: Push<A>> ReducerProcessSend for PushReducer<A, T>
 where
 	A: 'static,
 	T: ProcessSend,
 {
 	type Output = T;
 }
+impl<A, T: Push<A>> ReducerSend for PushReducer<A, T>
+where
+	A: 'static,
+	T: Send + 'static,
+{
+	type Output = T;
+}
 
 #[pin_project]
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "T: Serialize"),
+	bound(deserialize = "T: Deserialize<'de>")
+)]
 pub struct ExtendReducer<A, T = A>(Option<T>, PhantomData<fn(A)>);
 impl<A, T> Default for ExtendReducer<A, T>
 where
@@ -199,6 +227,20 @@ where
 	fn default() -> Self {
 		Self(Some(T::default()), PhantomData)
 	}
+}
+impl<A: IntoIterator<Item = B>, T: Extend<B>, B> ReducerProcessSend for ExtendReducer<A, T>
+where
+	A: 'static,
+	T: ProcessSend,
+{
+	type Output = T;
+}
+impl<A: IntoIterator<Item = B>, T: Extend<B>, B> ReducerSend for ExtendReducer<A, T>
+where
+	A: 'static,
+	T: Send + 'static,
+{
+	type Output = T;
 }
 impl<A: IntoIterator<Item = B>, T: Extend<B>, B> Reducer for ExtendReducer<A, T> {
 	type Item = A;
@@ -271,6 +313,7 @@ where
 	}
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OptionReduceFactory<RF: ReduceFactory>(RF);
 impl<RF: ReduceFactory> ReduceFactory for OptionReduceFactory<RF> {
 	type Reducer = OptionReducer<RF::Reducer>;
@@ -279,6 +322,7 @@ impl<RF: ReduceFactory> ReduceFactory for OptionReduceFactory<RF> {
 		OptionReducer(Some(self.0.make()))
 	}
 }
+
 #[pin_project]
 #[derive(Serialize, Deserialize)]
 pub struct OptionReducer<R>(#[pin] Option<R>);
@@ -308,13 +352,14 @@ impl<R: ReducerAsync> ReducerAsync for OptionReducer<R> {
 		self: Pin<&mut Self>, _cx: &mut Context, _stream: Pin<&mut impl Stream<Item = Self::Item>>,
 	) -> Poll<()> {
 		todo!()
-		// match (&mut self.0, item.is_some()) {
+		// let self_ = self.project();
+		// match (self_.0, item.is_some()) {
 		// 	(&mut Some(ref mut a), true) => {
 		// 		return a.push(item.unwrap());
 		// 	}
 		// 	(self_, _) => *self_ = None,
 		// }
-		// self.0.is_some()
+		// self_.0.is_some()
 	}
 	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		self.project()
@@ -324,20 +369,43 @@ impl<R: ReducerAsync> ReducerAsync for OptionReducer<R> {
 			.unwrap_or(Poll::Ready(None))
 	}
 }
-impl<R: Reducer> ReducerA for OptionReducer<R>
+impl<R: Reducer> ReducerProcessSend for OptionReducer<R>
 where
 	R: ProcessSend,
 	R::Output: ProcessSend,
 {
 	type Output = Option<R::Output>;
 }
+impl<R: Reducer> ReducerSend for OptionReducer<R>
+where
+	R: Send + 'static,
+	R::Output: Send + 'static,
+{
+	type Output = Option<R::Output>;
+}
 
-pub struct ResultReduceFactory<RF: ReduceFactory, E>(RF, PhantomData<fn(E)>);
-impl<RF: ReduceFactory, E> ReduceFactory for ResultReduceFactory<RF, E> {
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "RF: Serialize"),
+	bound(deserialize = "RF: Deserialize<'de>")
+)]
+pub struct ResultReduceFactory<RF, E>(RF, PhantomData<fn(E)>);
+impl<RF, E> ReduceFactory for ResultReduceFactory<RF, E>
+where
+	RF: ReduceFactory,
+{
 	type Reducer = ResultReducer<RF::Reducer, E>;
 
 	fn make(&self) -> Self::Reducer {
 		ResultReducer(self.0.make(), PhantomData)
+	}
+}
+impl<RF, E> Clone for ResultReduceFactory<RF, E>
+where
+	RF: Clone,
+{
+	fn clone(&self) -> Self {
+		Self(self.0.clone(), PhantomData)
 	}
 }
 
@@ -374,14 +442,15 @@ impl<R: ReducerAsync, E> ReducerAsync for ResultReducerAsync<R, E> {
 		self: Pin<&mut Self>, _cx: &mut Context, _stream: Pin<&mut impl Stream<Item = Self::Item>>,
 	) -> Poll<()> {
 		todo!()
-		// match (&mut self.0, item.is_ok()) {
+		// let self_ = self.project();
+		// match (self_.0, item.is_ok()) {
 		// 	(&mut Ok(ref mut a), true) => {
 		// 		return a.push(item.ok().unwrap());
 		// 	}
 		// 	(self_, false) => *self_ = Err(item.err().unwrap()),
 		// 	_ => (),
 		// }
-		// self.0.is_ok()
+		// self_.0.is_ok()
 	}
 	#[project]
 	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
@@ -392,11 +461,19 @@ impl<R: ReducerAsync, E> ReducerAsync for ResultReducerAsync<R, E> {
 		}
 	}
 }
-impl<R: Reducer, E> ReducerA for ResultReducer<R, E>
+impl<R: Reducer, E> ReducerProcessSend for ResultReducer<R, E>
 where
 	R: ProcessSend,
 	R::Output: ProcessSend,
 	E: ProcessSend,
+{
+	type Output = Result<R::Output, E>;
+}
+impl<R: Reducer, E> ReducerSend for ResultReducer<R, E>
+where
+	R: Send + 'static,
+	R::Output: Send + 'static,
+	E: Send + 'static,
 {
 	type Output = Result<R::Output, E>;
 }
@@ -406,10 +483,12 @@ where
 	T: ProcessSend,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
+	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -419,10 +498,12 @@ where
 	T: ProcessSend,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Vec<T>>;
-	type ReduceB = IntoReducer<ExtendReducer<Vec<T>>, Self>;
+	type ReduceB = ExtendReducer<Vec<T>>;
+	type ReduceC = IntoReducer<ExtendReducer<Vec<T>>, Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -432,10 +513,12 @@ where
 	T: ProcessSend,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Vec<T>>;
-	type ReduceB = IntoReducer<ExtendReducer<Vec<T>>, Self>;
+	type ReduceB = ExtendReducer<Vec<T>>;
+	type ReduceC = IntoReducer<ExtendReducer<Vec<T>>, Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -445,10 +528,12 @@ where
 	T: ProcessSend,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
+	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -459,10 +544,12 @@ where
 	S: BuildHasher + Default + Send + 'static,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
+	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -474,10 +561,12 @@ where
 	S: BuildHasher + Default + Send + 'static,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<(K, V), Self>;
 	type ReduceB = ExtendReducer<Self>;
+	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -487,10 +576,12 @@ where
 	T: Ord + ProcessSend,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
+	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -501,52 +592,66 @@ where
 	V: ProcessSend,
 {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<(K, V), Self>;
 	type ReduceB = ExtendReducer<Self>;
+	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
 
 impl FromDistributedIterator<char> for String {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<char, Self>;
 	type ReduceB = PushReducer<Self>;
+	type ReduceC = PushReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
 
 impl FromDistributedIterator<Self> for String {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<Self>;
 	type ReduceB = PushReducer<Self>;
+	type ReduceC = PushReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
 
 impl FromDistributedIterator<()> for () {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<Self>;
 	type ReduceB = PushReducer<Self>;
+	type ReduceC = PushReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		Default::default()
 	}
 }
 
 impl<T, C: FromDistributedIterator<T>> FromDistributedIterator<Option<T>> for Option<C> {
 	type ReduceAFactory = OptionReduceFactory<C::ReduceAFactory>;
+	type ReduceBFactory = OptionReduceFactory<C::ReduceBFactory>;
 	type ReduceA = OptionReducer<C::ReduceA>;
 	type ReduceB = OptionReducer<C::ReduceB>;
+	type ReduceC = OptionReducer<C::ReduceC>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
-		let (a, b) = C::reducers();
-		(OptionReduceFactory(a), OptionReducer(Some(b)))
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+		let (a, b, c) = C::reducers();
+		(
+			OptionReduceFactory(a),
+			OptionReduceFactory(b),
+			OptionReducer(Some(c)),
+		)
 	}
 }
 
@@ -555,14 +660,17 @@ where
 	E: ProcessSend,
 {
 	type ReduceAFactory = ResultReduceFactory<C::ReduceAFactory, E>;
+	type ReduceBFactory = ResultReduceFactory<C::ReduceBFactory, E>;
 	type ReduceA = ResultReducer<C::ReduceA, E>;
 	type ReduceB = ResultReducer<C::ReduceB, E>;
+	type ReduceC = ResultReducer<C::ReduceC, E>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceB) {
-		let (a, b) = C::reducers();
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+		let (a, b, c) = C::reducers();
 		(
 			ResultReduceFactory(a, PhantomData),
-			ResultReducer(b, PhantomData),
+			ResultReduceFactory(b, PhantomData),
+			ResultReducer(c, PhantomData),
 		)
 	}
 }

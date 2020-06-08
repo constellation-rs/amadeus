@@ -33,7 +33,7 @@ use std::{
 };
 
 use crate::{
-	into_dist_iter::IntoDistributedIterator, pool::{ProcessPool, ProcessSend}, sink::{Sink, SinkMap}, util::type_coerce
+	into_dist_iter::IntoDistributedIterator, pool::{ProcessPool, ProcessSend, ThreadPool}, sink::{Sink, SinkMap}, util::type_coerce
 };
 
 pub use self::{
@@ -119,12 +119,16 @@ pub trait DistributedIterator {
 		_assert_distributed_iterator(Chain::new(self, chain.into_dist_iter()))
 	}
 
-	async fn reduce<P, B, R1F, R1, R2>(mut self, pool: &P, reduce1factory: R1F, reduce2: R2) -> B
+	async fn reduce<P, B, R1F, R2F, R1, R2, R3>(
+		mut self, pool: &P, reduce_a_factory: R1F, reduce_b_factory: R2F, reduce_c: R3,
+	) -> B
 	where
 		P: ProcessPool,
-		R1F: ReduceFactory<Reducer = R1>,
-		R1: ReducerA<Item = Self::Item>,
-		R2: Reducer<Item = <R1 as ReducerA>::Output, Output = B>,
+		R1F: ReduceFactory<Reducer = R1> + Clone + ProcessSend,
+		R2F: ReduceFactory<Reducer = R2>,
+		R1: ReducerSend<Item = Self::Item> + ProcessSend,
+		R2: ReducerProcessSend<Item = <R1 as Reducer>::Output>,
+		R3: Reducer<Item = <R2 as ReducerProcessSend>::Output, Output = B>,
 		Self: Sized,
 	{
 		// TODO: don't buffer tasks before sending. requires changes to ProcessPool
@@ -168,12 +172,14 @@ pub trait DistributedIterator {
 				tasks.iter().map(Vec::len).collect::<Vec<_>>()
 			);
 		}
+
 		let handles = tasks
 			.into_iter()
 			.filter(|tasks| !tasks.is_empty())
 			.map(|tasks| {
-				let reduce1 = reduce1factory.make();
-				pool.spawn(FnOnce!(move || -> <R1 as ReducerA>::Output {
+				let reduce_b = reduce_b_factory.make();
+				let reduce_a_factory = reduce_a_factory.clone();
+				pool.spawn(FnOnce!(move |pool: &P::ThreadPool| {
 					#[pin_project]
 					struct Connect<B>(#[pin] B);
 					impl<B> Sink<B::Item> for Connect<B>
@@ -189,21 +195,89 @@ pub trait DistributedIterator {
 						}
 					}
 
-					let sink = Connect(reduce1.into_async());
-					pin_mut!(sink);
-					futures::executor::block_on(async {
-						// TODO: short circuit
-						for task in tasks {
-							let task = task.into_async();
-							pin_mut!(task);
-							futures::future::poll_fn(|cx| task.as_mut().poll_run(cx, sink.as_mut()))
-								.await
+					let mut process_tasks = tasks.into_iter();
+
+					let mut tasks = (0..pool.threads()).map(|_| vec![]).collect::<Vec<_>>();
+					let mut allocated = 0;
+					'a: loop {
+						for i in 0..tasks.len() {
+							loop {
+								let (mut lower, _upper) = process_tasks.size_hint();
+								if lower == 0 {
+									lower = 1;
+								}
+								let mut batch = (allocated + lower) / tasks.len();
+								if i < (allocated + lower) % tasks.len() {
+									batch += 1;
+								}
+								batch -= tasks[i].len();
+								if batch == 0 {
+									break;
+								}
+								for _ in 0..batch {
+									if let Some(task) = process_tasks.next() {
+										tasks[i].push(task);
+										allocated += 1;
+									} else {
+										break 'a;
+									}
+								}
+							}
 						}
+					}
+					for (i, task) in tasks.iter().enumerate() {
+						let mut count = allocated / tasks.len();
+						if i < allocated % tasks.len() {
+							count += 1;
+						}
+						assert_eq!(
+							task.len(),
+							count,
+							"alloc: {:#?}",
+							tasks.iter().map(Vec::len).collect::<Vec<_>>()
+						);
+					}
+					let handles = tasks
+						.into_iter()
+						.map(|tasks| {
+							let reduce_a = reduce_a_factory.make();
+							pool.spawn(move || {
+								let sink = Connect(reduce_a.into_async());
+								async move {
+									pin_mut!(sink);
+									// TODO: short circuit
+									for task in tasks {
+										let task = task.into_async();
+										pin_mut!(task);
+										futures::future::poll_fn(|cx| {
+											task.as_mut().poll_run(cx, sink.as_mut())
+										})
+										.await
+									}
+									futures::future::poll_fn(|cx| {
+										sink.as_mut().project().0.as_mut().poll_output(cx)
+									})
+									.await
+								}
+							})
+						})
+						.collect::<futures::stream::FuturesUnordered<_>>();
+
+					let stream = handles.map(|item| {
+						item.unwrap_or_else(|err| {
+							panic!("Amadeus: task '<unnamed>' panicked at '{}'", err)
+						})
+					});
+					let reduce_b = reduce_b.into_async();
+					async move {
+						pin_mut!(stream);
+						pin_mut!(reduce_b);
 						futures::future::poll_fn(|cx| {
-							sink.as_mut().project().0.as_mut().poll_output(cx)
+							ready!(reduce_b.as_mut().poll_forward(cx, stream.as_mut()));
+							reduce_b.as_mut().poll_output(cx)
 						})
 						.await
-					})
+					}
 				}))
 			})
 			.collect::<futures::stream::FuturesUnordered<_>>();
@@ -211,11 +285,11 @@ pub trait DistributedIterator {
 			item.unwrap_or_else(|err| panic!("Amadeus: task '<unnamed>' panicked at '{}'", err))
 		});
 		pin_mut!(stream);
-		let reduce2 = reduce2.into_async();
-		pin_mut!(reduce2);
+		let reduce_c = reduce_c.into_async();
+		pin_mut!(reduce_c);
 		futures::future::poll_fn(|cx| {
-			ready!(reduce2.as_mut().poll_forward(cx, stream.as_mut()));
-			reduce2.as_mut().poll_output(cx)
+			ready!(reduce_c.as_mut().poll_forward(cx, stream.as_mut()));
+			reduce_c.as_mut().poll_output(cx)
 		})
 		.await
 	}
@@ -293,9 +367,9 @@ pub trait DistributedIterator {
 			}
 		}
 
-		let (iterator, reducer_a, reducer_b) = reducer_a.reducers();
+		let (iterator, reducer_a, reducer_b, reducer_c) = reducer_a.reducers();
 		Connect(self, iterator)
-			.reduce(pool, reducer_a, reducer_b)
+			.reduce(pool, reducer_a, reducer_b, reducer_c)
 			.await
 	}
 
@@ -411,17 +485,13 @@ pub trait DistributedIterator {
 							if !ready.0 {
 								let stream = stream::poll_fn(|_cx| match pending {
 									Some(x) if !*given => {
-										// println!("gergrebjh given");
 										// if x.is_some() {
 										*given = true;
 										progress = true;
 										// }
 										Poll::Ready(type_coerce(x.as_ref()))
 									}
-									_ => {
-										// println!("gergrebjh pending");
-										Poll::Pending
-									}
+									_ => Poll::Pending,
 								})
 								.fuse();
 								pin_mut!(stream);
@@ -431,30 +501,23 @@ pub trait DistributedIterator {
 								pin_mut!(sink_);
 								ready.0 = self_.2.as_mut().poll_run(cx, stream, sink_).is_ready();
 								if ready.0 {
-									// println!("gergrebjh ready");
 									progress = true; // TODO
 								} else {
-									// println!("gergrebjh !ready");
 								}
 							}
 							if !ready.1 {
 								let stream = stream::poll_fn(|_cx| {
 									if !ready.0 && !*given {
-										// println!("rqhr pending");
 										return Poll::Pending;
 									}
 									match pending.take() {
 										Some(x) => {
 											// *pending = Some(None);
-											// println!("rqhr given {:?}", tuple::Debug(&x));
 											*given = false;
 											progress = true;
 											Poll::Ready(x)
 										}
-										None => {
-											// println!("rqhr pending2");
-											Poll::Pending
-										}
+										None => Poll::Pending,
 									}
 								})
 								.fuse();
@@ -465,14 +528,12 @@ pub trait DistributedIterator {
 								if ready.1 {
 									progress = true; // TODO
 								} else {
-									// println!("rqhr !ready");
 								}
 							}
 							if ready.0 && ready.1 {
 								break Poll::Ready(());
 							}
 							if !progress {
-								// println!("ewgwrg pending");
 								break Poll::Pending;
 							}
 						}
@@ -480,35 +541,20 @@ pub trait DistributedIterator {
 				}
 
 				let self_ = self.project();
-				// let a = self_.1;
-				// let b = self_.2;
-				// let sink = SinkBuffer::new(self_.3, |cx: &mut Context, item: &mut Option<_>| {
-				// 	let stream = stream::iter(type_coerce::<_, Option<_>>(item.as_ref()));
-				// 	pin_mut!(stream);
-				// 	let sink_ = SinkMap::new(&mut sink, |item| Sum2::B(type_coerce(item)));
-				// 	pin_mut!(sink_);
-				// 	ready!(b.as_mut().poll_run(cx, stream, sink_));
-				// 	let stream = stream::iter(iter::from_fn(|| item.take()));
-				// 	pin_mut!(stream);
-				// 	let sink_ = SinkMap::new(&mut sink, Sum2::A);
-				// 	pin_mut!(sink_);
-				// 	ready!(a.as_mut().poll_run(cx, stream, sink_));
-				// 	let _ = item.take();
-				// 	Poll::Ready(())
-				// });
 				let sink = SinkFn(sink, self_.1, self_.2, self_.3, self_.4, PhantomData);
 				pin_mut!(sink);
 				self_.0.poll_run(cx, sink)
 			}
 		}
 
-		let (iterator_a, reducer_a_a, reducer_a_b) = reducer_a.reducers();
-		let (iterator_b, reducer_b_a, reducer_b_b) = reducer_b.reducers();
+		let (iterator_a, reducer_a_a, reducer_a_b, reducer_a_c) = reducer_a.reducers();
+		let (iterator_b, reducer_b_a, reducer_b_b, reducer_b_c) = reducer_b.reducers();
 		Connect(self, iterator_a, iterator_b, PhantomData)
 			.reduce(
 				pool,
 				ReduceA2Factory(reducer_a_a, reducer_b_a),
-				ReduceB2::new(reducer_a_b, reducer_b_b),
+				ReduceC2Factory(reducer_a_b, reducer_b_b),
+				ReduceC2::new(reducer_a_c, reducer_b_c),
 			)
 			.await
 	}
@@ -992,21 +1038,25 @@ pub trait DistributedIteratorMulti<Source> {
 pub trait Consumer {
 	type Item;
 	type Async: ConsumerAsync<Item = Self::Item>;
+
 	fn into_async(self) -> Self::Async;
 }
 pub trait ConsumerMulti<Source> {
 	type Item;
 	type Async: ConsumerMultiAsync<Source, Item = Self::Item>;
+
 	fn into_async(self) -> Self::Async;
 }
 pub trait ConsumerAsync {
 	type Item;
+
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
 	) -> Poll<()>;
 }
 pub trait ConsumerMultiAsync<Source> {
 	type Item;
+
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 		sink: Pin<&mut impl Sink<Self::Item>>,
@@ -1017,31 +1067,42 @@ pub trait Reducer {
 	type Item;
 	type Output;
 	type Async: ReducerAsync<Item = Self::Item, Output = Self::Output>;
+
 	fn into_async(self) -> Self::Async;
 }
 pub trait ReducerAsync {
 	type Item;
 	type Output;
+
 	fn poll_forward(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Self::Item>>,
 	) -> Poll<()>;
 	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output>;
 }
-pub trait ReducerA: Reducer<Output = <Self as ReducerA>::Output> + ProcessSend {
+pub trait ReducerSend: Reducer<Output = <Self as ReducerSend>::Output> + Send + 'static {
+	type Output: Send + 'static;
+}
+pub trait ReducerProcessSend:
+	ReducerSend<Output = <Self as ReducerProcessSend>::Output> + ProcessSend
+{
 	type Output: ProcessSend;
 }
-// impl<T> ReducerA for T where T: Reducer, T::Output: ProcessSend {
-// 	type Output2 = T::Output;
+// impl<T> ReducerSend for T where T: Reducer + Send, <T as Reducer>::Output: Send {
+// 	type Output = <T as Reducer>::Output;
 // }
 
 pub trait ReduceFactory {
 	type Reducer: Reducer;
+
 	fn make(&self) -> Self::Reducer;
 }
 
 pub trait DistributedReducer<I: DistributedIteratorMulti<Source>, Source, B> {
-	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA>;
-	type ReduceA: ReducerA<Item = <I as DistributedIteratorMulti<Source>>::Item>; // + ProcessSend;
-	type ReduceB: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = B>;
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB);
+	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA> + Clone + ProcessSend;
+	type ReduceBFactory: ReduceFactory<Reducer = Self::ReduceB>;
+	type ReduceA: ReducerSend<Item = <I as DistributedIteratorMulti<Source>>::Item> + ProcessSend;
+	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output>;
+	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = B>;
+
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC);
 }

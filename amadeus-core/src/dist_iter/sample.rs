@@ -7,9 +7,10 @@ use serde::{Deserialize, Serialize};
 use std::{
 	hash::Hash, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
+use streaming_algorithms::{SampleUnstable as SASampleUnstable, Top, Zeroable};
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync, SumReducer
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
 };
 use crate::pool::ProcessSend;
 
@@ -25,42 +26,51 @@ impl<I> SampleUnstable<I> {
 }
 
 impl<I: DistributedIteratorMulti<Source>, Source>
-	DistributedReducer<I, Source, streaming_algorithms::SampleUnstable<I::Item>> for SampleUnstable<I>
+	DistributedReducer<I, Source, SASampleUnstable<I::Item>> for SampleUnstable<I>
 where
 	I::Item: ProcessSend,
 {
 	type ReduceAFactory = SampleUnstableReducerFactory<I::Item>;
+	type ReduceBFactory = SumReducerFactory<SASampleUnstable<I::Item>, SASampleUnstable<I::Item>>;
 	type ReduceA = SampleUnstableReducer<I::Item>;
-	type ReduceB = SumReducer<
-		streaming_algorithms::SampleUnstable<I::Item>,
-		streaming_algorithms::SampleUnstable<I::Item>,
-	>;
+	type ReduceB = SumReducer<SASampleUnstable<I::Item>, SASampleUnstable<I::Item>>;
+	type ReduceC = SumReducer<SASampleUnstable<I::Item>, SASampleUnstable<I::Item>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
 			SampleUnstableReducerFactory(self.samples, PhantomData),
-			SumReducer::new(streaming_algorithms::SampleUnstable::new(self.samples)),
+			SumReducerFactory::new(), // TODO: pass SASampleUnstable::new(self.samples) ?
+			SumReducer::new(SASampleUnstable::new(self.samples)),
 		)
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "A: Serialize"),
+	bound(deserialize = "A: Deserialize<'de>")
+)]
 pub struct SampleUnstableReducerFactory<A>(usize, PhantomData<fn(A)>);
-
 impl<A> ReduceFactory for SampleUnstableReducerFactory<A> {
 	type Reducer = SampleUnstableReducer<A>;
 	fn make(&self) -> Self::Reducer {
-		SampleUnstableReducer(Some(streaming_algorithms::SampleUnstable::new(self.0)))
+		SampleUnstableReducer(Some(SASampleUnstable::new(self.0)))
+	}
+}
+impl<A> Clone for SampleUnstableReducerFactory<A> {
+	fn clone(&self) -> Self {
+		Self(self.0, PhantomData)
 	}
 }
 
 #[pin_project]
 #[derive(Serialize, Deserialize)]
-pub struct SampleUnstableReducer<A>(Option<streaming_algorithms::SampleUnstable<A>>);
+pub struct SampleUnstableReducer<A>(Option<SASampleUnstable<A>>);
 
 impl<A> Reducer for SampleUnstableReducer<A> {
 	type Item = A;
-	type Output = streaming_algorithms::SampleUnstable<A>;
+	type Output = SASampleUnstable<A>;
 	type Async = Self;
 
 	fn into_async(self) -> Self::Async {
@@ -69,7 +79,7 @@ impl<A> Reducer for SampleUnstableReducer<A> {
 }
 impl<A> ReducerAsync for SampleUnstableReducer<A> {
 	type Item = A;
-	type Output = streaming_algorithms::SampleUnstable<A>;
+	type Output = SASampleUnstable<A>;
 
 	#[inline(always)]
 	fn poll_forward(
@@ -87,11 +97,33 @@ impl<A> ReducerAsync for SampleUnstableReducer<A> {
 		Poll::Ready(self.project().0.take().unwrap())
 	}
 }
-impl<A> ReducerA for SampleUnstableReducer<A>
+impl<A> ReducerProcessSend for SampleUnstableReducer<A>
 where
 	A: ProcessSend,
 {
-	type Output = streaming_algorithms::SampleUnstable<A>;
+	type Output = SASampleUnstable<A>;
+}
+impl<A> ReducerSend for SampleUnstableReducer<A>
+where
+	A: Send + 'static,
+{
+	type Output = SASampleUnstable<A>;
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct NonzeroReducerFactory<RF>(RF)
+where
+	RF: ReduceFactory;
+impl<RF, B> ReduceFactory for NonzeroReducerFactory<RF>
+where
+	RF: ReduceFactory,
+	RF::Reducer: Reducer<Output = Zeroable<B>>,
+{
+	type Reducer = NonzeroReducer<RF::Reducer>;
+
+	fn make(&self) -> Self::Reducer {
+		NonzeroReducer(self.0.make())
+	}
 }
 
 #[pin_project]
@@ -100,7 +132,7 @@ pub struct NonzeroReducer<R>(#[pin] R);
 
 impl<R, B> Reducer for NonzeroReducer<R>
 where
-	R: Reducer<Output = streaming_algorithms::Zeroable<B>>,
+	R: Reducer<Output = Zeroable<B>>,
 {
 	type Item = R::Item;
 	type Output = B;
@@ -112,7 +144,7 @@ where
 }
 impl<R, B> ReducerAsync for NonzeroReducer<R>
 where
-	R: ReducerAsync<Output = streaming_algorithms::Zeroable<B>>,
+	R: ReducerAsync<Output = Zeroable<B>>,
 {
 	type Item = R::Item;
 	type Output = B;
@@ -130,10 +162,17 @@ where
 			.map(|item| item.nonzero().unwrap())
 	}
 }
-impl<R, B> ReducerA for NonzeroReducer<R>
+impl<R, B> ReducerProcessSend for NonzeroReducer<R>
 where
-	R: Reducer<Output = streaming_algorithms::Zeroable<B>> + ProcessSend,
+	R: Reducer<Output = Zeroable<B>> + ProcessSend,
 	B: ProcessSend,
+{
+	type Output = B;
+}
+impl<R, B> ReducerSend for NonzeroReducer<R>
+where
+	R: Reducer<Output = Zeroable<B>> + Send + 'static,
+	B: Send + 'static,
 {
 	type Output = B;
 }
@@ -156,45 +195,49 @@ impl<I> MostFrequent<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source>
-	DistributedReducer<I, Source, streaming_algorithms::Top<I::Item, usize>> for MostFrequent<I>
+impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Top<I::Item, usize>>
+	for MostFrequent<I>
 where
 	I::Item: Clone + Hash + Eq + ProcessSend,
 {
 	type ReduceAFactory = MostFrequentReducerFactory<I::Item>;
-	type ReduceA = MostFrequentReducer<I::Item>;
-	type ReduceB = NonzeroReducer<
-		SumReducer<
-			streaming_algorithms::Top<I::Item, usize>,
-			streaming_algorithms::Zeroable<streaming_algorithms::Top<I::Item, usize>>,
-		>,
+	type ReduceBFactory = NonzeroReducerFactory<
+		SumReducerFactory<Top<I::Item, usize>, Zeroable<Top<I::Item, usize>>>,
 	>;
+	type ReduceA = MostFrequentReducer<I::Item>;
+	type ReduceB = NonzeroReducer<SumReducer<Top<I::Item, usize>, Zeroable<Top<I::Item, usize>>>>;
+	type ReduceC = NonzeroReducer<SumReducer<Top<I::Item, usize>, Zeroable<Top<I::Item, usize>>>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
 			MostFrequentReducerFactory(self.n, self.probability, self.tolerance, PhantomData),
-			NonzeroReducer(SumReducer::new(streaming_algorithms::Zeroable::Nonzero(
-				streaming_algorithms::Top::new(self.n, self.probability, self.tolerance, ()),
-			))),
+			NonzeroReducerFactory(SumReducerFactory::new()),
+			NonzeroReducer(SumReducer::new(Zeroable::Nonzero(Top::new(
+				self.n,
+				self.probability,
+				self.tolerance,
+				(),
+			)))),
 		)
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct MostFrequentReducerFactory<A>(usize, f64, f64, PhantomData<fn(A)>);
-
 impl<A> ReduceFactory for MostFrequentReducerFactory<A>
 where
 	A: Clone + Hash + Eq,
 {
 	type Reducer = MostFrequentReducer<A>;
 	fn make(&self) -> Self::Reducer {
-		MostFrequentReducer(Some(streaming_algorithms::Top::new(
-			self.0,
-			self.1,
-			self.2,
-			(),
-		)))
+		MostFrequentReducer(Some(Top::new(self.0, self.1, self.2, ())))
+	}
+}
+impl<A> Clone for MostFrequentReducerFactory<A> {
+	fn clone(&self) -> Self {
+		Self(self.0, self.1, self.2, PhantomData)
 	}
 }
 
@@ -204,14 +247,14 @@ where
 	serialize = "A: Hash + Eq + Serialize",
 	deserialize = "A: Hash + Eq + Deserialize<'de>"
 ))]
-pub struct MostFrequentReducer<A>(Option<streaming_algorithms::Top<A, usize>>);
+pub struct MostFrequentReducer<A>(Option<Top<A, usize>>);
 
 impl<A> Reducer for MostFrequentReducer<A>
 where
 	A: Clone + Hash + Eq,
 {
 	type Item = A;
-	type Output = streaming_algorithms::Top<A, usize>;
+	type Output = Top<A, usize>;
 	type Async = Self;
 
 	fn into_async(self) -> Self::Async {
@@ -223,7 +266,7 @@ where
 	A: Clone + Hash + Eq,
 {
 	type Item = A;
-	type Output = streaming_algorithms::Top<A, usize>;
+	type Output = Top<A, usize>;
 
 	#[inline(always)]
 	fn poll_forward(
@@ -241,11 +284,17 @@ where
 		Poll::Ready(self.project().0.take().unwrap())
 	}
 }
-impl<A> ReducerA for MostFrequentReducer<A>
+impl<A> ReducerProcessSend for MostFrequentReducer<A>
 where
 	A: Clone + Hash + Eq + ProcessSend,
 {
-	type Output = streaming_algorithms::Top<A, usize>;
+	type Output = Top<A, usize>;
+}
+impl<A> ReducerSend for MostFrequentReducer<A>
+where
+	A: Clone + Hash + Eq + Send + 'static,
+{
+	type Output = Top<A, usize>;
 }
 
 #[must_use]
@@ -269,27 +318,34 @@ impl<I> MostDistinct<I> {
 }
 
 impl<I: DistributedIteratorMulti<Source, Item = (A, B)>, Source, A, B>
-	DistributedReducer<
-		I,
-		Source,
-		streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
-	> for MostDistinct<I>
+	DistributedReducer<I, Source, Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>
+	for MostDistinct<I>
 where
 	A: Clone + Hash + Eq + ProcessSend,
 	B: Hash + 'static,
 {
 	type ReduceAFactory = MostDistinctReducerFactory<A, B>;
+	type ReduceBFactory = NonzeroReducerFactory<
+		SumReducerFactory<
+			Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
+			Zeroable<Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>,
+		>,
+	>;
 	type ReduceA = MostDistinctReducer<A, B>;
 	type ReduceB = NonzeroReducer<
 		SumReducer<
-			streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
-			streaming_algorithms::Zeroable<
-				streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
-			>,
+			Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
+			Zeroable<Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>,
+		>,
+	>;
+	type ReduceC = NonzeroReducer<
+		SumReducer<
+			Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
+			Zeroable<Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>,
 		>,
 	>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
 			MostDistinctReducerFactory(
@@ -299,20 +355,20 @@ where
 				self.error_rate,
 				PhantomData,
 			),
-			NonzeroReducer(SumReducer::new(streaming_algorithms::Zeroable::Nonzero(
-				streaming_algorithms::Top::new(
-					self.n,
-					self.probability,
-					self.tolerance,
-					self.error_rate,
-				),
-			))),
+			NonzeroReducerFactory(SumReducerFactory::new()),
+			NonzeroReducer(SumReducer::new(Zeroable::Nonzero(Top::new(
+				self.n,
+				self.probability,
+				self.tolerance,
+				self.error_rate,
+			)))),
 		)
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct MostDistinctReducerFactory<A, B>(usize, f64, f64, f64, PhantomData<fn(A, B)>);
-
 impl<A, B> ReduceFactory for MostDistinctReducerFactory<A, B>
 where
 	A: Clone + Hash + Eq,
@@ -320,9 +376,12 @@ where
 {
 	type Reducer = MostDistinctReducer<A, B>;
 	fn make(&self) -> Self::Reducer {
-		MostDistinctReducer(Some(streaming_algorithms::Top::new(
-			self.0, self.1, self.2, self.3,
-		)))
+		MostDistinctReducer(Some(Top::new(self.0, self.1, self.2, self.3)))
+	}
+}
+impl<A, B> Clone for MostDistinctReducerFactory<A, B> {
+	fn clone(&self) -> Self {
+		Self(self.0, self.1, self.2, self.3, PhantomData)
 	}
 }
 
@@ -333,7 +392,7 @@ where
 	deserialize = "A: Hash + Eq + Deserialize<'de>"
 ))]
 pub struct MostDistinctReducer<A, B: Hash>(
-	Option<streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>,
+	Option<Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>,
 );
 
 impl<A, B> Reducer for MostDistinctReducer<A, B>
@@ -342,7 +401,7 @@ where
 	B: Hash,
 {
 	type Item = (A, B);
-	type Output = streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
+	type Output = Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
 	type Async = Self;
 
 	fn into_async(self) -> Self::Async {
@@ -355,7 +414,7 @@ where
 	B: Hash,
 {
 	type Item = (A, B);
-	type Output = streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
+	type Output = Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
 
 	#[inline(always)]
 	fn poll_forward(
@@ -373,10 +432,17 @@ where
 		Poll::Ready(self.project().0.take().unwrap())
 	}
 }
-impl<A, B> ReducerA for MostDistinctReducer<A, B>
+impl<A, B> ReducerProcessSend for MostDistinctReducer<A, B>
 where
 	A: Clone + Hash + Eq + ProcessSend,
 	B: Hash + 'static,
 {
-	type Output = streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
+	type Output = Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
+}
+impl<A, B> ReducerSend for MostDistinctReducer<A, B>
+where
+	A: Clone + Hash + Eq + Send + 'static,
+	B: Hash + 'static,
+{
+	type Output = Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>;
 }

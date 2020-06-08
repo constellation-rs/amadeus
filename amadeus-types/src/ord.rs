@@ -32,7 +32,7 @@ impl AmadeusOrd for f64 {
 	}
 }
 
-impl<'a, T> AmadeusOrd for &'a T
+impl<T> AmadeusOrd for &T
 where
 	T: AmadeusOrd + ?Sized,
 {

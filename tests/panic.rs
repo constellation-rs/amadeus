@@ -18,26 +18,22 @@ async fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(10);
 
-	let local_pool_time = {
-		let local_pool = LocalPool::new();
-		run(&local_pool).await
-	};
 	let thread_pool_time = {
-		let thread_pool = ThreadPool::new(processes).unwrap();
+		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool).await
 	};
-	#[cfg(feature = "constellation")]
-	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool).await
-	};
-	#[cfg(not(feature = "constellation"))]
-	let process_pool_time = "-";
+	// #[cfg(feature = "constellation")]
+	// let process_pool_time = {
+	// 	let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+	// 	run(&process_pool).await
+	// };
+	// #[cfg(not(feature = "constellation"))]
+	// let process_pool_time = "-";
 
-	println!(
-		"in {:?} {:?} {:?}",
-		local_pool_time, thread_pool_time, process_pool_time
-	);
+	// println!(
+	// 	"in {:?} {:?}",
+	// 	thread_pool_time, process_pool_time
+	// );
 }
 
 async fn run<P: amadeus_core::pool::ProcessPool + std::panic::RefUnwindSafe>(pool: &P) -> Duration {

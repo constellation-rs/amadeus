@@ -8,7 +8,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -38,22 +38,29 @@ where
 	B: ProcessSend,
 	I::Item: 'static,
 {
-	type ReduceAFactory = FoldReducerFactory<I::Item, ID, F, B>;
+	type ReduceAFactory = FoldReducerAFactory<I::Item, ID, F, B>;
+	type ReduceBFactory = FoldReducerBFactory<I::Item, ID, F, B>;
 	type ReduceA = FoldReducerA<I::Item, ID, F, B>;
 	type ReduceB = FoldReducerB<I::Item, ID, F, B>;
+	type ReduceC = FoldReducerB<I::Item, ID, F, B>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			FoldReducerFactory(self.identity.clone(), self.op.clone(), PhantomData),
+			FoldReducerAFactory(self.identity.clone(), self.op.clone(), PhantomData),
+			FoldReducerBFactory(self.identity.clone(), self.op.clone(), PhantomData),
 			FoldReducerB(Some(Either::Left(self.identity)), self.op, PhantomData),
 		)
 	}
 }
 
-pub struct FoldReducerFactory<A, ID, F, B>(ID, F, PhantomData<fn(A, B)>);
-
-impl<A, ID, F, B> ReduceFactory for FoldReducerFactory<A, ID, F, B>
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "ID: Serialize, F: Serialize"),
+	bound(deserialize = "ID: Deserialize<'de>, F: Deserialize<'de>")
+)]
+pub struct FoldReducerAFactory<A, ID, F, B>(ID, F, PhantomData<fn(A, B)>);
+impl<A, ID, F, B> ReduceFactory for FoldReducerAFactory<A, ID, F, B>
 where
 	ID: FnMut() -> B + Clone,
 	F: FnMut(B, Either<A, B>) -> B + Clone,
@@ -65,6 +72,45 @@ where
 			self.1.clone(),
 			PhantomData,
 		)
+	}
+}
+impl<A, ID, F, B> Clone for FoldReducerAFactory<A, ID, F, B>
+where
+	ID: Clone,
+	F: Clone,
+{
+	fn clone(&self) -> Self {
+		Self(self.0.clone(), self.1.clone(), PhantomData)
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "ID: Serialize, F: Serialize"),
+	bound(deserialize = "ID: Deserialize<'de>, F: Deserialize<'de>")
+)]
+pub struct FoldReducerBFactory<A, ID, F, B>(ID, F, PhantomData<fn(A, B)>);
+impl<A, ID, F, B> ReduceFactory for FoldReducerBFactory<A, ID, F, B>
+where
+	ID: FnMut() -> B + Clone,
+	F: FnMut(B, Either<A, B>) -> B + Clone,
+{
+	type Reducer = FoldReducerB<A, ID, F, B>;
+	fn make(&self) -> Self::Reducer {
+		FoldReducerB(
+			Some(Either::Left(self.0.clone())),
+			self.1.clone(),
+			PhantomData,
+		)
+	}
+}
+impl<A, ID, F, B> Clone for FoldReducerBFactory<A, ID, F, B>
+where
+	ID: Clone,
+	F: Clone,
+{
+	fn clone(&self) -> Self {
+		Self(self.0.clone(), self.1.clone(), PhantomData)
 	}
 }
 
@@ -126,12 +172,21 @@ where
 		)
 	}
 }
-impl<A, ID, F, B> ReducerA for FoldReducerA<A, ID, F, B>
+impl<A, ID, F, B> ReducerProcessSend for FoldReducerA<A, ID, F, B>
 where
 	A: 'static,
 	ID: FnMut() -> B + Clone + ProcessSend,
 	F: FnMut(B, Either<A, B>) -> B + Clone + ProcessSend,
 	B: ProcessSend,
+{
+	type Output = B;
+}
+impl<A, ID, F, B> ReducerSend for FoldReducerA<A, ID, F, B>
+where
+	A: 'static,
+	ID: FnMut() -> B + Clone + Send + 'static,
+	F: FnMut(B, Either<A, B>) -> B + Clone + Send + 'static,
+	B: Send + 'static,
 {
 	type Output = B;
 }
@@ -209,4 +264,22 @@ where
 				.into_inner(),
 		)
 	}
+}
+impl<A, ID, F, B> ReducerProcessSend for FoldReducerB<A, ID, F, B>
+where
+	A: 'static,
+	ID: FnMut() -> B + Clone + ProcessSend,
+	F: FnMut(B, Either<A, B>) -> B + Clone + ProcessSend,
+	B: ProcessSend,
+{
+	type Output = B;
+}
+impl<A, ID, F, B> ReducerSend for FoldReducerB<A, ID, F, B>
+where
+	A: 'static,
+	ID: FnMut() -> B + Clone + Send + 'static,
+	F: FnMut(B, Either<A, B>) -> B + Clone + Send + 'static,
+	B: Send + 'static,
+{
+	type Output = B;
 }

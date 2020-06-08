@@ -5,7 +5,7 @@ use std::{
 	any::Any, collections::VecDeque, fmt, future::Future, io, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}, thread::{self, JoinHandle}
 };
 
-use super::util::{assert_sync_and_send, FutureExt1, OnDrop, Panicked, Synchronize};
+use super::util::{assert_sync_and_send, OnDrop, Panicked, Synchronize};
 
 type Request = Box<dyn FnOnce() -> Response + Send>;
 type Response = Box<dyn Any + Send>;
@@ -85,16 +85,25 @@ impl ThreadPoolInner {
 			let child = thread::Builder::new()
 				.name(format!("amadeus-{}", i))
 				.spawn(move || {
-					let channels = thread_channels;
-					while let Some(work) = {
-						let mut thread_receiver = channels.thread_receiver.lock().unwrap();
-						thread_receiver.next().block().unwrap()
-					} {
-						let ret = panic::catch_unwind(panic::AssertUnwindSafe(work));
-						let ret = ret.map_err(Panicked::from);
-						let mut thread_sender = channels.thread_sender.lock().unwrap();
-						thread_sender.send(ret).block().unwrap();
-					}
+					panic!();
+					let runtime = tokio::runtime::Builder::new()
+						.basic_scheduler()
+						// .threaded_scheduler().core_threads(8).max_threads(8)
+						.enable_all()
+						.build()
+						.unwrap();
+					runtime.enter(|| {
+						let channels = thread_channels;
+						while let Some(work) = {
+							let mut thread_receiver = channels.thread_receiver.lock().unwrap();
+							thread_receiver.next().block().unwrap()
+						} {
+							let ret = panic::catch_unwind(panic::AssertUnwindSafe(work));
+							let ret = ret.map_err(Panicked::from);
+							let mut thread_sender = channels.thread_sender.lock().unwrap();
+							thread_sender.send(ret).block().unwrap();
+						}
+					})
 				});
 			if let Err(err) = child {
 				for _ in 0..i {

@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+	DefaultReduceFactory, DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -28,20 +28,27 @@ where
 	I::Item: 'static,
 {
 	type ReduceAFactory = ForEachReducerFactory<I::Item, F>;
+	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = ForEachReducer<I::Item, F>;
 	type ReduceB = PushReducer<()>;
+	type ReduceC = PushReducer<()>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
 			ForEachReducerFactory(self.f, PhantomData),
+			DefaultReduceFactory::new(),
 			PushReducer::new(()),
 		)
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "F: Serialize"),
+	bound(deserialize = "F: Deserialize<'de>")
+)]
 pub struct ForEachReducerFactory<A, F>(F, PhantomData<fn(A)>);
-
 impl<A, F> ReduceFactory for ForEachReducerFactory<A, F>
 where
 	F: FnMut(A) + Clone,
@@ -49,6 +56,14 @@ where
 	type Reducer = ForEachReducer<A, F>;
 	fn make(&self) -> Self::Reducer {
 		ForEachReducer(self.0.clone(), PhantomData)
+	}
+}
+impl<A, F> Clone for ForEachReducerFactory<A, F>
+where
+	F: Clone,
+{
+	fn clone(&self) -> Self {
+		Self(self.0.clone(), PhantomData)
 	}
 }
 
@@ -94,10 +109,17 @@ where
 		Poll::Ready(())
 	}
 }
-impl<A, F> ReducerA for ForEachReducer<A, F>
+impl<A, F> ReducerProcessSend for ForEachReducer<A, F>
 where
 	A: 'static,
 	F: FnMut(A) + Clone + ProcessSend,
+{
+	type Output = ();
+}
+impl<A, F> ReducerSend for ForEachReducer<A, F>
+where
+	A: 'static,
+	F: FnMut(A) + Clone + Send + 'static,
 {
 	type Output = ();
 }

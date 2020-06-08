@@ -71,7 +71,7 @@ pub trait FileReader {
 
 /// Enable APIs to be generic over values or references, including enabling
 /// `get_row_iter<T>` to accept `&self` or `self`.
-impl<'a, R> FileReader for &'a R
+impl<R> FileReader for &R
 where
 	R: FileReader,
 {

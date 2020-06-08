@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -28,20 +28,27 @@ where
 	I::Item: 'static,
 {
 	type ReduceAFactory = AnyReducerFactory<I::Item, F>;
+	type ReduceBFactory = BoolOrReducerFactory;
 	type ReduceA = AnyReducer<I::Item, F>;
 	type ReduceB = BoolOrReducer;
+	type ReduceC = BoolOrReducer;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
 			AnyReducerFactory(self.f, PhantomData),
+			BoolOrReducerFactory,
 			BoolOrReducer(true),
 		)
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "F: Serialize"),
+	bound(deserialize = "F: Deserialize<'de>")
+)]
 pub struct AnyReducerFactory<A, F>(F, PhantomData<fn(A)>);
-
 impl<A, F> ReduceFactory for AnyReducerFactory<A, F>
 where
 	F: FnMut(A) -> bool + Clone,
@@ -49,6 +56,14 @@ where
 	type Reducer = AnyReducer<A, F>;
 	fn make(&self) -> Self::Reducer {
 		AnyReducer(self.0.clone(), true, PhantomData)
+	}
+}
+impl<A, F> Clone for AnyReducerFactory<A, F>
+where
+	F: Clone,
+{
+	fn clone(&self) -> Self {
+		Self(self.0.clone(), PhantomData)
 	}
 }
 
@@ -97,12 +112,28 @@ where
 		Poll::Ready(!self.1)
 	}
 }
-impl<A, F> ReducerA for AnyReducer<A, F>
+impl<A, F> ReducerProcessSend for AnyReducer<A, F>
 where
 	A: 'static,
 	F: FnMut(A) -> bool + ProcessSend,
 {
 	type Output = bool;
+}
+impl<A, F> ReducerSend for AnyReducer<A, F>
+where
+	A: 'static,
+	F: FnMut(A) -> bool + Send + 'static,
+{
+	type Output = bool;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BoolOrReducerFactory;
+impl ReduceFactory for BoolOrReducerFactory {
+	type Reducer = BoolOrReducer;
+	fn make(&self) -> Self::Reducer {
+		BoolOrReducer(true)
+	}
 }
 
 #[pin_project]
@@ -139,6 +170,9 @@ impl ReducerAsync for BoolOrReducer {
 		Poll::Ready(!self.0)
 	}
 }
-impl ReducerA for BoolOrReducer {
+impl ReducerProcessSend for BoolOrReducer {
+	type Output = bool;
+}
+impl ReducerSend for BoolOrReducer {
 	type Output = bool;
 }

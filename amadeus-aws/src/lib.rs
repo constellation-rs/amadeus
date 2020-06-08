@@ -1,20 +1,22 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-aws/0.1.7")]
 #![feature(type_alias_impl_trait)]
+#![feature(async_closure)]
 
 mod cloudfront;
 mod file;
 
-use futures::future::FutureExt;
+use async_trait::async_trait;
+use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use once_cell::sync::Lazy;
 use rusoto_core::{
-	credential::StaticProvider, request::{DispatchSignedRequest, HttpClient}, signature::SignedRequest, DefaultCredentialsProvider, ProvideAwsCredentials, RusotoError
+	credential::StaticProvider, request::{DispatchSignedRequest, DispatchSignedRequestFuture, HttpClient}, signature::SignedRequest, RusotoError
 };
+use rusoto_credential::{CredentialsError, DefaultCredentialsProvider, ProvideAwsCredentials};
 use rusoto_s3::{GetObjectError, ListObjectsV2Error, ListObjectsV2Request, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use std::{
-	cell::RefCell, error, fmt::{self, Display}, future::Future, io, iter, mem::transmute, ops::FnMut, time::Duration
+	error, fmt::{self, Display}, future::Future, io, ops::FnMut, time::Duration
 };
-use tokio::runtime::Runtime;
 
 use amadeus_core::util::{IoError, ResultExpand};
 
@@ -27,100 +29,63 @@ pub use rusoto_core::Region as AwsRegion;
 
 // https://docs.datadoghq.com/integrations/amazon_web_services/?tab=allpermissions#enable-logging-for-your-aws-service
 
-static RUNTIME: Lazy<Runtime> =
-	Lazy::new(|| Runtime::new().expect("failed to create tokio runtime"));
 static RUSOTO_DISPATCHER: Lazy<HttpClient> =
 	Lazy::new(|| HttpClient::new().expect("failed to create request dispatcher"));
 static RUSOTO_CREDENTIALS_PROVIDER: Lazy<DefaultCredentialsProvider> =
 	Lazy::new(|| DefaultCredentialsProvider::new().expect("failed to create credentials provider"));
 
-thread_local! {
-	static REENTRANCY_CHECK: RefCell<()> = RefCell::new(());
-}
-
-fn block_on_01<F>(future: F) -> Result<F::Item, F::Error>
+fn retry<F, FU, T, S>(f: F) -> impl Future<Output = Result<T, RusotoError<S>>>
 where
-	F: futures_01::future::Future + Send,
-	F::Item: Send,
-	F::Error: Send,
+	F: FnMut() -> FU + Unpin,
+	FU: Future<Output = Result<T, RusotoError<S>>>,
 {
-	use futures_01::{future::Future, sync::oneshot};
-	REENTRANCY_CHECK.with(|reentrancy_check| {
-		let _reentrancy_check = reentrancy_check.borrow_mut();
-		// unsafe is used here to magic away tokio's 'static constraints
-		struct Receiver<T>(Option<T>);
-		unsafe impl<T> Sync for Receiver<T> {}
-		let mut i = Receiver(None);
-		let mut e = Receiver(None);
-		let mut future = future.map(|i_| i.0 = Some(i_)).map_err(|e_| e.0 = Some(e_));
-		let future: &mut (dyn Future<Item = (), Error = ()> + Send) = &mut future;
-		let future: &mut (dyn Future<Item = (), Error = ()> + Send) = unsafe { transmute(future) };
-		oneshot::spawn(future, &RUNTIME.executor())
-			.wait()
-			.map(|()| i.0.take().unwrap())
-			.map_err(|()| e.0.take().unwrap())
+	futures_retry::FutureRetry::new(f, |err| match err {
+		RusotoError::HttpDispatch(_) => {
+			futures_retry::RetryPolicy::WaitRetry(std::time::Duration::from_millis(10))
+		}
+		RusotoError::Unknown(response) if response.status.is_server_error() => {
+			futures_retry::RetryPolicy::WaitRetry(std::time::Duration::from_millis(10))
+		}
+		e => futures_retry::RetryPolicy::ForwardError(e),
 	})
-}
-fn block_on<F>(future: F) -> F::Output
-where
-	F: Future + Send,
-	F::Output: Send,
-{
-	block_on_01(futures::compat::Compat::new(
-		Box::pin(future).map(Ok::<_, ()>),
-	))
-	.unwrap()
+	.map_ok(|(x, _)| x)
+	.map_err(|(x, _)| x)
 }
 
-fn retry<F, FU, S>(f: F) -> impl futures_01::future::Future<Item = FU::Item, Error = FU::Error>
-where
-	F: FnMut() -> FU,
-	FU: futures_01::future::Future<Error = RusotoError<S>>,
-{
-	use futures_01::future::Future;
-	tokio_retry::RetryIf::spawn(
-		tokio_retry::strategy::ExponentialBackoff::from_millis(10),
-		f,
-		|err: &RusotoError<_>| {
-			if let RusotoError::HttpDispatch(_) = *err {
-				true
-			} else {
-				false
-			}
-		},
-	)
-	.map_err(|err| match err {
-		tokio_retry::Error::OperationError(err) => err,
-		_ => panic!(),
-	})
-}
-
-fn list(
+async fn list(
 	client: &S3Client, bucket: &str, prefix: &str,
 ) -> Result<Vec<Object>, RusotoError<ListObjectsV2Error>> {
-	let (mut first, mut continuation_token) = (true, None);
-	let objects: Result<Vec<Object>, _> = iter::from_fn(|| {
-		if !first && continuation_token.is_none() {
-			return None;
-		}
-		first = false;
-		Some(ResultExpand(
-			block_on_01(retry(|| {
-				client.list_objects_v2(ListObjectsV2Request {
-					bucket: bucket.to_owned(),
-					prefix: Some(prefix.to_owned()),
-					continuation_token: continuation_token.take(),
-					..ListObjectsV2Request::default()
-				})
-			}))
-			.map(|res| {
-				continuation_token = res.next_continuation_token;
-				res.contents.unwrap_or_default().into_iter()
-			}),
-		))
-	})
+	let (first, continuation_token) = (true, None);
+	let objects: Result<Vec<Object>, _> = stream::unfold(
+		(first, continuation_token),
+		|(mut first, mut continuation_token)| async move {
+			if !first && continuation_token.is_none() {
+				return None;
+			}
+			first = false;
+			Some((
+				stream::iter(ResultExpand(
+					retry(|| {
+						client.list_objects_v2(ListObjectsV2Request {
+							bucket: bucket.to_owned(),
+							prefix: Some(prefix.to_owned()),
+							continuation_token: continuation_token.take(),
+							..ListObjectsV2Request::default()
+						})
+					})
+					.await
+					.map(|res| {
+						continuation_token = res.next_continuation_token;
+						res.contents.unwrap_or_default().into_iter()
+					}),
+				)),
+				(first, continuation_token),
+			))
+		},
+	)
 	.flatten()
-	.collect();
+	.try_collect()
+	.await;
 	objects
 }
 
@@ -135,9 +100,9 @@ impl<D> DispatchSignedRequest for Ref<D>
 where
 	D: DispatchSignedRequest,
 {
-	type Future = D::Future;
-
-	fn dispatch(&self, request: SignedRequest, timeout: Option<Duration>) -> Self::Future {
+	fn dispatch(
+		&self, request: SignedRequest, timeout: Option<Duration>,
+	) -> DispatchSignedRequestFuture {
 		D::dispatch(self.0, request, timeout)
 	}
 }
@@ -153,24 +118,23 @@ impl Default for AwsCredentials {
 		AwsCredentials::Environment
 	}
 }
+#[async_trait]
 impl ProvideAwsCredentials for AwsCredentials {
-	type Future = futures_01::future::Either<
-		<StaticProvider as ProvideAwsCredentials>::Future,
-		<DefaultCredentialsProvider as ProvideAwsCredentials>::Future,
-	>;
-
-	fn credentials(&self) -> Self::Future {
+	async fn credentials(&self) -> Result<rusoto_credential::AwsCredentials, CredentialsError> {
 		match self {
-			AwsCredentials::Anonymous => futures_01::future::Either::A(
+			AwsCredentials::Anonymous => {
 				StaticProvider::from(rusoto_core::credential::AwsCredentials::default())
-					.credentials(),
-			),
-			AwsCredentials::AccessKey { id, secret } => futures_01::future::Either::A(
-				StaticProvider::new(id.clone(), secret.clone(), None, None).credentials(),
-			),
-			AwsCredentials::Environment => {
-				futures_01::future::Either::B(RUSOTO_CREDENTIALS_PROVIDER.credentials())
+					.credentials()
+					.await
 			}
+
+			AwsCredentials::AccessKey { id, secret } => {
+				StaticProvider::new(id.clone(), secret.clone(), None, None)
+					.credentials()
+					.await
+			}
+
+			AwsCredentials::Environment => RUSOTO_CREDENTIALS_PROVIDER.credentials().await,
 		}
 	}
 }
@@ -181,7 +145,7 @@ pub enum AwsError {
 	NoSuchBucket(String),
 	NoSuchKey(String),
 	HttpDispatch(rusoto_core::request::HttpDispatchError),
-	Credentials(rusoto_core::CredentialsError),
+	Credentials(rusoto_credential::CredentialsError),
 	Validation(String),
 	ParseError(String),
 	Unknown(rusoto_core::request::BufferedHttpResponse),
@@ -193,8 +157,8 @@ impl Clone for AwsError {
 			Self::NoSuchBucket(err) => Self::NoSuchBucket(err.clone()),
 			Self::NoSuchKey(err) => Self::NoSuchKey(err.clone()),
 			Self::HttpDispatch(err) => Self::HttpDispatch(err.clone()),
-			Self::Credentials(rusoto_core::CredentialsError { message }) => {
-				Self::Credentials(rusoto_core::CredentialsError {
+			Self::Credentials(rusoto_credential::CredentialsError { message }) => {
+				Self::Credentials(rusoto_credential::CredentialsError {
 					message: message.clone(),
 				})
 			}
@@ -260,6 +224,7 @@ where
 			RusotoError::Validation(err) => Self::Validation(err),
 			RusotoError::ParseError(err) => Self::ParseError(err),
 			RusotoError::Unknown(err) => Self::Unknown(err),
+			RusotoError::Blocking => unreachable!(),
 		}
 	}
 }

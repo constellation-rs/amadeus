@@ -8,6 +8,7 @@
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
 )]
+#![feature(specialization)]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -47,7 +48,7 @@ pub use amadeus_core::{dist_iter, into_dist_iter};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, List, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1, source::Source
+	data::{Data, List, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, source::Source
 };
 
 pub mod prelude {
@@ -63,7 +64,7 @@ pub mod prelude {
 	pub use super::{
 		data, data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
-		}, dist_iter::{DistributedIteratorMulti, Identity}, pool::LocalPool, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, FutureExt1, IntoDistributedIterator, IteratorExt, List, Value
+		}, dist_iter::{DistributedIteratorMulti, Identity}, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, IntoDistributedIterator, IteratorExt, List, Value
 	};
 	#[doc(no_inline)]
 	pub use serde_closure::{Fn, FnMut, FnOnce};

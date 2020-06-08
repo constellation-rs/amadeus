@@ -7,7 +7,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -29,12 +29,15 @@ where
 	I::Item: ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, CombineFn<F>>;
+	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, CombineFn<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, CombineFn<F>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, CombineFn<F>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, CombineFn<F>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
+			CombineReducerFactory(CombineFn(self.f.clone()), PhantomData),
 			CombineReducerFactory(CombineFn(self.f.clone()), PhantomData),
 			CombineReducer(None, CombineFn(self.f), PhantomData),
 		)
@@ -56,8 +59,12 @@ pub trait Combiner<A> {
 	fn combine(&mut self, a: A, b: A) -> A;
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(
+	bound(serialize = "F: Serialize"),
+	bound(deserialize = "F: Deserialize<'de>")
+)]
 pub struct CombineReducerFactory<A, B, F>(pub(crate) F, pub(crate) PhantomData<fn(A, B)>);
-
 impl<A, B, F> ReduceFactory for CombineReducerFactory<A, B, F>
 where
 	Option<B>: From<A>,
@@ -66,6 +73,14 @@ where
 	type Reducer = CombineReducer<A, B, F>;
 	fn make(&self) -> Self::Reducer {
 		CombineReducer(None, self.0.clone(), PhantomData)
+	}
+}
+impl<A, B, F> Clone for CombineReducerFactory<A, B, F>
+where
+	F: Clone,
+{
+	fn clone(&self) -> Self {
+		Self(self.0.clone(), PhantomData)
 	}
 }
 
@@ -127,12 +142,21 @@ where
 		Poll::Ready(self.project().0.take())
 	}
 }
-impl<A, B, F> ReducerA for CombineReducer<A, B, F>
+impl<A, B, F> ReducerProcessSend for CombineReducer<A, B, F>
 where
 	A: 'static,
 	Option<B>: From<A>,
 	F: Combiner<B> + ProcessSend,
 	B: ProcessSend,
+{
+	type Output = Option<B>;
+}
+impl<A, B, F> ReducerSend for CombineReducer<A, B, F>
+where
+	A: 'static,
+	Option<B>: From<A>,
+	F: Combiner<B> + Send + 'static,
+	B: Send + 'static,
 {
 	type Output = Option<B>;
 }

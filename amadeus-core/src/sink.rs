@@ -1,7 +1,7 @@
 use futures::{pin_mut, ready, stream, Future, Stream, StreamExt};
 use pin_project::{pin_project, project, project_replace};
 use std::{
-	any::type_name, marker::PhantomData, ops::DerefMut, pin::Pin, task::{Context, Poll}
+	marker::PhantomData, ops::DerefMut, pin::Pin, task::{Context, Poll}
 };
 
 pub trait Sink<Item> {
@@ -124,137 +124,6 @@ where
 		(self_.1).poll_forward(cx, stream)
 	}
 }
-
-// #[pin_project]
-// pub struct SinkFn<F, S>(F, PhantomData<(S)>);
-// impl<F, S> SinkFn<F, S> {
-// 	pub fn new(f: F) -> Self {
-// 		Self(f, PhantomData)
-// 	}
-// }
-// impl<F, S> Sink<S::Item> for SinkFn<F, S>
-// where
-// 	F: FnMut(&mut Context, Pin<&mut S>) -> Poll<()>,
-// 	S: Stream,
-// {
-// 	fn poll_forward(
-// 		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = S::Item>>,
-// 	) -> Poll<()> {
-// 		let self_ = self.project();
-// 		self_.0(cx, stream)
-// 	}
-// }
-
-#[pin_project]
-pub struct SinkBuffer<'a, F, Item>(F, &'a mut Option<Option<Item>>, PhantomData<()>);
-impl<'a, F, Item> SinkBuffer<'a, F, Item> {
-	pub fn new(buffer: &'a mut Option<Option<Item>>, f: F) -> Self {
-		Self(f, buffer, PhantomData)
-	}
-}
-impl<'a, F, Item> Sink<Item> for SinkBuffer<'a, F, Item>
-where
-	F: FnMut(&mut Context, &mut Option<Item>) -> Poll<()>,
-{
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Item>>,
-	) -> Poll<()> {
-		let self_ = self.project();
-		loop {
-			if self_.1.is_none() {
-				**self_.1 = Some(ready!(stream.as_mut().poll_next(cx)));
-			}
-			let end = self_.1.as_ref().unwrap().is_none();
-			// println!("give {}: {}", std::any::type_name::<F>(), self_.1.as_mut().is_some());
-			let ret = (self_.0)(cx, self_.1.as_mut().unwrap());
-			println!("ret {:?}", ret.is_ready());
-			assert!(
-				!ret.is_ready() || self_.1.as_ref().unwrap().is_none(),
-				"{}",
-				type_name::<F>()
-			);
-			ready!(ret);
-			**self_.1 = None;
-			// println!("buffd {}: {}", std::any::type_name::<F>(), ret);
-			if end {
-				return Poll::Ready(());
-			}
-		}
-	}
-}
-
-// #[pin_project]
-// pub struct SinkConnect<F, Item>(Sink, Stream, PhantomData<()>);
-// impl<F, Item> SinkConnect<F, Item> {
-// 	pub fn new(buffer: &'a mut Option<Option<Item>>, f: F) -> Self {
-// 		Self(f, buffer, PhantomData)
-// 	}
-// }
-// impl<F, Item> Sink<Item> for SinkConnect<F, Item>
-// where
-// 	F: FnMut(&mut Context, &mut Option<Item>) -> Poll<()>,
-// {
-// 	fn poll_forward(
-// 		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Item>>,
-// 	) -> Poll<()> {
-// 		let self_ = self.project();
-// 		loop {
-// 			if self_.1.is_none() {
-// 				**self_.1 = Some(ready!(stream.as_mut().poll_next(cx)));
-// 			}
-// 			let end = self_.1.as_ref().unwrap().is_none();
-// 			// println!("give {}: {}", std::any::type_name::<F>(), self_.1.as_mut().is_some());
-// 			let ret = (self_.0)(cx, self_.1.as_mut().unwrap());
-// 			assert!(
-// 				!ret.is_ready() || self_.1.as_ref().unwrap().is_none(),
-// 				"{}",
-// 				type_name::<F>()
-// 			);
-// 			ready!(ret);
-// 			**self_.1 = None;
-// 			// println!("buffd {}: {}", std::any::type_name::<F>(), ret);
-// 			if end {
-// 				return Poll::Ready(());
-// 			}
-// 		}
-// 	}
-// }
-
-// #[pin_project]
-// pub struct SinkFuture<F, Item>(F, PhantomData<()>);
-// impl<F, Item> SinkFuture<F, Item> {
-// 	pub fn new(buffer: &'a mut Option<Option<Item>>, f: F) -> Self {
-// 		Self(f, buffer, PhantomData)
-// 	}
-// }
-// impl<'a, F, Item> Sink<Item> for SinkFuture<'a, F, Item>
-// where
-// 	F: FnMut(&mut Context, &mut Option<Item>) -> Poll<()>,
-// {
-// 	fn poll_forward(
-// 		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Item>>,
-// 	) -> Poll<()> {
-// 		let self_ = self.project();
-// 		loop {
-// 			if self_.1.is_none() {
-// 				**self_.1 = Some(ready!(stream.as_mut().poll_next(cx)));
-// 			}
-// 			// println!("give {}: {}", std::any::type_name::<F>(), self_.1.as_mut().is_some());
-// 			let ret = (self_.0)(cx, self_.1.as_mut().unwrap());
-// 			assert!(
-// 				!ret.is_ready() || self_.1.as_ref().unwrap().is_none(),
-// 				"{}",
-// 				type_name::<F>()
-// 			);
-// 			let ret = ready!(ret);
-// 			**self_.1 = None;
-// 			// println!("buffd {}: {}", std::any::type_name::<F>(), ret);
-// 			if !ret {
-// 				return Poll::Ready(false);
-// 			}
-// 		}
-// 	}
-// }
 
 #[pin_project]
 pub struct SinkThen<'a, F, I, Fut, R>(F, #[pin] I, Pin<&'a mut Option<Fut>>, PhantomData<R>);

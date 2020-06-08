@@ -1,4 +1,4 @@
-use constellation::{spawn, FutureExt1, Receiver, Resources, Sender, SpawnError};
+use constellation::{spawn, Receiver, Resources, Sender, SpawnError};
 use serde_closure::FnOnce;
 use serde_traitobject as st;
 use std::{

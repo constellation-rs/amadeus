@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync, SumReducer
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
 };
 
 #[must_use]
@@ -24,20 +24,33 @@ where
 	I::Item: 'static,
 {
 	type ReduceAFactory = CountReducerFactory<I::Item>;
+	type ReduceBFactory = SumReducerFactory<usize, usize>;
 	type ReduceA = CountReducer<I::Item>;
 	type ReduceB = SumReducer<usize, usize>;
+	type ReduceC = SumReducer<usize, usize>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
-		(self.i, CountReducerFactory(PhantomData), SumReducer::new(0))
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+		(
+			self.i,
+			CountReducerFactory(PhantomData),
+			SumReducerFactory::new(),
+			SumReducer::new(0),
+		)
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct CountReducerFactory<A>(PhantomData<fn(A)>);
-
 impl<A> ReduceFactory for CountReducerFactory<A> {
 	type Reducer = CountReducer<A>;
 	fn make(&self) -> Self::Reducer {
 		CountReducer(0, PhantomData)
+	}
+}
+impl<A> Clone for CountReducerFactory<A> {
+	fn clone(&self) -> Self {
+		Self(PhantomData)
 	}
 }
 
@@ -73,7 +86,13 @@ impl<A> ReducerAsync for CountReducer<A> {
 		Poll::Ready(self.0)
 	}
 }
-impl<A> ReducerA for CountReducer<A>
+impl<A> ReducerProcessSend for CountReducer<A>
+where
+	A: 'static,
+{
+	type Output = usize;
+}
+impl<A> ReducerSend for CountReducer<A>
 where
 	A: 'static,
 {

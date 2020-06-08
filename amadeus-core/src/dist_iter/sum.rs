@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerA, ReducerAsync
+	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -30,20 +30,29 @@ where
 	I::Item: 'static,
 {
 	type ReduceAFactory = SumReducerFactory<I::Item, B>;
+	type ReduceBFactory = SumReducerFactory<B, B>;
 	type ReduceA = SumReducer<I::Item, B>;
 	type ReduceB = SumReducer<B, B>;
+	type ReduceC = SumReducer<B, B>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
 			SumReducerFactory(PhantomData),
+			SumReducerFactory::new(),
 			SumReducer(Some(iter::empty::<B>().sum()), PhantomData),
 		)
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct SumReducerFactory<A, B>(PhantomData<fn(A, B)>);
-
+impl<A, B> SumReducerFactory<A, B> {
+	pub fn new() -> Self {
+		Self(PhantomData)
+	}
+}
 impl<A, B> ReduceFactory for SumReducerFactory<A, B>
 where
 	B: iter::Sum<A> + iter::Sum,
@@ -51,6 +60,11 @@ where
 	type Reducer = SumReducer<A, B>;
 	fn make(&self) -> Self::Reducer {
 		SumReducer(Some(iter::empty::<B>().sum()), PhantomData)
+	}
+}
+impl<A, B> Clone for SumReducerFactory<A, B> {
+	fn clone(&self) -> Self {
+		Self(PhantomData)
 	}
 }
 
@@ -103,10 +117,17 @@ where
 		Poll::Ready(self.project().0.take().unwrap())
 	}
 }
-impl<A, B> ReducerA for SumReducer<A, B>
+impl<A, B> ReducerProcessSend for SumReducer<A, B>
 where
 	A: 'static,
 	B: iter::Sum<A> + iter::Sum + ProcessSend,
+{
+	type Output = B;
+}
+impl<A, B> ReducerSend for SumReducer<A, B>
+where
+	A: 'static,
+	B: iter::Sum<A> + iter::Sum + Send + 'static,
 {
 	type Output = B;
 }

@@ -19,12 +19,8 @@ async fn main() {
 		.and_then(|arg| arg.parse::<usize>().ok())
 		.unwrap_or(10);
 
-	let local_pool_time = {
-		let local_pool = LocalPool::new();
-		run(&local_pool).await
-	};
 	let thread_pool_time = {
-		let thread_pool = ThreadPool::new(processes).unwrap();
+		let thread_pool = ThreadPool::new();
 		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
@@ -35,10 +31,7 @@ async fn main() {
 	#[cfg(not(feature = "constellation"))]
 	let process_pool_time = "-";
 
-	println!(
-		"in {:?} {:?} {:?}",
-		local_pool_time, thread_pool_time, process_pool_time
-	);
+	println!("in {:?} {:?}", thread_pool_time, process_pool_time);
 }
 
 async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {

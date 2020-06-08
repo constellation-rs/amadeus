@@ -1,5 +1,9 @@
+use futures::{ready, Stream};
+use pin_project::{pin_project, project};
 use serde::{Deserialize, Serialize};
-use std::{any::type_name, error, fmt, io, marker::PhantomData, sync::Arc};
+use std::{
+	any::type_name, error, fmt, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
+};
 
 #[cfg(feature = "doc")]
 use crate::{
@@ -18,24 +22,47 @@ where
 	type Item = Result<T::Item, E>;
 	type IntoIter = ResultExpandIter<T::IntoIter, E>;
 	fn into_iter(self) -> Self::IntoIter {
-		ResultExpandIter(self.0.map(IntoIterator::into_iter).map_err(Some))
+		ResultExpandIter::new(self.0.map(IntoIterator::into_iter))
 	}
 }
-pub struct ResultExpandIter<T, E>(Result<T, Option<E>>);
+#[pin_project]
+pub enum ResultExpandIter<T, E> {
+	Ok(#[pin] T),
+	Err(Option<E>),
+}
+impl<T, E> ResultExpandIter<T, E> {
+	pub fn new(t: Result<T, E>) -> Self {
+		match t {
+			Ok(t) => Self::Ok(t),
+			Err(e) => Self::Err(Some(e)),
+		}
+	}
+}
 impl<T, E> Iterator for ResultExpandIter<T, E>
 where
 	T: Iterator,
 {
 	type Item = Result<T::Item, E>;
 	fn next(&mut self) -> Option<Self::Item> {
-		transpose(self.0.as_mut().map(Iterator::next).map_err(Option::take))
+		match self {
+			Self::Ok(t) => t.next().map(Ok),
+			Self::Err(e) => e.take().map(Err),
+		}
 	}
 }
-fn transpose<T, E>(result: Result<Option<T>, Option<E>>) -> Option<Result<T, E>> {
-	match result {
-		Ok(Some(x)) => Some(Ok(x)),
-		Err(Some(e)) => Some(Err(e)),
-		Ok(None) | Err(None) => None,
+impl<T, E> Stream for ResultExpandIter<T, E>
+where
+	T: Stream,
+{
+	type Item = Result<T::Item, E>;
+	#[project]
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		#[project]
+		let ret = match self.project() {
+			ResultExpandIter::Ok(t) => ready!(t.poll_next(cx)).map(Ok),
+			ResultExpandIter::Err(e) => e.take().map(Err),
+		};
+		Poll::Ready(ret)
 	}
 }
 
@@ -144,4 +171,28 @@ pub fn try_type_coerce<A, B>(a: A) -> Option<B> {
 	}
 
 	Foo::<A, B>(a, PhantomData).eq()
+}
+
+#[repr(transparent)]
+pub struct Debug<T: ?Sized>(pub T);
+trait DebugDuck {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error>;
+}
+impl<T: ?Sized> DebugDuck for T {
+	default fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		write!(f, "{}", std::any::type_name::<Self>())
+	}
+}
+impl<T: ?Sized> DebugDuck for T
+where
+	T: std::fmt::Debug,
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		<T as std::fmt::Debug>::fmt(self, f)
+	}
+}
+impl<T: ?Sized> std::fmt::Debug for Debug<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		<T as DebugDuck>::fmt(&self.0, f)
+	}
 }

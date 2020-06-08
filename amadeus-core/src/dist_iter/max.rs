@@ -22,12 +22,15 @@ where
 	I::Item: Ord + ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::Max>;
+	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, combine::Max>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::Max>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::Max>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::Max>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
+			CombineReducerFactory(combine::Max, PhantomData),
 			CombineReducerFactory(combine::Max, PhantomData),
 			CombineReducer(None, combine::Max, PhantomData),
 		)
@@ -52,12 +55,15 @@ where
 	I::Item: ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MaxBy<F>>;
+	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, combine::MaxBy<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MaxBy<F>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MaxBy<F>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MaxBy<F>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
+			CombineReducerFactory(combine::MaxBy(self.f.clone()), PhantomData),
 			CombineReducerFactory(combine::MaxBy(self.f.clone()), PhantomData),
 			CombineReducer(None, combine::MaxBy(self.f), PhantomData),
 		)
@@ -83,12 +89,15 @@ where
 	B: Ord + 'static,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MaxByKey<F, B>>;
+	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, combine::MaxByKey<F, B>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MaxByKey<F, B>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MaxByKey<F, B>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MaxByKey<F, B>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
+			CombineReducerFactory(combine::MaxByKey(self.f.clone(), PhantomData), PhantomData),
 			CombineReducerFactory(combine::MaxByKey(self.f.clone(), PhantomData), PhantomData),
 			CombineReducer(None, combine::MaxByKey(self.f, PhantomData), PhantomData),
 		)
@@ -111,12 +120,15 @@ where
 	I::Item: Ord + ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::Min>;
+	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, combine::Min>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::Min>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::Min>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::Min>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
+			CombineReducerFactory(combine::Min, PhantomData),
 			CombineReducerFactory(combine::Min, PhantomData),
 			CombineReducer(None, combine::Min, PhantomData),
 		)
@@ -141,12 +153,15 @@ where
 	I::Item: ProcessSend,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MinBy<F>>;
+	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, combine::MinBy<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MinBy<F>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MinBy<F>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MinBy<F>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
+			CombineReducerFactory(combine::MinBy(self.f.clone()), PhantomData),
 			CombineReducerFactory(combine::MinBy(self.f.clone()), PhantomData),
 			CombineReducer(None, combine::MinBy(self.f), PhantomData),
 		)
@@ -172,12 +187,15 @@ where
 	B: Ord + 'static,
 {
 	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MinByKey<F, B>>;
+	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, combine::MinByKey<F, B>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MinByKey<F, B>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MinByKey<F, B>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MinByKey<F, B>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
+			CombineReducerFactory(combine::MinByKey(self.f.clone(), PhantomData), PhantomData),
 			CombineReducerFactory(combine::MinByKey(self.f.clone(), PhantomData), PhantomData),
 			CombineReducer(None, combine::MinByKey(self.f, PhantomData), PhantomData),
 		)
