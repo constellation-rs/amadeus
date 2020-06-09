@@ -220,7 +220,6 @@ impl<T> ops::AddAssign for SampleUnstable<T> {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use rand;
 	use std::collections::HashMap;
 
 	#[test]

@@ -14,7 +14,7 @@ jobs:
     endpoint: alecmocatta
     default:
       rust_toolchain: nightly
-      rust_lint_toolchain: nightly-2019-07-19
+      rust_lint_toolchain: nightly-2020-06-09
       rust_flags: ''
       rust_features: ''
       rust_target_check: ''
@@ -22,11 +22,11 @@ jobs:
       rust_target_run: ''
     matrix:
       windows:
-        imageName: 'vs2017-win2016'
-        rust_target_run: 'x86_64-pc-windows-msvc i686-pc-windows-msvc' # currently broken building crate-type=lib: x86_64-pc-windows-gnu i686-pc-windows-gnu
+        imageName: 'windows-latest'
+        rust_target_run: 'x86_64-pc-windows-msvc i686-pc-windows-msvc x86_64-pc-windows-gnu'
       mac:
-        imageName: 'macos-10.13'
-        rust_target_run: 'x86_64-apple-darwin i686-apple-darwin'
+        imageName: 'macos-latest'
+        rust_target_run: 'x86_64-apple-darwin'
       linux:
-        imageName: 'ubuntu-16.04'
+        imageName: 'ubuntu-latest'
         rust_target_run: 'x86_64-unknown-linux-gnu i686-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-musl'

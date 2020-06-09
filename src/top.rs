@@ -153,13 +153,14 @@ impl<'a, A: Hash + Eq + Clone + Debug, C: Ord + Debug + 'a> Debug for TopIter<'a
 }
 
 /// For the result of a `std::iter::sum()` when an additive identity (i.e. zero) can't be constructed (in the case where we're summing an empty iterator).
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
 pub enum Zeroable<T> {
 	/// Zero
 	Zero,
 	/// Nonzero
 	Nonzero(T),
 }
+#[allow(clippy::missing_errors_doc)]
 impl<T> Zeroable<T> {
 	/// Transform to a `Result<T, E>`.
 	pub fn ok_or<E>(self, err: E) -> Result<T, E> {
@@ -182,25 +183,6 @@ impl<T> From<Option<T>> for Zeroable<T> {
 			Some(a) => Zeroable::Nonzero(a),
 			None => Zeroable::Zero,
 		}
-	}
-}
-impl<T> std::ops::Try for Zeroable<T> {
-	type Ok = T;
-	type Error = std::option::NoneError;
-
-	#[inline]
-	fn into_result(self) -> Result<T, std::option::NoneError> {
-		self.ok_or(std::option::NoneError)
-	}
-
-	#[inline]
-	fn from_ok(v: T) -> Self {
-		Zeroable::Nonzero(v)
-	}
-
-	#[inline]
-	fn from_error(_: std::option::NoneError) -> Self {
-		Zeroable::Zero
 	}
 }
 impl<T> iter::Sum for Zeroable<T>
@@ -231,7 +213,11 @@ impl<
 	where
 		I: Iterator<Item = Top<A, C>>,
 	{
-		let mut total = iter.next()?;
+		let mut total = if let Some(total) = iter.next() {
+			total
+		} else {
+			return Zeroable::Zero;
+		};
 		for sample in iter {
 			total += sample;
 		}
