@@ -185,25 +185,6 @@ impl<T> From<Option<T>> for Zeroable<T> {
 		}
 	}
 }
-impl<T> std::ops::Try for Zeroable<T> {
-	type Ok = T;
-	type Error = std::option::NoneError;
-
-	#[inline]
-	fn into_result(self) -> Result<T, std::option::NoneError> {
-		self.ok_or(std::option::NoneError)
-	}
-
-	#[inline]
-	fn from_ok(v: T) -> Self {
-		Zeroable::Nonzero(v)
-	}
-
-	#[inline]
-	fn from_error(_: std::option::NoneError) -> Self {
-		Zeroable::Zero
-	}
-}
 impl<T> iter::Sum for Zeroable<T>
 where
 	Self: iter::Sum<T>,
@@ -232,7 +213,11 @@ impl<
 	where
 		I: Iterator<Item = Top<A, C>>,
 	{
-		let mut total = iter.next()?;
+		let mut total = if let Some(total) = iter.next() {
+			total
+		} else {
+			return Zeroable::Zero;
+		};
 		for sample in iter {
 			total += sample;
 		}
