@@ -44,7 +44,10 @@
 	clippy::op_ref,
 	clippy::needless_pass_by_value,
 	clippy::suspicious_op_assign_impl,
-	clippy::float_cmp
+	clippy::float_cmp,
+	clippy::unsafe_derive_deserialize,
+	clippy::must_use_candidate,
+	clippy::unused_self
 )]
 
 mod count_min;

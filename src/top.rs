@@ -153,13 +153,14 @@ impl<'a, A: Hash + Eq + Clone + Debug, C: Ord + Debug + 'a> Debug for TopIter<'a
 }
 
 /// For the result of a `std::iter::sum()` when an additive identity (i.e. zero) can't be constructed (in the case where we're summing an empty iterator).
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
 pub enum Zeroable<T> {
 	/// Zero
 	Zero,
 	/// Nonzero
 	Nonzero(T),
 }
+#[allow(clippy::missing_errors_doc)]
 impl<T> Zeroable<T> {
 	/// Transform to a `Result<T, E>`.
 	pub fn ok_or<E>(self, err: E) -> Result<T, E> {

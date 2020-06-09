@@ -54,7 +54,7 @@ use std::{
 use twox_hash::XxHash;
 
 mod consts;
-use self::consts::*;
+use self::consts::{BIAS_DATA, RAW_ESTIMATE_DATA, TRESHOLD_DATA};
 
 /// Like [`HyperLogLog`] but implements `Ord` and `Eq` by using the estimate of the cardinality.
 #[derive(Serialize, Deserialize)]
@@ -429,7 +429,7 @@ impl<V: ?Sized> IntersectPlusUnionIsPlus for HyperLogLog<V> {
 
 #[cfg(target_feature = "avx512bw")] // TODO
 mod simd_types {
-	use super::*;
+	use super::packed_simd;
 	pub type u8s = packed_simd::u8x64;
 	pub type u8s_sad_out = packed_simd::u64x8;
 	pub type f32s = packed_simd::f32x16;
@@ -439,7 +439,7 @@ mod simd_types {
 #[cfg(target_feature = "avx2")]
 mod simd_types {
 	#![allow(non_camel_case_types)]
-	use super::*;
+	use super::packed_simd;
 	pub type u8s = packed_simd::u8x32;
 	pub type u8s_sad_out = packed_simd::u64x4;
 	pub type f32s = packed_simd::f32x8;
@@ -449,7 +449,7 @@ mod simd_types {
 #[cfg(all(not(target_feature = "avx2"), target_feature = "sse2"))]
 mod simd_types {
 	#![allow(non_camel_case_types)]
-	use super::*;
+	use super::packed_simd;
 	pub type u8s = packed_simd::u8x16;
 	pub type u8s_sad_out = packed_simd::u64x2;
 	pub type f32s = packed_simd::f32x4;
@@ -459,14 +459,14 @@ mod simd_types {
 #[cfg(all(not(target_feature = "avx2"), not(target_feature = "sse2")))]
 mod simd_types {
 	#![allow(non_camel_case_types)]
-	use super::*;
+	use super::packed_simd;
 	pub type u8s = packed_simd::u8x8;
 	pub type u8s_sad_out = u64;
 	pub type f32s = packed_simd::f32x2;
 	pub type u32s = packed_simd::u32x2;
 	pub type u8sq = packed_simd::u8x2;
 }
-use self::simd_types::*;
+use self::simd_types::{f32s, u32s, u8s, u8s_sad_out, u8sq};
 
 struct Sad<X>(PhantomData<fn(X)>);
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
