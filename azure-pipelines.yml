@@ -23,10 +23,10 @@ jobs:
     matrix:
       windows:
         imageName: 'windows-latest'
-        rust_target_run: 'x86_64-pc-windows-msvc i686-pc-windows-msvc' # currently broken building crate-type=lib: x86_64-pc-windows-gnu i686-pc-windows-gnu
+        rust_target_run: 'x86_64-pc-windows-msvc i686-pc-windows-msvc x86_64-pc-windows-gnu'
       mac:
         imageName: 'macos-latest'
-        rust_target_run: 'x86_64-apple-darwin i686-apple-darwin'
+        rust_target_run: 'x86_64-apple-darwin'
       linux:
         imageName: 'ubuntu-latest'
         rust_target_run: 'x86_64-unknown-linux-gnu i686-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-musl'
