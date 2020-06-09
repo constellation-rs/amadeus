@@ -1,6 +1,8 @@
 //! SIMD-accelerated implementations of various [streaming algorithms](https://en.wikipedia.org/wiki/Streaming_algorithm).
 //!
-//! **[Crates.io](https://crates.io/crates/streaming_algorithms) │ [Repo](https://github.com/alecmocatta/streaming_algorithms)**
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/streaming_algorithms">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/alecmocatta/streaming_algorithms">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213236-subprojects">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
 //!
 //! This library is a work in progress. PRs are very welcome! Currently implemented algorithms include:
 //!
@@ -21,7 +23,7 @@
 //!
 //! As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
-#![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.1.1")]
+#![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.1.2")]
 #![feature(specialization)]
 #![warn(
 	missing_copy_implementations,
