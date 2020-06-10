@@ -7,10 +7,11 @@ use std::{
 
 use amadeus_core::pool::ProcessSend;
 
-use super::util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize};
+use super::{
+	util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize}, ThreadPool
+};
 
-// type Request = Box<dyn st::FnOnce() -> Response + Send>; // when #![feature(unboxed_closures)] is stable
-type Request = Box<dyn st::FnOnce<(), Output = Response> + Send>;
+type Request = Box<dyn st::FnOnce<(), Output = Response> + Send>; // TODO: update once #![feature(unboxed_closures)] is stable
 type Response = Box<dyn st::Any + Send>;
 
 #[derive(Debug)]
@@ -123,9 +124,12 @@ impl ProcessPoolInner {
 	fn threads(&self) -> usize {
 		self.threads
 	}
-	async fn spawn<F: FnOnce() -> T + ProcessSend, T: ProcessSend>(
-		&self, work: F,
-	) -> Result<T, Panicked> {
+	async fn spawn<F, Fut, T>(&self, work: F) -> Result<T, Panicked>
+	where
+		F: FnOnce(&ThreadPool) -> Fut + ProcessSend,
+		Fut: Future<Output = T> + 'static,
+		T: ProcessSend,
+	{
 		let process_index = self.i.get();
 		let process = &self.processes[process_index];
 		let x = process.sender.send(Some(Box::new(FnOnce!(move || {
@@ -203,10 +207,15 @@ impl ProcessPool {
 	pub fn threads(&self) -> usize {
 		self.0.threads()
 	}
-	pub fn spawn<F: FnOnce() -> T + ProcessSend, T: ProcessSend>(
+	pub fn spawn<F, Fut, T>(
 		&self, work: F,
-	) -> impl Future<Output = Result<T, Panicked>> + Send + 'static {
-		// TODO: + Sync
+	) -> impl Future<Output = Result<T, Panicked>> + Send + 'static
+	where
+		F: FnOnce(&ThreadPool) -> Fut + ProcessSend,
+		Fut: Future<Output = T> + 'static,
+		T: ProcessSend,
+	{
+		// // TODO: + Sync
 		let inner = self.0.clone();
 		async move { inner.spawn(work).await }
 	}
