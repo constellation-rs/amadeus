@@ -8,7 +8,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -30,7 +30,7 @@ impl<I, ID, F, B> Fold<I, ID, F, B> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, ID, F, B> DistributedReducer<I, Source, B>
+impl<I: DistributedStreamMulti<Source>, Source, ID, F, B> DistributedReducer<I, Source, B>
 	for Fold<I, ID, F, B>
 where
 	ID: FnMut() -> B + Clone + ProcessSend,

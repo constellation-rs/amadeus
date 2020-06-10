@@ -5,13 +5,11 @@ use std::{
 use sum::Sum2;
 
 use super::{
-	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedIterator, DistributedIteratorMulti
+	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedStream, DistributedStreamMulti
 };
 use crate::sink::Sink;
 
-impl<A: DistributedIterator, B: DistributedIterator<Item = A::Item>> DistributedIterator
-	for Sum2<A, B>
-{
+impl<A: DistributedStream, B: DistributedStream<Item = A::Item>> DistributedStream for Sum2<A, B> {
 	type Item = A::Item;
 	type Task = Sum2<A::Task, B::Task>;
 
@@ -30,10 +28,10 @@ impl<A: DistributedIterator, B: DistributedIterator<Item = A::Item>> Distributed
 }
 
 impl<
-		A: DistributedIteratorMulti<Source>,
-		B: DistributedIteratorMulti<Source, Item = A::Item>,
+		A: DistributedStreamMulti<Source>,
+		B: DistributedStreamMulti<Source, Item = A::Item>,
 		Source,
-	> DistributedIteratorMulti<Source> for Sum2<A, B>
+	> DistributedStreamMulti<Source> for Sum2<A, B>
 {
 	type Item = A::Item;
 	type Task = Sum2<A::Task, B::Task>;

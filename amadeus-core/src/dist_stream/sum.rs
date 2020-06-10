@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -24,7 +24,7 @@ impl<I, B> Sum<I, B> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, B, Source> DistributedReducer<I, Source, B> for Sum<I, B>
+impl<I: DistributedStreamMulti<Source>, B, Source> DistributedReducer<I, Source, B> for Sum<I, B>
 where
 	B: iter::Sum<I::Item> + iter::Sum<B> + ProcessSend,
 	I::Item: 'static,

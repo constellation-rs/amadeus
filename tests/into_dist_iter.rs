@@ -6,12 +6,12 @@ use amadeus::prelude::*;
 async fn main() {
 	let pool = ThreadPool::new(None);
 
-	<&[usize] as IntoDistributedIterator>::into_dist_iter(&[1, 2, 3])
+	<&[usize] as IntoDistributedStream>::into_dist_stream(&[1, 2, 3])
 		.map(FnMut!(|a: usize| a))
 		.for_each(&pool, FnMut!(|a: usize| println!("{:?}", a)))
 		.await;
 
-	let res: usize = [1, 2, 3].into_dist_iter().sum(&pool).await;
+	let res: usize = [1, 2, 3].into_dist_stream().sum(&pool).await;
 	assert_eq!(res, 6);
 
 	let slice = [
@@ -20,8 +20,8 @@ async fn main() {
 	];
 	for i in 0..slice.len() {
 		let res = slice[..i]
-			.dist_iter()
-			.into_dist_iter()
+			.dist_stream()
+			.into_dist_stream()
 			.fold(
 				&pool,
 				FnMut!(|| 0usize),

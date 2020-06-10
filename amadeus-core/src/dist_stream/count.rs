@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
+	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
 };
 
 #[must_use]
@@ -19,7 +19,7 @@ impl<I> Count<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, usize> for Count<I>
+impl<I: DistributedStreamMulti<Source>, Source> DistributedReducer<I, Source, usize> for Count<I>
 where
 	I::Item: 'static,
 {

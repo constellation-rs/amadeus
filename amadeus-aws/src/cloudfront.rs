@@ -10,7 +10,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::ResultExpandIter, Source
+	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, util::ResultExpandIter, Source
 };
 use amadeus_types::{DateTime, IpAddr, Url};
 
@@ -55,13 +55,13 @@ impl Source for Cloudfront {
 	type Error = AwsError;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
+	fn dist_stream(self) -> Self::DistStream {
 		let Self {
 			bucket,
 			region,
@@ -69,7 +69,7 @@ impl Source for Cloudfront {
 			credentials,
 		} = self;
 		let ret = objects
-			.into_dist_iter()
+			.into_dist_stream()
 			.flat_map(FnMut!(move |key: String| {
 				let (credentials, region, bucket) =
 					(credentials.clone(), region.clone(), bucket.clone());
@@ -117,7 +117,7 @@ impl Source for Cloudfront {
 				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(self::identity)
 			));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
 	}
 

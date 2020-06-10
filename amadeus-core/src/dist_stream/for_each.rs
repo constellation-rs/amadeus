@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DefaultReduceFactory, DistributedIteratorMulti, DistributedReducer, PushReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DefaultReduceFactory, DistributedReducer, DistributedStreamMulti, PushReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -21,7 +21,7 @@ impl<I, F> ForEach<I, F> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, ()>
+impl<I: DistributedStreamMulti<Source>, Source, F> DistributedReducer<I, Source, ()>
 	for ForEach<I, F>
 where
 	F: FnMut(I::Item) + Clone + ProcessSend,

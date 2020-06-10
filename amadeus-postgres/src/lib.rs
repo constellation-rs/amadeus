@@ -18,7 +18,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::IoError, Source as DSource
+	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, util::IoError, Source as DSource
 };
 
 const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
@@ -196,16 +196,16 @@ where
 	type Error = PostgresError;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
+	fn dist_stream(self) -> Self::DistStream {
 		let ret = self
 			.files
-			.into_dist_iter()
+			.into_dist_stream()
 			.flat_map(FnMut!(|(config, tables)| async move {
 				let (config, tables): (ConnectParams, Vec<Source>) = (config, tables);
 				let (client, connection) = postgres::config::Config::from(config)
@@ -246,7 +246,7 @@ where
 			}
 			.flatten_stream()));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
 	}
 	fn iter(self) -> Self::Iter {

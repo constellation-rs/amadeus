@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, marker::PhantomData};
 
 use super::{
-	CombineReducer, CombineReducerFactory, Combiner, DistributedIteratorMulti, DistributedReducer
+	CombineReducer, CombineReducerFactory, Combiner, DistributedReducer, DistributedStreamMulti
 };
 use crate::pool::ProcessSend;
 
@@ -16,7 +16,7 @@ impl<I> Max<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedStreamMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
 	for Max<I>
 where
 	I::Item: Ord + ProcessSend,
@@ -48,7 +48,7 @@ impl<I, F> MaxBy<I, F> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedStreamMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
 	for MaxBy<I, F>
 where
 	F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + ProcessSend,
@@ -81,8 +81,8 @@ impl<I, F> MaxByKey<I, F> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F, B>
-	DistributedReducer<I, Source, Option<I::Item>> for MaxByKey<I, F>
+impl<I: DistributedStreamMulti<Source>, Source, F, B> DistributedReducer<I, Source, Option<I::Item>>
+	for MaxByKey<I, F>
 where
 	F: FnMut(&I::Item) -> B + Clone + ProcessSend,
 	I::Item: ProcessSend,
@@ -114,7 +114,7 @@ impl<I> Min<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedStreamMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
 	for Min<I>
 where
 	I::Item: Ord + ProcessSend,
@@ -146,7 +146,7 @@ impl<I, F> MinBy<I, F> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedStreamMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
 	for MinBy<I, F>
 where
 	F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + ProcessSend,
@@ -179,8 +179,8 @@ impl<I, F> MinByKey<I, F> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F, B>
-	DistributedReducer<I, Source, Option<I::Item>> for MinByKey<I, F>
+impl<I: DistributedStreamMulti<Source>, Source, F, B> DistributedReducer<I, Source, Option<I::Item>>
+	for MinByKey<I, F>
 where
 	F: FnMut(&I::Item) -> B + Clone + ProcessSend,
 	I::Item: ProcessSend,

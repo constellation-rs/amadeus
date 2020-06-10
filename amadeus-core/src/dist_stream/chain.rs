@@ -4,7 +4,7 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{Consumer, ConsumerAsync, DistributedIterator};
+use super::{Consumer, ConsumerAsync, DistributedStream};
 use crate::sink::Sink;
 
 #[must_use]
@@ -18,9 +18,7 @@ impl<A, B> Chain<A, B> {
 	}
 }
 
-impl<A: DistributedIterator, B: DistributedIterator<Item = A::Item>> DistributedIterator
-	for Chain<A, B>
-{
+impl<A: DistributedStream, B: DistributedStream<Item = A::Item>> DistributedStream for Chain<A, B> {
 	type Item = A::Item;
 	type Task = ChainConsumer<A::Task, B::Task>;
 

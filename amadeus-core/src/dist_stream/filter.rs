@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedIterator, DistributedIteratorMulti
+	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedStream, DistributedStreamMulti
 };
 use crate::{
 	pool::ProcessSend, sink::{Sink, SinkFilter, SinkFilterState}
@@ -23,7 +23,7 @@ impl<I, F> Filter<I, F> {
 	}
 }
 
-impl<I: DistributedIterator, F, Fut> DistributedIterator for Filter<I, F>
+impl<I: DistributedStream, F, Fut> DistributedStream for Filter<I, F>
 where
 	F: FnMut(&I::Item) -> Fut + Clone + ProcessSend,
 	Fut: Future<Output = bool>,
@@ -42,10 +42,10 @@ where
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, F, Fut, Source> DistributedIteratorMulti<Source>
+impl<I: DistributedStreamMulti<Source>, F, Fut, Source> DistributedStreamMulti<Source>
 	for Filter<I, F>
 where
-	F: FnMut(&<I as DistributedIteratorMulti<Source>>::Item) -> Fut + Clone + ProcessSend,
+	F: FnMut(&<I as DistributedStreamMulti<Source>>::Item) -> Fut + Clone + ProcessSend,
 	Fut: Future<Output = bool>,
 {
 	type Item = I::Item;

@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedIterator, DistributedIteratorMulti
+	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedStream, DistributedStreamMulti
 };
 use crate::{
 	pool::ProcessSend, sink::{Sink, SinkMap}
@@ -23,7 +23,7 @@ impl<I, F> Map<I, F> {
 	}
 }
 
-impl<I: DistributedIterator, F, R> DistributedIterator for Map<I, F>
+impl<I: DistributedStream, F, R> DistributedStream for Map<I, F>
 where
 	F: FnMut(I::Item) -> R + Clone + ProcessSend,
 {
@@ -41,10 +41,9 @@ where
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, F, R, Source> DistributedIteratorMulti<Source>
-	for Map<I, F>
+impl<I: DistributedStreamMulti<Source>, F, R, Source> DistributedStreamMulti<Source> for Map<I, F>
 where
-	F: FnMut(<I as DistributedIteratorMulti<Source>>::Item) -> R + Clone + ProcessSend,
+	F: FnMut(<I as DistributedStreamMulti<Source>>::Item) -> R + Clone + ProcessSend,
 {
 	type Item = R;
 	type Task = MapConsumer<I::Task, F>;

@@ -3,17 +3,17 @@ use std::{
 	iter, pin::Pin, slice, task::{Context, Poll}
 };
 
-use super::{Consumer, ConsumerAsync, DistributedIterator, IntoDistributedIterator, IterIter};
+use super::{Consumer, ConsumerAsync, DistributedStream, IntoDistributedStream, IterIter};
 use crate::{pool::ProcessSend, sink::Sink};
 
-impl<T> IntoDistributedIterator for [T]
+impl<T> IntoDistributedStream for [T]
 where
 	T: ProcessSend,
 {
 	type Iter = Never;
 	type Item = Never;
 
-	fn into_dist_iter(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::Iter
 	where
 		Self: Sized,
 	{
@@ -21,14 +21,14 @@ where
 	}
 }
 
-impl<'a, T: Clone> IntoDistributedIterator for &'a [T]
+impl<'a, T: Clone> IntoDistributedStream for &'a [T]
 where
 	T: ProcessSend,
 {
 	type Iter = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_iter(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::Iter
 	where
 		Self: Sized,
 	{
@@ -38,7 +38,7 @@ where
 
 pub struct Never(!);
 
-impl DistributedIterator for Never {
+impl DistributedStream for Never {
 	type Item = Self;
 	type Task = Self;
 

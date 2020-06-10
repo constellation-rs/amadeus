@@ -11,7 +11,7 @@ use serde_closure::*;
 use std::{io, iter, time};
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, Source
+	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, Source
 };
 use amadeus_types::Webpage;
 
@@ -93,16 +93,16 @@ impl Source for CommonCrawl {
 	type Error = io::Error;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
+	fn dist_stream(self) -> Self::DistStream {
 		let ret = self
 			.urls
-			.into_dist_iter()
+			.into_dist_stream()
 			.flat_map(FnMut!(|url: String| async move {
 				let body = reqwest_resume::get(url.parse().unwrap()).await.unwrap();
 				let body = body
@@ -115,7 +115,7 @@ impl Source for CommonCrawl {
 			}
 			.flatten_stream()));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
 	}
 	fn iter(self) -> Self::Iter {

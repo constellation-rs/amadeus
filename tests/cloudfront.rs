@@ -3,20 +3,12 @@
 use amadeus::prelude::*;
 #[cfg(feature = "constellation")]
 use constellation::*;
-use std::{
-	env, time::{Duration, SystemTime}
-};
+use std::time::{Duration, SystemTime};
 
 #[tokio::main]
 async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
-
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
 
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(None);
@@ -24,7 +16,7 @@ async fn main() {
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
 		run(&process_pool).await
 	};
 	#[cfg(not(feature = "constellation"))]
@@ -36,7 +28,7 @@ async fn main() {
 async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	let _ = DistributedIteratorMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity);
+	let _ = DistributedStreamMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity);
 
 	let ((), (count, count2)) = Cloudfront::new_with(
 		AwsRegion::UsEast1,
@@ -46,7 +38,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	)
 	.await
 	.unwrap()
-	.dist_iter()
+	.dist_stream()
 	.multi(
 		pool,
 		Identity.for_each(FnMut!(|x: Result<CloudfrontRow, _>| {
@@ -56,7 +48,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		(
 			Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
 			Identity.cloned().count(),
-			// DistributedIteratorMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity),
+			// DistributedStreamMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity),
 		),
 	)
 	.await;

@@ -69,7 +69,7 @@ async fn main() {
 			streaming_algorithms::Top<usize,streaming_algorithms::HyperLogLogMagnitude<Vec<u8>>>,
 			streaming_algorithms::SampleUnstable<u32>,
 		),
-	) = CommonCrawl::new("CC-MAIN-2018-30").await.unwrap().dist_iter().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
+	) = CommonCrawl::new("CC-MAIN-2018-30").await.unwrap().dist_stream().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
 		.multi(
 			&pool,
 			((

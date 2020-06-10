@@ -7,7 +7,7 @@ use std::{
 
 #[cfg(feature = "doc")]
 use crate::{
-	dist_iter::{Consumer, ConsumerAsync, DistributedIterator}, sink::Sink
+	dist_stream::{Consumer, ConsumerAsync, DistributedStream}, sink::Sink
 };
 #[cfg(feature = "doc")]
 use std::{
@@ -98,18 +98,18 @@ impl From<IoError> for io::Error {
 
 #[cfg(feature = "doc")]
 #[doc(hidden)]
-pub struct ImplDistributedIterator<T>(PhantomData<fn(T)>);
+pub struct ImplDistributedStream<T>(PhantomData<fn(T)>);
 #[cfg(feature = "doc")]
-impl<T> ImplDistributedIterator<T> {
+impl<T> ImplDistributedStream<T> {
 	pub fn new<U>(_drop: U) -> Self
 	where
-		U: DistributedIterator<Item = T>,
+		U: DistributedStream<Item = T>,
 	{
 		Self(PhantomData)
 	}
 }
 #[cfg(feature = "doc")]
-impl<T: 'static> DistributedIterator for ImplDistributedIterator<T> {
+impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
 	type Item = T;
 	type Task = ImplConsumer<T>;
 

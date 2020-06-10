@@ -10,7 +10,7 @@ use std::{
 use streaming_algorithms::{SampleUnstable as SASampleUnstable, Top, Zeroable};
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
+	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
 };
 use crate::pool::ProcessSend;
 
@@ -25,7 +25,7 @@ impl<I> SampleUnstable<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source>
+impl<I: DistributedStreamMulti<Source>, Source>
 	DistributedReducer<I, Source, SASampleUnstable<I::Item>> for SampleUnstable<I>
 where
 	I::Item: ProcessSend,
@@ -195,7 +195,7 @@ impl<I> MostFrequent<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Top<I::Item, usize>>
+impl<I: DistributedStreamMulti<Source>, Source> DistributedReducer<I, Source, Top<I::Item, usize>>
 	for MostFrequent<I>
 where
 	I::Item: Clone + Hash + Eq + ProcessSend,
@@ -317,7 +317,7 @@ impl<I> MostDistinct<I> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source, Item = (A, B)>, Source, A, B>
+impl<I: DistributedStreamMulti<Source, Item = (A, B)>, Source, A, B>
 	DistributedReducer<I, Source, Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>
 	for MostDistinct<I>
 where

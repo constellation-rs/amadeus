@@ -38,11 +38,11 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistIter = <Self as amadeus_core::Source>::DistIter;
+	type DistStream = <Self as amadeus_core::Source>::DistStream;
 	type Iter = <Self as amadeus_core::Source>::Iter;
 
-	fn dist_iter(self) -> Self::DistIter {
-		<Self as amadeus_core::Source>::dist_iter(self)
+	fn dist_stream(self) -> Self::DistStream {
+		<Self as amadeus_core::Source>::dist_stream(self)
 	}
 	fn iter(self) -> Self::Iter {
 		<Self as amadeus_core::Source>::iter(self)
@@ -57,11 +57,11 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistIter = <Self as amadeus_core::Source>::DistIter;
+	type DistStream = <Self as amadeus_core::Source>::DistStream;
 	type Iter = <Self as amadeus_core::Source>::Iter;
 
-	fn dist_iter(self) -> Self::DistIter {
-		<Self as amadeus_core::Source>::dist_iter(self)
+	fn dist_stream(self) -> Self::DistStream {
+		<Self as amadeus_core::Source>::dist_stream(self)
 	}
 	fn iter(self) -> Self::Iter {
 		<Self as amadeus_core::Source>::iter(self)
@@ -76,11 +76,11 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistIter = <Self as amadeus_core::Source>::DistIter;
+	type DistStream = <Self as amadeus_core::Source>::DistStream;
 	type Iter = <Self as amadeus_core::Source>::Iter;
 
-	fn dist_iter(self) -> Self::DistIter {
-		<Self as amadeus_core::Source>::dist_iter(self)
+	fn dist_stream(self) -> Self::DistStream {
+		<Self as amadeus_core::Source>::dist_stream(self)
 	}
 	fn iter(self) -> Self::Iter {
 		<Self as amadeus_core::Source>::iter(self)
@@ -94,11 +94,11 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistIter = <Self as amadeus_core::Source>::DistIter;
+	type DistStream = <Self as amadeus_core::Source>::DistStream;
 	type Iter = <Self as amadeus_core::Source>::Iter;
 
-	fn dist_iter(self) -> Self::DistIter {
-		<Self as amadeus_core::Source>::dist_iter(self)
+	fn dist_stream(self) -> Self::DistStream {
+		<Self as amadeus_core::Source>::dist_stream(self)
 	}
 	fn iter(self) -> Self::Iter {
 		<Self as amadeus_core::Source>::iter(self)
@@ -109,11 +109,14 @@ impl Source for Cloudfront {
 	type Item = crate::data::CloudfrontRow;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistIter = IntoIter<<Self as amadeus_core::Source>::DistIter, Self::Item>;
+	type DistStream = IntoIter<<Self as amadeus_core::Source>::DistStream, Self::Item>;
 	type Iter = IntoIter<<Self as amadeus_core::Source>::Iter, Self::Item>;
 
-	fn dist_iter(self) -> Self::DistIter {
-		IntoIter(<Self as amadeus_core::Source>::dist_iter(self), PhantomData)
+	fn dist_stream(self) -> Self::DistStream {
+		IntoIter(
+			<Self as amadeus_core::Source>::dist_stream(self),
+			PhantomData,
+		)
 	}
 	fn iter(self) -> Self::Iter {
 		IntoIter(<Self as amadeus_core::Source>::iter(self), PhantomData)
@@ -124,11 +127,14 @@ impl Source for CommonCrawl {
 	type Item = amadeus_types::Webpage<'static>;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistIter = IntoIter<<Self as amadeus_core::Source>::DistIter, Self::Item>;
+	type DistStream = IntoIter<<Self as amadeus_core::Source>::DistStream, Self::Item>;
 	type Iter = IntoIter<<Self as amadeus_core::Source>::Iter, Self::Item>;
 
-	fn dist_iter(self) -> Self::DistIter {
-		IntoIter(<Self as amadeus_core::Source>::dist_iter(self), PhantomData)
+	fn dist_stream(self) -> Self::DistStream {
+		IntoIter(
+			<Self as amadeus_core::Source>::dist_stream(self),
+			PhantomData,
+		)
 	}
 	fn iter(self) -> Self::Iter {
 		IntoIter(<Self as amadeus_core::Source>::iter(self), PhantomData)
@@ -136,9 +142,9 @@ impl Source for CommonCrawl {
 }
 use std::marker::PhantomData;
 pub struct IntoIter<I, U>(I, PhantomData<fn() -> U>);
-impl<I, T, E, U> crate::dist_iter::DistributedIterator for IntoIter<I, U>
+impl<I, T, E, U> crate::dist_stream::DistributedStream for IntoIter<I, U>
 where
-	I: crate::dist_iter::DistributedIterator<Item = Result<T, E>>,
+	I: crate::dist_stream::DistributedStream<Item = Result<T, E>>,
 	T: Into<U>,
 	U: 'static,
 {
@@ -164,9 +170,9 @@ pub struct IntoConsumer<I, U> {
 	#[serde(skip)]
 	marker: PhantomData<fn() -> U>,
 }
-impl<I, T, E, U> amadeus_core::dist_iter::Consumer for IntoConsumer<I, U>
+impl<I, T, E, U> amadeus_core::dist_stream::Consumer for IntoConsumer<I, U>
 where
-	I: amadeus_core::dist_iter::Consumer<Item = Result<T, E>>,
+	I: amadeus_core::dist_stream::Consumer<Item = Result<T, E>>,
 	T: Into<U>,
 {
 	type Item = Result<U, E>;
@@ -178,9 +184,9 @@ where
 		}
 	}
 }
-impl<I, T, E, U> amadeus_core::dist_iter::ConsumerAsync for IntoConsumer<I, U>
+impl<I, T, E, U> amadeus_core::dist_stream::ConsumerAsync for IntoConsumer<I, U>
 where
-	I: amadeus_core::dist_iter::ConsumerAsync<Item = Result<T, E>>,
+	I: amadeus_core::dist_stream::ConsumerAsync<Item = Result<T, E>>,
 	T: Into<U>,
 {
 	type Item = Result<U, E>;
@@ -211,21 +217,21 @@ pub trait Source {
 	type Item: crate::data::Data;
 	type Error: std::error::Error;
 
-	type DistIter: crate::dist_iter::DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream: crate::dist_stream::DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	// type ParIter: ParallelIterator;
 	type Iter: Iterator<Item = Result<Self::Item, Self::Error>>;
 
-	fn dist_iter(self) -> Self::DistIter;
+	fn dist_stream(self) -> Self::DistStream;
 	// fn par_iter(self) -> Self::ParIter;
 	fn iter(self) -> Self::Iter;
 }
 
 pub trait Destination<I>
 where
-	I: crate::dist_iter::DistributedIteratorMulti<Self::Item>,
+	I: crate::dist_stream::DistributedStreamMulti<Self::Item>,
 {
 	type Item: crate::data::Data;
 	type Error: std::error::Error;
 
-	type DistDest: crate::dist_iter::DistributedReducer<I, Self::Item, Result<(), Self::Error>>;
+	type DistDest: crate::dist_stream::DistributedReducer<I, Self::Item, Result<(), Self::Error>>;
 }

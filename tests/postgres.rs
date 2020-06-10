@@ -1,8 +1,6 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
-use std::{
-	env, time::{Duration, SystemTime}
-};
+use std::time::{Duration, SystemTime};
 
 use amadeus::prelude::*;
 
@@ -11,19 +9,13 @@ async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
-
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool, 2).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
 		run(&process_pool, processes * 2).await
 	};
 	#[cfg(not(feature = "constellation"))]
@@ -59,7 +51,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Dura
 		)],
 	)]);
 	assert_eq!(
-		rows.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
 			.count(&pool)
 			.await,
@@ -75,7 +67,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Dura
 	// 	)],
 	// )]);
 	// assert_eq!(
-	// 	rows.dist_iter()
+	// 	rows.dist_stream()
 	// 		.map(FnMut!(|row: Result<Value, _>| -> Value {
 	// 			let value = row.unwrap();
 	// 			// println!("{:?}", value);

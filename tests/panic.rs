@@ -2,7 +2,7 @@
 use constellation::*;
 use futures::FutureExt;
 use std::{
-	env, panic, panic::AssertUnwindSafe, time::{Duration, SystemTime}
+	panic, panic::AssertUnwindSafe, time::{Duration, SystemTime}
 };
 
 use amadeus::prelude::*;
@@ -12,34 +12,25 @@ async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
-
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool).await
 	};
-	// #[cfg(feature = "constellation")]
-	// let process_pool_time = {
-	// 	let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-	// 	run(&process_pool).await
-	// };
-	// #[cfg(not(feature = "constellation"))]
-	// let process_pool_time = "-";
+	#[cfg(feature = "constellation")]
+	let process_pool_time = {
+		let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+		run(&process_pool).await
+	};
+	#[cfg(not(feature = "constellation"))]
+	let process_pool_time = "-";
 
-	// println!(
-	// 	"in {:?} {:?}",
-	// 	thread_pool_time, process_pool_time
-	// );
+	println!("in {:?} {:?}", thread_pool_time, process_pool_time);
 }
 
 async fn run<P: amadeus_core::pool::ProcessPool + std::panic::RefUnwindSafe>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	let res = AssertUnwindSafe((0i32..1_000).into_dist_iter().for_each(
+	let res = AssertUnwindSafe((0i32..1_000).into_dist_stream().for_each(
 		pool,
 		FnMut!(|i| if i == 500 {
 			panic!("boom")

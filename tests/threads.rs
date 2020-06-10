@@ -3,7 +3,7 @@ use constellation::*;
 use futures::future::join_all;
 use rand::{Rng, SeedableRng};
 use std::{
-	convert::TryInto, env, thread, time::{self, Duration, SystemTime}
+	convert::TryInto, thread, time::{self, Duration, SystemTime}
 };
 
 use amadeus::prelude::*;
@@ -13,19 +13,13 @@ async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
-
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool, 10).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
 		run(&process_pool, processes * 10)
 	};
 	#[cfg(not(feature = "constellation"))]

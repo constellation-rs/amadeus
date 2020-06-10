@@ -5,7 +5,7 @@ use std::{
 	marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
-use super::{ConsumerMulti, ConsumerMultiAsync, DistributedIteratorMulti};
+use super::{ConsumerMulti, ConsumerMultiAsync, DistributedStreamMulti};
 use crate::sink::{Sink, SinkMap};
 
 #[must_use]
@@ -22,9 +22,9 @@ impl<I, T, Source> Cloned<I, T, Source> {
 	}
 }
 
-// impl<'a,I,T:'a> DistributedIterator for Cloned<I>
+// impl<'a,I,T:'a> DistributedStream for Cloned<I>
 // where
-// 	I: DistributedIterator<Item = &'a T>,
+// 	I: DistributedStream<Item = &'a T>,
 // 	T: Clone,
 // {
 // 	type Item = T;
@@ -40,9 +40,9 @@ impl<I, T, Source> Cloned<I, T, Source> {
 // https://github.com/rust-lang/rust/issues/55731
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2015&gist=238651c4992913bcd62b68b4832fcd9a
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2015&gist=2f1da304878b050cc313c0279047b0fa
-impl<'a, I, Source, T: 'a> DistributedIteratorMulti<&'a Source> for Cloned<I, T, Source>
+impl<'a, I, Source, T: 'a> DistributedStreamMulti<&'a Source> for Cloned<I, T, Source>
 where
-	I: DistributedIteratorMulti<&'a Source, Item = &'a T>,
+	I: DistributedStreamMulti<&'a Source, Item = &'a T>,
 	T: Clone,
 {
 	type Item = T;

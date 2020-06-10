@@ -4,11 +4,11 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{ConsumerMulti, ConsumerMultiAsync, DistributedIteratorMulti};
+use super::{ConsumerMulti, ConsumerMultiAsync, DistributedStreamMulti};
 use crate::sink::Sink;
 
 pub struct Identity;
-impl<Item> DistributedIteratorMulti<Item> for Identity {
+impl<Item> DistributedStreamMulti<Item> for Identity {
 	type Item = Item;
 	type Task = IdentityMultiTask;
 

@@ -5,7 +5,7 @@ use std::{
 	iter, ops::{Range, RangeFrom, RangeInclusive}, pin::Pin, task::{Context, Poll}
 };
 
-use super::{Consumer, ConsumerAsync, DistributedIterator, IntoDistributedIterator};
+use super::{Consumer, ConsumerAsync, DistributedStream, IntoDistributedStream};
 use crate::{pool::ProcessSend, sink::Sink};
 
 pub trait IteratorExt: Iterator + Sized {
@@ -17,7 +17,7 @@ impl<I: Iterator + Sized> IteratorExt for I {}
 
 pub struct IterIter<I>(pub(super) I);
 
-impl<I: Iterator> DistributedIterator for IterIter<I>
+impl<I: Iterator> DistributedStream for IterIter<I>
 where
 	I::Item: ProcessSend,
 {
@@ -61,7 +61,7 @@ impl<T> ConsumerAsync for IterIterConsumer<T> {
 	}
 }
 
-impl<Idx> IntoDistributedIterator for Range<Idx>
+impl<Idx> IntoDistributedStream for Range<Idx>
 where
 	Self: Iterator,
 	<Self as Iterator>::Item: ProcessSend,
@@ -69,7 +69,7 @@ where
 	type Iter = IterIter<Self>;
 	type Item = <Self as Iterator>::Item;
 
-	fn into_dist_iter(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::Iter
 	where
 		Self: Sized,
 	{
@@ -77,7 +77,7 @@ where
 	}
 }
 
-impl<Idx> IntoDistributedIterator for RangeFrom<Idx>
+impl<Idx> IntoDistributedStream for RangeFrom<Idx>
 where
 	Self: Iterator,
 	<Self as Iterator>::Item: ProcessSend,
@@ -85,7 +85,7 @@ where
 	type Iter = IterIter<Self>;
 	type Item = <Self as Iterator>::Item;
 
-	fn into_dist_iter(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::Iter
 	where
 		Self: Sized,
 	{
@@ -93,7 +93,7 @@ where
 	}
 }
 
-impl<Idx> IntoDistributedIterator for RangeInclusive<Idx>
+impl<Idx> IntoDistributedStream for RangeInclusive<Idx>
 where
 	Self: Iterator,
 	<Self as Iterator>::Item: ProcessSend,
@@ -101,7 +101,7 @@ where
 	type Iter = IterIter<Self>;
 	type Item = <Self as Iterator>::Item;
 
-	fn into_dist_iter(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::Iter
 	where
 		Self: Sized,
 	{

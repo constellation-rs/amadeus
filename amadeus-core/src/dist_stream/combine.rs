@@ -7,7 +7,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -22,7 +22,7 @@ impl<I, F> Combine<I, F> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedStreamMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
 	for Combine<I, F>
 where
 	F: FnMut(I::Item, I::Item) -> I::Item + Clone + ProcessSend,

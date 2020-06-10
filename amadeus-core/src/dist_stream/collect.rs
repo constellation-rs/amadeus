@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -24,7 +24,7 @@ impl<I, A> Collect<I, A> {
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, T: FromDistributedIterator<I::Item>>
+impl<I: DistributedStreamMulti<Source>, Source, T: FromDistributedStream<I::Item>>
 	DistributedReducer<I, Source, T> for Collect<I, T>
 {
 	type ReduceAFactory = T::ReduceAFactory;
@@ -39,15 +39,15 @@ impl<I: DistributedIteratorMulti<Source>, Source, T: FromDistributedIterator<I::
 	}
 }
 
-pub trait FromDistributedIterator<T>: Sized {
+pub trait FromDistributedStream<T>: Sized {
 	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA> + Clone + ProcessSend;
 	type ReduceBFactory: ReduceFactory<Reducer = Self::ReduceB>;
 	type ReduceA: ReducerSend<Item = T> + ProcessSend;
-	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output>;
+	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
 	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self>;
 
 	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC);
-	// 	fn from_dist_iter<I>(dist_iter: I, pool: &Pool) -> Self where T: Serialize + DeserializeOwned + Send + 'static, I: IntoDistributedIterator<Item = T>, <<I as IntoDistributedIterator>::Iter as DistributedIterator>::Task: Serialize + DeserializeOwned + Send + 'static;
+	// 	fn from_dist_stream<I>(dist_stream: I, pool: &Pool) -> Self where T: Serialize + DeserializeOwned + Send + 'static, I: IntoDistributedStream<Item = T>, <<I as IntoDistributedStream>::Iter as DistributedStream>::Task: Serialize + DeserializeOwned + Send + 'static;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -478,7 +478,7 @@ where
 	type Output = Result<R::Output, E>;
 }
 
-impl<T> FromDistributedIterator<T> for Vec<T>
+impl<T> FromDistributedStream<T> for Vec<T>
 where
 	T: ProcessSend,
 {
@@ -493,7 +493,7 @@ where
 	}
 }
 
-impl<T> FromDistributedIterator<T> for VecDeque<T>
+impl<T> FromDistributedStream<T> for VecDeque<T>
 where
 	T: ProcessSend,
 {
@@ -508,7 +508,7 @@ where
 	}
 }
 
-impl<T: Ord> FromDistributedIterator<T> for BinaryHeap<T>
+impl<T: Ord> FromDistributedStream<T> for BinaryHeap<T>
 where
 	T: ProcessSend,
 {
@@ -523,7 +523,7 @@ where
 	}
 }
 
-impl<T> FromDistributedIterator<T> for LinkedList<T>
+impl<T> FromDistributedStream<T> for LinkedList<T>
 where
 	T: ProcessSend,
 {
@@ -538,7 +538,7 @@ where
 	}
 }
 
-impl<T, S> FromDistributedIterator<T> for HashSet<T, S>
+impl<T, S> FromDistributedStream<T> for HashSet<T, S>
 where
 	T: Eq + Hash + ProcessSend,
 	S: BuildHasher + Default + Send + 'static,
@@ -554,7 +554,7 @@ where
 	}
 }
 
-impl<K, V, S> FromDistributedIterator<(K, V)> for HashMap<K, V, S>
+impl<K, V, S> FromDistributedStream<(K, V)> for HashMap<K, V, S>
 where
 	K: Eq + Hash + ProcessSend,
 	V: ProcessSend,
@@ -571,7 +571,7 @@ where
 	}
 }
 
-impl<T> FromDistributedIterator<T> for BTreeSet<T>
+impl<T> FromDistributedStream<T> for BTreeSet<T>
 where
 	T: Ord + ProcessSend,
 {
@@ -586,7 +586,7 @@ where
 	}
 }
 
-impl<K, V> FromDistributedIterator<(K, V)> for BTreeMap<K, V>
+impl<K, V> FromDistributedStream<(K, V)> for BTreeMap<K, V>
 where
 	K: Ord + ProcessSend,
 	V: ProcessSend,
@@ -602,7 +602,7 @@ where
 	}
 }
 
-impl FromDistributedIterator<char> for String {
+impl FromDistributedStream<char> for String {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<char, Self>;
@@ -614,7 +614,7 @@ impl FromDistributedIterator<char> for String {
 	}
 }
 
-impl FromDistributedIterator<Self> for String {
+impl FromDistributedStream<Self> for String {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<Self>;
@@ -626,7 +626,7 @@ impl FromDistributedIterator<Self> for String {
 	}
 }
 
-impl FromDistributedIterator<()> for () {
+impl FromDistributedStream<()> for () {
 	type ReduceAFactory = DefaultReduceFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<Self>;
@@ -638,7 +638,7 @@ impl FromDistributedIterator<()> for () {
 	}
 }
 
-impl<T, C: FromDistributedIterator<T>> FromDistributedIterator<Option<T>> for Option<C> {
+impl<T, C: FromDistributedStream<T>> FromDistributedStream<Option<T>> for Option<C> {
 	type ReduceAFactory = OptionReduceFactory<C::ReduceAFactory>;
 	type ReduceBFactory = OptionReduceFactory<C::ReduceBFactory>;
 	type ReduceA = OptionReducer<C::ReduceA>;
@@ -655,7 +655,7 @@ impl<T, C: FromDistributedIterator<T>> FromDistributedIterator<Option<T>> for Op
 	}
 }
 
-impl<T, C: FromDistributedIterator<T>, E> FromDistributedIterator<Result<T, E>> for Result<C, E>
+impl<T, C: FromDistributedStream<T>, E> FromDistributedStream<Result<T, E>> for Result<C, E>
 where
 	E: ProcessSend,
 {

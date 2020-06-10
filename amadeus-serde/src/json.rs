@@ -7,7 +7,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpandIter, Source
+	dist_stream::DistributedStream, file::{File, Page, Partition}, into_dist_stream::IntoDistributedStream, util::ResultExpandIter, Source
 };
 
 use super::{SerdeData, SerdeDeserialize};
@@ -47,16 +47,16 @@ where
 	>;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
+	fn dist_stream(self) -> Self::DistStream {
 		let ret = self
 			.partitions
-			.into_dist_iter()
+			.into_dist_stream()
 			.flat_map(FnMut!(|partition: F::Partition| async move {
 				Ok(stream::iter(
 					partition
@@ -88,7 +88,7 @@ where
 			.flatten_stream()
 			.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
 	}
 	fn iter(self) -> Self::Iter {

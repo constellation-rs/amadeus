@@ -9,7 +9,7 @@ use std::{
 use sum::*;
 
 use super::{
-	ConsumerMulti, ConsumerMultiAsync, DistributedIteratorMulti, DistributedReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	ConsumerMulti, ConsumerMultiAsync, DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::{
 	pool::ProcessSend, sink::{Sink, SinkMap}
@@ -41,7 +41,7 @@ where
 macro_rules! impl_iterator_multi_tuple {
 	($reduceafactory:ident $reducea:ident $reduceaasync:ident $reducebfactory:ident $reduceb:ident $reducebasync:ident $async:ident $enum:ident $($copy:ident)? : $($i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $num:tt $t:ident $($copyb:ident)? , $comma:tt)*) => (
 		impl<
-				$($i: DistributedIteratorMulti<Source>,)*
+				$($i: DistributedStreamMulti<Source>,)*
 				Source,
 				$($r: DistributedReducer<$i, Source, $o>,)*
 				$($o,)*
@@ -65,8 +65,8 @@ macro_rules! impl_iterator_multi_tuple {
 			}
 		}
 
-		impl<Source, $($i: DistributedIteratorMulti<Source>,)*>
-			DistributedIteratorMulti<Source> for ($($i,)*)
+		impl<Source, $($i: DistributedStreamMulti<Source>,)*>
+			DistributedStreamMulti<Source> for ($($i,)*)
 				where Source: $($copy)*,
 		{
 			type Item = $enum<$($i::Item,)*>;

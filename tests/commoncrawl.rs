@@ -1,8 +1,6 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
-use std::{
-	env, time::{Duration, SystemTime}
-};
+use std::time::{Duration, SystemTime};
 
 use amadeus::prelude::*;
 use data::Webpage;
@@ -12,19 +10,13 @@ async fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
-
 	let thread_pool_time = {
 		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
 	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
+		let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
 		run(&process_pool).await
 	};
 	#[cfg(not(feature = "constellation"))]
@@ -36,10 +28,8 @@ async fn main() {
 async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	CommonCrawl::new("CC-MAIN-2018-43")
-		.await
-		.unwrap()
-		.dist_iter()
+	let rows = CommonCrawl::new("CC-MAIN-2018-43").await.unwrap();
+	rows.dist_stream()
 		.all(
 			pool,
 			FnMut!(move |x: Result<Webpage<'static>, _>| -> bool {
