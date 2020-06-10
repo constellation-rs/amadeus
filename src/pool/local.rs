@@ -1,6 +1,6 @@
 use futures::{future, FutureExt, TryFutureExt};
 use std::{
-	future::Future, panic, panic::{RefUnwindSafe, UnwindSafe}, sync::Arc
+	future::Future, panic::{RefUnwindSafe, UnwindSafe}, sync::Arc
 };
 use tokio::task::spawn;
 
@@ -41,6 +41,7 @@ impl ThreadPool {
 		Fut: Future<Output = T> + 'static,
 		T: Send + 'static,
 	{
+		let _self = self;
 		spawn(DuckSend(future::lazy(|_| work()).flatten()))
 			.map_err(tokio::task::JoinError::into_panic)
 			.map_err(Panicked::from)
@@ -75,7 +76,7 @@ where
 	type Output = F::Output;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		assert!(<F as IsSend>::is_send());
+		assert!(<F as IsSend>::is_send(), "{}", std::any::type_name::<F>());
 		self.project().0.poll(cx)
 	}
 }

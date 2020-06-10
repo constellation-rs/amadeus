@@ -1,4 +1,5 @@
-// use pin_project::pin_project;
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::{
 	any::Any, error::Error, fmt::{self, Debug, Display}, future::Future, mem, sync::{
@@ -161,7 +162,6 @@ impl Synchronize {
 	}
 }
 
-#[allow(dead_code)]
 pub fn assert_sync_and_send<T: Send + Sync>(t: T) -> T {
 	t
 }

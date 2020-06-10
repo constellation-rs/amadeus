@@ -1,13 +1,13 @@
-use csv::Error as SerdeCsvError;
-use futures::stream;
+use csv::Error as InternalCsvError;
+use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	error, fmt::{self, Display}, iter, marker::PhantomData
+	error, fmt::{self, Display}, io::Cursor, iter, marker::PhantomData
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
+	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpandIter, Source
 };
 
 use super::{SerdeData, SerdeDeserializeGroup};
@@ -65,9 +65,9 @@ where
 	F: File,
 	Row: SerdeData,
 {
-	pub fn new(file: F) -> Result<Self, <Self as Source>::Error> {
+	pub async fn new(file: F) -> Result<Self, <Self as Source>::Error> {
 		Ok(Self {
-			partitions: file.partitions().map_err(CsvError::File)?,
+			partitions: file.partitions().await.map_err(CsvError::File)?,
 			marker: PhantomData,
 		})
 	}
@@ -98,24 +98,41 @@ where
 		let ret = self
 			.partitions
 			.into_dist_iter()
-			.flat_map(FnMut!(|partition: F::Partition| {
-				stream::iter(
-					ResultExpand(partition.pages().map_err(CsvError::Partition))
-						.into_iter()
-						.flat_map(|page: Result<_, _>| {
-							ResultExpand(page.map(|page| {
-								csv::ReaderBuilder::new()
-									.has_headers(false)
-									.from_reader(Page::reader(page))
-									.into_deserialize()
-									.map(|x: Result<SerdeDeserializeGroup<Row>, SerdeCsvError>| {
-										Ok(x?.0)
-									})
-							}))
-						})
-						.map(|row: Result<Result<Row, SerdeCsvError>, Self::Error>| Ok(row??)),
+			.flat_map(FnMut!(|partition: F::Partition| async move {
+				Ok(stream::iter(
+					partition
+						.pages()
+						.await
+						.map_err(CsvError::Partition)?
+						.into_iter(),
 				)
-			}));
+				.flat_map(|page| {
+					async move {
+						let mut buf = Vec::new();
+						let reader = Page::reader(page);
+						pin_mut!(reader);
+						let _ = reader
+							.read_to_end(&mut buf)
+							.await
+							.map_err(InternalCsvError::from)?;
+						Ok(stream::iter(
+							csv::ReaderBuilder::new()
+								.has_headers(false)
+								.from_reader(Cursor::new(buf))
+								.into_deserialize()
+								.map(|x: Result<SerdeDeserializeGroup<Row>, InternalCsvError>| {
+									Ok(x?.0)
+								}),
+						))
+					}
+					.map(ResultExpandIter::new)
+					.flatten_stream()
+				})
+				.map(|row: Result<Result<Row, InternalCsvError>, Self::Error>| Ok(row??)))
+			}
+			.map(ResultExpandIter::new)
+			.flatten_stream()
+			.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))));
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
 		ret
@@ -202,7 +219,7 @@ pub enum CsvError<A, B, C> {
 	File(A),
 	Partition(B),
 	Page(C),
-	Csv(#[serde(with = "csverror")] SerdeCsvError),
+	Csv(#[serde(with = "csverror")] InternalCsvError),
 }
 impl<A, B, C> Clone for CsvError<A, B, C>
 where
@@ -257,8 +274,8 @@ where
 		}
 	}
 }
-impl<A, B, C> From<SerdeCsvError> for CsvError<A, B, C> {
-	fn from(err: SerdeCsvError) -> Self {
+impl<A, B, C> From<InternalCsvError> for CsvError<A, B, C> {
+	fn from(err: InternalCsvError) -> Self {
 		Self::Csv(err)
 	}
 }

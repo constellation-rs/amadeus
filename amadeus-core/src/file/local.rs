@@ -1,7 +1,11 @@
+#![allow(clippy::needless_lifetimes)]
+
 use async_trait::async_trait;
-use futures::{stream, FutureExt, StreamExt, TryStreamExt};
+use futures::{future::BoxFuture, stream, FutureExt, StreamExt, TryStreamExt};
 use std::{
-	convert::TryFrom, ffi::{OsStr, OsString}, fs, future::Future, io::{self, Seek, SeekFrom}, path::{Path, PathBuf}, pin::Pin, sync::atomic::{AtomicU64, Ordering}
+	convert::TryFrom, ffi::{OsStr, OsString}, fs, io::{self, Seek, SeekFrom}, path::{Path, PathBuf}, sync::{
+		atomic::{AtomicU64, Ordering}, Arc
+	}
 };
 use walkdir::WalkDir;
 
@@ -206,11 +210,14 @@ impl File for &OsStr {
 
 // https://github.com/vasi/positioned-io/blob/a03c792f5b6f99cb4f72e146befdfc8b1f6e1d28/src/raf.rs
 
-pub struct LocalFile {
+struct LocalFileInner {
 	file: fs::File,
 	len: AtomicU64,
 	#[cfg(windows)]
 	pos: u64,
+}
+pub struct LocalFile {
+	inner: Arc<LocalFileInner>,
 }
 impl LocalFile {
 	/// [Opens](https://doc.rust-lang.org/std/fs/struct.File.html#method.open)
@@ -227,7 +234,8 @@ impl LocalFile {
 			file.seek(SeekFrom::Start(old_pos))?;
 		}
 		let len = AtomicU64::new(len);
-		Ok(Self { file, len })
+		let inner = Arc::new(LocalFileInner { file, len });
+		Ok(Self { inner })
 	}
 
 	#[cfg(windows)]
@@ -235,18 +243,19 @@ impl LocalFile {
 		let pos = file.seek(SeekFrom::Current(0))?;
 		let len = file.seek(SeekFrom::End(0))?;
 		let len = AtomicU64::new(len);
-		Ok(Self { file, len, pos })
+		let inner = Arc::new(LocalFileInner { file, len, pos });
+		Ok(Self { inner })
 	}
 
-	#[cfg(unix)]
-	fn into_file(self) -> io::Result<fs::File> {
-		Ok(self.file)
-	}
+	// #[cfg(unix)]
+	// fn into_file(self) -> io::Result<fs::File> {
+	// 	Ok(self.file)
+	// }
 
-	#[cfg(windows)]
-	fn into_file(mut self) -> io::Result<fs::File> {
-		self.file.seek(SeekFrom::Start(self.pos)).map(|_| self.file)
-	}
+	// #[cfg(windows)]
+	// fn into_file(mut self) -> io::Result<fs::File> {
+	// 	self.file.seek(SeekFrom::Start(self.pos)).map(|_| self.file)
+	// }
 }
 
 impl From<fs::File> for LocalFile {
@@ -254,21 +263,21 @@ impl From<fs::File> for LocalFile {
 		Self::from_file(file).unwrap()
 	}
 }
-impl From<LocalFile> for fs::File {
-	fn from(file: LocalFile) -> Self {
-		file.into_file().unwrap()
-	}
-}
+// impl From<LocalFile> for fs::File {
+// 	fn from(file: LocalFile) -> Self {
+// 		file.into_file().unwrap()
+// 	}
+// }
 
 #[cfg(unix)]
 impl LocalFile {
 	#[inline]
 	fn read_at(&self, pos: u64, buf: &mut [u8]) -> io::Result<usize> {
-		FileExt::read_at(&self.file, buf, pos)
+		FileExt::read_at(&self.inner.file, buf, pos)
 	}
 	#[inline]
 	fn write_at(&self, pos: u64, buf: &[u8]) -> io::Result<usize> {
-		FileExt::write_at(&self.file, buf, pos)
+		FileExt::write_at(&self.inner.file, buf, pos)
 	}
 }
 
@@ -276,11 +285,11 @@ impl LocalFile {
 impl LocalFile {
 	#[inline]
 	fn read_at(&self, pos: u64, buf: &mut [u8]) -> io::Result<usize> {
-		FileExt::seek_read(&self.file, buf, pos)
+		FileExt::seek_read(&self.inner.file, buf, pos)
 	}
 	#[inline]
 	fn write_at(&self, pos: u64, buf: &[u8]) -> io::Result<usize> {
-		FileExt::seek_write(&self.file, buf, pos)
+		FileExt::seek_write(&self.inner.file, buf, pos)
 	}
 }
 
@@ -289,19 +298,24 @@ impl Page for LocalFile {
 	type Error = IoError;
 
 	fn len(&self) -> u64 {
-		self.len.load(Ordering::Relaxed)
+		self.inner.len.load(Ordering::Relaxed)
 	}
 	fn set_len(&self, len: u64) -> Result<(), Self::Error> {
-		self.file.set_len(len)?;
-		self.len.store(len, Ordering::Relaxed);
+		self.inner.file.set_len(len)?;
+		self.inner.len.store(len, Ordering::Relaxed);
 		Ok(())
 	}
-	fn read<'a>(
-		&'a self, mut offset: u64, mut buf: &'a mut [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+	fn read(
+		&self, mut offset: u64, len: usize,
+	) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+		let self_ = LocalFile {
+			inner: self.inner.clone(),
+		};
 		Box::pin(async move {
+			let mut buf_ = vec![0; len].into_boxed_slice();
+			let mut buf = &mut *buf_;
 			while !buf.is_empty() {
-				match self.read_at(offset, buf) {
+				match self_.read_at(offset, buf) {
 					Ok(0) => break,
 					Ok(n) => {
 						let tmp = buf;
@@ -318,16 +332,20 @@ impl Page for LocalFile {
 						.into(),
 				)
 			} else {
-				Ok(())
+				Ok(buf_)
 			}
 		})
 	}
-	fn write<'a>(
-		&'a self, mut offset: u64, mut buf: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+	fn write(
+		&self, mut offset: u64, buf: Box<[u8]>,
+	) -> BoxFuture<'static, Result<(), Self::Error>> {
+		let self_ = LocalFile {
+			inner: self.inner.clone(),
+		};
 		Box::pin(async move {
+			let mut buf = &*buf;
 			while !buf.is_empty() {
-				match self.write_at(offset, buf) {
+				match self_.write_at(offset, buf) {
 					Ok(0) => {
 						return Err(io::Error::new(
 							io::ErrorKind::WriteZero,
@@ -336,7 +354,8 @@ impl Page for LocalFile {
 						.into())
 					}
 					Ok(n) => {
-						let _ = self
+						let _ = self_
+							.inner
 							.len
 							.fetch_max(offset + u64::try_from(n).unwrap(), Ordering::Relaxed);
 						buf = &buf[n..];

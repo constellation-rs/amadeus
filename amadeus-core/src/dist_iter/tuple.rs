@@ -60,7 +60,7 @@ macro_rules! impl_iterator_multi_tuple {
 					($($iterator,)*),
 					$reduceafactory($($reducera,)*),
 					$reducebfactory($($reducerb,)*),
-					$reduceb{$($t: $t,)*},
+					$reduceb{$($t,)*},
 				)
 			}
 		}

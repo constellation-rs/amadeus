@@ -18,7 +18,7 @@ async fn main() {
 		.unwrap_or(10);
 
 	let thread_pool_time = {
-		let thread_pool = ThreadPool::new();
+		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]
@@ -45,8 +45,9 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		f: String,
 	}
 
-	let rows =
-		Csv::<_, GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]).unwrap();
+	let rows = Csv::<_, GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")])
+		.await
+		.unwrap();
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
@@ -65,7 +66,9 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		f: String,
 	}
 
-	let rows = Csv::<_, Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]).unwrap();
+	let rows = Csv::<_, Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")])
+		.await
+		.unwrap();
 	assert_eq!(
 		rows.dist_iter()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {

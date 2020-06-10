@@ -8,8 +8,8 @@ pub use local::ThreadPool;
 pub use process::ProcessPool;
 
 mod process_pool_impls {
-	use futures::future::TryFutureExt;
-	use std::{error::Error, future::Future, pin::Pin};
+	use futures::future::{BoxFuture, TryFutureExt};
+	use std::{error::Error, future::Future};
 
 	use amadeus_core::pool::{ProcessPool as Pool, ProcessSend};
 
@@ -26,7 +26,7 @@ mod process_pool_impls {
 		fn processes(&self) -> usize {
 			ProcessPool::processes(self)
 		}
-		fn spawn<F, Fut, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
+		fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 		where
 			F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
 			Fut: Future<Output = T> + 'static,
@@ -42,7 +42,7 @@ mod process_pool_impls {
 		fn processes(&self) -> usize {
 			1
 		}
-		fn spawn<F, Fut, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
+		fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 		where
 			F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
 			Fut: Future<Output = T> + 'static,
@@ -55,8 +55,8 @@ mod process_pool_impls {
 }
 
 mod thread_pool_impls {
-	use futures::future::TryFutureExt;
-	use std::{error::Error, future::Future, pin::Pin};
+	use futures::future::{BoxFuture, TryFutureExt};
+	use std::{error::Error, future::Future};
 
 	use amadeus_core::pool::ThreadPool as Pool;
 
@@ -68,7 +68,7 @@ mod thread_pool_impls {
 		fn threads(&self) -> usize {
 			ThreadPool::threads(self)
 		}
-		fn spawn<F, Fut, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
+		fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 		where
 			F: FnOnce() -> Fut + Send + 'static,
 			Fut: Future<Output = T> + 'static,

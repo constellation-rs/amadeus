@@ -53,6 +53,11 @@ impl<A, B> SumReducerFactory<A, B> {
 		Self(PhantomData)
 	}
 }
+impl<A, B> Default for SumReducerFactory<A, B> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
 impl<A, B> ReduceFactory for SumReducerFactory<A, B>
 where
 	B: iter::Sum<A> + iter::Sum,

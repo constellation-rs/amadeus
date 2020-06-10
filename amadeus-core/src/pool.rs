@@ -1,6 +1,7 @@
+use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::{
-	error::Error, future::Future, panic::{RefUnwindSafe, UnwindSafe}, pin::Pin
+	error::Error, future::Future, panic::{RefUnwindSafe, UnwindSafe}
 };
 
 pub trait ProcessSend: Send + Serialize + for<'de> Deserialize<'de> + 'static {}
@@ -12,7 +13,7 @@ pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin 
 	type ThreadPool: ThreadPool + 'static;
 
 	fn processes(&self) -> usize;
-	fn spawn<F, Fut, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
+	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
 		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
 		Fut: Future<Output = T> + 'static,
@@ -21,7 +22,7 @@ pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin 
 
 pub trait ThreadPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 	fn threads(&self) -> usize;
-	fn spawn<F, Fut, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
+	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
 		F: FnOnce() -> Fut + Send + 'static,
 		Fut: Future<Output = T> + 'static,
@@ -37,7 +38,7 @@ where
 	fn processes(&self) -> usize {
 		(*self).processes()
 	}
-	fn spawn<F, Fut, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
+	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
 		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
 		Fut: Future<Output = T> + 'static,
@@ -54,7 +55,7 @@ where
 	fn threads(&self) -> usize {
 		(*self).threads()
 	}
-	fn spawn<F, Fut, T>(&self, work: F) -> Pin<Box<dyn Future<Output = Result<T>> + Send>>
+	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
 		F: FnOnce() -> Fut + Send + 'static,
 		Fut: Future<Output = T> + 'static,

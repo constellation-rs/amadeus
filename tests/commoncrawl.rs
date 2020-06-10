@@ -19,7 +19,7 @@ async fn main() {
 		.unwrap_or(10);
 
 	let thread_pool_time = {
-		let thread_pool = ThreadPool::new();
+		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool).await
 	};
 	#[cfg(feature = "constellation")]

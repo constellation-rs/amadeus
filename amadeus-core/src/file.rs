@@ -1,15 +1,19 @@
+#![allow(clippy::type_complexity)]
+
 mod local;
 
 use async_trait::async_trait;
-use futures::future::FutureExt;
+use futures::{future::BoxFuture, ready};
 use pin_project::pin_project;
 use std::{
-	convert::{TryFrom, TryInto}, error::Error, fmt, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
+	convert::TryFrom, error::Error, fmt, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
 use crate::pool::ProcessSend;
 
 pub use local::LocalFile;
+
+const PAGE_SIZE: usize = 10 * 1024 * 1024; // `Reader` reads this many bytes at a time
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PathBuf {
@@ -138,12 +142,8 @@ pub trait Page {
 
 	fn len(&self) -> u64;
 	fn set_len(&self, len: u64) -> Result<(), Self::Error>;
-	fn read<'a>(
-		&'a self, offset: u64, buf: &'a mut [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>>;
-	fn write<'a>(
-		&'a self, offset: u64, buf: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>>;
+	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>>;
+	fn write(&self, offset: u64, buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>>;
 
 	fn reader(self) -> Reader<Self>
 	where
@@ -166,14 +166,10 @@ where
 	fn set_len(&self, len: u64) -> Result<(), Self::Error> {
 		(**self).set_len(len)
 	}
-	fn read<'a>(
-		&'a self, offset: u64, buf: &'a mut [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
-		(**self).read(offset, buf)
+	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+		(**self).read(offset, len)
 	}
-	fn write<'a>(
-		&'a self, offset: u64, buf: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+	fn write(&self, offset: u64, buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>> {
 		(**self).write(offset, buf)
 	}
 }
@@ -190,22 +186,24 @@ where
 	fn set_len(&self, len: u64) -> Result<(), Self::Error> {
 		(**self).set_len(len)
 	}
-	fn read<'a>(
-		&'a self, offset: u64, buf: &'a mut [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
-		(**self).read(offset, buf)
+	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+		(**self).read(offset, len)
 	}
-	fn write<'a>(
-		&'a self, offset: u64, buf: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+	fn write(&self, offset: u64, buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>> {
 		(**self).write(offset, buf)
 	}
 }
 
 #[pin_project]
-#[derive(Clone)]
-pub struct Reader<P> {
+pub struct Reader<P>
+where
+	P: Page,
+{
+	#[pin]
 	page: P,
+	#[pin]
+	pending: Option<BoxFuture<'static, Result<Box<[u8]>, P::Error>>>,
+	pending_len: Option<usize>,
 	offset: u64,
 }
 #[allow(clippy::len_without_is_empty)]
@@ -214,7 +212,12 @@ where
 	P: Page,
 {
 	fn new(page: P) -> Self {
-		Self { page, offset: 0 }
+		Self {
+			page,
+			pending: None,
+			pending_len: None,
+			offset: 0,
+		}
 	}
 	pub fn len(&self) -> u64 {
 		self.page.len()
@@ -225,51 +228,31 @@ where
 	P: Page,
 {
 	fn poll_read(
-		self: Pin<&mut Self>, _cx: &mut Context, _buf: &mut [u8],
+		self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8],
 	) -> Poll<io::Result<usize>> {
-		unimplemented!();
-		// println!("Reader::poll_read");
-		// let rem = self.page.len().saturating_sub(self.offset);
-		// let rem: usize = rem.try_into().unwrap();
-		// let rem = rem.min(buf.len());
-		// buf = &mut buf[..rem];
-		// let offset = self.offset;
-		// // let self_offset = &mut self.offset;
-		// let ret = unsafe { self.map_unchecked_mut(|s| &mut s.page) }
-		// 	.read(offset, buf)
-		// 	.poll_unpin(cx)
-		// 	.map(|x| x.map(|()| {
-		// 		println!("/Reader::poll_read");
-		// 		// *self_offset += u64::try_from(rem).unwrap();
-		// 		rem
-		// 	}).map_err(Into::into))
-		// 	;
-		// println!("{:?}", ret);
-		// ret
+		let mut self_ = self.project();
+		if self_.pending.is_none() {
+			let start = *self_.offset;
+			let len = (self_.page.len() - start).min(buf.len() as u64) as usize;
+			let len = len.min(PAGE_SIZE);
+			let pending = self_.page.read(start, len);
+			*self_.pending = Some(pending);
+			*self_.pending_len = Some(len);
+		}
+		let ret = ready!(self_.pending.as_mut().as_pin_mut().unwrap().poll(cx));
+		*self_.pending = None;
+		let len = self_.pending_len.take().unwrap();
+		let ret = ret
+			.map(|buf_| {
+				buf[..len].copy_from_slice(&buf_);
+				len
+			})
+			.map_err(Into::into);
+		*self_.offset += u64::try_from(len).unwrap();
+		Poll::Ready(ret)
 	}
 }
-// impl<P> io::Read for Reader<P>
-// where
-// 	P: Page,
-// {
-// 	fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
-// 		// let future = futures::io::AsyncReadExt::read(self, buf);
-// 		let rem = self.page.len().saturating_sub(self.offset);
-// 		let rem: usize = rem.try_into().unwrap();
-// 		let rem = rem.min(buf.len());
-// 		buf = &mut buf[..rem];
-// 		let offset = self.offset;
-// 		self.offset += u64::try_from(rem).unwrap();
-// 		let future = self
-// 			.page
-// 			.read(offset, buf)
-// 			.map(|x| x.map(|()| rem).map_err(Into::into));
-// 		P::block_on(future)
-// 	}
-// 	unsafe fn initializer(&self) -> io::Initializer {
-// 		io::Initializer::nop()
-// 	}
-// }
+
 // impl<P> io::Seek for Reader<P>
 // where
 // 	P: Page,

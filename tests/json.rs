@@ -18,7 +18,7 @@ async fn main() {
 		.unwrap_or(10);
 
 	let thread_pool_time = {
-		let thread_pool = ThreadPool::new();
+		let thread_pool = ThreadPool::new(None);
 		run(&thread_pool, 2).await
 	};
 	#[cfg(feature = "constellation")]
@@ -75,6 +75,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Dura
 			PathBuf::from("amadeus-testing/json/bitcoin2.json");
 			tasks
 		])
+		.await
 		.unwrap();
 	assert_eq!(
 		rows.dist_iter()
@@ -90,6 +91,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Dura
 		PathBuf::from("amadeus-testing/json/bitcoin2.json");
 		tasks
 	])
+	.await
 	.unwrap();
 	assert_eq!(
 		rows.dist_iter()
