@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.7")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.0")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 
@@ -7,16 +7,22 @@ mod impls;
 #[doc(hidden)]
 pub use postgres as _internal;
 
-use postgres::{params::IntoConnectParams, Error as PostgresError};
+use bytes::{Buf, Bytes};
+use futures::{ready, stream, FutureExt, Stream, StreamExt, TryStreamExt};
+use pin_project::pin_project;
+use postgres::{CopyOutStream, Error as InternalPostgresError};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::TryFrom, error, fmt::{self, Debug, Display}, io, iter, marker::PhantomData, ops::Fn, path::PathBuf, str
+	convert::TryFrom, error, fmt::{self, Debug, Display}, io, io::Cursor, marker::PhantomData, ops::Fn, path::PathBuf, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::IoError, Source as DSource
+	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, util::IoError, Source as DSource
 };
+
+const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
+const HEADER_LEN: usize = MAGIC.len() + 4 + 4;
 
 pub trait PostgresData
 where
@@ -84,59 +90,80 @@ impl str::FromStr for Table {
 	}
 }
 
-// postgres::params::ConnectParams
 #[derive(Serialize, Deserialize)]
 pub struct ConnectParams {
-	#[serde(with = "Host")]
-	host: postgres::params::Host,
-	port: u16,
-	#[serde(with = "misc_serde")]
-	user: Option<postgres::params::User>,
-	database: Option<String>,
-	options: Vec<(String, String)>,
-	connect_timeout: Option<std::time::Duration>,
+	hosts: Vec<Host>,
+	ports: Vec<u16>,
+	user: Option<String>,
+	password: Option<Vec<u8>>,
+	dbname: Option<String>,
+	options: Option<String>,
+	connect_timeout: Option<Duration>,
 }
-impl IntoConnectParams for ConnectParams {
-	fn into_connect_params(
-		self,
-	) -> Result<postgres::params::ConnectParams, Box<dyn std::error::Error + 'static + Send + Sync>>
-	{
-		let mut builder = postgres::params::ConnectParams::builder();
-		let _ = builder.port(self.port);
-		if let Some(user) = self.user {
-			let _ = builder.user(user.name(), user.password());
+impl From<ConnectParams> for postgres::config::Config {
+	fn from(from: ConnectParams) -> Self {
+		let mut config = postgres::config::Config::new();
+		for host in from.hosts {
+			let _ = match host {
+				Host::Tcp(addr) => config.host(&addr.to_string()),
+				Host::Unix(path) => config.host_path(&path),
+			};
 		}
-		if let Some(database) = self.database {
-			let _ = builder.database(&database);
+		for port in from.ports {
+			let _ = config.port(port);
 		}
-		for (name, value) in self.options {
-			let _ = builder.option(&name, &value);
+		if let Some(user) = from.user {
+			let _ = config.user(&user);
 		}
-		let _ = builder.connect_timeout(self.connect_timeout);
-		Ok(builder.build(self.host))
+		if let Some(password) = from.password {
+			let _ = config.password(password);
+		}
+		if let Some(dbname) = from.dbname {
+			let _ = config.dbname(&dbname);
+		}
+		if let Some(options) = from.options {
+			let _ = config.options(&options);
+		}
+		if let Some(connect_timeout) = from.connect_timeout {
+			let _ = config.connect_timeout(connect_timeout);
+		}
+		config
+	}
+}
+impl From<postgres::config::Config> for ConnectParams {
+	fn from(from: postgres::config::Config) -> Self {
+		Self {
+			hosts: from.get_hosts().iter().cloned().map(Into::into).collect(),
+			ports: from.get_ports().to_owned(),
+			user: from.get_user().map(ToOwned::to_owned),
+			password: from.get_password().map(ToOwned::to_owned),
+			dbname: from.get_dbname().map(ToOwned::to_owned),
+			options: from.get_options().map(ToOwned::to_owned),
+			connect_timeout: from.get_connect_timeout().cloned(),
+		}
 	}
 }
 impl str::FromStr for ConnectParams {
 	type Err = Box<dyn std::error::Error + 'static + Send + Sync>;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let params = s.into_connect_params()?;
-		Ok(Self {
-			host: params.host().clone(),
-			port: params.port(),
-			user: params.user().map(Clone::clone),
-			database: params.database().map(ToOwned::to_owned),
-			options: params.options().to_owned(),
-			connect_timeout: params.connect_timeout(),
-		})
+		let params: postgres::config::Config = s.parse()?;
+		Ok(params.into())
 	}
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "postgres::params::Host")]
 enum Host {
 	Tcp(String),
 	Unix(PathBuf),
+}
+impl From<postgres::config::Host> for Host {
+	fn from(from: postgres::config::Host) -> Self {
+		match from {
+			postgres::config::Host::Tcp(addr) => Host::Tcp(addr),
+			postgres::config::Host::Unix(path) => Host::Unix(path),
+		}
+	}
 }
 
 pub struct Postgres<Row>
@@ -166,45 +193,31 @@ where
 	Row: PostgresData,
 {
 	type Item = Row;
-	type Error = Error;
+	type Error = PostgresError;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
+	fn dist_stream(self) -> Self::DistStream {
 		let ret = self
 			.files
-			.into_dist_iter()
-			.flat_map(FnMut!(|(connect, tables)| {
-				let (connect, tables): (ConnectParams, Vec<Source>) = (connect, tables);
-				let connection =
-					postgres::Connection::connect(connect, postgres::TlsMode::None).unwrap();
-				tables.into_iter().flat_map(
-					(move |table: Source| {
-						// let stmt = connection.prepare("SELECT $1::\"public\".\"weather\"").unwrap();
-						// let type_ = stmt.param_types()[0].clone();
-						// let stmt = connection.prepare("SELECT ROW(city, temp_lo, temp_hi, prcp, date, CASE WHEN invent IS NOT NULL THEN ROW((invent).name, (invent).supplier_id, (invent).price) ELSE NULL END) FROM \"public\".\"weather\"").unwrap();
-						// let type_ = stmt.columns()[0].type_().clone();
-						// println!("{:?}", type_);
-						// println!("{:?}", type_.kind());
-						// let stmt = connection.execute("SELECT $1::weather", &[&A::default()]).unwrap();
-
-						let mut vec = Vec::new();
-
-						let writer = |row: Option<&[u8]>, _: &postgres::stmt::CopyInfo| {
-							println!("{:?}", row);
-							let row = Row::decode(&postgres::types::RECORD, row).unwrap();
-							println!("{:?}", row);
-							vec.push(Ok(row));
-							Ok(())
-						};
-
-						let mut writer = postgres_binary_copy::BinaryCopyWriter::new(writer);
-
+			.into_dist_stream()
+			.flat_map(FnMut!(|(config, tables)| async move {
+				let (config, tables): (ConnectParams, Vec<Source>) = (config, tables);
+				let (client, connection) = postgres::config::Config::from(config)
+					.connect(postgres::tls::NoTls)
+					.await
+					.unwrap();
+				tokio::spawn(async move {
+					let _ = connection.await;
+				});
+				let client = Arc::new(client);
+				stream::iter(tables.into_iter()).flat_map(move |table: Source| {
+					let client = client.clone();
+					async move {
 						let table = match table {
 							Source::Table(table) => table.to_string(),
 							Source::Query(query) => format!("({}) _", query),
@@ -214,24 +227,122 @@ where
 							DisplayFmt::new(|f| Row::query(f, None)),
 							table
 						);
-						println!("{}", query);
-						let stmt = connection.prepare(&query).unwrap();
-						let _ = stmt.copy_out(&[], &mut writer).unwrap();
-						vec.into_iter()
-					}),
-				)
-			}));
+						let stmt = client.prepare(&query).await.unwrap();
+						let stream = client.copy_out(&stmt).await.unwrap();
+						BinaryCopyOutStream::new(stream)
+							.map_ok(|row| {
+								Row::decode(
+									&postgres::types::Type::RECORD,
+									row.as_ref().map(|bytes| bytes.as_ref()),
+								)
+								.unwrap()
+							})
+							.map_err(Into::into)
+					}
+					.flatten_stream()
+				})
+			}
+			.flatten_stream()));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-	fn iter(self) -> Self::Iter {
-		iter::empty()
 	}
 }
 
-use std::io::Read;
-pub fn read_be_i32(buf: &mut &[u8]) -> ::std::io::Result<i32> {
+#[pin_project]
+/// A stream of rows deserialized from the PostgreSQL binary copy format.
+pub struct BinaryCopyOutStream {
+	#[pin]
+	stream: CopyOutStream,
+	header: bool,
+}
+
+impl BinaryCopyOutStream {
+	/// Creates a stream from a raw copy out stream and the types of the columns being returned.
+	pub fn new(stream: CopyOutStream) -> Self {
+		BinaryCopyOutStream {
+			stream,
+			header: false,
+		}
+	}
+}
+
+impl Stream for BinaryCopyOutStream {
+	type Item = Result<Option<Bytes>, PostgresError>;
+
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		let self_ = self.project();
+
+		let chunk = match ready!(self_.stream.poll_next(cx)) {
+			Some(Ok(chunk)) => chunk,
+			Some(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
+			None => {
+				return Poll::Ready(Some(Err(io::Error::new(
+					io::ErrorKind::UnexpectedEof,
+					"connection closed",
+				)
+				.into())))
+			}
+		};
+		let mut chunk = Cursor::new(chunk);
+
+		if !*self_.header {
+			check_remaining(&chunk, HEADER_LEN)?;
+			if &chunk.bytes()[..MAGIC.len()] != MAGIC {
+				return Poll::Ready(Some(Err(io::Error::new(
+					io::ErrorKind::InvalidData,
+					"error parsing response from server: invalid magic value",
+				)
+				.into())));
+			}
+			chunk.advance(MAGIC.len());
+
+			let flags = chunk.get_i32();
+			let has_oids = (flags & (1 << 16)) != 0;
+
+			let header_extension = chunk.get_u32() as usize;
+			check_remaining(&chunk, header_extension)?;
+			chunk.advance(header_extension);
+
+			assert!(!has_oids);
+			*self_.header = true;
+		}
+
+		check_remaining(&chunk, 2)?;
+		let len = chunk.get_i16();
+		if len == -1 {
+			return Poll::Ready(None);
+		}
+
+		assert_eq!(len, 1);
+
+		check_remaining(&chunk, 4)?;
+		let len = chunk.get_i32();
+		if len == -1 {
+			Poll::Ready(Some(Ok(None)))
+		} else {
+			let len = len as usize;
+			check_remaining(&chunk, len)?;
+			let start = chunk.position() as usize;
+			Poll::Ready(Some(Ok(Some(chunk.into_inner().slice(start..start + len)))))
+		}
+	}
+}
+
+fn check_remaining(buf: &Cursor<Bytes>, len: usize) -> Result<(), PostgresError> {
+	if buf.remaining() < len {
+		Err(io::Error::new(
+			io::ErrorKind::UnexpectedEof,
+			"error parsing response from server: unexpected EOF",
+		)
+		.into())
+	} else {
+		Ok(())
+	}
+}
+
+pub fn read_be_i32(buf: &mut &[u8]) -> io::Result<i32> {
+	use std::io::Read;
 	let mut bytes = [0; 4];
 	buf.read_exact(&mut bytes)?;
 	let num = ((i32::from(bytes[0])) << 24)
@@ -287,105 +398,22 @@ impl<'a> Display for Names<'a> {
 // select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
 // select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;
 
-mod misc_serde {
-	use postgres::Error as PostgresError;
-	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-	pub struct Serde<T>(T);
-
-	impl Serialize for Serde<&postgres::params::User> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			(self.0.name(), self.0.password()).serialize(serializer)
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<postgres::params::User> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			<(String, Option<String>)>::deserialize(deserializer).map(|(name, password)| {
-				Self(
-					postgres::params::ConnectParams::builder()
-						.user(&name, password.as_deref())
-						.build(postgres::params::Host::Tcp(String::new()))
-						.user()
-						.unwrap()
-						.clone(),
-				)
-			})
-		}
-	}
-
-	impl Serialize for Serde<&Option<postgres::params::User>> {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			self.0.as_ref().map(Serde).serialize(serializer)
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<Option<postgres::params::User>> {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			<Option<Serde<postgres::params::User>>>::deserialize(deserializer)
-				.map(|x| Self(x.map(|x| x.0)))
-		}
-	}
-
-	impl Serialize for Serde<&PostgresError> {
-		fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			panic!()
-		}
-	}
-	impl<'de> Deserialize<'de> for Serde<PostgresError> {
-		fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			panic!()
-		}
-	}
-
-	pub fn serialize<T, S>(t: &T, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		for<'a> Serde<&'a T>: Serialize,
-		S: Serializer,
-	{
-		Serde(t).serialize(serializer)
-	}
-	pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-	where
-		Serde<T>: Deserialize<'de>,
-		D: Deserializer<'de>,
-	{
-		Serde::<T>::deserialize(deserializer).map(|x| x.0)
-	}
-}
-
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Error {
+pub enum PostgresError {
 	Io(IoError),
-	Postgres(#[serde(with = "misc_serde")] PostgresError),
+	Postgres(String),
 }
-impl PartialEq for Error {
+impl PartialEq for PostgresError {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(Self::Io(a), Self::Io(b)) => a.to_string() == b.to_string(),
-			(Self::Postgres(a), Self::Postgres(b)) => a.to_string() == b.to_string(),
+			(Self::Postgres(a), Self::Postgres(b)) => a == b,
 			_ => false,
 		}
 	}
 }
-impl error::Error for Error {}
-impl Display for Error {
+impl error::Error for PostgresError {}
+impl Display for PostgresError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Self::Io(err) => Display::fmt(err, f),
@@ -393,14 +421,14 @@ impl Display for Error {
 		}
 	}
 }
-impl From<io::Error> for Error {
+impl From<io::Error> for PostgresError {
 	fn from(err: io::Error) -> Self {
 		Self::Io(err.into())
 	}
 }
-impl From<PostgresError> for Error {
-	fn from(err: PostgresError) -> Self {
-		Self::Postgres(err)
+impl From<InternalPostgresError> for PostgresError {
+	fn from(err: InternalPostgresError) -> Self {
+		Self::Postgres(err.to_string())
 	}
 }
 

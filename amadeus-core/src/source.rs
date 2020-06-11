@@ -1,22 +1,24 @@
+use crate::{
+	dist_pipe::DistributedPipe, dist_sink::DistributedSink, dist_stream::DistributedStream
+};
+
 pub trait Source {
-	type Item; //: crate::data::Data;
+	type Item;
 	type Error: std::error::Error;
 
-	type DistIter: crate::dist_iter::DistributedIterator<Item = Result<Self::Item, Self::Error>>;
-	// type ParIter: ParallelIterator;
-	type Iter: Iterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream: DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
-	fn dist_iter(self) -> Self::DistIter;
-	// fn par_iter(self) -> Self::ParIter;
-	fn iter(self) -> Self::Iter;
+	fn dist_stream(self) -> Self::DistStream;
 }
 
-pub trait Sink<I>
+pub trait Destination<I>
 where
-	I: crate::dist_iter::DistributedIteratorMulti<Self::Item>,
+	I: DistributedPipe<Self::Item>,
 {
-	type Item; //: crate::data::Data;
+	type Item;
 	type Error: std::error::Error;
 
-	type DistDest: crate::dist_iter::DistributedReducer<I, Self::Item, Result<(), Self::Error>>;
+	type DistSink: DistributedSink<I, Self::Item, Result<(), Self::Error>>;
+
+	fn dist_sink(self) -> Self::DistSink;
 }

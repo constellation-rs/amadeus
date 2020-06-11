@@ -1,4 +1,4 @@
-use ::serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{
 	cmp::Ordering, collections::HashMap, fmt::Debug, hash::{BuildHasher, Hash, Hasher}
 };
@@ -171,23 +171,23 @@ impl From<amadeus_aws::CloudfrontRow> for CloudfrontRow {
 
 // impl<T: ?Sized> Data for T where T: PartialEq + Eq + Clone + 'static {}
 
-// pub trait DataSource: crate::dist_iter::DistributedIterator<Item = <Self as DataSource>::Itemm> {
+// pub trait DataSource: crate::dist_stream::DistributedStream<Item = <Self as DataSource>::Itemm> {
 // 	type Itemm: Data;
 // }
 
-// impl<T: ?Sized> DataSource for T where T: crate::dist_iter::DistributedIterator, <T as crate::dist_iter::DistributedIterator>::Item: Data {
-// 	type Itemm = <T as crate::dist_iter::DistributedIterator>::Item;
+// impl<T: ?Sized> DataSource for T where T: crate::dist_stream::DistributedStream, <T as crate::dist_stream::DistributedStream>::Item: Data {
+// 	type Itemm = <T as crate::dist_stream::DistributedStream>::Item;
 // }
 
 // pub trait DataSource
 // where
-// 	Self: amadeus_core::dist_iter::DistributedIterator<Item = <Self as DataSource>::Item>,
-// 	<Self as amadeus_core::dist_iter::DistributedIterator>::Item: Data,
+// 	Self: amadeus_core::dist_stream::DistributedStream<Item = <Self as DataSource>::Item>,
+// 	<Self as amadeus_core::dist_stream::DistributedStream>::Item: Data,
 // {
 // 	type Item;
 // }
 
-// impl<T: ?Sized> DataSource for T where T: crate::dist_iter::DistributedIterator, <T as crate::dist_iter::DistributedIterator>::Item: Data {
-// 	// type Itemm = <T as crate::dist_iter::DistributedIterator>::Item;
-// 	type Item = <T as crate::dist_iter::DistributedIterator>::Item;
+// impl<T: ?Sized> DataSource for T where T: crate::dist_stream::DistributedStream, <T as crate::dist_stream::DistributedStream>::Item: Data {
+// 	// type Itemm = <T as crate::dist_stream::DistributedStream>::Item;
+// 	type Item = <T as crate::dist_stream::DistributedStream>::Item;
 // }

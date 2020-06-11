@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-serde"
-version = "0.1.7"
+version = "0.2.0"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -10,7 +10,7 @@ Harmonious distributed data analysis in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.7"
+documentation = "https://docs.rs/amadeus/0.2.0"
 readme = "README.md"
 edition = "2018"
 
@@ -19,16 +19,17 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
-doc = []
+doc = ["amadeus-core/doc"]
 
 [package.metadata.docs.rs]
 features = ["doc"]
 
 [dependencies]
-amadeus-core = { version = "=0.1.7", path = "../amadeus-core" }
-amadeus-types = { version = "=0.1.7", path = "../amadeus-types" }
+amadeus-core = { version = "=0.2.0", path = "../amadeus-core" }
+amadeus-types = { version = "=0.2.0", path = "../amadeus-types" }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 csv = "1.0"
+futures = "0.3"
 linked-hash-map = "0.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"

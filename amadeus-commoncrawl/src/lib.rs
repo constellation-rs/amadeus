@@ -1,28 +1,29 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.1.7")]
+#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.2.0")]
 #![feature(type_alias_impl_trait)]
 
 mod commoncrawl;
 mod parser;
 
-use flate2::read::MultiGzDecoder;
+use async_compression::futures::bufread::GzipDecoder; // TODO: use stream or https://github.com/alexcrichton/flate2-rs/pull/214
+use futures::{io::BufReader, AsyncBufReadExt, FutureExt, StreamExt, TryStreamExt};
 use reqwest_resume::ClientExt;
 use serde_closure::*;
-use std::{
-	io::{self, BufRead, BufReader}, iter, time
-};
+use std::{io, time};
 
-use amadeus_core::{dist_iter::DistributedIterator, into_dist_iter::IteratorExt, Source};
+use amadeus_core::{
+	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, Source
+};
 use amadeus_types::Webpage;
 
 use commoncrawl::WarcParser;
 
 /// See https://commoncrawl.s3.amazonaws.com/crawl-data/index.html
-/// CC-MAIN-2018-43
 pub struct CommonCrawl {
-	body: reqwest_resume::Response,
+	urls: Vec<String>,
 }
 impl CommonCrawl {
-	pub fn new(id: &str) -> Result<Self, reqwest::Error> {
+	/// CC-MAIN-2020-24
+	pub async fn new(id: &str) -> Result<Self, reqwest::Error> {
 		let url = format!(
 			"https://commoncrawl.s3.amazonaws.com/crawl-data/{}/warc.paths.gz",
 			id
@@ -33,8 +34,23 @@ impl CommonCrawl {
 			.unwrap()
 			.resumable()
 			.get(url.parse().unwrap())
-			.send()?;
-		Ok(Self { body })
+			.send();
+		let body = body
+			.await?
+			.bytes_stream()
+			.map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+		let body = BufReader::new(body.into_async_read());
+		let mut body = GzipDecoder::new(body); // Content-Encoding isn't set, so decode manually
+		body.multiple_members(true);
+
+		let urls = BufReader::new(body)
+			.lines()
+			.map(FnMut!(|url: Result<String, io::Error>| -> String {
+				format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap())
+			}))
+			.collect()
+			.await;
+		Ok(Self { urls })
 	}
 }
 
@@ -43,38 +59,28 @@ impl Source for CommonCrawl {
 	type Error = io::Error;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
-		let body = MultiGzDecoder::new(self.body); // Content-Encoding isn't set, so decode manually
-
-		let ret = BufReader::new(body)
-			.lines()
-			.map(FnMut!(|url: Result<String, io::Error>| -> String {
-				format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap())
-			}))
-			.dist()
-			.flat_map(FnMut!(|url: String| {
-				let body = reqwest::ClientBuilder::new()
-					.timeout(time::Duration::new(120, 0))
-					.build()
-					.unwrap()
-					.resumable()
-					.get(url.parse().unwrap())
-					.send()
-					.unwrap();
-				let body = MultiGzDecoder::new(body);
+	fn dist_stream(self) -> Self::DistStream {
+		let ret = self
+			.urls
+			.into_dist_stream()
+			.flat_map(FnMut!(|url: String| async move {
+				let body = reqwest_resume::get(url.parse().unwrap()).await.unwrap();
+				let body = body
+					.bytes_stream()
+					.map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+				let body = BufReader::new(body.into_async_read());
+				let mut body = GzipDecoder::new(body); // Content-Encoding isn't set, so decode manually
+				body.multiple_members(true);
 				WarcParser::new(body)
-			}));
+			}
+			.flatten_stream()));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-	fn iter(self) -> Self::Iter {
-		iter::empty()
 	}
 }

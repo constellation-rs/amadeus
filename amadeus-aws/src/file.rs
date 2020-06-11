@@ -1,17 +1,18 @@
-use futures::compat::Compat01As03;
+use async_trait::async_trait;
+use futures::future::BoxFuture;
 use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 use serde::{Deserialize, Serialize};
-use std::{convert::TryInto, future::Future, io, pin::Pin};
-use tokio::{io::AsyncRead, prelude::future::poll_fn};
+use std::{
+	convert::{TryFrom, TryInto}, sync::Arc
+};
+use tokio::io::AsyncReadExt;
 
 use amadeus_core::{
 	file::{Directory, File, Page, Partition, PathBuf}, util::IoError
 };
 
-use super::{
-	block_on, block_on_01, retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER
-};
+use super::{retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct S3Directory {
@@ -36,8 +37,11 @@ impl S3Directory {
 		}
 	}
 }
+#[async_trait(?Send)]
 impl Directory for S3Directory {
-	fn partitions_filter<F>(self, mut f: F) -> Result<Vec<Self::Partition>, Self::Error>
+	async fn partitions_filter<F>(
+		self, mut f: F,
+	) -> Result<Vec<<Self as File>::Partition>, <Self as File>::Error>
 	where
 		F: FnMut(&PathBuf) -> bool,
 	{
@@ -52,7 +56,7 @@ impl Directory for S3Directory {
 			credentials.clone(),
 			region.clone(),
 		);
-		let objects = super::list(&client, &bucket, &prefix)?;
+		let objects = super::list(&client, &bucket, &prefix).await?;
 
 		let mut current_path = PathBuf::new();
 		let mut skip = false;
@@ -108,12 +112,13 @@ impl Directory for S3Directory {
 	}
 }
 
+#[async_trait(?Send)]
 impl File for S3Directory {
 	type Partition = S3Partition;
 	type Error = AwsError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
-		self.partitions_filter(|_| true)
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+		self.partitions_filter(|_| true).await
 	}
 }
 
@@ -140,25 +145,24 @@ impl S3File {
 		}
 	}
 }
+#[async_trait(?Send)]
 impl File for S3File {
 	type Partition = S3File;
 	type Error = AwsError;
 
-	fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
+	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error> {
 		Ok(vec![self])
 	}
 }
+#[async_trait(?Send)]
 impl Partition for S3File {
 	type Page = S3Page;
 	type Error = IoError;
 
-	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
-		Ok(vec![S3Page::new(
-			self.region,
-			self.bucket,
-			self.key,
-			self.credentials,
-		)])
+	async fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
+		Ok(vec![
+			S3Page::new(self.region, self.bucket, self.key, self.credentials).await,
+		])
 	}
 }
 
@@ -170,79 +174,86 @@ pub struct S3Partition {
 	len: u64,
 	credentials: AwsCredentials,
 }
+#[async_trait(?Send)]
 impl Partition for S3Partition {
 	type Page = S3Page;
 	type Error = IoError;
 
-	fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
+	async fn pages(self) -> Result<Vec<Self::Page>, Self::Error> {
 		let client = S3Client::new_with(Ref(&*RUSOTO_DISPATCHER), self.credentials, self.region);
 		let (bucket, key, len) = (self.bucket, self.key, self.len);
-		Ok(vec![S3Page {
+		let inner = Arc::new(S3PageInner {
 			client,
 			bucket,
 			key,
 			len,
-		}])
+		});
+		Ok(vec![S3Page { inner }])
 	}
 }
 
-pub struct S3Page {
+struct S3PageInner {
 	client: S3Client,
 	bucket: String,
 	key: String,
 	len: u64,
 }
+pub struct S3Page {
+	inner: Arc<S3PageInner>,
+}
 impl S3Page {
-	fn new(region: AwsRegion, bucket: String, key: String, credentials: AwsCredentials) -> Self {
+	async fn new(
+		region: AwsRegion, bucket: String, key: String, credentials: AwsCredentials,
+	) -> Self {
 		let client = S3Client::new_with(Ref(&*RUSOTO_DISPATCHER), credentials, region);
-		let object = block_on_01(retry(|| {
+		let object = retry(|| {
 			client.head_object(HeadObjectRequest {
 				bucket: bucket.clone(),
 				key: key.clone(),
 				..HeadObjectRequest::default()
 			})
-		}))
+		})
+		.await
 		.unwrap();
 		let len = object.content_length.unwrap().try_into().unwrap();
-		S3Page {
+		let inner = Arc::new(S3PageInner {
 			client,
 			bucket,
 			key,
 			len,
-		}
+		});
+		Self { inner }
 	}
 }
 impl Page for S3Page {
 	type Error = IoError;
 
-	fn block_on<F>(future: F) -> F::Output
-	where
-		F: Future + Send,
-		F::Output: Send,
-	{
-		block_on(future)
-	}
 	fn len(&self) -> u64 {
-		self.len
+		self.inner.len
 	}
 	fn set_len(&self, _len: u64) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
-	fn read<'a>(
-		&'a self, offset: u64, buf: &'a mut [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+		let self_ = S3Page {
+			inner: self.inner.clone(),
+		};
 		Box::pin(async move {
-			let len: u64 = buf.len().try_into().unwrap();
-			let mut cursor = io::Cursor::new(buf);
-			let mut errors = 0;
-			while len - cursor.position() > 0 {
-				let (start, end) = (offset + cursor.position(), offset + len - 1);
-				let res = Compat01As03::new(self.client.get_object(GetObjectRequest {
-					bucket: self.bucket.clone(),
-					key: self.key.clone(),
+			let mut buf_ = vec![0; len].into_boxed_slice();
+			let mut buf = &mut *buf_;
+			let len: u64 = len.try_into().unwrap();
+			let mut pos = 0u64;
+			let mut errors: usize = 0;
+			let end = offset + len - 1;
+			while !buf.is_empty() {
+				let start = offset + pos;
+				assert_eq!(start, end + 1 - u64::try_from(buf.len()).unwrap()); // TODO
+				let res = self_.inner.client.get_object(GetObjectRequest {
+					bucket: self_.inner.bucket.clone(),
+					key: self_.inner.key.clone(),
 					range: Some(format!("bytes={}-{}", start, end)),
 					..GetObjectRequest::default()
-				}));
+				});
 				let res = res.await;
 				match res {
 					Err(RusotoError::HttpDispatch(_)) if errors < 10 => {
@@ -258,20 +269,18 @@ impl Page for S3Page {
 					_ => (),
 				}
 				let mut read = res.unwrap().body.unwrap().into_async_read();
-				while len - cursor.position() > 0 {
-					let res = Compat01As03::new(poll_fn(|| read.read_buf(&mut cursor))).await;
+				while !buf.is_empty() {
+					let res = read.read_buf(&mut buf).await;
 					match res {
 						Ok(0) | Err(_) => break,
-						_ => (),
+						Ok(n) => pos += u64::try_from(n).unwrap(),
 					}
 				}
 			}
-			Ok(())
+			Ok(buf_)
 		})
 	}
-	fn write<'a>(
-		&'a self, _offset: u64, _buf: &'a [u8],
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+	fn write(&self, _offset: u64, _buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>> {
 		unimplemented!()
 	}
 }

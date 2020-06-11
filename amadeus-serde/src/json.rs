@@ -1,12 +1,13 @@
+use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
-use serde_json::Error as SerdeJsonError;
+use serde_json::Error as InternalJsonError;
 use std::{
-	error, fmt::{self, Debug, Display}, io::BufReader, iter, marker::PhantomData
+	error, fmt::{self, Debug, Display}, io::{self, Cursor}, marker::PhantomData
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, file::{File, Page, Partition}, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
+	dist_stream::DistributedStream, file::{File, Page, Partition}, into_dist_stream::IntoDistributedStream, util::ResultExpandIter, Source
 };
 
 use super::{SerdeData, SerdeDeserialize};
@@ -25,9 +26,9 @@ where
 	F: File,
 	Row: SerdeData,
 {
-	pub fn new(file: F) -> Result<Self, <Self as Source>::Error> {
+	pub async fn new(file: F) -> Result<Self, <Self as Source>::Error> {
 		Ok(Self {
-			partitions: file.partitions().map_err(JsonError::File)?,
+			partitions: file.partitions().await.map_err(JsonError::File)?,
 			marker: PhantomData,
 		})
 	}
@@ -46,55 +47,48 @@ where
 	>;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
+	fn dist_stream(self) -> Self::DistStream {
 		let ret = self
 			.partitions
-			.into_dist_iter()
-			.flat_map(FnMut!(|partition: F::Partition| {
-				ResultExpand(partition.pages().map_err(JsonError::Partition))
-					.into_iter()
-					.flat_map(|page: Result<_, _>| {
-						ResultExpand(page.map(|page| {
-							let reader = BufReader::new(Page::reader(page));
-							serde_json::Deserializer::from_reader(reader)
-								.into_iter()
-								.map(|x: Result<SerdeDeserialize<Row>, SerdeJsonError>| Ok(x?.0))
-						}))
-					})
-					.map(|row: Result<Result<Row, SerdeJsonError>, Self::Error>| Ok(row??))
-			}));
+			.into_dist_stream()
+			.flat_map(FnMut!(|partition: F::Partition| async move {
+				Ok(stream::iter(
+					partition
+						.pages()
+						.await
+						.map_err(JsonError::Partition)?
+						.into_iter(),
+				)
+				.flat_map(|page| {
+					async move {
+						let mut buf = Vec::new();
+						let reader = Page::reader(page);
+						pin_mut!(reader);
+						let buf = PassError::new(
+							reader.read_to_end(&mut buf).await.map(|_| Cursor::new(buf)),
+						);
+						Ok(stream::iter(
+							serde_json::Deserializer::from_reader(buf).into_iter().map(
+								|x: Result<SerdeDeserialize<Row>, InternalJsonError>| Ok(x?.0),
+							),
+						))
+					}
+					.map(ResultExpandIter::new)
+					.flatten_stream()
+				})
+				.map(|row: Result<Result<Row, InternalJsonError>, Self::Error>| Ok(row??)))
+			}
+			.map(ResultExpandIter::new)
+			.flatten_stream()
+			.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-	fn iter(self) -> Self::Iter {
-		iter::empty()
-		// self.files
-		// 	.into_iter()
-		// 	.flat_map(|file: PathBuf| {
-		// 		let files = if !file.is_dir() {
-		// 			sum::Sum2::A(iter::once(Ok(file)))
-		// 		} else {
-		// 			sum::Sum2::B(get_json_partitions(file))
-		// 		};
-		// 		files
-		// 			.flat_map(|file: Result<PathBuf, _>| ResultExpand(
-		// 				file.and_then(|file| Ok(fs::File::open(file)?)).map(|file| {
-		// 					serde_json::Deserializer::from_reader(file)
-		// 						.into_iter()
-		// 						.map(FnMut!(|x: Result<SerdeDeserialize<Row>, SerdeJsonError>| Ok(
-		// 							x?.0
-		// 						)))
-		// 				})
-		// 			))
-		// 			.map(|row: Result<Result<Row, SerdeJsonError>, io::Error>| Ok(row??))
-		// 	})
 	}
 }
 
@@ -120,7 +114,7 @@ pub enum JsonError<A, B, C> {
 	File(A),
 	Partition(B),
 	Page(C),
-	Json(#[serde(with = "jsonerror")] SerdeJsonError),
+	Json(#[serde(with = "jsonerror")] InternalJsonError),
 }
 impl<A, B, C> Clone for JsonError<A, B, C>
 where
@@ -175,8 +169,26 @@ where
 		}
 	}
 }
-impl<A, B, C> From<SerdeJsonError> for JsonError<A, B, C> {
-	fn from(err: SerdeJsonError) -> Self {
+impl<A, B, C> From<InternalJsonError> for JsonError<A, B, C> {
+	fn from(err: InternalJsonError) -> Self {
 		Self::Json(err)
+	}
+}
+
+struct PassError<R>(Result<R, Option<io::Error>>);
+impl<R> PassError<R> {
+	fn new(r: Result<R, io::Error>) -> Self {
+		Self(r.map_err(Some))
+	}
+}
+impl<R> io::Read for PassError<R>
+where
+	R: io::Read,
+{
+	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+		match &mut self.0 {
+			Ok(r) => r.read(buf),
+			Err(r) => Err(r.take().unwrap()),
+		}
 	}
 }

@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, marker::PhantomData};
 
-use super::{
-	CombineReducer, CombineReducerFactory, Combiner, DistributedIteratorMulti, DistributedReducer
-};
+use super::{CombineReduceFactory, CombineReducer, Combiner, DistributedPipe, DistributedSink};
 use crate::pool::ProcessSend;
 
 #[must_use]
@@ -11,24 +9,26 @@ pub struct Max<I> {
 	i: I,
 }
 impl<I> Max<I> {
-	pub(super) fn new(i: I) -> Self {
+	pub(crate) fn new(i: I) -> Self {
 		Self { i }
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
-	for Max<I>
+impl<I: DistributedPipe<Source>, Source> DistributedSink<I, Source, Option<I::Item>> for Max<I>
 where
 	I::Item: Ord + ProcessSend,
 {
-	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::Max>;
+	type ReduceAFactory = CombineReduceFactory<I::Item, I::Item, combine::Max>;
+	type ReduceBFactory = CombineReduceFactory<Option<I::Item>, I::Item, combine::Max>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::Max>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::Max>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::Max>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CombineReducerFactory(combine::Max, PhantomData),
+			CombineReduceFactory(combine::Max, PhantomData),
+			CombineReduceFactory(combine::Max, PhantomData),
 			CombineReducer(None, combine::Max, PhantomData),
 		)
 	}
@@ -40,25 +40,28 @@ pub struct MaxBy<I, F> {
 	f: F,
 }
 impl<I, F> MaxBy<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedPipe<Source>, Source, F> DistributedSink<I, Source, Option<I::Item>>
 	for MaxBy<I, F>
 where
 	F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + ProcessSend,
 	I::Item: ProcessSend,
 {
-	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MaxBy<F>>;
+	type ReduceAFactory = CombineReduceFactory<I::Item, I::Item, combine::MaxBy<F>>;
+	type ReduceBFactory = CombineReduceFactory<Option<I::Item>, I::Item, combine::MaxBy<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MaxBy<F>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MaxBy<F>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MaxBy<F>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CombineReducerFactory(combine::MaxBy(self.f.clone()), PhantomData),
+			CombineReduceFactory(combine::MaxBy(self.f.clone()), PhantomData),
+			CombineReduceFactory(combine::MaxBy(self.f.clone()), PhantomData),
 			CombineReducer(None, combine::MaxBy(self.f), PhantomData),
 		)
 	}
@@ -70,26 +73,29 @@ pub struct MaxByKey<I, F> {
 	f: F,
 }
 impl<I, F> MaxByKey<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F, B>
-	DistributedReducer<I, Source, Option<I::Item>> for MaxByKey<I, F>
+impl<I: DistributedPipe<Source>, Source, F, B> DistributedSink<I, Source, Option<I::Item>>
+	for MaxByKey<I, F>
 where
 	F: FnMut(&I::Item) -> B + Clone + ProcessSend,
 	I::Item: ProcessSend,
 	B: Ord + 'static,
 {
-	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MaxByKey<F, B>>;
+	type ReduceAFactory = CombineReduceFactory<I::Item, I::Item, combine::MaxByKey<F, B>>;
+	type ReduceBFactory = CombineReduceFactory<Option<I::Item>, I::Item, combine::MaxByKey<F, B>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MaxByKey<F, B>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MaxByKey<F, B>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MaxByKey<F, B>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CombineReducerFactory(combine::MaxByKey(self.f.clone(), PhantomData), PhantomData),
+			CombineReduceFactory(combine::MaxByKey(self.f.clone(), PhantomData), PhantomData),
+			CombineReduceFactory(combine::MaxByKey(self.f.clone(), PhantomData), PhantomData),
 			CombineReducer(None, combine::MaxByKey(self.f, PhantomData), PhantomData),
 		)
 	}
@@ -100,24 +106,26 @@ pub struct Min<I> {
 	i: I,
 }
 impl<I> Min<I> {
-	pub(super) fn new(i: I) -> Self {
+	pub(crate) fn new(i: I) -> Self {
 		Self { i }
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source> DistributedReducer<I, Source, Option<I::Item>>
-	for Min<I>
+impl<I: DistributedPipe<Source>, Source> DistributedSink<I, Source, Option<I::Item>> for Min<I>
 where
 	I::Item: Ord + ProcessSend,
 {
-	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::Min>;
+	type ReduceAFactory = CombineReduceFactory<I::Item, I::Item, combine::Min>;
+	type ReduceBFactory = CombineReduceFactory<Option<I::Item>, I::Item, combine::Min>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::Min>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::Min>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::Min>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CombineReducerFactory(combine::Min, PhantomData),
+			CombineReduceFactory(combine::Min, PhantomData),
+			CombineReduceFactory(combine::Min, PhantomData),
 			CombineReducer(None, combine::Min, PhantomData),
 		)
 	}
@@ -129,25 +137,28 @@ pub struct MinBy<I, F> {
 	f: F,
 }
 impl<I, F> MinBy<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedPipe<Source>, Source, F> DistributedSink<I, Source, Option<I::Item>>
 	for MinBy<I, F>
 where
 	F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + ProcessSend,
 	I::Item: ProcessSend,
 {
-	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MinBy<F>>;
+	type ReduceAFactory = CombineReduceFactory<I::Item, I::Item, combine::MinBy<F>>;
+	type ReduceBFactory = CombineReduceFactory<Option<I::Item>, I::Item, combine::MinBy<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MinBy<F>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MinBy<F>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MinBy<F>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CombineReducerFactory(combine::MinBy(self.f.clone()), PhantomData),
+			CombineReduceFactory(combine::MinBy(self.f.clone()), PhantomData),
+			CombineReduceFactory(combine::MinBy(self.f.clone()), PhantomData),
 			CombineReducer(None, combine::MinBy(self.f), PhantomData),
 		)
 	}
@@ -159,26 +170,29 @@ pub struct MinByKey<I, F> {
 	f: F,
 }
 impl<I, F> MinByKey<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
 
-impl<I: DistributedIteratorMulti<Source>, Source, F, B>
-	DistributedReducer<I, Source, Option<I::Item>> for MinByKey<I, F>
+impl<I: DistributedPipe<Source>, Source, F, B> DistributedSink<I, Source, Option<I::Item>>
+	for MinByKey<I, F>
 where
 	F: FnMut(&I::Item) -> B + Clone + ProcessSend,
 	I::Item: ProcessSend,
 	B: Ord + 'static,
 {
-	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, combine::MinByKey<F, B>>;
+	type ReduceAFactory = CombineReduceFactory<I::Item, I::Item, combine::MinByKey<F, B>>;
+	type ReduceBFactory = CombineReduceFactory<Option<I::Item>, I::Item, combine::MinByKey<F, B>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, combine::MinByKey<F, B>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, combine::MinByKey<F, B>>;
+	type ReduceC = CombineReducer<Option<I::Item>, I::Item, combine::MinByKey<F, B>>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceB) {
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CombineReducerFactory(combine::MinByKey(self.f.clone(), PhantomData), PhantomData),
+			CombineReduceFactory(combine::MinByKey(self.f.clone(), PhantomData), PhantomData),
+			CombineReduceFactory(combine::MinByKey(self.f.clone(), PhantomData), PhantomData),
 			CombineReducer(None, combine::MinByKey(self.f, PhantomData), PhantomData),
 		)
 	}

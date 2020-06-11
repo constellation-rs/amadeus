@@ -1,22 +1,20 @@
+use async_compression::futures::bufread::GzipDecoder;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
-use flate2::read::MultiGzDecoder;
+use futures::{future, io::BufReader, AsyncBufReadExt, FutureExt, StreamExt, TryStreamExt};
 use http::{Method, StatusCode};
-use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::identity, io::{self, BufRead, BufReader}, iter, time::Duration
+	convert::identity, io::{self}, time::Duration
 };
 
 use amadeus_core::{
-	dist_iter::DistributedIterator, into_dist_iter::IntoDistributedIterator, util::ResultExpand, Source
+	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, util::ResultExpandIter, Source
 };
 use amadeus_types::{DateTime, IpAddr, Url};
 
-use super::{
-	block_on_01, list, retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER
-};
+use super::{list, retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER};
 
 pub struct Cloudfront {
 	region: AwsRegion,
@@ -25,10 +23,10 @@ pub struct Cloudfront {
 	credentials: AwsCredentials,
 }
 impl Cloudfront {
-	pub fn new(region: AwsRegion, bucket: &str, prefix: &str) -> Result<Self, AwsError> {
-		Self::new_with(region, bucket, prefix, AwsCredentials::Environment)
+	pub async fn new(region: AwsRegion, bucket: &str, prefix: &str) -> Result<Self, AwsError> {
+		Self::new_with(region, bucket, prefix, AwsCredentials::Environment).await
 	}
-	pub fn new_with(
+	pub async fn new_with(
 		region: AwsRegion, bucket: &str, prefix: &str, credentials: AwsCredentials,
 	) -> Result<Self, AwsError> {
 		let (bucket, prefix) = (bucket.to_owned(), prefix.to_owned());
@@ -38,7 +36,8 @@ impl Cloudfront {
 			region.clone(),
 		);
 
-		let objects = list(&client, &bucket, &prefix)?
+		let objects = list(&client, &bucket, &prefix)
+			.await?
 			.into_iter()
 			.map(|object: Object| object.key.unwrap())
 			.collect();
@@ -56,13 +55,12 @@ impl Source for Cloudfront {
 	type Error = AwsError;
 
 	#[cfg(not(feature = "doc"))]
-	type DistIter = impl DistributedIterator<Item = Result<Self::Item, Self::Error>>;
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type DistIter = amadeus_core::util::ImplDistributedIterator<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
+	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
-	fn dist_iter(self) -> Self::DistIter {
+	fn dist_stream(self) -> Self::DistStream {
 		let Self {
 			bucket,
 			region,
@@ -70,70 +68,56 @@ impl Source for Cloudfront {
 			credentials,
 		} = self;
 		let ret = objects
-			.into_dist_iter()
+			.into_dist_stream()
 			.flat_map(FnMut!(move |key: String| {
-				let client = S3Client::new_with(
-					Ref(once_cell::sync::Lazy::force(&RUSOTO_DISPATCHER)),
-					credentials.clone(),
-					region.clone(),
-				);
-				let mut errors = 0;
-				ResultExpand(
-					loop {
-						match self::block_on_01(self::retry(|| {
-							client.get_object(GetObjectRequest {
-								bucket: bucket.clone(),
-								key: key.clone(),
-								..GetObjectRequest::default()
-							})
-						})) {
-							Err(RusotoError::HttpDispatch(_)) if errors < 10 => {
-								errors += 1;
-								continue;
-							}
-							Err(RusotoError::Unknown(response))
-								if response.status.is_server_error() && errors < 10 =>
-							{
-								errors += 1;
-								continue;
-							}
-							res => break res,
-						}
-					}
+				let (credentials, region, bucket) =
+					(credentials.clone(), region.clone(), bucket.clone());
+				async move {
+					let client = S3Client::new_with(
+						Ref(once_cell::sync::Lazy::force(&RUSOTO_DISPATCHER)),
+						credentials,
+						region,
+					);
+					let rows = retry(|| {
+						client.get_object(GetObjectRequest {
+							bucket: bucket.clone(),
+							key: key.clone(),
+							..GetObjectRequest::default()
+						})
+					})
+					.await
 					.map_err(AwsError::from)
 					.map(|res| {
-						let body = res.body.unwrap().into_blocking_read();
-						BufReader::new(MultiGzDecoder::new(
-							Box::new(body) as Box<dyn io::Read + Send>
-						))
-						.lines()
-						.filter(|x: &Result<String, io::Error>| {
-							if let Ok(x) = x {
-								x.chars().filter(|x| !x.is_whitespace()).nth(0) != Some('#')
-							} else {
-								true
-							}
-						})
-						.map(|x: Result<String, io::Error>| {
-							if let Ok(x) = x {
-								Ok(CloudfrontRow::from_line(&x))
-							} else {
-								Err(AwsError::from(x.err().unwrap()))
-							}
-						})
-					}),
-				)
+						let body = BufReader::new(TryStreamExt::into_async_read(res.body.unwrap()));
+						let mut body = GzipDecoder::new(body); // Content-Encoding isn't set, so decode manually
+						body.multiple_members(true);
+						BufReader::new(body)
+							.lines()
+							.filter(|x: &Result<String, io::Error>| {
+								future::ready(if let Ok(x) = x {
+									x.chars().find(|x| !x.is_whitespace()) != Some('#')
+								} else {
+									true
+								})
+							})
+							.then(|x: Result<String, io::Error>| async {
+								if let Ok(x) = x {
+									Ok(CloudfrontRow::from_line(&x))
+								} else {
+									Err(AwsError::from(x.err().unwrap()))
+								}
+							})
+					});
+					ResultExpandIter::new(rows)
+				}
+				.flatten_stream()
 			}))
 			.map(FnMut!(
 				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(self::identity)
 			));
 		#[cfg(feature = "doc")]
-		let ret = amadeus_core::util::ImplDistributedIterator::new(ret);
+		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-
-	fn iter(self) -> Self::Iter {
-		iter::empty()
 	}
 }
 

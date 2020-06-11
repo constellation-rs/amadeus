@@ -1,9 +1,10 @@
+#![type_length_limit = "1319139"]
 #![allow(clippy::cognitive_complexity, clippy::type_complexity)]
 
 #[cfg(feature = "constellation")]
 use constellation::*;
 use std::{
-	collections::HashMap, env, path::PathBuf, time::{Duration, SystemTime}
+	collections::HashMap, path::PathBuf, time::{Duration, SystemTime}
 };
 
 use amadeus::prelude::*;
@@ -12,56 +13,52 @@ fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
 
-	let local_pool_time = {
-		let local_pool = LocalPool::new();
-		run(&local_pool)
-	};
-	let thread_pool_time = {
-		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool)
-	};
-	#[cfg(feature = "constellation")]
-	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool)
-	};
-	#[cfg(not(feature = "constellation"))]
-	let process_pool_time = "-";
-
-	println!(
-		"in {:?} {:?} {:?}",
-		local_pool_time, thread_pool_time, process_pool_time
-	);
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
 	let rows = Parquet::<_, Value>::new(ParquetDirectory::new(PathBuf::from(
 		"amadeus-testing/parquet/cf-accesslogs/",
-	)));
+	)))
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		207_535
 	);
 
 	#[cfg(feature = "aws")]
 	{
-		let rows = Parquet::<_, Value>::new(vec![S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet", AwsCredentials::Anonymous);20]);
+		let rows = Parquet::<_, Value>::new(vec![S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet", AwsCredentials::Anonymous);20]).await.unwrap();
 		assert_eq!(
-			rows.unwrap()
-				.dist_iter()
+			rows.dist_stream()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			45_167 * 20
 		);
 
@@ -70,12 +67,14 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			"us-east-1.data-analytics",
 			"cflogworkshop/optimized/cf-accesslogs/",
 			AwsCredentials::Anonymous,
-		)));
+		)))
+		.await
+		.unwrap();
 		assert_eq!(
-			rows.unwrap()
-				.dist_iter()
+			rows.dist_stream()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			207_535
 		);
 
@@ -88,12 +87,12 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=05/part-00025-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet", AwsCredentials::Anonymous),
 			S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=06/part-00185-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet", AwsCredentials::Anonymous),
 			S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=07/part-00151-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet", AwsCredentials::Anonymous),
-		]);
+		]).await.unwrap();
 		assert_eq!(
-			rows.unwrap()
-				.dist_iter()
+			rows.dist_stream()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			207_535
 		);
 
@@ -102,12 +101,14 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			"us-east-1.data-analytics",
 			"cflogworkshop/optimized/cf-accesslogs/",
 			AwsCredentials::Anonymous,
-		)));
+		)))
+		.await
+		.unwrap();
 		assert_eq!(
-			rows.unwrap()
-				.dist_iter()
+			rows.dist_stream()
 				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-				.count(pool),
+				.count(pool)
+				.await,
 			207_535
 		);
 	}
@@ -139,27 +140,31 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	}
 	let rows = Parquet::<_, StockSimulatedDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: StockSimulatedDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -171,27 +176,31 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, StockSimulatedDerivedProjection1>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: StockSimulatedDerivedProjection1 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -200,27 +209,31 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, StockSimulatedDerivedProjection2>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: StockSimulatedDerivedProjection2 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		42_000
 	);
 
@@ -249,39 +262,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, TenKayVeeTwo>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/10k-v2.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		10_000
 	);
 
 	let rows = Parquet::<_, TenKayVeeTwoDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/10k-v2.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		10_000
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/10k-v2.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: TenKayVeeTwo = value.clone().downcast().unwrap();
 				let _: TenKayVeeTwoDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		10_000
 	);
 
@@ -316,39 +335,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, AlltypesDictionary>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_dictionary.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
 	let rows = Parquet::<_, AlltypesDictionaryDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_dictionary.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_dictionary.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: AlltypesDictionary = value.clone().downcast().unwrap();
 				let _: AlltypesDictionaryDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -383,39 +408,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, AlltypesPlain>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
 	let rows = Parquet::<_, AlltypesPlainDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: AlltypesPlain = value.clone().downcast().unwrap();
 				let _: AlltypesPlainDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -450,39 +481,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, AlltypesPlainSnappy>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
 	let rows = Parquet::<_, AlltypesPlainSnappyDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: AlltypesPlainSnappy = value.clone().downcast().unwrap();
 				let _: AlltypesPlainSnappyDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		2
 	);
 
@@ -492,9 +529,9 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	// let rows = Parquet::<_,NationDictMalformed>::new(vec![PathBuf::from(
 	// 	"amadeus-testing/parquet/nation.dict-malformed.parquet",
-	// )]);
+	// )]).await.unwrap();
 	// assert_eq!(
-	// 	rows.unwrap().dist_iter().collect::<Vec<_>>(pool),
+	// 	rows.dist_stream().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
 	// 		amadeus_parquet::internal::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
@@ -504,9 +541,9 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	// let rows = Parquet::<_,Value>::new(vec![PathBuf::from(
 	// 	"amadeus-testing/parquet/nation.dict-malformed.parquet",
-	// )]);
+	// )]).await.unwrap();
 	// assert_eq!(
-	// 	rows.unwrap().dist_iter().collect::<Vec<_>>(pool),
+	// 	rows.dist_stream().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
 	// 		amadeus_parquet::internal::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
@@ -525,39 +562,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	}
 	let rows = Parquet::<_, NestedLists>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nested_lists.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		3
 	);
 
 	let rows = Parquet::<_, NestedListsDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nested_lists.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		3
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nested_lists.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: NestedLists = value.clone().downcast().unwrap();
 				let _: NestedListsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		3
 	);
 
@@ -574,39 +617,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	}
 	let rows = Parquet::<_, NestedMaps>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nested_maps.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
 	let rows = Parquet::<_, NestedMapsDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nested_maps.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nested_maps.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: NestedMaps = value.clone().downcast().unwrap();
 				let _: NestedMapsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -662,39 +711,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, Nonnullable>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nonnullable.impala.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		1
 	);
 
 	let rows = Parquet::<_, NonnullableDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nonnullable.impala.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		1
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nonnullable.impala.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Nonnullable = value.clone().downcast().unwrap();
 				let _: NonnullableDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		1
 	);
 
@@ -729,39 +784,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	}
 	let rows = Parquet::<_, Nullable>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nullable.impala.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		7
 	);
 
 	let rows = Parquet::<_, NullableDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nullable.impala.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		7
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nullable.impala.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Nullable = value.clone().downcast().unwrap();
 				let _: NullableDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		7
 	);
 
@@ -772,39 +833,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	}
 	let rows = Parquet::<_, Nulls>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nulls.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
 	let rows = Parquet::<_, NullsDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nulls.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/nulls.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Nulls = value.clone().downcast().unwrap();
 				let _: NullsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		8
 	);
 
@@ -817,39 +884,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	}
 	let rows = Parquet::<_, Repeated>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
 	let rows = Parquet::<_, RepeatedDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Repeated = value.clone().downcast().unwrap();
 				let _: RepeatedDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		6
 	);
 
@@ -864,39 +937,45 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	}
 	let rows = Parquet::<_, TestDatapage>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		5
 	);
 
 	let rows = Parquet::<_, TestDatapageDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		5
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: TestDatapage = value.clone().downcast().unwrap();
 				let _: TestDatapageDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		5
 	);
 
@@ -929,27 +1008,31 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 
 	let rows = Parquet::<_, CommitsDerived>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/commits.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		14_444
 	);
 
 	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
 		"amadeus-testing/parquet/commits.parquet",
-	)]);
+	)])
+	.await
+	.unwrap();
 	assert_eq!(
-		rows.unwrap()
-			.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: CommitsDerived = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		14_444
 	);
 

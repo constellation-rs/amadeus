@@ -1,17 +1,19 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{iter, slice};
+use std::{
+	iter, pin::Pin, slice, task::{Context, Poll}
+};
 
-use super::{Consumer, DistributedIterator, IntoDistributedIterator, IterIter};
-use crate::pool::ProcessSend;
+use super::{DistributedStream, IntoDistributedStream, IterIter, StreamTask, StreamTaskAsync};
+use crate::{pool::ProcessSend, sink::Sink};
 
-impl<T> IntoDistributedIterator for [T]
+impl<T> IntoDistributedStream for [T]
 where
 	T: ProcessSend,
 {
-	type Iter = Never;
+	type DistStream = Never;
 	type Item = Never;
 
-	fn into_dist_iter(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -19,14 +21,14 @@ where
 	}
 }
 
-impl<'a, T: Clone> IntoDistributedIterator for &'a [T]
+impl<'a, T: Clone> IntoDistributedStream for &'a [T]
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_iter(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -36,7 +38,7 @@ where
 
 pub struct Never(!);
 
-impl DistributedIterator for Never {
+impl DistributedStream for Never {
 	type Item = Self;
 	type Task = Self;
 
@@ -48,10 +50,20 @@ impl DistributedIterator for Never {
 	}
 }
 
-impl Consumer for Never {
+impl StreamTask for Never {
+	type Item = Self;
+	type Async = Self;
+
+	fn into_async(self) -> Self::Async {
+		self
+	}
+}
+impl StreamTaskAsync for Never {
 	type Item = Self;
 
-	fn run(self, _: &mut impl FnMut(Self::Item) -> bool) -> bool {
+	fn poll_run(
+		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()> {
 		unreachable!()
 	}
 }

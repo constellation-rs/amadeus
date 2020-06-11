@@ -32,7 +32,7 @@ impl AmadeusOrd for f64 {
 	}
 }
 
-impl<'a, T> AmadeusOrd for &'a T
+impl<T> AmadeusOrd for &T
 where
 	T: AmadeusOrd + ?Sized,
 {
@@ -131,8 +131,8 @@ macro_rules! ord {
 			T: AmadeusOrd
 		{
 			fn amadeus_cmp(&self, other: &Self) -> Ordering {
-				for i in 0..$i {
-					match self[i].amadeus_cmp(&other[i]) {
+				for (a,b) in self.iter().zip(other.iter()) {
+					match a.amadeus_cmp(b) {
 						Ordering::Equal => (),
 						res => return res,
 					}

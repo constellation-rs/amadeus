@@ -552,7 +552,7 @@ impl DateTime {
 			date_time.hour().try_into().unwrap(),
 			date_time.minute().try_into().unwrap(),
 			date_time.second().try_into().unwrap(),
-			date_time.nanosecond().try_into().unwrap(),
+			date_time.nanosecond(),
 			Timezone::from_chrono(&date_time.timezone(), date_time.offset()),
 		)
 		.unwrap()
@@ -721,7 +721,7 @@ impl TimeWithoutTimezone {
 		self.0.second().try_into().unwrap()
 	}
 	pub fn nanosecond(&self) -> u32 {
-		self.0.nanosecond().try_into().unwrap()
+		self.0.nanosecond()
 	}
 	pub fn with_timezone(self, timezone: Timezone) -> Time {
 		Time {

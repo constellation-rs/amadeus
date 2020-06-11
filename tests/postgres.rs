@@ -1,6 +1,6 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
-use std::{env, time::SystemTime};
+use std::time::{Duration, SystemTime};
 
 use amadeus::prelude::*;
 
@@ -8,16 +8,30 @@ fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool, 2).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool, processes * 2).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
 
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
+}
+
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 	let start = SystemTime::now();
-
-	let pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-	// let pool = amadeus::no_pool::NoPool;
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct Weather {
@@ -25,7 +39,7 @@ fn main() {
 		temp_lo: Option<i32>,
 		temp_hi: Option<i32>,
 		prcp: Option<f32>,
-		date: Option<Date>,
+		date: Option<DateWithoutTimezone>,
 		invent: Option<InventoryItem>,
 	}
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -43,9 +57,10 @@ fn main() {
 		)],
 	)]);
 	assert_eq!(
-		rows.unwrap()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(&pool),
+			.count(&pool)
+			.await,
 		4
 	);
 
@@ -58,16 +73,16 @@ fn main() {
 	// 	)],
 	// )]);
 	// assert_eq!(
-	// 	rows.unwrap()
+	// 	rows.dist_stream()
 	// 		.map(FnMut!(|row: Result<Value, _>| -> Value {
 	// 			let value = row.unwrap();
 	// 			// println!("{:?}", value);
 	// 			// let _: GameDerived = value.clone().downcast().unwrap();
 	// 			value
 	// 		}))
-	// 		.count(&pool),
+	// 		.count(&pool).await,
 	// 	4
 	// );
 
-	println!("in {:?}", start.elapsed().unwrap());
+	start.elapsed().unwrap()
 }

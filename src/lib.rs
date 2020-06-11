@@ -1,13 +1,14 @@
 //! Harmonious distributed data processing & analysis in Rust.
 //!
 //! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
-//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/alecmocatta/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
 //! </strong></p>
 
-#![doc(html_root_url = "https://docs.rs/amadeus/0.1.7")]
+#![doc(html_root_url = "https://docs.rs/amadeus/0.2.0")]
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
 )]
+#![feature(specialization)]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -43,11 +44,11 @@ pub mod data;
 pub mod pool;
 pub mod source;
 
-pub use amadeus_core::{dist_iter, into_dist_iter};
+pub use amadeus_core::{dist_pipe, dist_sink, dist_stream, into_dist_stream};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, List, Value}, dist_iter::{DistributedIterator, FromDistributedIterator}, into_dist_iter::{IntoDistributedIterator, IteratorExt}, pool::util::FutureExt1, source::Source
+	data::{Data, List, Value}, dist_sink::FromDistributedStream, dist_stream::DistributedStream, into_dist_stream::{IntoDistributedStream, IteratorExt}, source::Source
 };
 
 pub mod prelude {
@@ -63,7 +64,7 @@ pub mod prelude {
 	pub use super::{
 		data, data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
-		}, dist_iter::{DistributedIteratorMulti, Identity}, pool::LocalPool, pool::ThreadPool, source::*, Data, DistributedIterator, FromDistributedIterator, FutureExt1, IntoDistributedIterator, IteratorExt, List, Value
+		}, dist_pipe::DistributedPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
 	};
 	#[doc(no_inline)]
 	pub use serde_closure::{Fn, FnMut, FnOnce};

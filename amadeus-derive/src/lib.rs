@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.1.7")]
+#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.2.0")]
 #![recursion_limit = "400"]
 #![allow(clippy::useless_let_if_seq)]
 
@@ -396,7 +396,7 @@ fn impl_struct(
 				}
 				fn decode(type_: &__::postgres::types::Type, buf: Option<&[u8]>) -> __::Result<Self, __::Box<__::Error + __::Sync + __::Send>> {
 					let buf = buf.unwrap();
-					assert_eq!(type_, &__::postgres::types::RECORD);
+					assert_eq!(type_, &__::postgres::types::Type::RECORD);
 
 					let mut buf = buf;
 					let num_fields = __::read_be_i32(&mut buf)?;
@@ -408,7 +408,7 @@ fn impl_struct(
 						#(
 							#field_names1: {
 								let oid = __::read_be_i32(&mut buf)? as u32;
-								__::read_value(&__::postgres::types::Type::from_oid(oid).unwrap_or(__::postgres::types::OPAQUE), &mut buf)?
+								__::read_value(&__::postgres::types::Type::from_oid(oid).unwrap_or(__::postgres::types::Type::OPAQUE), &mut buf)?
 							},
 						)*
 					})

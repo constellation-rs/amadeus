@@ -13,12 +13,12 @@
 </p>
 
 <p align="center">
-    <a href="https://docs.rs/amadeus/0.1.7">📖 Docs</a> | <a href="https://constellation.rs/amadeus">🌐 Home</a> | <a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬 Chat</a>
+    <a href="https://docs.rs/amadeus/0.2.0">📖 Docs</a> | <a href="https://constellation.rs/amadeus">🌐 Home</a> | <a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬 Chat</a>
 </p>
 
 ## Amadeus provides:
 
-- **Distributed iterators:** like [Rayon](https://github.com/rayon-rs/rayon)'s parallel iterators, but distributed across a cluster.
+- **Distributed streams:** like [Rayon](https://github.com/rayon-rs/rayon)'s parallel iterators, but distributed across a cluster.
 - **Data connectors:** to work with CSV, JSON, Parquet, Postgres, S3 and more.
 - **ETL and Data Science tooling:** focused on streaming processing & analysis.
 
@@ -50,7 +50,7 @@ We aim to create a community that is welcoming and helpful to anyone that is int
 
 Amadeus has deep, pluggable, integration with various file formats, databases and interfaces:
 
-| Data format | [`Source`](https://docs.rs/amadeus/0.1.7/amadeus/trait.Source.html) | [`Sink`](https://docs.rs/amadeus/0.1.7/amadeus/trait.Sink.html) |
+| Data format | [`Source`](https://docs.rs/amadeus/0.2.0/amadeus/trait.Source.html) | [`Destination`](https://docs.rs/amadeus/0.2.0/amadeus/trait.Destination.html) |
 |---|---|---|
 | CSV | ✔ | ✔ |
 | JSON | ✔ | ✔ |

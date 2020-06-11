@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-parquet"
-version = "0.1.7"
+version = "0.2.0"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>", "Apache Arrow <dev@arrow.apache.org>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -10,7 +10,7 @@ An Apache Parquet implementation in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.7"
+documentation = "https://docs.rs/amadeus/0.2.0"
 readme = "README.md"
 edition = "2018"
 
@@ -19,18 +19,20 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
-doc = []
+doc = ["amadeus-core/doc"]
 
 [package.metadata.docs.rs]
 features = ["doc"]
 
 [dependencies]
-amadeus-core = { version = "=0.1.7", path = "../amadeus-core" }
-amadeus-types = { version = "=0.1.7", path = "../amadeus-types" }
+amadeus-core = { version = "=0.2.0", path = "../amadeus-core" }
+amadeus-types = { version = "=0.2.0", path = "../amadeus-types" }
+async-trait = "0.1"
 brotli = "3.3"
 byteorder = "1.2"
 chrono = { version = "0.4", default-features = false }
 flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = false }
+futures = "0.3"
 fxhash = "0.2"
 linked-hash-map = "0.5"
 lz4 = "1.23"

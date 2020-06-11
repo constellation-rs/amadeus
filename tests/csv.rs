@@ -1,7 +1,7 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
 use std::{
-	env, path::PathBuf, time::{Duration, SystemTime}
+	path::PathBuf, time::{Duration, SystemTime}
 };
 
 use amadeus::prelude::*;
@@ -10,35 +10,29 @@ fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
 
-	let local_pool_time = {
-		let local_pool = LocalPool::new();
-		run(&local_pool)
-	};
-	let thread_pool_time = {
-		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool)
-	};
-	#[cfg(feature = "constellation")]
-	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool)
-	};
-	#[cfg(not(feature = "constellation"))]
-	let process_pool_time = "-";
-
-	println!(
-		"in {:?} {:?} {:?}",
-		local_pool_time, thread_pool_time, process_pool_time
-	);
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -51,12 +45,14 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		f: String,
 	}
 
-	let rows =
-		Csv::<_, GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]).unwrap();
+	let rows = Csv::<_, GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")])
+		.await
+		.unwrap();
 	assert_eq!(
-		rows.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		100_000
 	);
 
@@ -70,16 +66,19 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		f: String,
 	}
 
-	let rows = Csv::<_, Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")]).unwrap();
+	let rows = Csv::<_, Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")])
+		.await
+		.unwrap();
 	assert_eq!(
-		rows.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				// println!("{:?}", value);
 				let _: GameDerived2 = value.clone().downcast().unwrap();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		100_000
 	);
 

@@ -1,7 +1,7 @@
 #[cfg(feature = "constellation")]
 use constellation::*;
 use std::{
-	env, path::PathBuf, time::{Duration, SystemTime}
+	path::PathBuf, time::{Duration, SystemTime}
 };
 
 use amadeus::prelude::*;
@@ -10,35 +10,29 @@ fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	// Accept the number of processes at the command line, defaulting to 10
-	let processes = env::args()
-		.nth(1)
-		.and_then(|arg| arg.parse::<usize>().ok())
-		.unwrap_or(10);
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool, 100).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool, 100).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
 
-	let local_pool_time = {
-		let local_pool = LocalPool::new();
-		run(&local_pool, 2)
-	};
-	let thread_pool_time = {
-		let thread_pool = ThreadPool::new(processes).unwrap();
-		run(&thread_pool, processes * 2)
-	};
-	#[cfg(feature = "constellation")]
-	let process_pool_time = {
-		let process_pool = ProcessPool::new(processes, 1, Resources::default()).unwrap();
-		run(&process_pool, processes * 2)
-	};
-	#[cfg(not(feature = "constellation"))]
-	let process_pool_time = "-";
-
-	println!(
-		"in {:?} {:?} {:?}",
-		local_pool_time, thread_pool_time, process_pool_time
-	);
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
 }
 
-fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 	let start = SystemTime::now();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -81,11 +75,13 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 			PathBuf::from("amadeus-testing/json/bitcoin2.json");
 			tasks
 		])
+		.await
 		.unwrap();
 	assert_eq!(
-		rows.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
-			.count(pool),
+			.count(pool)
+			.await,
 		3_605 * tasks
 	);
 	println!("a: {:?}", start.elapsed().unwrap());
@@ -95,16 +91,18 @@ fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
 		PathBuf::from("amadeus-testing/json/bitcoin2.json");
 		tasks
 	])
+	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_iter()
+		rows.dist_stream()
 			.map(FnMut!(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				// println!("{:?}", value);
 				let _: Result<BitcoinDerived, _> = value.clone().downcast();
 				value
 			}))
-			.count(pool),
+			.count(pool)
+			.await,
 		3_605 * tasks
 	);
 	println!("b: {:?}", b.elapsed().unwrap());

@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-postgres"
-version = "0.1.7"
+version = "0.2.0"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -10,7 +10,7 @@ Harmonious distributed data analysis in Rust.
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.1.7"
+documentation = "https://docs.rs/amadeus/0.2.0"
 readme = "README.md"
 edition = "2018"
 
@@ -19,17 +19,20 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests" }
 maintenance = { status = "actively-developed" }
 
 [features]
-doc = []
+doc = ["amadeus-core/doc"]
 
 [package.metadata.docs.rs]
 features = ["doc"]
 
 [dependencies]
-amadeus-core = { version = "=0.1.7", path = "../amadeus-core" }
-amadeus-types = { version = "=0.1.7", path = "../amadeus-types" }
-serde = { version = "1.0", features = ["derive"] }
-postgres = { version = "0.15", features = ["with-chrono"] }
-serde_closure = "0.2"
-postgres-binary-copy = "0.5"
+amadeus-core = { version = "=0.2.0", path = "../amadeus-core" }
+amadeus-types = { version = "=0.2.0", path = "../amadeus-types" }
+bytes = "0.5"
 chrono = { version = "0.4", default-features = false }
+futures = "0.3"
+pin-project = "0.4"
+postgres = { package = "tokio-postgres", version = "0.5", features = ["with-chrono-0_4"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_closure = "0.2"
 sum = "0.1"
+tokio = "0.2"
