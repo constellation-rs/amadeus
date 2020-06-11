@@ -137,11 +137,11 @@ impl ProcessPoolInner {
 								let ret = panic::catch_unwind(panic::AssertUnwindSafe(|| {
 									work(&thread_pool)
 								}));
-								let ret = ret.map_err(Panicked::from);
 								let ret = match ret {
-									Ok(t) => Ok(t.await),
+									Ok(t) => panic::AssertUnwindSafe(t).catch_unwind().await,
 									Err(e) => Err(e),
-								};
+								}
+								.map_err(Panicked::from);
 								sender.send(ret).await;
 							}
 						})
