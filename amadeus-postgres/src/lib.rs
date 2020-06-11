@@ -232,7 +232,6 @@ where
 						let stream = client.copy_out(&stmt).await.unwrap();
 						BinaryCopyOutStream::new(stream)
 							.map_ok(|row| {
-								println!("{:?}", row);
 								Row::decode(
 									&postgres::types::Type::RECORD,
 									row.as_ref().map(|bytes| bytes.as_ref()),

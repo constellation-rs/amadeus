@@ -4,24 +4,30 @@ use std::time::{Duration, SystemTime};
 
 use amadeus::prelude::*;
 
-#[tokio::main]
-async fn main() {
+fn main() {
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
-	let thread_pool_time = {
-		let thread_pool = ThreadPool::new(None);
-		run(&thread_pool, 2).await
-	};
-	#[cfg(feature = "constellation")]
-	let process_pool_time = {
-		let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
-		run(&process_pool, processes * 2).await
-	};
-	#[cfg(not(feature = "constellation"))]
-	let process_pool_time = "-";
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool, 2).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool, processes * 2).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
 
-	println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
 }
 
 async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {

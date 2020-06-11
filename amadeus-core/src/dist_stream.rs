@@ -295,7 +295,7 @@ pub trait DistributedStream {
 	}
 
 	#[doc(hidden)]
-	async fn single<P, DistStream, DistReducer, A>(self, pool: &P, reducer_a: DistReducer) -> A
+	async fn fork_single<P, DistStream, DistReducer, A>(self, pool: &P, reducer_a: DistReducer) -> A
 	where
 		P: ProcessPool,
 		DistStream: DistributedStreamMulti<Self::Item>,
@@ -371,7 +371,7 @@ pub trait DistributedStream {
 			.await
 	}
 
-	async fn multi<P, DistStreamA, DistStreamB, DistReducerA, DistReducerB, A, B>(
+	async fn fork<P, DistStreamA, DistStreamB, DistReducerA, DistReducerB, A, B>(
 		self, pool: &P, reducer_a: DistReducerA, reducer_b: DistReducerB,
 	) -> (A, B)
 	where
@@ -564,7 +564,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::for_each(Identity, f),
 		)
@@ -580,7 +580,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::fold(Identity, identity, op),
 		)
@@ -593,7 +593,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.single(pool, DistributedStreamMulti::<Self::Item>::count(Identity))
+		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::count(Identity))
 			.await
 	}
 
@@ -604,7 +604,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.single(pool, DistributedStreamMulti::<Self::Item>::sum(Identity))
+		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::sum(Identity))
 			.await
 	}
 
@@ -615,7 +615,7 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::combine(Identity, f),
 		)
@@ -628,7 +628,7 @@ pub trait DistributedStream {
 		Self::Item: Ord + ProcessSend,
 		Self: Sized,
 	{
-		self.single(pool, DistributedStreamMulti::<Self::Item>::max(Identity))
+		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::max(Identity))
 			.await
 	}
 
@@ -639,7 +639,7 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::max_by(Identity, f),
 		)
@@ -654,7 +654,7 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::max_by_key(Identity, f),
 		)
@@ -667,7 +667,7 @@ pub trait DistributedStream {
 		Self::Item: Ord + ProcessSend,
 		Self: Sized,
 	{
-		self.single(pool, DistributedStreamMulti::<Self::Item>::min(Identity))
+		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::min(Identity))
 			.await
 	}
 
@@ -678,7 +678,7 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::min_by(Identity, f),
 		)
@@ -693,7 +693,7 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::min_by_key(Identity, f),
 		)
@@ -708,7 +708,7 @@ pub trait DistributedStream {
 		Self::Item: Hash + Eq + Clone + ProcessSend,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::most_frequent(
 				Identity,
@@ -729,7 +729,7 @@ pub trait DistributedStream {
 		A: Hash + Eq + Clone + ProcessSend,
 		B: Hash + 'static,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::most_distinct(
 				Identity,
@@ -751,7 +751,7 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::sample_unstable(Identity, samples),
 		)
@@ -765,7 +765,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.single(pool, DistributedStreamMulti::<Self::Item>::all(Identity, f))
+		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::all(Identity, f))
 			.await
 	}
 
@@ -776,7 +776,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.single(pool, DistributedStreamMulti::<Self::Item>::any(Identity, f))
+		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::any(Identity, f))
 			.await
 	}
 
@@ -789,7 +789,7 @@ pub trait DistributedStream {
 		Self: Sized,
 	{
 		// B::from_dist_stream(self, pool)
-		self.single(
+		self.fork_single(
 			pool,
 			DistributedStreamMulti::<Self::Item>::collect(Identity),
 		)

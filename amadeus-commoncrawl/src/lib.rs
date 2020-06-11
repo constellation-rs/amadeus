@@ -18,11 +18,11 @@ use amadeus_types::Webpage;
 use commoncrawl::WarcParser;
 
 /// See https://commoncrawl.s3.amazonaws.com/crawl-data/index.html
-/// CC-MAIN-2018-43
 pub struct CommonCrawl {
 	urls: Vec<String>,
 }
 impl CommonCrawl {
+	/// CC-MAIN-2020-24
 	pub async fn new(id: &str) -> Result<Self, reqwest::Error> {
 		let url = format!(
 			"https://commoncrawl.s3.amazonaws.com/crawl-data/{}/warc.paths.gz",
@@ -53,40 +53,6 @@ impl CommonCrawl {
 		Ok(Self { urls })
 	}
 }
-
-// let body = reqwest::get(
-// 	"http://commoncrawl.s3.amazonaws.com/crawl-data/CC-MAIN-2018-30/warc.paths.gz",
-// )
-// .await
-// .unwrap();
-// let body = body
-// 	.bytes_stream()
-// 	.map_err(|e| io::Error::new(io::ErrorKind::Other, e));
-// let body = BufReader::new(body.into_async_read());
-// let mut body = GzipDecoder::new(body); // Content-Encoding isn't set, so decode manually
-// body.multiple_members(true);
-// let handles = BufReader::new(body)
-// 	.lines()
-// 	.map(|url| format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap()))
-// 	.take(10)
-// 	.map(|url| {
-// 		tokio::spawn(async move {
-// 			println!("{}", url);
-// 			let body = super::get(url.parse().unwrap()).await.unwrap();
-// 			let body = body
-// 				.bytes_stream()
-// 				.map_err(|e| io::Error::new(io::ErrorKind::Other, e));
-// 			let body = BufReader::new(body.into_async_read());
-// 			let mut body = GzipDecoder::new(body); // Content-Encoding isn't set, so decode manually
-// 			body.multiple_members(true);
-// 			let n = futures::io::copy(&mut body, &mut futures::io::sink())
-// 				.await
-// 				.unwrap();
-// 			println!("{}", n);
-// 		})
-// 	})
-// 	.collect::<Vec<_>>()
-// 	.await;
 
 impl Source for CommonCrawl {
 	type Item = Webpage<'static>;

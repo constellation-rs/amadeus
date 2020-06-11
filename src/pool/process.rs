@@ -1,4 +1,5 @@
 use constellation::{spawn, Receiver, Resources, Sender, SpawnError};
+use futures::{future::LocalBoxFuture, FutureExt};
 use serde_closure::FnOnce;
 use serde_traitobject as st;
 use std::{
@@ -11,8 +12,53 @@ use super::{
 	util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize}, ThreadPool
 };
 
-type Request = Box<dyn st::FnOnce<(), Output = Response> + Send>; // TODO: update once #![feature(unboxed_closures)] is stable
+type Request = Box<
+	dyn for<'a> st::FnOnce<(&'a ThreadPool,), Output = LocalBoxFuture<'static, Response>> + Send,
+>; // TODO: update once #![feature(unboxed_closures)] is stable
 type Response = Box<dyn st::Any + Send>;
+
+mod future_ext {
+	use futures::{future::Future, pin_mut};
+	use std::{
+		sync::Arc, task::{Context, Poll}, thread::{self, Thread}
+	};
+
+	/// Extension trait to provide convenient [`block()`](FutureExt1::block) method on futures.
+	///
+	/// Named `FutureExt1` to avoid clashing with [`futures::future::FutureExt`].
+	pub trait FutureExt1: Future {
+		/// Convenience method over `futures::executor::block_on(future)`.
+		fn block(self) -> Self::Output
+		where
+			Self: Sized,
+		{
+			// futures::executor::block_on(self) // Not reentrant for some reason
+			struct ThreadNotify {
+				thread: Thread,
+			}
+			impl futures::task::ArcWake for ThreadNotify {
+				fn wake_by_ref(arc_self: &Arc<Self>) {
+					arc_self.thread.unpark();
+				}
+			}
+			let f = self;
+			pin_mut!(f);
+			let thread_notify = Arc::new(ThreadNotify {
+				thread: thread::current(),
+			});
+			let waker = futures::task::waker_ref(&thread_notify);
+			let mut cx = Context::from_waker(&waker);
+			loop {
+				if let Poll::Ready(t) = f.as_mut().poll(&mut cx) {
+					return t;
+				}
+				thread::park();
+			}
+		}
+	}
+	impl<T: ?Sized> FutureExt1 for T where T: Future {}
+}
+use future_ext::FutureExt1;
 
 #[derive(Debug)]
 struct Process {
@@ -63,26 +109,42 @@ impl<T> Queued<T> {
 #[derive(Debug)]
 struct ProcessPoolInner {
 	processes: Vec<Process>,
-	threads: usize,
 	i: RoundRobin,
 }
 impl ProcessPoolInner {
-	fn new(processes: usize, threads: usize, resources: Resources) -> Result<Self, SpawnError> {
+	#[allow(clippy::double_parens)] // TODO: work out what's triggering this
+	fn new(
+		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
+	) -> Result<Self, SpawnError> {
+		let processes = processes.unwrap_or(10); // TODO!
 		let mut processes_vec = Vec::with_capacity(processes);
 		for _ in 0..processes {
 			let child = spawn(
 				resources,
 				FnOnce!(move |parent| {
-					let receiver = Receiver::<Option<Request>>::new(parent);
-					let sender = Sender::<Result<Response, Panicked>>::new(parent);
+					tokio::runtime::Builder::new()
+						.threaded_scheduler()
+						.enable_all()
+						.build()
+						.unwrap()
+						.block_on(async {
+							let receiver = Receiver::<Option<Request>>::new(parent);
+							let sender = Sender::<Result<Response, Panicked>>::new(parent);
 
-					let _ = threads;
+							let thread_pool = ThreadPool::new(tasks_per_core);
 
-					while let Some(work) = receiver.recv().block().unwrap() {
-						let ret = panic::catch_unwind(panic::AssertUnwindSafe(work));
-						let ret = ret.map_err(Panicked::from);
-						sender.send(ret).block();
-					}
+							while let Some(work) = receiver.recv().await.unwrap() {
+								let ret = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+									work(&thread_pool)
+								}));
+								let ret = ret.map_err(Panicked::from);
+								let ret = match ret {
+									Ok(t) => Ok(t.await),
+									Err(e) => Err(e),
+								};
+								sender.send(ret).await;
+							}
+						})
 				}),
 			)
 			.block();
@@ -114,15 +176,11 @@ impl ProcessPoolInner {
 		let i = RoundRobin::new(0, processes_vec.len());
 		Ok(Self {
 			processes: processes_vec,
-			threads,
 			i,
 		})
 	}
 	fn processes(&self) -> usize {
 		self.processes.len()
-	}
-	fn threads(&self) -> usize {
-		self.threads
 	}
 	async fn spawn<F, Fut, T>(&self, work: F) -> Result<T, Panicked>
 	where
@@ -132,10 +190,14 @@ impl ProcessPoolInner {
 	{
 		let process_index = self.i.get();
 		let process = &self.processes[process_index];
-		let x = process.sender.send(Some(Box::new(FnOnce!(move || {
-			let work: F = work;
-			Box::new(work()) as Response
-		})) as Request));
+		let x = process
+			.sender
+			.send(Some(Box::new(FnOnce!(move |thread_pool: &_| {
+				let work: F = work;
+				work(thread_pool)
+					.map(|res| Box::new(res) as Response)
+					.boxed_local()
+			})) as Request));
 		x.await;
 		let index;
 		{
@@ -196,20 +258,19 @@ impl Drop for ProcessPoolInner {
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);
 impl ProcessPool {
-	pub fn new(processes: usize, threads: usize, resources: Resources) -> Result<Self, SpawnError> {
+	pub fn new(
+		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
+	) -> Result<Self, SpawnError> {
 		Ok(Self(Arc::new(ProcessPoolInner::new(
-			processes, threads, resources,
+			processes,
+			tasks_per_core,
+			resources,
 		)?)))
 	}
 	pub fn processes(&self) -> usize {
 		self.0.processes()
 	}
-	pub fn threads(&self) -> usize {
-		self.0.threads()
-	}
-	pub fn spawn<F, Fut, T>(
-		&self, work: F,
-	) -> impl Future<Output = Result<T, Panicked>> + Send + 'static
+	pub fn spawn<F, Fut, T>(&self, work: F) -> impl Future<Output = Result<T, Panicked>> + Send
 	where
 		F: FnOnce(&ThreadPool) -> Fut + ProcessSend,
 		Fut: Future<Output = T> + 'static,

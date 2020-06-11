@@ -9,10 +9,6 @@ use std::{
 use crate::{
 	dist_stream::{Consumer, ConsumerAsync, DistributedStream}, sink::Sink
 };
-#[cfg(feature = "doc")]
-use std::{
-	pin::Pin, task::{Context, Poll}
-};
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
 impl<T, E> IntoIterator for ResultExpand<T, E>
