@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.1.7")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.0")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 
