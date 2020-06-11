@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -16,7 +16,7 @@ pub struct Sum<I, B> {
 	marker: PhantomData<fn() -> B>,
 }
 impl<I, B> Sum<I, B> {
-	pub(super) fn new(i: I) -> Self {
+	pub(crate) fn new(i: I) -> Self {
 		Self {
 			i,
 			marker: PhantomData,
@@ -24,13 +24,13 @@ impl<I, B> Sum<I, B> {
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, B, Source> DistributedReducer<I, Source, B> for Sum<I, B>
+impl<I: DistributedPipe<Source>, B, Source> DistributedSink<I, Source, B> for Sum<I, B>
 where
 	B: iter::Sum<I::Item> + iter::Sum<B> + ProcessSend,
 	I::Item: 'static,
 {
-	type ReduceAFactory = SumReducerFactory<I::Item, B>;
-	type ReduceBFactory = SumReducerFactory<B, B>;
+	type ReduceAFactory = SumReduceFactory<I::Item, B>;
+	type ReduceBFactory = SumReduceFactory<B, B>;
 	type ReduceA = SumReducer<I::Item, B>;
 	type ReduceB = SumReducer<B, B>;
 	type ReduceC = SumReducer<B, B>;
@@ -38,8 +38,8 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			SumReducerFactory(PhantomData),
-			SumReducerFactory::new(),
+			SumReduceFactory(PhantomData),
+			SumReduceFactory::new(),
 			SumReducer(Some(iter::empty::<B>().sum()), PhantomData),
 		)
 	}
@@ -47,27 +47,27 @@ where
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct SumReducerFactory<A, B>(PhantomData<fn(A, B)>);
-impl<A, B> SumReducerFactory<A, B> {
+pub struct SumReduceFactory<A, B>(PhantomData<fn(A, B)>);
+impl<A, B> SumReduceFactory<A, B> {
 	pub fn new() -> Self {
 		Self(PhantomData)
 	}
 }
-impl<A, B> Default for SumReducerFactory<A, B> {
+impl<A, B> Default for SumReduceFactory<A, B> {
 	fn default() -> Self {
 		Self(PhantomData)
 	}
 }
-impl<A, B> ReduceFactory for SumReducerFactory<A, B>
+impl<A, B> Factory for SumReduceFactory<A, B>
 where
 	B: iter::Sum<A> + iter::Sum,
 {
-	type Reducer = SumReducer<A, B>;
-	fn make(&self) -> Self::Reducer {
+	type Item = SumReducer<A, B>;
+	fn make(&self) -> Self::Item {
 		SumReducer(Some(iter::empty::<B>().sum()), PhantomData)
 	}
 }
-impl<A, B> Clone for SumReducerFactory<A, B> {
+impl<A, B> Clone for SumReduceFactory<A, B> {
 	fn clone(&self) -> Self {
 		Self(PhantomData)
 	}

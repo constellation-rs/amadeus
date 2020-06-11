@@ -14,7 +14,7 @@ use postgres::{CopyOutStream, Error as InternalPostgresError};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::TryFrom, error, fmt::{self, Debug, Display}, io, io::Cursor, iter, marker::PhantomData, ops::Fn, path::PathBuf, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration
+	convert::TryFrom, error, fmt::{self, Debug, Display}, io, io::Cursor, marker::PhantomData, ops::Fn, path::PathBuf, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration
 };
 
 use amadeus_core::{
@@ -199,7 +199,6 @@ where
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
@@ -247,9 +246,6 @@ where
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-	fn iter(self) -> Self::Iter {
-		iter::empty()
 	}
 }
 

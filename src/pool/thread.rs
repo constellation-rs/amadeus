@@ -4,7 +4,7 @@ use std::{
 };
 use tokio::task::spawn;
 
-use super::util::Panicked;
+use super::util::{assert_sync_and_send, Panicked};
 
 const DEFAULT_TASKS_PER_CORE: usize = 100;
 
@@ -53,6 +53,10 @@ impl Clone for ThreadPool {
 
 impl UnwindSafe for ThreadPool {}
 impl RefUnwindSafe for ThreadPool {}
+
+fn _assert() {
+	let _ = assert_sync_and_send::<ThreadPool>;
+}
 
 // TODO remove when spawn_pinned exists https://github.com/tokio-rs/tokio/issues/2545
 

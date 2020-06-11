@@ -4,29 +4,29 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{ConsumerMulti, ConsumerMultiAsync, DistributedStreamMulti};
+use super::{DistributedPipe, PipeTask, PipeTaskAsync};
 use crate::sink::Sink;
 
 pub struct Identity;
-impl<Item> DistributedStreamMulti<Item> for Identity {
+impl<Item> DistributedPipe<Item> for Identity {
 	type Item = Item;
-	type Task = IdentityMultiTask;
+	type Task = IdentityTask;
 
 	fn task(&self) -> Self::Task {
-		IdentityMultiTask
+		IdentityTask
 	}
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct IdentityMultiTask;
-impl<Source> ConsumerMulti<Source> for IdentityMultiTask {
+pub struct IdentityTask;
+impl<Source> PipeTask<Source> for IdentityTask {
 	type Item = Source;
-	type Async = IdentityMultiTask;
+	type Async = IdentityTask;
 	fn into_async(self) -> Self::Async {
-		IdentityMultiTask
+		IdentityTask
 	}
 }
-impl<Item> ConsumerMultiAsync<Item> for IdentityMultiTask {
+impl<Item> PipeTaskAsync<Item> for IdentityTask {
 	type Item = Item;
 
 	fn poll_run(

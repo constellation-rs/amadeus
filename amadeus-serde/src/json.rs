@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use serde_json::Error as InternalJsonError;
 use std::{
-	error, fmt::{self, Debug, Display}, io::{self, Cursor}, iter, marker::PhantomData
+	error, fmt::{self, Debug, Display}, io::{self, Cursor}, marker::PhantomData
 };
 
 use amadeus_core::{
@@ -50,7 +50,6 @@ where
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
@@ -90,29 +89,6 @@ where
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-	fn iter(self) -> Self::Iter {
-		iter::empty()
-		// self.files
-		// 	.into_iter()
-		// 	.flat_map(|file: PathBuf| {
-		// 		let files = if !file.is_dir() {
-		// 			sum::Sum2::A(iter::once(Ok(file)))
-		// 		} else {
-		// 			sum::Sum2::B(get_json_partitions(file))
-		// 		};
-		// 		files
-		// 			.flat_map(|file: Result<PathBuf, _>| ResultExpand(
-		// 				file.and_then(|file| Ok(fs::File::open(file)?)).map(|file| {
-		// 					serde_json::Deserializer::from_reader(file)
-		// 						.into_iter()
-		// 						.map(FnMut!(|x: Result<SerdeDeserialize<Row>, InternalJsonError>| Ok(
-		// 							x?.0
-		// 						)))
-		// 				})
-		// 			))
-		// 			.map(|row: Result<Result<Row, InternalJsonError>, io::Error>| Ok(row??))
-		// 	})
 	}
 }
 

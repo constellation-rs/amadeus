@@ -22,10 +22,10 @@ impl<T> IntoDistributedStream for Vec<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<vec::IntoIter<T>>;
+	type DistStream = IterIter<vec::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -36,10 +36,10 @@ impl<'a, T: Clone> IntoDistributedStream for &'a Vec<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -51,10 +51,10 @@ impl<T> IntoDistributedStream for VecDeque<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<vec_deque::IntoIter<T>>;
+	type DistStream = IterIter<vec_deque::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -65,10 +65,10 @@ impl<'a, T: Clone> IntoDistributedStream for &'a VecDeque<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<vec_deque::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<vec_deque::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -80,10 +80,10 @@ impl<T: Ord> IntoDistributedStream for BinaryHeap<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<binary_heap::IntoIter<T>>;
+	type DistStream = IterIter<binary_heap::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -94,10 +94,10 @@ impl<'a, T: Ord + Clone> IntoDistributedStream for &'a BinaryHeap<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<binary_heap::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<binary_heap::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -109,10 +109,10 @@ impl<T> IntoDistributedStream for LinkedList<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<linked_list::IntoIter<T>>;
+	type DistStream = IterIter<linked_list::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -123,10 +123,10 @@ impl<'a, T: Clone> IntoDistributedStream for &'a LinkedList<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<linked_list::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<linked_list::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -139,10 +139,10 @@ where
 	T: Eq + Hash + ProcessSend,
 	S: BuildHasher + Default,
 {
-	type Iter = IterIter<hash_set::IntoIter<T>>;
+	type DistStream = IterIter<hash_set::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -154,10 +154,10 @@ where
 	T: Eq + Hash + ProcessSend,
 	S: BuildHasher + Default,
 {
-	type Iter = IterIter<iter::Cloned<hash_set::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<hash_set::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -171,10 +171,10 @@ where
 	V: ProcessSend,
 	S: BuildHasher + Default,
 {
-	type Iter = IterIter<hash_map::IntoIter<K, V>>;
+	type DistStream = IterIter<hash_map::IntoIter<K, V>>;
 	type Item = (K, V);
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -187,10 +187,10 @@ where
 	V: ProcessSend,
 	S: BuildHasher + Default,
 {
-	type Iter = IterIter<TupleCloned<hash_map::Iter<'a, K, V>>>;
+	type DistStream = IterIter<TupleCloned<hash_map::Iter<'a, K, V>>>;
 	type Item = (K, V);
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -202,10 +202,10 @@ impl<T> IntoDistributedStream for BTreeSet<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<btree_set::IntoIter<T>>;
+	type DistStream = IterIter<btree_set::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -216,10 +216,10 @@ impl<'a, T: Clone> IntoDistributedStream for &'a BTreeSet<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<btree_set::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<btree_set::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -232,10 +232,10 @@ where
 	K: ProcessSend,
 	V: ProcessSend,
 {
-	type Iter = IterIter<btree_map::IntoIter<K, V>>;
+	type DistStream = IterIter<btree_map::IntoIter<K, V>>;
 	type Item = (K, V);
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -247,10 +247,10 @@ where
 	K: ProcessSend,
 	V: ProcessSend,
 {
-	type Iter = IterIter<TupleCloned<btree_map::Iter<'a, K, V>>>;
+	type DistStream = IterIter<TupleCloned<btree_map::Iter<'a, K, V>>>;
 	type Item = (K, V);
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -259,10 +259,10 @@ where
 }
 
 impl IntoDistributedStream for String {
-	type Iter = IterIter<IntoChars>;
+	type DistStream = IterIter<IntoChars>;
 	type Item = char;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -270,10 +270,10 @@ impl IntoDistributedStream for String {
 	}
 }
 impl<'a> IntoDistributedStream for &'a String {
-	type Iter = IterIter<str::Chars<'a>>;
+	type DistStream = IterIter<str::Chars<'a>>;
 	type Item = char;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -285,10 +285,10 @@ impl<T> IntoDistributedStream for Option<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<option::IntoIter<T>>;
+	type DistStream = IterIter<option::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -299,10 +299,10 @@ impl<'a, T: Clone> IntoDistributedStream for &'a Option<T>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<option::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<option::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -314,10 +314,10 @@ impl<T, E> IntoDistributedStream for Result<T, E>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<result::IntoIter<T>>;
+	type DistStream = IterIter<result::IntoIter<T>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{
@@ -328,10 +328,10 @@ impl<'a, T: Clone, E> IntoDistributedStream for &'a Result<T, E>
 where
 	T: ProcessSend,
 {
-	type Iter = IterIter<iter::Cloned<result::Iter<'a, T>>>;
+	type DistStream = IterIter<iter::Cloned<result::Iter<'a, T>>>;
 	type Item = T;
 
-	fn into_dist_stream(self) -> Self::Iter
+	fn into_dist_stream(self) -> Self::DistStream
 	where
 		Self: Sized,
 	{

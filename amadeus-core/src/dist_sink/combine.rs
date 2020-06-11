@@ -7,7 +7,7 @@ use std::{
 };
 
 use super::{
-	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -17,19 +17,19 @@ pub struct Combine<I, F> {
 	f: F,
 }
 impl<I, F> Combine<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, Source, F> DistributedReducer<I, Source, Option<I::Item>>
+impl<I: DistributedPipe<Source>, Source, F> DistributedSink<I, Source, Option<I::Item>>
 	for Combine<I, F>
 where
 	F: FnMut(I::Item, I::Item) -> I::Item + Clone + ProcessSend,
 	I::Item: ProcessSend,
 {
-	type ReduceAFactory = CombineReducerFactory<I::Item, I::Item, CombineFn<F>>;
-	type ReduceBFactory = CombineReducerFactory<Option<I::Item>, I::Item, CombineFn<F>>;
+	type ReduceAFactory = CombineReduceFactory<I::Item, I::Item, CombineFn<F>>;
+	type ReduceBFactory = CombineReduceFactory<Option<I::Item>, I::Item, CombineFn<F>>;
 	type ReduceA = CombineReducer<I::Item, I::Item, CombineFn<F>>;
 	type ReduceB = CombineReducer<Option<I::Item>, I::Item, CombineFn<F>>;
 	type ReduceC = CombineReducer<Option<I::Item>, I::Item, CombineFn<F>>;
@@ -37,8 +37,8 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CombineReducerFactory(CombineFn(self.f.clone()), PhantomData),
-			CombineReducerFactory(CombineFn(self.f.clone()), PhantomData),
+			CombineReduceFactory(CombineFn(self.f.clone()), PhantomData),
+			CombineReduceFactory(CombineFn(self.f.clone()), PhantomData),
 			CombineReducer(None, CombineFn(self.f), PhantomData),
 		)
 	}
@@ -64,18 +64,18 @@ pub trait Combiner<A> {
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct CombineReducerFactory<A, B, F>(pub(crate) F, pub(crate) PhantomData<fn(A, B)>);
-impl<A, B, F> ReduceFactory for CombineReducerFactory<A, B, F>
+pub struct CombineReduceFactory<A, B, F>(pub(crate) F, pub(crate) PhantomData<fn(A, B)>);
+impl<A, B, F> Factory for CombineReduceFactory<A, B, F>
 where
 	Option<B>: From<A>,
 	F: Combiner<B> + Clone,
 {
-	type Reducer = CombineReducer<A, B, F>;
-	fn make(&self) -> Self::Reducer {
+	type Item = CombineReducer<A, B, F>;
+	fn make(&self) -> Self::Item {
 		CombineReducer(None, self.0.clone(), PhantomData)
 	}
 }
-impl<A, B, F> Clone for CombineReducerFactory<A, B, F>
+impl<A, B, F> Clone for CombineReduceFactory<A, B, F>
 where
 	F: Clone,
 {

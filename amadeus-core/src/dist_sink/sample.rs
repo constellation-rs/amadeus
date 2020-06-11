@@ -10,7 +10,7 @@ use std::{
 use streaming_algorithms::{SampleUnstable as SASampleUnstable, Top, Zeroable};
 
 use super::{
-	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
+	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReduceFactory, SumReducer
 };
 use crate::pool::ProcessSend;
 
@@ -20,18 +20,18 @@ pub struct SampleUnstable<I> {
 	samples: usize,
 }
 impl<I> SampleUnstable<I> {
-	pub(super) fn new(i: I, samples: usize) -> Self {
+	pub(crate) fn new(i: I, samples: usize) -> Self {
 		Self { i, samples }
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, Source>
-	DistributedReducer<I, Source, SASampleUnstable<I::Item>> for SampleUnstable<I>
+impl<I: DistributedPipe<Source>, Source> DistributedSink<I, Source, SASampleUnstable<I::Item>>
+	for SampleUnstable<I>
 where
 	I::Item: ProcessSend,
 {
-	type ReduceAFactory = SampleUnstableReducerFactory<I::Item>;
-	type ReduceBFactory = SumReducerFactory<SASampleUnstable<I::Item>, SASampleUnstable<I::Item>>;
+	type ReduceAFactory = SampleUnstableReduceFactory<I::Item>;
+	type ReduceBFactory = SumReduceFactory<SASampleUnstable<I::Item>, SASampleUnstable<I::Item>>;
 	type ReduceA = SampleUnstableReducer<I::Item>;
 	type ReduceB = SumReducer<SASampleUnstable<I::Item>, SASampleUnstable<I::Item>>;
 	type ReduceC = SumReducer<SASampleUnstable<I::Item>, SASampleUnstable<I::Item>>;
@@ -39,8 +39,8 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			SampleUnstableReducerFactory(self.samples, PhantomData),
-			SumReducerFactory::new(), // TODO: pass SASampleUnstable::new(self.samples) ?
+			SampleUnstableReduceFactory(self.samples, PhantomData),
+			SumReduceFactory::new(), // TODO: pass SASampleUnstable::new(self.samples) ?
 			SumReducer::new(SASampleUnstable::new(self.samples)),
 		)
 	}
@@ -51,14 +51,14 @@ where
 	bound(serialize = "A: Serialize"),
 	bound(deserialize = "A: Deserialize<'de>")
 )]
-pub struct SampleUnstableReducerFactory<A>(usize, PhantomData<fn(A)>);
-impl<A> ReduceFactory for SampleUnstableReducerFactory<A> {
-	type Reducer = SampleUnstableReducer<A>;
-	fn make(&self) -> Self::Reducer {
+pub struct SampleUnstableReduceFactory<A>(usize, PhantomData<fn(A)>);
+impl<A> Factory for SampleUnstableReduceFactory<A> {
+	type Item = SampleUnstableReducer<A>;
+	fn make(&self) -> Self::Item {
 		SampleUnstableReducer(Some(SASampleUnstable::new(self.0)))
 	}
 }
-impl<A> Clone for SampleUnstableReducerFactory<A> {
+impl<A> Clone for SampleUnstableReduceFactory<A> {
 	fn clone(&self) -> Self {
 		Self(self.0, PhantomData)
 	}
@@ -111,17 +111,17 @@ where
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct NonzeroReducerFactory<RF>(RF)
+pub struct NonzeroReduceFactory<RF>(RF)
 where
-	RF: ReduceFactory;
-impl<RF, B> ReduceFactory for NonzeroReducerFactory<RF>
+	RF: Factory;
+impl<RF, B> Factory for NonzeroReduceFactory<RF>
 where
-	RF: ReduceFactory,
-	RF::Reducer: Reducer<Output = Zeroable<B>>,
+	RF: Factory,
+	RF::Item: Reducer<Output = Zeroable<B>>,
 {
-	type Reducer = NonzeroReducer<RF::Reducer>;
+	type Item = NonzeroReducer<RF::Item>;
 
-	fn make(&self) -> Self::Reducer {
+	fn make(&self) -> Self::Item {
 		NonzeroReducer(self.0.make())
 	}
 }
@@ -185,7 +185,7 @@ pub struct MostFrequent<I> {
 	tolerance: f64,
 }
 impl<I> MostFrequent<I> {
-	pub(super) fn new(i: I, n: usize, probability: f64, tolerance: f64) -> Self {
+	pub(crate) fn new(i: I, n: usize, probability: f64, tolerance: f64) -> Self {
 		Self {
 			i,
 			n,
@@ -195,15 +195,14 @@ impl<I> MostFrequent<I> {
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, Source> DistributedReducer<I, Source, Top<I::Item, usize>>
+impl<I: DistributedPipe<Source>, Source> DistributedSink<I, Source, Top<I::Item, usize>>
 	for MostFrequent<I>
 where
 	I::Item: Clone + Hash + Eq + ProcessSend,
 {
-	type ReduceAFactory = MostFrequentReducerFactory<I::Item>;
-	type ReduceBFactory = NonzeroReducerFactory<
-		SumReducerFactory<Top<I::Item, usize>, Zeroable<Top<I::Item, usize>>>,
-	>;
+	type ReduceAFactory = MostFrequentReduceFactory<I::Item>;
+	type ReduceBFactory =
+		NonzeroReduceFactory<SumReduceFactory<Top<I::Item, usize>, Zeroable<Top<I::Item, usize>>>>;
 	type ReduceA = MostFrequentReducer<I::Item>;
 	type ReduceB = NonzeroReducer<SumReducer<Top<I::Item, usize>, Zeroable<Top<I::Item, usize>>>>;
 	type ReduceC = NonzeroReducer<SumReducer<Top<I::Item, usize>, Zeroable<Top<I::Item, usize>>>>;
@@ -211,8 +210,8 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			MostFrequentReducerFactory(self.n, self.probability, self.tolerance, PhantomData),
-			NonzeroReducerFactory(SumReducerFactory::new()),
+			MostFrequentReduceFactory(self.n, self.probability, self.tolerance, PhantomData),
+			NonzeroReduceFactory(SumReduceFactory::new()),
 			NonzeroReducer(SumReducer::new(Zeroable::Nonzero(Top::new(
 				self.n,
 				self.probability,
@@ -225,17 +224,17 @@ where
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct MostFrequentReducerFactory<A>(usize, f64, f64, PhantomData<fn(A)>);
-impl<A> ReduceFactory for MostFrequentReducerFactory<A>
+pub struct MostFrequentReduceFactory<A>(usize, f64, f64, PhantomData<fn(A)>);
+impl<A> Factory for MostFrequentReduceFactory<A>
 where
 	A: Clone + Hash + Eq,
 {
-	type Reducer = MostFrequentReducer<A>;
-	fn make(&self) -> Self::Reducer {
+	type Item = MostFrequentReducer<A>;
+	fn make(&self) -> Self::Item {
 		MostFrequentReducer(Some(Top::new(self.0, self.1, self.2, ())))
 	}
 }
-impl<A> Clone for MostFrequentReducerFactory<A> {
+impl<A> Clone for MostFrequentReduceFactory<A> {
 	fn clone(&self) -> Self {
 		Self(self.0, self.1, self.2, PhantomData)
 	}
@@ -306,7 +305,7 @@ pub struct MostDistinct<I> {
 	error_rate: f64,
 }
 impl<I> MostDistinct<I> {
-	pub(super) fn new(i: I, n: usize, probability: f64, tolerance: f64, error_rate: f64) -> Self {
+	pub(crate) fn new(i: I, n: usize, probability: f64, tolerance: f64, error_rate: f64) -> Self {
 		Self {
 			i,
 			n,
@@ -317,16 +316,16 @@ impl<I> MostDistinct<I> {
 	}
 }
 
-impl<I: DistributedStreamMulti<Source, Item = (A, B)>, Source, A, B>
-	DistributedReducer<I, Source, Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>
+impl<I: DistributedPipe<Source, Item = (A, B)>, Source, A, B>
+	DistributedSink<I, Source, Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>
 	for MostDistinct<I>
 where
 	A: Clone + Hash + Eq + ProcessSend,
 	B: Hash + 'static,
 {
-	type ReduceAFactory = MostDistinctReducerFactory<A, B>;
-	type ReduceBFactory = NonzeroReducerFactory<
-		SumReducerFactory<
+	type ReduceAFactory = MostDistinctReduceFactory<A, B>;
+	type ReduceBFactory = NonzeroReduceFactory<
+		SumReduceFactory<
 			Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>,
 			Zeroable<Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>>,
 		>,
@@ -348,14 +347,14 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			MostDistinctReducerFactory(
+			MostDistinctReduceFactory(
 				self.n,
 				self.probability,
 				self.tolerance,
 				self.error_rate,
 				PhantomData,
 			),
-			NonzeroReducerFactory(SumReducerFactory::new()),
+			NonzeroReduceFactory(SumReduceFactory::new()),
 			NonzeroReducer(SumReducer::new(Zeroable::Nonzero(Top::new(
 				self.n,
 				self.probability,
@@ -368,18 +367,18 @@ where
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct MostDistinctReducerFactory<A, B>(usize, f64, f64, f64, PhantomData<fn(A, B)>);
-impl<A, B> ReduceFactory for MostDistinctReducerFactory<A, B>
+pub struct MostDistinctReduceFactory<A, B>(usize, f64, f64, f64, PhantomData<fn(A, B)>);
+impl<A, B> Factory for MostDistinctReduceFactory<A, B>
 where
 	A: Clone + Hash + Eq,
 	B: Hash,
 {
-	type Reducer = MostDistinctReducer<A, B>;
-	fn make(&self) -> Self::Reducer {
+	type Item = MostDistinctReducer<A, B>;
+	fn make(&self) -> Self::Item {
 		MostDistinctReducer(Some(Top::new(self.0, self.1, self.2, self.3)))
 	}
 }
-impl<A, B> Clone for MostDistinctReducerFactory<A, B> {
+impl<A, B> Clone for MostDistinctReduceFactory<A, B> {
 	fn clone(&self) -> Self {
 		Self(self.0, self.1, self.2, self.3, PhantomData)
 	}

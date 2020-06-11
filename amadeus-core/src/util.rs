@@ -7,7 +7,7 @@ use std::{
 
 #[cfg(feature = "doc")]
 use crate::{
-	dist_stream::{Consumer, ConsumerAsync, DistributedStream}, sink::Sink
+	dist_stream::{DistributedStream, StreamTask, StreamTaskAsync}, sink::Sink
 };
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
@@ -107,7 +107,7 @@ impl<T> ImplDistributedStream<T> {
 #[cfg(feature = "doc")]
 impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
 	type Item = T;
-	type Task = ImplConsumer<T>;
+	type Task = ImplTask<T>;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		unreachable!()
@@ -120,21 +120,21 @@ impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
 #[cfg(feature = "doc")]
 #[doc(hidden)]
 #[derive(Serialize, Deserialize)]
-pub struct ImplConsumer<T>(PhantomData<fn(T)>);
+pub struct ImplTask<T>(PhantomData<fn(T)>);
 #[cfg(feature = "doc")]
-impl<T> Consumer for ImplConsumer<T>
+impl<T> StreamTask for ImplTask<T>
 where
 	T: 'static,
 {
 	type Item = T;
-	type Async = ImplConsumer<T>;
+	type Async = ImplTask<T>;
 
 	fn into_async(self) -> Self::Async {
 		self
 	}
 }
 #[cfg(feature = "doc")]
-impl<T: 'static> ConsumerAsync for ImplConsumer<T> {
+impl<T: 'static> StreamTaskAsync for ImplTask<T> {
 	type Item = T;
 
 	fn poll_run(

@@ -8,7 +8,7 @@ use async_compression::futures::bufread::GzipDecoder; // TODO: use stream or htt
 use futures::{io::BufReader, AsyncBufReadExt, FutureExt, StreamExt, TryStreamExt};
 use reqwest_resume::ClientExt;
 use serde_closure::*;
-use std::{io, iter, time};
+use std::{io, time};
 
 use amadeus_core::{
 	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, Source
@@ -62,7 +62,6 @@ impl Source for CommonCrawl {
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
@@ -83,8 +82,5 @@ impl Source for CommonCrawl {
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-	fn iter(self) -> Self::Iter {
-		iter::empty()
 	}
 }

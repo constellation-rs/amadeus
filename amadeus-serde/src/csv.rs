@@ -3,7 +3,7 @@ use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	error, fmt::{self, Display}, io::Cursor, iter, marker::PhantomData
+	error, fmt::{self, Display}, io::Cursor, marker::PhantomData
 };
 
 use amadeus_core::{
@@ -91,7 +91,6 @@ where
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
@@ -136,9 +135,6 @@ where
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-	fn iter(self) -> Self::Iter {
-		iter::empty()
 	}
 }
 

@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReducer, SumReducerFactory
+	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend, SumReduceFactory, SumReducer
 };
 
 #[must_use]
@@ -14,17 +14,17 @@ pub struct Count<I> {
 	i: I,
 }
 impl<I> Count<I> {
-	pub(super) fn new(i: I) -> Self {
+	pub(crate) fn new(i: I) -> Self {
 		Self { i }
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, Source> DistributedReducer<I, Source, usize> for Count<I>
+impl<I: DistributedPipe<Source>, Source> DistributedSink<I, Source, usize> for Count<I>
 where
 	I::Item: 'static,
 {
-	type ReduceAFactory = CountReducerFactory<I::Item>;
-	type ReduceBFactory = SumReducerFactory<usize, usize>;
+	type ReduceAFactory = CountReduceFactory<I::Item>;
+	type ReduceBFactory = SumReduceFactory<usize, usize>;
 	type ReduceA = CountReducer<I::Item>;
 	type ReduceB = SumReducer<usize, usize>;
 	type ReduceC = SumReducer<usize, usize>;
@@ -32,8 +32,8 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			CountReducerFactory(PhantomData),
-			SumReducerFactory::new(),
+			CountReduceFactory(PhantomData),
+			SumReduceFactory::new(),
 			SumReducer::new(0),
 		)
 	}
@@ -41,14 +41,14 @@ where
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct CountReducerFactory<A>(PhantomData<fn(A)>);
-impl<A> ReduceFactory for CountReducerFactory<A> {
-	type Reducer = CountReducer<A>;
-	fn make(&self) -> Self::Reducer {
+pub struct CountReduceFactory<A>(PhantomData<fn(A)>);
+impl<A> Factory for CountReduceFactory<A> {
+	type Item = CountReducer<A>;
+	fn make(&self) -> Self::Item {
 		CountReducer(0, PhantomData)
 	}
 }
-impl<A> Clone for CountReducerFactory<A> {
+impl<A> Clone for CountReduceFactory<A> {
 	fn clone(&self) -> Self {
 		Self(PhantomData)
 	}

@@ -3,6 +3,8 @@
 #![feature(specialization)]
 #![feature(read_initializer)]
 
+pub mod dist_pipe;
+pub mod dist_sink;
 pub mod dist_stream;
 pub mod file;
 pub mod into_dist_stream;

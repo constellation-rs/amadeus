@@ -276,7 +276,6 @@ impl ProcessPool {
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend,
 	{
-		// // TODO: + Sync
 		let inner = self.0.clone();
 		async move { inner.spawn(work).await }
 	}

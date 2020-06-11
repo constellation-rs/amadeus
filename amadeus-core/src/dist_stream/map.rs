@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedStream, DistributedStreamMulti
+	DistributedPipe, DistributedStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync
 };
 use crate::{
 	pool::ProcessSend, sink::{Sink, SinkMap}
@@ -18,7 +18,7 @@ pub struct Map<I, F> {
 	f: F,
 }
 impl<I, F> Map<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
@@ -28,7 +28,7 @@ where
 	F: FnMut(I::Item) -> R + Clone + ProcessSend,
 {
 	type Item = R;
-	type Task = MapConsumer<I::Task, F>;
+	type Task = MapTask<I::Task, F>;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.i.size_hint()
@@ -36,61 +36,61 @@ where
 	fn next_task(&mut self) -> Option<Self::Task> {
 		self.i.next_task().map(|task| {
 			let f = self.f.clone();
-			MapConsumer { task, f }
+			MapTask { task, f }
 		})
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, F, R, Source> DistributedStreamMulti<Source> for Map<I, F>
+impl<I: DistributedPipe<Source>, F, R, Source> DistributedPipe<Source> for Map<I, F>
 where
-	F: FnMut(<I as DistributedStreamMulti<Source>>::Item) -> R + Clone + ProcessSend,
+	F: FnMut(<I as DistributedPipe<Source>>::Item) -> R + Clone + ProcessSend,
 {
 	type Item = R;
-	type Task = MapConsumer<I::Task, F>;
+	type Task = MapTask<I::Task, F>;
 
 	fn task(&self) -> Self::Task {
 		let task = self.i.task();
 		let f = self.f.clone();
-		MapConsumer { task, f }
+		MapTask { task, f }
 	}
 }
 
 #[pin_project]
 #[derive(Serialize, Deserialize)]
-pub struct MapConsumer<C, F> {
+pub struct MapTask<C, F> {
 	#[pin]
 	task: C,
 	f: F,
 }
 
-impl<C: Consumer, F, R> Consumer for MapConsumer<C, F>
+impl<C: StreamTask, F, R> StreamTask for MapTask<C, F>
 where
 	F: FnMut(C::Item) -> R + Clone,
 {
 	type Item = R;
-	type Async = MapConsumer<C::Async, F>;
+	type Async = MapTask<C::Async, F>;
 	fn into_async(self) -> Self::Async {
-		MapConsumer {
+		MapTask {
 			task: self.task.into_async(),
 			f: self.f,
 		}
 	}
 }
-impl<C: ConsumerMulti<Source>, F, R, Source> ConsumerMulti<Source> for MapConsumer<C, F>
+impl<C: PipeTask<Source>, F, R, Source> PipeTask<Source> for MapTask<C, F>
 where
 	F: FnMut(C::Item) -> R + Clone,
 {
 	type Item = R;
-	type Async = MapConsumer<C::Async, F>;
+	type Async = MapTask<C::Async, F>;
 	fn into_async(self) -> Self::Async {
-		MapConsumer {
+		MapTask {
 			task: self.task.into_async(),
 			f: self.f,
 		}
 	}
 }
 
-impl<C: ConsumerAsync, F, R> ConsumerAsync for MapConsumer<C, F>
+impl<C: StreamTaskAsync, F, R> StreamTaskAsync for MapTask<C, F>
 where
 	F: FnMut(C::Item) -> R + Clone,
 {
@@ -107,9 +107,9 @@ where
 	}
 }
 
-impl<C: ConsumerMultiAsync<Source>, F, R, Source> ConsumerMultiAsync<Source> for MapConsumer<C, F>
+impl<C: PipeTaskAsync<Source>, F, R, Source> PipeTaskAsync<Source> for MapTask<C, F>
 where
-	F: FnMut(<C as ConsumerMultiAsync<Source>>::Item) -> R + Clone,
+	F: FnMut(<C as PipeTaskAsync<Source>>::Item) -> R + Clone,
 {
 	type Item = R;
 

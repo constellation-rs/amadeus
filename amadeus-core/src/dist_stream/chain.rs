@@ -4,7 +4,7 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{Consumer, ConsumerAsync, DistributedStream};
+use super::{DistributedStream, StreamTask, StreamTaskAsync};
 use crate::sink::Sink;
 
 #[must_use]
@@ -13,14 +13,14 @@ pub struct Chain<A, B> {
 	b: B,
 }
 impl<A, B> Chain<A, B> {
-	pub(super) fn new(a: A, b: B) -> Self {
+	pub(crate) fn new(a: A, b: B) -> Self {
 		Self { a, b }
 	}
 }
 
 impl<A: DistributedStream, B: DistributedStream<Item = A::Item>> DistributedStream for Chain<A, B> {
 	type Item = A::Item;
-	type Task = ChainConsumer<A::Task, B::Task>;
+	type Task = ChainTask<A::Task, B::Task>;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		let (a_lower, a_upper) = self.a.size_hint();
@@ -37,28 +37,28 @@ impl<A: DistributedStream, B: DistributedStream<Item = A::Item>> DistributedStre
 	fn next_task(&mut self) -> Option<Self::Task> {
 		self.a
 			.next_task()
-			.map(ChainConsumer::A)
-			.or_else(|| self.b.next_task().map(ChainConsumer::B))
+			.map(ChainTask::A)
+			.or_else(|| self.b.next_task().map(ChainTask::B))
 	}
 }
 
 #[pin_project]
 #[derive(Serialize, Deserialize)]
-pub enum ChainConsumer<A, B> {
+pub enum ChainTask<A, B> {
 	A(#[pin] A),
 	B(#[pin] B),
 }
-impl<A: Consumer, B: Consumer<Item = A::Item>> Consumer for ChainConsumer<A, B> {
+impl<A: StreamTask, B: StreamTask<Item = A::Item>> StreamTask for ChainTask<A, B> {
 	type Item = A::Item;
-	type Async = ChainConsumer<A::Async, B::Async>;
+	type Async = ChainTask<A::Async, B::Async>;
 	fn into_async(self) -> Self::Async {
 		match self {
-			ChainConsumer::A(a) => ChainConsumer::A(a.into_async()),
-			ChainConsumer::B(b) => ChainConsumer::B(b.into_async()),
+			ChainTask::A(a) => ChainTask::A(a.into_async()),
+			ChainTask::B(b) => ChainTask::B(b.into_async()),
 		}
 	}
 }
-impl<A: ConsumerAsync, B: ConsumerAsync<Item = A::Item>> ConsumerAsync for ChainConsumer<A, B> {
+impl<A: StreamTaskAsync, B: StreamTaskAsync<Item = A::Item>> StreamTaskAsync for ChainTask<A, B> {
 	type Item = A::Item;
 
 	#[project]
@@ -67,8 +67,8 @@ impl<A: ConsumerAsync, B: ConsumerAsync<Item = A::Item>> ConsumerAsync for Chain
 	) -> Poll<()> {
 		#[project]
 		match self.project() {
-			ChainConsumer::A(a) => a.poll_run(cx, sink),
-			ChainConsumer::B(b) => b.poll_run(cx, sink),
+			ChainTask::A(a) => a.poll_run(cx, sink),
+			ChainTask::B(b) => b.poll_run(cx, sink),
 		}
 	}
 }

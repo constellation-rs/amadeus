@@ -34,7 +34,7 @@ fn main() {
 async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	let _ = DistributedStreamMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity);
+	let _ = DistributedPipe::<&Result<CloudfrontRow, AwsError>>::count(Identity);
 
 	let rows = Cloudfront::new_with(
 		AwsRegion::UsEast1,
@@ -56,7 +56,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			(
 				Identity.map(FnMut!(|_x: &Result<_, _>| {})).count(),
 				Identity.cloned().count(),
-				// DistributedStreamMulti::<&Result<CloudfrontRow, AwsError>>::count(Identity),
+				// DistributedPipe::<&Result<CloudfrontRow, AwsError>>::count(Identity),
 			),
 		)
 		.await;

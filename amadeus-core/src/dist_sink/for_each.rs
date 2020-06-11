@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DefaultReduceFactory, DistributedReducer, DistributedStreamMulti, PushReducer, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DefaultReduceFactory, DistributedPipe, DistributedSink, Factory, PushReducer, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -16,18 +16,17 @@ pub struct ForEach<I, F> {
 	f: F,
 }
 impl<I, F> ForEach<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, Source, F> DistributedReducer<I, Source, ()>
-	for ForEach<I, F>
+impl<I: DistributedPipe<Source>, Source, F> DistributedSink<I, Source, ()> for ForEach<I, F>
 where
 	F: FnMut(I::Item) + Clone + ProcessSend,
 	I::Item: 'static,
 {
-	type ReduceAFactory = ForEachReducerFactory<I::Item, F>;
+	type ReduceAFactory = ForEachReduceFactory<I::Item, F>;
 	type ReduceBFactory = DefaultReduceFactory<Self::ReduceB>;
 	type ReduceA = ForEachReducer<I::Item, F>;
 	type ReduceB = PushReducer<()>;
@@ -36,7 +35,7 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			ForEachReducerFactory(self.f, PhantomData),
+			ForEachReduceFactory(self.f, PhantomData),
 			DefaultReduceFactory::new(),
 			PushReducer::new(()),
 		)
@@ -48,17 +47,17 @@ where
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct ForEachReducerFactory<A, F>(F, PhantomData<fn(A)>);
-impl<A, F> ReduceFactory for ForEachReducerFactory<A, F>
+pub struct ForEachReduceFactory<A, F>(F, PhantomData<fn(A)>);
+impl<A, F> Factory for ForEachReduceFactory<A, F>
 where
 	F: FnMut(A) + Clone,
 {
-	type Reducer = ForEachReducer<A, F>;
-	fn make(&self) -> Self::Reducer {
+	type Item = ForEachReducer<A, F>;
+	fn make(&self) -> Self::Item {
 		ForEachReducer(self.0.clone(), PhantomData)
 	}
 }
-impl<A, F> Clone for ForEachReducerFactory<A, F>
+impl<A, F> Clone for ForEachReduceFactory<A, F>
 where
 	F: Clone,
 {

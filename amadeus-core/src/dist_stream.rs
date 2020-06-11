@@ -1,24 +1,13 @@
 // TODO: P: Pool -> impl Pool: async_trait triggers https://github.com/rust-lang/rust/issues/71869
 
-mod all;
-mod any;
 mod chain;
 mod cloned;
-mod collect;
-mod combine;
-mod count;
 mod filter;
 mod flat_map;
-mod fold;
-mod for_each;
 mod identity;
 mod inspect;
 mod map;
-mod max;
-mod sample;
-mod sum;
 mod sum_type;
-mod tuple;
 mod update;
 
 use ::sum::*;
@@ -37,35 +26,32 @@ use crate::{
 };
 
 pub use self::{
-	all::*, any::*, chain::*, cloned::*, collect::*, combine::*, count::*, filter::*, flat_map::*, fold::*, for_each::*, identity::*, inspect::*, map::*, max::*, sample::*, sum::*, tuple::*, update::*
+	chain::*, cloned::*, filter::*, flat_map::*, identity::*, inspect::*, map::*, update::*
 };
 
-#[inline(always)]
-fn _assert_distributed_stream<T, I: DistributedStream<Item = T>>(i: I) -> I {
-	i
+use super::{dist_pipe::*, dist_sink::*};
+
+#[must_use]
+pub trait StreamTask {
+	type Item;
+	type Async: StreamTaskAsync<Item = Self::Item>;
+
+	fn into_async(self) -> Self::Async;
 }
-#[inline(always)]
-fn _assert_distributed_stream_multi<T, I: DistributedStreamMulti<Source, Item = T>, Source>(
-	i: I,
-) -> I {
-	i
-}
-#[inline(always)]
-fn _assert_distributed_reducer<
-	T,
-	R: DistributedReducer<I, Source, T>,
-	I: DistributedStreamMulti<Source>,
-	Source,
->(
-	r: R,
-) -> R {
-	r
+#[must_use]
+pub trait StreamTaskAsync {
+	type Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+	) -> Poll<()>;
 }
 
 #[async_trait(?Send)]
+#[must_use]
 pub trait DistributedStream {
 	type Item;
-	type Task: Consumer<Item = Self::Item> + ProcessSend;
+	type Task: StreamTask<Item = Self::Item> + ProcessSend;
 	fn size_hint(&self) -> (usize, Option<usize>);
 	fn next_task(&mut self) -> Option<Self::Task>;
 
@@ -74,7 +60,7 @@ pub trait DistributedStream {
 		F: FnMut(&Self::Item) + Clone + ProcessSend,
 		Self: Sized,
 	{
-		_assert_distributed_stream(Inspect::new(self, f))
+		assert_distributed_stream(Inspect::new(self, f))
 	}
 
 	fn update<F>(self, f: F) -> Update<Self, F>
@@ -82,7 +68,7 @@ pub trait DistributedStream {
 		F: FnMut(&mut Self::Item) + Clone + ProcessSend,
 		Self: Sized,
 	{
-		_assert_distributed_stream(Update::new(self, f))
+		assert_distributed_stream(Update::new(self, f))
 	}
 
 	fn map<B, F>(self, f: F) -> Map<Self, F>
@@ -90,7 +76,7 @@ pub trait DistributedStream {
 		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
 		Self: Sized,
 	{
-		_assert_distributed_stream(Map::new(self, f))
+		assert_distributed_stream(Map::new(self, f))
 	}
 
 	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
@@ -99,7 +85,7 @@ pub trait DistributedStream {
 		B: Stream,
 		Self: Sized,
 	{
-		_assert_distributed_stream(FlatMap::new(self, f))
+		assert_distributed_stream(FlatMap::new(self, f))
 	}
 
 	fn filter<F, Fut>(self, f: F) -> Filter<Self, F>
@@ -108,15 +94,15 @@ pub trait DistributedStream {
 		Fut: Future<Output = bool>,
 		Self: Sized,
 	{
-		_assert_distributed_stream(Filter::new(self, f))
+		assert_distributed_stream(Filter::new(self, f))
 	}
 
-	fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
+	fn chain<C>(self, chain: C) -> Chain<Self, C::DistStream>
 	where
 		C: IntoDistributedStream<Item = Self::Item>,
 		Self: Sized,
 	{
-		_assert_distributed_stream(Chain::new(self, chain.into_dist_stream()))
+		assert_distributed_stream(Chain::new(self, chain.into_dist_stream()))
 	}
 
 	async fn reduce<P, B, R1F, R2F, R1, R2, R3>(
@@ -124,8 +110,8 @@ pub trait DistributedStream {
 	) -> B
 	where
 		P: ProcessPool,
-		R1F: ReduceFactory<Reducer = R1> + Clone + ProcessSend,
-		R2F: ReduceFactory<Reducer = R2>,
+		R1F: Factory<Item = R1> + Clone + ProcessSend,
+		R2F: Factory<Item = R2>,
 		R1: ReducerSend<Item = Self::Item> + ProcessSend,
 		R2: ReducerProcessSend<Item = <R1 as Reducer>::Output> + ProcessSend,
 		R3: Reducer<Item = <R2 as ReducerProcessSend>::Output, Output = B>,
@@ -295,24 +281,24 @@ pub trait DistributedStream {
 	}
 
 	#[doc(hidden)]
-	async fn fork_single<P, DistStream, DistReducer, A>(self, pool: &P, reducer_a: DistReducer) -> A
+	async fn fork_single<P, DistPipe, DistSink, A>(self, pool: &P, sink: DistSink) -> A
 	where
 		P: ProcessPool,
-		DistStream: DistributedStreamMulti<Self::Item>,
-		DistReducer: DistributedReducer<DistStream, Self::Item, A>,
+		DistPipe: DistributedPipe<Self::Item>,
+		DistSink: DistributedSink<DistPipe, Self::Item, A>,
 		Self: Sized,
 	{
 		struct Connect<A, B>(A, B);
-		impl<A: DistributedStream, B: DistributedStreamMulti<A::Item>> DistributedStream for Connect<A, B> {
+		impl<A: DistributedStream, B: DistributedPipe<A::Item>> DistributedStream for Connect<A, B> {
 			type Item = B::Item;
-			type Task = ConnectConsumer<A::Task, B::Task>;
+			type Task = ConnectTask<A::Task, B::Task>;
 			fn size_hint(&self) -> (usize, Option<usize>) {
 				self.0.size_hint()
 			}
 			fn next_task(&mut self) -> Option<Self::Task> {
 				self.0
 					.next_task()
-					.map(|task| ConnectConsumer(task, self.1.task()))
+					.map(|task| ConnectTask(task, self.1.task()))
 			}
 		}
 		#[derive(Serialize, Deserialize)]
@@ -320,24 +306,24 @@ pub trait DistributedStream {
 			bound(serialize = "A: Serialize, B: Serialize"),
 			bound(deserialize = "A: Deserialize<'de>, B: Deserialize<'de>")
 		)]
-		struct ConnectConsumer<A, B>(A, B);
-		impl<A, B> Consumer for ConnectConsumer<A, B>
+		struct ConnectTask<A, B>(A, B);
+		impl<A, B> StreamTask for ConnectTask<A, B>
 		where
-			A: Consumer,
-			B: ConsumerMulti<A::Item>,
+			A: StreamTask,
+			B: PipeTask<A::Item>,
 		{
 			type Item = B::Item;
-			type Async = ConnectConsumerAsync<A::Async, B::Async>;
+			type Async = ConnectStreamTaskAsync<A::Async, B::Async>;
 			fn into_async(self) -> Self::Async {
-				ConnectConsumerAsync(self.0.into_async(), self.1.into_async())
+				ConnectStreamTaskAsync(self.0.into_async(), self.1.into_async())
 			}
 		}
 		#[pin_project]
-		struct ConnectConsumerAsync<A, B>(#[pin] A, #[pin] B);
-		impl<A, B> ConsumerAsync for ConnectConsumerAsync<A, B>
+		struct ConnectStreamTaskAsync<A, B>(#[pin] A, #[pin] B);
+		impl<A, B> StreamTaskAsync for ConnectStreamTaskAsync<A, B>
 		where
-			A: ConsumerAsync,
-			B: ConsumerMultiAsync<A::Item>,
+			A: StreamTaskAsync,
+			B: PipeTaskAsync<A::Item>,
 		{
 			type Item = B::Item;
 			fn poll_run(
@@ -348,7 +334,7 @@ pub trait DistributedStream {
 				impl<'a, I, B, Item> Sink<Item> for Proxy<'a, I, B>
 				where
 					I: Sink<B::Item>,
-					B: ConsumerMultiAsync<Item>,
+					B: PipeTaskAsync<Item>,
 				{
 					fn poll_forward(
 						self: Pin<&mut Self>, cx: &mut Context,
@@ -365,23 +351,23 @@ pub trait DistributedStream {
 			}
 		}
 
-		let (iterator, reducer_a, reducer_b, reducer_c) = reducer_a.reducers();
+		let (iterator, reducer_a, reducer_b, reducer_c) = sink.reducers();
 		Connect(self, iterator)
 			.reduce(pool, reducer_a, reducer_b, reducer_c)
 			.await
 	}
 
-	async fn fork<P, DistStreamA, DistStreamB, DistReducerA, DistReducerB, A, B>(
-		self, pool: &P, reducer_a: DistReducerA, reducer_b: DistReducerB,
+	async fn fork<P, DistPipeA, DistPipeB, DistSinkA, DistSinkB, A, B>(
+		self, pool: &P, sink_a: DistSinkA, sink_b: DistSinkB,
 	) -> (A, B)
 	where
 		P: ProcessPool,
 
-		DistStreamA: DistributedStreamMulti<Self::Item>,
-		DistStreamB: for<'a> DistributedStreamMulti<&'a Self::Item>,
+		DistPipeA: DistributedPipe<Self::Item>,
+		DistPipeB: for<'a> DistributedPipe<&'a Self::Item>,
 
-		DistReducerA: DistributedReducer<DistStreamA, Self::Item, A>,
-		DistReducerB: for<'a> DistributedReducer<DistStreamB, &'a Self::Item, B>,
+		DistSinkA: DistributedSink<DistPipeA, Self::Item, A>,
+		DistSinkB: for<'a> DistributedSink<DistPipeB, &'a Self::Item, B>,
 
 		Self::Item: 'static,
 		Self: Sized,
@@ -390,19 +376,19 @@ pub trait DistributedStream {
 		impl<A, B, C, RefAItem> DistributedStream for Connect<A, B, C, RefAItem>
 		where
 			A: DistributedStream,
-			B: DistributedStreamMulti<A::Item>,
-			C: DistributedStreamMulti<RefAItem>,
+			B: DistributedPipe<A::Item>,
+			C: DistributedPipe<RefAItem>,
 			RefAItem: 'static,
 		{
 			type Item = Sum2<B::Item, C::Item>;
-			type Task = ConnectConsumer<A::Task, B::Task, C::Task, RefAItem>;
+			type Task = ConnectTask<A::Task, B::Task, C::Task, RefAItem>;
 			fn size_hint(&self) -> (usize, Option<usize>) {
 				self.0.size_hint()
 			}
 			fn next_task(&mut self) -> Option<Self::Task> {
 				self.0
 					.next_task()
-					.map(|task| ConnectConsumer(task, self.1.task(), self.2.task(), PhantomData))
+					.map(|task| ConnectTask(task, self.1.task(), self.2.task(), PhantomData))
 			}
 		}
 		#[derive(Serialize, Deserialize)]
@@ -410,17 +396,17 @@ pub trait DistributedStream {
 			bound(serialize = "A: Serialize, B: Serialize, C: Serialize"),
 			bound(deserialize = "A: Deserialize<'de>, B: Deserialize<'de>, C: Deserialize<'de>")
 		)]
-		struct ConnectConsumer<A, B, C, RefAItem>(A, B, C, PhantomData<fn(RefAItem)>);
-		impl<A, B, C, RefAItem> Consumer for ConnectConsumer<A, B, C, RefAItem>
+		struct ConnectTask<A, B, C, RefAItem>(A, B, C, PhantomData<fn(RefAItem)>);
+		impl<A, B, C, RefAItem> StreamTask for ConnectTask<A, B, C, RefAItem>
 		where
-			A: Consumer,
-			B: ConsumerMulti<A::Item>,
-			C: ConsumerMulti<RefAItem>,
+			A: StreamTask,
+			B: PipeTask<A::Item>,
+			C: PipeTask<RefAItem>,
 		{
 			type Item = Sum2<B::Item, C::Item>;
-			type Async = ConnectConsumerAsync<A::Async, B::Async, C::Async, RefAItem, A::Item>;
+			type Async = ConnectStreamTaskAsync<A::Async, B::Async, C::Async, RefAItem, A::Item>;
 			fn into_async(self) -> Self::Async {
-				ConnectConsumerAsync(
+				ConnectStreamTaskAsync(
 					self.0.into_async(),
 					self.1.into_async(),
 					self.2.into_async(),
@@ -431,7 +417,7 @@ pub trait DistributedStream {
 			}
 		}
 		#[pin_project]
-		struct ConnectConsumerAsync<A, B, C, RefAItem, T>(
+		struct ConnectStreamTaskAsync<A, B, C, RefAItem, T>(
 			#[pin] A,
 			#[pin] B,
 			#[pin] C,
@@ -439,11 +425,11 @@ pub trait DistributedStream {
 			Option<Option<T>>,
 			PhantomData<fn(RefAItem)>,
 		);
-		impl<A, B, C, RefAItem> ConsumerAsync for ConnectConsumerAsync<A, B, C, RefAItem, A::Item>
+		impl<A, B, C, RefAItem> StreamTaskAsync for ConnectStreamTaskAsync<A, B, C, RefAItem, A::Item>
 		where
-			A: ConsumerAsync,
-			B: ConsumerMultiAsync<A::Item>,
-			C: ConsumerMultiAsync<RefAItem>,
+			A: StreamTaskAsync,
+			B: PipeTaskAsync<A::Item>,
+			C: PipeTaskAsync<RefAItem>,
 		{
 			type Item = Sum2<B::Item, C::Item>;
 			fn poll_run(
@@ -461,8 +447,8 @@ pub trait DistributedStream {
 				impl<'a, S, A, B, T, RefAItem> Sink<T> for SinkFn<'a, S, A, B, T, RefAItem>
 				where
 					S: Sink<Sum2<A::Item, B::Item>>,
-					A: ConsumerMultiAsync<T>,
-					B: ConsumerMultiAsync<RefAItem>,
+					A: PipeTaskAsync<T>,
+					B: PipeTaskAsync<RefAItem>,
 				{
 					fn poll_forward(
 						self: Pin<&mut Self>, cx: &mut Context,
@@ -545,8 +531,8 @@ pub trait DistributedStream {
 			}
 		}
 
-		let (iterator_a, reducer_a_a, reducer_a_b, reducer_a_c) = reducer_a.reducers();
-		let (iterator_b, reducer_b_a, reducer_b_b, reducer_b_c) = reducer_b.reducers();
+		let (iterator_a, reducer_a_a, reducer_a_b, reducer_a_c) = sink_a.reducers();
+		let (iterator_b, reducer_b_a, reducer_b_b, reducer_b_c) = sink_b.reducers();
 		Connect(self, iterator_a, iterator_b, PhantomData)
 			.reduce(
 				pool,
@@ -564,11 +550,8 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.fork_single(
-			pool,
-			DistributedStreamMulti::<Self::Item>::for_each(Identity, f),
-		)
-		.await
+		self.fork_single(pool, DistributedPipe::<Self::Item>::for_each(Identity, f))
+			.await
 	}
 
 	async fn fold<P, ID, F, B>(self, pool: &P, identity: ID, op: F) -> B
@@ -582,7 +565,7 @@ pub trait DistributedStream {
 	{
 		self.fork_single(
 			pool,
-			DistributedStreamMulti::<Self::Item>::fold(Identity, identity, op),
+			DistributedPipe::<Self::Item>::fold(Identity, identity, op),
 		)
 		.await
 	}
@@ -593,7 +576,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::count(Identity))
+		self.fork_single(pool, DistributedPipe::<Self::Item>::count(Identity))
 			.await
 	}
 
@@ -604,7 +587,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::sum(Identity))
+		self.fork_single(pool, DistributedPipe::<Self::Item>::sum(Identity))
 			.await
 	}
 
@@ -615,11 +598,8 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.fork_single(
-			pool,
-			DistributedStreamMulti::<Self::Item>::combine(Identity, f),
-		)
-		.await
+		self.fork_single(pool, DistributedPipe::<Self::Item>::combine(Identity, f))
+			.await
 	}
 
 	async fn max<P>(self, pool: &P) -> Option<Self::Item>
@@ -628,7 +608,7 @@ pub trait DistributedStream {
 		Self::Item: Ord + ProcessSend,
 		Self: Sized,
 	{
-		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::max(Identity))
+		self.fork_single(pool, DistributedPipe::<Self::Item>::max(Identity))
 			.await
 	}
 
@@ -639,11 +619,8 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.fork_single(
-			pool,
-			DistributedStreamMulti::<Self::Item>::max_by(Identity, f),
-		)
-		.await
+		self.fork_single(pool, DistributedPipe::<Self::Item>::max_by(Identity, f))
+			.await
 	}
 
 	async fn max_by_key<P, F, B>(self, pool: &P, f: F) -> Option<Self::Item>
@@ -654,11 +631,8 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.fork_single(
-			pool,
-			DistributedStreamMulti::<Self::Item>::max_by_key(Identity, f),
-		)
-		.await
+		self.fork_single(pool, DistributedPipe::<Self::Item>::max_by_key(Identity, f))
+			.await
 	}
 
 	async fn min<P>(self, pool: &P) -> Option<Self::Item>
@@ -667,7 +641,7 @@ pub trait DistributedStream {
 		Self::Item: Ord + ProcessSend,
 		Self: Sized,
 	{
-		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::min(Identity))
+		self.fork_single(pool, DistributedPipe::<Self::Item>::min(Identity))
 			.await
 	}
 
@@ -678,11 +652,8 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.fork_single(
-			pool,
-			DistributedStreamMulti::<Self::Item>::min_by(Identity, f),
-		)
-		.await
+		self.fork_single(pool, DistributedPipe::<Self::Item>::min_by(Identity, f))
+			.await
 	}
 
 	async fn min_by_key<P, F, B>(self, pool: &P, f: F) -> Option<Self::Item>
@@ -693,11 +664,8 @@ pub trait DistributedStream {
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
-		self.fork_single(
-			pool,
-			DistributedStreamMulti::<Self::Item>::min_by_key(Identity, f),
-		)
-		.await
+		self.fork_single(pool, DistributedPipe::<Self::Item>::min_by_key(Identity, f))
+			.await
 	}
 
 	async fn most_frequent<P>(
@@ -710,12 +678,7 @@ pub trait DistributedStream {
 	{
 		self.fork_single(
 			pool,
-			DistributedStreamMulti::<Self::Item>::most_frequent(
-				Identity,
-				n,
-				probability,
-				tolerance,
-			),
+			DistributedPipe::<Self::Item>::most_frequent(Identity, n, probability, tolerance),
 		)
 		.await
 	}
@@ -731,7 +694,7 @@ pub trait DistributedStream {
 	{
 		self.fork_single(
 			pool,
-			DistributedStreamMulti::<Self::Item>::most_distinct(
+			DistributedPipe::<Self::Item>::most_distinct(
 				Identity,
 				n,
 				probability,
@@ -747,13 +710,12 @@ pub trait DistributedStream {
 	) -> ::streaming_algorithms::SampleUnstable<Self::Item>
 	where
 		P: ProcessPool,
-		// Self::Task: ProcessSend,
 		Self::Item: ProcessSend,
 		Self: Sized,
 	{
 		self.fork_single(
 			pool,
-			DistributedStreamMulti::<Self::Item>::sample_unstable(Identity, samples),
+			DistributedPipe::<Self::Item>::sample_unstable(Identity, samples),
 		)
 		.await
 	}
@@ -765,7 +727,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::all(Identity, f))
+		self.fork_single(pool, DistributedPipe::<Self::Item>::all(Identity, f))
 			.await
 	}
 
@@ -776,7 +738,7 @@ pub trait DistributedStream {
 		Self::Item: 'static,
 		Self: Sized,
 	{
-		self.fork_single(pool, DistributedStreamMulti::<Self::Item>::any(Identity, f))
+		self.fork_single(pool, DistributedPipe::<Self::Item>::any(Identity, f))
 			.await
 	}
 
@@ -785,308 +747,14 @@ pub trait DistributedStream {
 		P: ProcessPool,
 		B: FromDistributedStream<Self::Item>,
 		B::ReduceA: ProcessSend,
-		// <B::ReduceA as Reducer>::Output: Serialize + DeserializeOwned + Send,
 		Self: Sized,
 	{
-		// B::from_dist_stream(self, pool)
-		self.fork_single(
-			pool,
-			DistributedStreamMulti::<Self::Item>::collect(Identity),
-		)
-		.await
+		self.fork_single(pool, DistributedPipe::<Self::Item>::collect(Identity))
+			.await
 	}
 }
 
-#[must_use]
-pub trait DistributedStreamMulti<Source> {
-	type Item;
-	type Task: ConsumerMulti<Source, Item = Self::Item> + ProcessSend;
-
-	fn task(&self) -> Self::Task;
-
-	fn for_each<F>(self, f: F) -> ForEach<Self, F>
-	where
-		F: FnMut(Self::Item) + Clone + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(ForEach::new(self, f))
-	}
-
-	fn inspect<F>(self, f: F) -> Inspect<Self, F>
-	where
-		F: FnMut(&Self::Item) + Clone + ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_stream_multi(Inspect::new(self, f))
-	}
-
-	fn update<F>(self, f: F) -> Update<Self, F>
-	where
-		F: FnMut(&mut Self::Item) + Clone + ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_stream_multi(Update::new(self, f))
-	}
-
-	fn map<B, F>(self, f: F) -> Map<Self, F>
-	where
-		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_stream_multi(Map::new(self, f))
-	}
-
-	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
-	where
-		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
-		B: Stream,
-		Self: Sized,
-	{
-		_assert_distributed_stream_multi(FlatMap::new(self, f))
-	}
-
-	fn filter<F, Fut>(self, f: F) -> Filter<Self, F>
-	where
-		F: FnMut(&Self::Item) -> Fut + Clone + ProcessSend,
-		Fut: Future<Output = bool>,
-		Self: Sized,
-	{
-		_assert_distributed_stream_multi(Filter::new(self, f))
-	}
-
-	// #[must_use]
-	// fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
-	// where
-	// 	C: IntoDistributedStream<Item = Self::Item>,
-	// 	Self: Sized,
-	// {
-	// 	Chain::new(self, chain.into_dist_stream())
-	// }
-
-	fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
-	where
-		ID: FnMut() -> B + Clone + ProcessSend,
-		F: FnMut(B, Either<Self::Item, B>) -> B + Clone + ProcessSend,
-		B: ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(Fold::new(self, identity, op))
-	}
-
-	fn count(self) -> Count<Self>
-	where
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(Count::new(self))
-	}
-
-	fn sum<B>(self) -> Sum<Self, B>
-	where
-		B: iter::Sum<Self::Item> + iter::Sum<B> + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(Sum::new(self))
-	}
-
-	fn combine<F>(self, f: F) -> Combine<Self, F>
-	where
-		F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + ProcessSend,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(Combine::new(self, f))
-	}
-
-	fn max(self) -> Max<Self>
-	where
-		Self::Item: Ord + ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(Max::new(self))
-	}
-
-	fn max_by<F>(self, f: F) -> MaxBy<Self, F>
-	where
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(MaxBy::new(self, f))
-	}
-
-	fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
-	where
-		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
-		B: Ord + 'static,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(MaxByKey::new(self, f))
-	}
-
-	fn min(self) -> Min<Self>
-	where
-		Self::Item: Ord + ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(Min::new(self))
-	}
-
-	fn min_by<F>(self, f: F) -> MinBy<Self, F>
-	where
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(MinBy::new(self, f))
-	}
-
-	fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
-	where
-		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
-		B: Ord + 'static,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(MinByKey::new(self, f))
-	}
-
-	fn most_frequent(self, n: usize, probability: f64, tolerance: f64) -> MostFrequent<Self>
-	where
-		Self::Item: Hash + Eq + Clone + ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(MostFrequent::new(self, n, probability, tolerance))
-	}
-
-	fn most_distinct<A, B>(
-		self, n: usize, probability: f64, tolerance: f64, error_rate: f64,
-	) -> MostDistinct<Self>
-	where
-		Self: DistributedStreamMulti<Source, Item = (A, B)> + Sized,
-		A: Hash + Eq + Clone + ProcessSend,
-		B: Hash + 'static,
-	{
-		_assert_distributed_reducer(MostDistinct::new(
-			self,
-			n,
-			probability,
-			tolerance,
-			error_rate,
-		))
-	}
-
-	fn sample_unstable(self, samples: usize) -> SampleUnstable<Self>
-	where
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(SampleUnstable::new(self, samples))
-	}
-
-	fn all<F>(self, f: F) -> All<Self, F>
-	where
-		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(All::new(self, f))
-	}
-
-	fn any<F>(self, f: F) -> Any<Self, F>
-	where
-		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		_assert_distributed_reducer(Any::new(self, f))
-	}
-
-	fn collect<B>(self) -> Collect<Self, B>
-	where
-		B: FromDistributedStream<Self::Item>,
-		Self: Sized,
-	{
-		_assert_distributed_reducer::<B, _, _, _>(Collect::new(self))
-	}
-
-	fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
-	where
-		T: Clone + 'a,
-		Source: 'a,
-		Self: DistributedStreamMulti<&'a Source, Item = &'a T> + Sized,
-	{
-		_assert_distributed_stream_multi::<T, _, _>(Cloned::new(self))
-	}
-}
-
-pub trait Consumer {
-	type Item;
-	type Async: ConsumerAsync<Item = Self::Item>;
-
-	fn into_async(self) -> Self::Async;
-}
-pub trait ConsumerMulti<Source> {
-	type Item;
-	type Async: ConsumerMultiAsync<Source, Item = Self::Item>;
-
-	fn into_async(self) -> Self::Async;
-}
-pub trait ConsumerAsync {
-	type Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
-	) -> Poll<()>;
-}
-pub trait ConsumerMultiAsync<Source> {
-	type Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Self::Item>>,
-	) -> Poll<()>;
-}
-
-pub trait Reducer {
-	type Item;
-	type Output;
-	type Async: ReducerAsync<Item = Self::Item, Output = Self::Output>;
-
-	fn into_async(self) -> Self::Async;
-}
-pub trait ReducerAsync {
-	type Item;
-	type Output;
-
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Self::Item>>,
-	) -> Poll<()>;
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output>;
-}
-pub trait ReducerSend: Reducer<Output = <Self as ReducerSend>::Output> {
-	type Output: Send + 'static;
-}
-pub trait ReducerProcessSend: ReducerSend<Output = <Self as ReducerProcessSend>::Output> {
-	type Output: ProcessSend;
-}
-
-pub trait ReduceFactory {
-	type Reducer: Reducer;
-
-	fn make(&self) -> Self::Reducer;
-}
-
-pub trait DistributedReducer<I: DistributedStreamMulti<Source>, Source, B> {
-	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA> + Clone + ProcessSend;
-	type ReduceBFactory: ReduceFactory<Reducer = Self::ReduceB>;
-	type ReduceA: ReducerSend<Item = <I as DistributedStreamMulti<Source>>::Item> + ProcessSend;
-	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
-	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = B>;
-
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC);
+#[inline(always)]
+pub(crate) fn assert_distributed_stream<T, I: DistributedStream<Item = T>>(i: I) -> I {
+	i
 }

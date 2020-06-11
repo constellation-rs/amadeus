@@ -44,11 +44,11 @@ pub mod data;
 pub mod pool;
 pub mod source;
 
-pub use amadeus_core::{dist_stream, into_dist_stream};
+pub use amadeus_core::{dist_pipe, dist_sink, dist_stream, into_dist_stream};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, List, Value}, dist_stream::{DistributedStream, FromDistributedStream}, into_dist_stream::{IntoDistributedStream, IteratorExt}, source::Source
+	data::{Data, List, Value}, dist_sink::FromDistributedStream, dist_stream::DistributedStream, into_dist_stream::{IntoDistributedStream, IteratorExt}, source::Source
 };
 
 pub mod prelude {
@@ -64,7 +64,7 @@ pub mod prelude {
 	pub use super::{
 		data, data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
-		}, dist_stream::{DistributedStreamMulti, Identity}, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
+		}, dist_pipe::DistributedPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
 	};
 	#[doc(no_inline)]
 	pub use serde_closure::{Fn, FnMut, FnOnce};

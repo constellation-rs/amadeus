@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -24,8 +24,8 @@ impl<I, A> Collect<I, A> {
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, Source, T: FromDistributedStream<I::Item>>
-	DistributedReducer<I, Source, T> for Collect<I, T>
+impl<I: DistributedPipe<Source>, Source, T: FromDistributedStream<I::Item>>
+	DistributedSink<I, Source, T> for Collect<I, T>
 {
 	type ReduceAFactory = T::ReduceAFactory;
 	type ReduceBFactory = T::ReduceBFactory;
@@ -40,8 +40,8 @@ impl<I: DistributedStreamMulti<Source>, Source, T: FromDistributedStream<I::Item
 }
 
 pub trait FromDistributedStream<T>: Sized {
-	type ReduceAFactory: ReduceFactory<Reducer = Self::ReduceA> + Clone + ProcessSend;
-	type ReduceBFactory: ReduceFactory<Reducer = Self::ReduceB>;
+	type ReduceAFactory: Factory<Item = Self::ReduceA> + Clone + ProcessSend;
+	type ReduceBFactory: Factory<Item = Self::ReduceB>;
 	type ReduceA: ReducerSend<Item = T> + ProcessSend;
 	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
 	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self>;
@@ -63,9 +63,9 @@ impl<T> Default for DefaultReduceFactory<T> {
 		Self(PhantomData)
 	}
 }
-impl<T: Default + Reducer> ReduceFactory for DefaultReduceFactory<T> {
-	type Reducer = T;
-	fn make(&self) -> Self::Reducer {
+impl<T: Default + Reducer> Factory for DefaultReduceFactory<T> {
+	type Item = T;
+	fn make(&self) -> Self::Item {
 		T::default()
 	}
 }
@@ -314,11 +314,11 @@ where
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct OptionReduceFactory<RF: ReduceFactory>(RF);
-impl<RF: ReduceFactory> ReduceFactory for OptionReduceFactory<RF> {
-	type Reducer = OptionReducer<RF::Reducer>;
+pub struct OptionReduceFactory<RF: Factory>(RF);
+impl<RF: Factory> Factory for OptionReduceFactory<RF> {
+	type Item = OptionReducer<RF::Item>;
 
-	fn make(&self) -> Self::Reducer {
+	fn make(&self) -> Self::Item {
 		OptionReducer(Some(self.0.make()))
 	}
 }
@@ -390,13 +390,13 @@ where
 	bound(deserialize = "RF: Deserialize<'de>")
 )]
 pub struct ResultReduceFactory<RF, E>(RF, PhantomData<fn(E)>);
-impl<RF, E> ReduceFactory for ResultReduceFactory<RF, E>
+impl<RF, E> Factory for ResultReduceFactory<RF, E>
 where
-	RF: ReduceFactory,
+	RF: Factory,
 {
-	type Reducer = ResultReducer<RF::Reducer, E>;
+	type Item = ResultReducer<RF::Item, E>;
 
-	fn make(&self) -> Self::Reducer {
+	fn make(&self) -> Self::Item {
 		ResultReducer(self.0.make(), PhantomData)
 	}
 }

@@ -8,7 +8,7 @@ use std::{
 };
 
 use super::{
-	DistributedReducer, DistributedStreamMulti, ReduceFactory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -20,7 +20,7 @@ pub struct Fold<I, ID, F, B> {
 	marker: PhantomData<fn() -> B>,
 }
 impl<I, ID, F, B> Fold<I, ID, F, B> {
-	pub(super) fn new(i: I, identity: ID, op: F) -> Self {
+	pub(crate) fn new(i: I, identity: ID, op: F) -> Self {
 		Self {
 			i,
 			identity,
@@ -30,7 +30,7 @@ impl<I, ID, F, B> Fold<I, ID, F, B> {
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, Source, ID, F, B> DistributedReducer<I, Source, B>
+impl<I: DistributedPipe<Source>, Source, ID, F, B> DistributedSink<I, Source, B>
 	for Fold<I, ID, F, B>
 where
 	ID: FnMut() -> B + Clone + ProcessSend,
@@ -60,13 +60,13 @@ where
 	bound(deserialize = "ID: Deserialize<'de>, F: Deserialize<'de>")
 )]
 pub struct FoldReducerAFactory<A, ID, F, B>(ID, F, PhantomData<fn(A, B)>);
-impl<A, ID, F, B> ReduceFactory for FoldReducerAFactory<A, ID, F, B>
+impl<A, ID, F, B> Factory for FoldReducerAFactory<A, ID, F, B>
 where
 	ID: FnMut() -> B + Clone,
 	F: FnMut(B, Either<A, B>) -> B + Clone,
 {
-	type Reducer = FoldReducerA<A, ID, F, B>;
-	fn make(&self) -> Self::Reducer {
+	type Item = FoldReducerA<A, ID, F, B>;
+	fn make(&self) -> Self::Item {
 		FoldReducerA(
 			Some(Either::Left(self.0.clone())),
 			self.1.clone(),
@@ -90,13 +90,13 @@ where
 	bound(deserialize = "ID: Deserialize<'de>, F: Deserialize<'de>")
 )]
 pub struct FoldReducerBFactory<A, ID, F, B>(ID, F, PhantomData<fn(A, B)>);
-impl<A, ID, F, B> ReduceFactory for FoldReducerBFactory<A, ID, F, B>
+impl<A, ID, F, B> Factory for FoldReducerBFactory<A, ID, F, B>
 where
 	ID: FnMut() -> B + Clone,
 	F: FnMut(B, Either<A, B>) -> B + Clone,
 {
-	type Reducer = FoldReducerB<A, ID, F, B>;
-	fn make(&self) -> Self::Reducer {
+	type Item = FoldReducerB<A, ID, F, B>;
+	fn make(&self) -> Self::Item {
 		FoldReducerB(
 			Some(Either::Left(self.0.clone())),
 			self.1.clone(),

@@ -7,6 +7,10 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
+use crate::{
+	dist_pipe::DistributedPipe, dist_sink::DistributedSink, dist_stream::{DistributedStream, StreamTask, StreamTaskAsync}
+};
+
 #[cfg(feature = "aws")]
 #[doc(inline)]
 pub use amadeus_aws::Cloudfront;
@@ -29,6 +33,25 @@ pub use amadeus_postgres::{self as postgres, Postgres};
 #[doc(inline)]
 pub use amadeus_serde::{self as serde, Csv, Json};
 
+pub trait Source {
+	type Item: crate::data::Data;
+	type Error: std::error::Error;
+
+	type DistStream: DistributedStream<Item = Result<Self::Item, Self::Error>>;
+
+	fn dist_stream(self) -> Self::DistStream;
+}
+
+pub trait Destination<I>
+where
+	I: DistributedPipe<Self::Item>,
+{
+	type Item: crate::data::Data;
+	type Error: std::error::Error;
+
+	type DistSink: DistributedSink<I, Self::Item, Result<(), Self::Error>>;
+}
+
 #[cfg(feature = "amadeus-serde")]
 impl<File, Row> Source for Json<File, Row>
 where
@@ -39,13 +62,9 @@ where
 	type Error = <Self as amadeus_core::Source>::Error;
 
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
-	type Iter = <Self as amadeus_core::Source>::Iter;
 
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
-	}
-	fn iter(self) -> Self::Iter {
-		<Self as amadeus_core::Source>::iter(self)
 	}
 }
 #[cfg(feature = "amadeus-serde")]
@@ -58,13 +77,9 @@ where
 	type Error = <Self as amadeus_core::Source>::Error;
 
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
-	type Iter = <Self as amadeus_core::Source>::Iter;
 
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
-	}
-	fn iter(self) -> Self::Iter {
-		<Self as amadeus_core::Source>::iter(self)
 	}
 }
 #[cfg(feature = "parquet")]
@@ -77,13 +92,9 @@ where
 	type Error = <Self as amadeus_core::Source>::Error;
 
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
-	type Iter = <Self as amadeus_core::Source>::Iter;
 
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
-	}
-	fn iter(self) -> Self::Iter {
-		<Self as amadeus_core::Source>::iter(self)
 	}
 }
 #[cfg(feature = "postgres")]
@@ -95,13 +106,9 @@ where
 	type Error = <Self as amadeus_core::Source>::Error;
 
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
-	type Iter = <Self as amadeus_core::Source>::Iter;
 
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
-	}
-	fn iter(self) -> Self::Iter {
-		<Self as amadeus_core::Source>::iter(self)
 	}
 }
 #[cfg(feature = "aws")]
@@ -110,16 +117,12 @@ impl Source for Cloudfront {
 	type Error = <Self as amadeus_core::Source>::Error;
 
 	type DistStream = IntoIter<<Self as amadeus_core::Source>::DistStream, Self::Item>;
-	type Iter = IntoIter<<Self as amadeus_core::Source>::Iter, Self::Item>;
 
 	fn dist_stream(self) -> Self::DistStream {
 		IntoIter(
 			<Self as amadeus_core::Source>::dist_stream(self),
 			PhantomData,
 		)
-	}
-	fn iter(self) -> Self::Iter {
-		IntoIter(<Self as amadeus_core::Source>::iter(self), PhantomData)
 	}
 }
 #[cfg(feature = "commoncrawl")]
@@ -128,7 +131,6 @@ impl Source for CommonCrawl {
 	type Error = <Self as amadeus_core::Source>::Error;
 
 	type DistStream = IntoIter<<Self as amadeus_core::Source>::DistStream, Self::Item>;
-	type Iter = IntoIter<<Self as amadeus_core::Source>::Iter, Self::Item>;
 
 	fn dist_stream(self) -> Self::DistStream {
 		IntoIter(
@@ -136,26 +138,23 @@ impl Source for CommonCrawl {
 			PhantomData,
 		)
 	}
-	fn iter(self) -> Self::Iter {
-		IntoIter(<Self as amadeus_core::Source>::iter(self), PhantomData)
-	}
 }
 use std::marker::PhantomData;
 pub struct IntoIter<I, U>(I, PhantomData<fn() -> U>);
-impl<I, T, E, U> crate::dist_stream::DistributedStream for IntoIter<I, U>
+impl<I, T, E, U> DistributedStream for IntoIter<I, U>
 where
-	I: crate::dist_stream::DistributedStream<Item = Result<T, E>>,
+	I: DistributedStream<Item = Result<T, E>>,
 	T: Into<U>,
 	U: 'static,
 {
 	type Item = Result<U, E>;
-	type Task = IntoConsumer<I::Task, U>;
+	type Task = IntoTask<I::Task, U>;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.0.size_hint()
 	}
 	fn next_task(&mut self) -> Option<Self::Task> {
-		self.0.next_task().map(|task| IntoConsumer {
+		self.0.next_task().map(|task| IntoTask {
 			task,
 			marker: PhantomData,
 		})
@@ -164,29 +163,29 @@ where
 #[pin_project]
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct IntoConsumer<I, U> {
+pub struct IntoTask<I, U> {
 	#[pin]
 	task: I,
 	#[serde(skip)]
 	marker: PhantomData<fn() -> U>,
 }
-impl<I, T, E, U> amadeus_core::dist_stream::Consumer for IntoConsumer<I, U>
+impl<I, T, E, U> StreamTask for IntoTask<I, U>
 where
-	I: amadeus_core::dist_stream::Consumer<Item = Result<T, E>>,
+	I: StreamTask<Item = Result<T, E>>,
 	T: Into<U>,
 {
 	type Item = Result<U, E>;
-	type Async = IntoConsumer<I::Async, U>;
+	type Async = IntoTask<I::Async, U>;
 	fn into_async(self) -> Self::Async {
-		IntoConsumer {
+		IntoTask {
 			task: self.task.into_async(),
 			marker: self.marker,
 		}
 	}
 }
-impl<I, T, E, U> amadeus_core::dist_stream::ConsumerAsync for IntoConsumer<I, U>
+impl<I, T, E, U> StreamTaskAsync for IntoTask<I, U>
 where
-	I: amadeus_core::dist_stream::ConsumerAsync<Item = Result<T, E>>,
+	I: StreamTaskAsync<Item = Result<T, E>>,
 	T: Into<U>,
 {
 	type Item = Result<U, E>;
@@ -211,27 +210,4 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		self.0.next().map(|x| x.map(Into::into))
 	}
-}
-
-pub trait Source {
-	type Item: crate::data::Data;
-	type Error: std::error::Error;
-
-	type DistStream: crate::dist_stream::DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	// type ParIter: ParallelIterator;
-	type Iter: Iterator<Item = Result<Self::Item, Self::Error>>;
-
-	fn dist_stream(self) -> Self::DistStream;
-	// fn par_iter(self) -> Self::ParIter;
-	fn iter(self) -> Self::Iter;
-}
-
-pub trait Destination<I>
-where
-	I: crate::dist_stream::DistributedStreamMulti<Self::Item>,
-{
-	type Item: crate::data::Data;
-	type Error: std::error::Error;
-
-	type DistDest: crate::dist_stream::DistributedReducer<I, Self::Item, Result<(), Self::Error>>;
 }

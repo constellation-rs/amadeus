@@ -6,7 +6,7 @@ use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	convert::identity, io::{self}, iter, time::Duration
+	convert::identity, io::{self}, time::Duration
 };
 
 use amadeus_core::{
@@ -58,7 +58,6 @@ impl Source for Cloudfront {
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
-	type Iter = iter::Empty<Result<Self::Item, Self::Error>>;
 
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
@@ -119,10 +118,6 @@ impl Source for Cloudfront {
 		#[cfg(feature = "doc")]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
-	}
-
-	fn iter(self) -> Self::Iter {
-		iter::empty()
 	}
 }
 

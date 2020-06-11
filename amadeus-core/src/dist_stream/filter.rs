@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	Consumer, ConsumerAsync, ConsumerMulti, ConsumerMultiAsync, DistributedStream, DistributedStreamMulti
+	DistributedPipe, DistributedStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync
 };
 use crate::{
 	pool::ProcessSend, sink::{Sink, SinkFilter, SinkFilterState}
@@ -18,7 +18,7 @@ pub struct Filter<I, F> {
 	f: F,
 }
 impl<I, F> Filter<I, F> {
-	pub(super) fn new(i: I, f: F) -> Self {
+	pub(crate) fn new(i: I, f: F) -> Self {
 		Self { i, f }
 	}
 }
@@ -29,7 +29,7 @@ where
 	Fut: Future<Output = bool>,
 {
 	type Item = I::Item;
-	type Task = FilterConsumer<I::Task, F>;
+	type Task = FilterTask<I::Task, F>;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		(0, self.i.size_hint().1)
@@ -37,57 +37,56 @@ where
 	fn next_task(&mut self) -> Option<Self::Task> {
 		self.i.next_task().map(|task| {
 			let f = self.f.clone();
-			FilterConsumer { task, f }
+			FilterTask { task, f }
 		})
 	}
 }
 
-impl<I: DistributedStreamMulti<Source>, F, Fut, Source> DistributedStreamMulti<Source>
-	for Filter<I, F>
+impl<I: DistributedPipe<Source>, F, Fut, Source> DistributedPipe<Source> for Filter<I, F>
 where
-	F: FnMut(&<I as DistributedStreamMulti<Source>>::Item) -> Fut + Clone + ProcessSend,
+	F: FnMut(&<I as DistributedPipe<Source>>::Item) -> Fut + Clone + ProcessSend,
 	Fut: Future<Output = bool>,
 {
 	type Item = I::Item;
-	type Task = FilterConsumer<I::Task, F>;
+	type Task = FilterTask<I::Task, F>;
 
 	fn task(&self) -> Self::Task {
 		let task = self.i.task();
 		let f = self.f.clone();
-		FilterConsumer { task, f }
+		FilterTask { task, f }
 	}
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct FilterConsumer<C, F> {
+pub struct FilterTask<C, F> {
 	task: C,
 	f: F,
 }
 
-impl<C: Consumer, F, Fut> Consumer for FilterConsumer<C, F>
+impl<C: StreamTask, F, Fut> StreamTask for FilterTask<C, F>
 where
 	F: FnMut(&C::Item) -> Fut + Clone,
 	Fut: Future<Output = bool>,
 {
 	type Item = C::Item;
-	type Async = FilterConsumerAsync<C::Async, F, Self::Item, Fut>;
+	type Async = FilterStreamTaskAsync<C::Async, F, Self::Item, Fut>;
 	fn into_async(self) -> Self::Async {
-		FilterConsumerAsync {
+		FilterStreamTaskAsync {
 			task: self.task.into_async(),
 			f: self.f,
 			state: SinkFilterState::None,
 		}
 	}
 }
-impl<C: ConsumerMulti<Source>, F, Fut, Source> ConsumerMulti<Source> for FilterConsumer<C, F>
+impl<C: PipeTask<Source>, F, Fut, Source> PipeTask<Source> for FilterTask<C, F>
 where
 	F: FnMut(&C::Item) -> Fut + Clone,
 	Fut: Future<Output = bool>,
 {
 	type Item = C::Item;
-	type Async = FilterConsumerAsync<C::Async, F, Self::Item, Fut>;
+	type Async = FilterStreamTaskAsync<C::Async, F, Self::Item, Fut>;
 	fn into_async(self) -> Self::Async {
-		FilterConsumerAsync {
+		FilterStreamTaskAsync {
 			task: self.task.into_async(),
 			f: self.f,
 			state: SinkFilterState::None,
@@ -96,7 +95,7 @@ where
 }
 
 #[pin_project]
-pub struct FilterConsumerAsync<C, F, T, Fut> {
+pub struct FilterStreamTaskAsync<C, F, T, Fut> {
 	#[pin]
 	task: C,
 	f: F,
@@ -104,7 +103,7 @@ pub struct FilterConsumerAsync<C, F, T, Fut> {
 	state: SinkFilterState<T, Fut>,
 }
 
-impl<C: ConsumerAsync, F, Fut> ConsumerAsync for FilterConsumerAsync<C, F, C::Item, Fut>
+impl<C: StreamTaskAsync, F, Fut> StreamTaskAsync for FilterStreamTaskAsync<C, F, C::Item, Fut>
 where
 	F: FnMut(&C::Item) -> Fut + Clone,
 	Fut: Future<Output = bool>,
@@ -122,10 +121,10 @@ where
 	}
 }
 
-impl<C: ConsumerMultiAsync<Source>, F, Fut, Source> ConsumerMultiAsync<Source>
-	for FilterConsumerAsync<C, F, C::Item, Fut>
+impl<C: PipeTaskAsync<Source>, F, Fut, Source> PipeTaskAsync<Source>
+	for FilterStreamTaskAsync<C, F, C::Item, Fut>
 where
-	F: FnMut(&<C as ConsumerMultiAsync<Source>>::Item) -> Fut + Clone,
+	F: FnMut(&<C as PipeTaskAsync<Source>>::Item) -> Fut + Clone,
 	Fut: Future<Output = bool>,
 {
 	type Item = C::Item;

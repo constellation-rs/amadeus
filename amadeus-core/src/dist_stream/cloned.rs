@@ -5,7 +5,7 @@ use std::{
 	marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
-use super::{ConsumerMulti, ConsumerMultiAsync, DistributedStreamMulti};
+use super::{DistributedPipe, PipeTask, PipeTaskAsync};
 use crate::sink::{Sink, SinkMap};
 
 #[must_use]
@@ -14,7 +14,7 @@ pub struct Cloned<I, T, Source> {
 	marker: PhantomData<fn(Source, T)>,
 }
 impl<I, T, Source> Cloned<I, T, Source> {
-	pub(super) fn new(i: I) -> Self {
+	pub(crate) fn new(i: I) -> Self {
 		Self {
 			i,
 			marker: PhantomData,
@@ -28,53 +28,53 @@ impl<I, T, Source> Cloned<I, T, Source> {
 // 	T: Clone,
 // {
 // 	type Item = T;
-// 	type Task = ClonedConsumer<I::Task>;
+// 	type Task = ClonedTask<I::Task>;
 // 	fn size_hint(&self) -> (usize, Option<usize>) {
 // 		self.i.size_hint()
 // 	}
 // 	fn next_task(&mut self) -> Option<Self::Task> {
-// 		self.i.next_task().map(|task| ClonedConsumer { task })
+// 		self.i.next_task().map(|task| ClonedTask { task })
 // 	}
 // }
 // I'm a bit confused as to why this works and it isn't for Cloned<I, &'a Source, T>
 // https://github.com/rust-lang/rust/issues/55731
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2015&gist=238651c4992913bcd62b68b4832fcd9a
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2015&gist=2f1da304878b050cc313c0279047b0fa
-impl<'a, I, Source, T: 'a> DistributedStreamMulti<&'a Source> for Cloned<I, T, Source>
+impl<'a, I, Source, T: 'a> DistributedPipe<&'a Source> for Cloned<I, T, Source>
 where
-	I: DistributedStreamMulti<&'a Source, Item = &'a T>,
+	I: DistributedPipe<&'a Source, Item = &'a T>,
 	T: Clone,
 {
 	type Item = T;
-	type Task = ClonedConsumer<I::Task>;
+	type Task = ClonedTask<I::Task>;
 
 	fn task(&self) -> Self::Task {
 		let task = self.i.task();
-		ClonedConsumer { task }
+		ClonedTask { task }
 	}
 }
 #[pin_project]
 #[derive(Serialize, Deserialize)]
-pub struct ClonedConsumer<T> {
+pub struct ClonedTask<T> {
 	#[pin]
 	task: T,
 }
-impl<'a, C, Source, T: 'a> ConsumerMulti<&'a Source> for ClonedConsumer<C>
+impl<'a, C, Source, T: 'a> PipeTask<&'a Source> for ClonedTask<C>
 where
-	C: ConsumerMulti<&'a Source, Item = &'a T>,
+	C: PipeTask<&'a Source, Item = &'a T>,
 	T: Clone,
 {
 	type Item = T;
-	type Async = ClonedConsumer<C::Async>;
+	type Async = ClonedTask<C::Async>;
 	fn into_async(self) -> Self::Async {
-		ClonedConsumer {
+		ClonedTask {
 			task: self.task.into_async(),
 		}
 	}
 }
-// impl<'a,C,T:'a> Consumer for ClonedConsumer<C>
+// impl<'a,C,T:'a> StreamTask for  ClonedTask<C>
 // where
-// 	C: Consumer<Item = &'a T>,
+// 	C: StreamTask<Item = &'a T>,
 // 	T: Clone,
 // {
 // 	type Item = T;
@@ -82,9 +82,9 @@ where
 // 		self.task.run(&mut |item| i(item.clone()))
 // 	}
 // }
-impl<'a, C, Source: 'a, T: 'a> ConsumerMultiAsync<&'a Source> for ClonedConsumer<C>
+impl<'a, C, Source: 'a, T: 'a> PipeTaskAsync<&'a Source> for ClonedTask<C>
 where
-	C: ConsumerMultiAsync<&'a Source, Item = &'a T>,
+	C: PipeTaskAsync<&'a Source, Item = &'a T>,
 	T: Clone,
 {
 	type Item = T;
