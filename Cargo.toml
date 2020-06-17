@@ -58,7 +58,7 @@ tokio = { version = "0.2", features = ["rt-threaded", "rt-util"] }
 [dev-dependencies]
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
-streaming_algorithms = { version = "0.1", path = "../streaming_algorithms" }
+streaming_algorithms = "0.2"
 tokio = { version = "0.2", features = ["macros"] }
 
 [[example]]
