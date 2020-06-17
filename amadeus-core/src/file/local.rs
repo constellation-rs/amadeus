@@ -114,8 +114,8 @@ impl Directory for &Path {
 					std::os::windows::ffi::OsStrExt::encode_wide(osstr)
 						.flat_map(|char| {
 							let char = char.to_be();
-							iter::once(u8::try_from(char >> 8).unwrap())
-								.chain(iter::once(u8::try_from(char & 0xff).unwrap()))
+							std::iter::once(u8::try_from(char >> 8).unwrap())
+								.chain(std::iter::once(u8::try_from(char & 0xff).unwrap()))
 						})
 						.collect()
 				};
