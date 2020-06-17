@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use crate::{
-	dist_sink::{DistributedSink, ParallelSink}, dist_stream::{DistributedStream, ParallelStream}
+	par_sink::{DistributedSink, ParallelSink}, par_stream::{DistributedStream, ParallelStream}
 };
 
 pub trait Source {

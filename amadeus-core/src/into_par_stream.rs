@@ -1,4 +1,4 @@
-use crate::dist_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync};
+use crate::par_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync};
 
 mod collections;
 mod iterator;

@@ -11,7 +11,7 @@ use serde_closure::*;
 use std::{io, time};
 
 use amadeus_core::{
-	dist_stream::{DistributedStream, ParallelStream}, into_dist_stream::IntoDistributedStream, util::DistParStream, Source
+	into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::DistParStream, Source
 };
 use amadeus_types::Webpage;
 

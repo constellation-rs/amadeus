@@ -6,10 +6,10 @@ use std::{
 	any::type_name, error, fmt, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
-use crate::dist_stream::{DistributedStream, ParallelStream};
+use crate::par_stream::{DistributedStream, ParallelStream};
 #[cfg(feature = "doc")]
 use crate::{
-	dist_stream::{DistributedStream, StreamTask, StreamTaskAsync}, sink::Sink
+	par_stream::{DistributedStream, StreamTask, StreamTaskAsync}, sink::Sink
 };
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);

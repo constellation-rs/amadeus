@@ -16,13 +16,13 @@ mod macros {
 	#[macro_export]
 	macro_rules! folder_dist_sink {
 		($folder_a:ty, $folder_b:ty, $self:ident, $init_a:expr, $init_b:expr) => {
-			type Output = <Self::ReduceC as $crate::dist_sink::Reducer>::Output;
+			type Output = <Self::ReduceC as $crate::par_sink::Reducer>::Output;
 			type Pipe = I;
 			type ReduceAFactory = FolderSyncReducerFactory<I::Item, $folder_a>;
-			type ReduceBFactory = FolderSyncReducerFactory<<Self::ReduceA as $crate::dist_sink::Reducer>::Output, $folder_b>;
+			type ReduceBFactory = FolderSyncReducerFactory<<Self::ReduceA as $crate::par_sink::Reducer>::Output, $folder_b>;
 			type ReduceA = FolderSyncReducer<I::Item, $folder_a>;
-			type ReduceB = FolderSyncReducer<<Self::ReduceA as $crate::dist_sink::Reducer>::Output, $folder_b>;
-			type ReduceC = FolderSyncReducer<<Self::ReduceB as $crate::dist_sink::Reducer>::Output, $folder_b>;
+			type ReduceB = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer>::Output, $folder_b>;
+			type ReduceC = FolderSyncReducer<<Self::ReduceB as $crate::par_sink::Reducer>::Output, $folder_b>;
 
 			fn reducers($self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 				let init_a = $init_a;
@@ -39,11 +39,11 @@ mod macros {
 	#[macro_export]
 	macro_rules! folder_par_sink {
 		($folder_a:ty, $folder_b:ty, $self:ident, $init_a:expr, $init_b:expr) => {
-			type Output = <Self::ReduceC as $crate::dist_sink::Reducer>::Output;
+			type Output = <Self::ReduceC as $crate::par_sink::Reducer>::Output;
 			type Pipe = I;
 			type ReduceAFactory = FolderSyncReducerFactory<I::Item, $folder_a>;
 			type ReduceA = FolderSyncReducer<I::Item, $folder_a>;
-			type ReduceC = FolderSyncReducer<<Self::ReduceA as $crate::dist_sink::Reducer>::Output, $folder_b>;
+			type ReduceC = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer>::Output, $folder_b>;
 
 			fn reducers($self) -> (I, Self::ReduceAFactory, Self::ReduceC) {
 				let init_a = $init_a;

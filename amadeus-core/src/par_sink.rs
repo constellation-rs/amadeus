@@ -19,7 +19,7 @@ use std::{
 
 use crate::pool::ProcessSend;
 
-use super::dist_pipe::*;
+use super::par_pipe::*;
 
 pub use self::{
 	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, max::*, sample::*, sum::*, tuple::*

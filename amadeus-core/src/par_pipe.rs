@@ -6,7 +6,7 @@ use std::{
 
 use crate::{pool::ProcessSend, sink::Sink};
 
-use super::{dist_sink::*, dist_stream::*};
+use super::{par_sink::*, par_stream::*};
 
 #[must_use]
 pub trait PipeTask<Source> {

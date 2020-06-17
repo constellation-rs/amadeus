@@ -66,7 +66,7 @@ name = "common_crawl"
 required-features = ["commoncrawl", "constellation"]
 
 [[test]]
-name = "into_dist_stream_dist"
+name = "into_par_stream_dist"
 harness = false
 
 [[test]]

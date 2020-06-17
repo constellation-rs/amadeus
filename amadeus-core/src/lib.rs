@@ -17,7 +17,7 @@ macro_rules! impl_par_dist {
 }
 mod impl_par_dist {
 	pub use crate::{
-		combiner_dist_sink as combiner_par_sink, dist_pipe::DistributedPipe as ParallelPipe, dist_sink::{DistributedSink as ParallelSink, FromDistributedStream as FromParallelStream}, dist_stream::DistributedStream as ParallelStream, folder_dist_sink as folder_par_sink, pool::ProcessSend as Send
+		combiner_dist_sink as combiner_par_sink, folder_dist_sink as folder_par_sink, par_pipe::DistributedPipe as ParallelPipe, par_sink::{DistributedSink as ParallelSink, FromDistributedStream as FromParallelStream}, par_stream::DistributedStream as ParallelStream, pool::ProcessSend as Send
 	};
 }
 
@@ -59,12 +59,12 @@ macro_rules! rename {
 	);
 }
 
-pub mod dist_pipe;
-pub mod dist_sink;
-pub mod dist_stream;
 pub mod file;
-pub mod into_dist_stream;
+pub mod into_par_stream;
 pub mod misc_serde;
+pub mod par_pipe;
+pub mod par_sink;
+pub mod par_stream;
 pub mod pool;
 pub mod sink;
 mod source;

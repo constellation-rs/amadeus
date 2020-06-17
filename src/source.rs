@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-	dist_sink::{DistributedSink, ParallelSink}, dist_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync}
+	par_sink::{DistributedSink, ParallelSink}, par_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync}
 };
 
 #[cfg(feature = "aws")]

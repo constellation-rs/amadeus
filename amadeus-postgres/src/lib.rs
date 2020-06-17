@@ -23,7 +23,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_stream::{DistributedStream, ParallelStream}, into_dist_stream::IntoDistributedStream, util::{DistParStream, IoError}, Source as DSource
+	into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::{DistParStream, IoError}, Source as DSource
 };
 
 const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";

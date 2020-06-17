@@ -10,7 +10,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_stream::{DistributedStream, ParallelStream}, into_dist_stream::IntoDistributedStream, util::{DistParStream, ResultExpandIter}, Source
+	into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::{DistParStream, ResultExpandIter}, Source
 };
 use amadeus_types::{DateTime, IpAddr, Url};
 

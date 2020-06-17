@@ -7,7 +7,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_stream::{DistributedStream, ParallelStream}, file::{File, Page, Partition}, into_dist_stream::IntoDistributedStream, util::{DistParStream, ResultExpandIter}, Source
+	file::{File, Page, Partition}, into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::{DistParStream, ResultExpandIter}, Source
 };
 
 use super::{SerdeData, SerdeDeserializeGroup};

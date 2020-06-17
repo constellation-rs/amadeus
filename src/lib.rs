@@ -44,11 +44,11 @@ pub mod data;
 pub mod pool;
 pub mod source;
 
-pub use amadeus_core::{dist_pipe, dist_sink, dist_stream, into_dist_stream};
+pub use amadeus_core::{into_par_stream, par_pipe, par_sink, par_stream};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, List, Value}, dist_sink::{FromDistributedStream, FromParallelStream}, dist_stream::{DistributedStream, ParallelStream}, into_dist_stream::{IntoDistributedStream, IntoParallelStream, IteratorExt}, source::Source
+	data::{Data, List, Value}, into_par_stream::{IntoDistributedStream, IntoParallelStream, IteratorExt}, par_sink::{FromDistributedStream, FromParallelStream}, par_stream::{DistributedStream, ParallelStream}, source::Source
 };
 
 pub mod dist {
@@ -65,7 +65,7 @@ pub mod dist {
 		pub use super::super::{
 			data, data::{
 				Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
-			}, dist_pipe::DistributedPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
+			}, par_pipe::DistributedPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
 		};
 		#[doc(no_inline)]
 		pub use serde_closure::{Fn, FnMut, FnOnce};
@@ -84,7 +84,7 @@ pub mod prelude {
 	pub use super::{
 		data, data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
-		}, dist_pipe::ParallelPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
+		}, par_pipe::ParallelPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
 	};
 	#[doc(no_inline)]
 	pub use serde_closure::{Fn, FnMut, FnOnce};

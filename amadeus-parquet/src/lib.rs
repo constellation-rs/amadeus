@@ -21,7 +21,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_stream::{DistributedStream, ParallelStream}, file::{Directory, File, Page, Partition, PathBuf}, into_dist_stream::IntoDistributedStream, util::{DistParStream, ResultExpandIter}, Source
+	file::{Directory, File, Page, Partition, PathBuf}, into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::{DistParStream, ResultExpandIter}, Source
 };
 
 pub use internal::record::ParquetData;

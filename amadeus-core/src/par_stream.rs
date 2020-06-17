@@ -22,14 +22,14 @@ use std::{
 };
 
 use crate::{
-	into_dist_stream::IntoDistributedStream, pool::{ProcessPool, ProcessSend, ThreadPool}, sink::{Sink, SinkMap}, util::type_coerce
+	into_par_stream::IntoDistributedStream, pool::{ProcessPool, ProcessSend, ThreadPool}, sink::{Sink, SinkMap}, util::type_coerce
 };
 
 pub use self::{
 	chain::*, cloned::*, filter::*, flat_map::*, identity::*, inspect::*, map::*, update::*
 };
 
-use super::{dist_pipe::*, dist_sink::*};
+use super::{par_pipe::*, par_sink::*};
 
 #[must_use]
 pub trait StreamTask {
