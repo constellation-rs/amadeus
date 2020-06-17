@@ -106,7 +106,10 @@ impl From<ConnectParams> for postgres::config::Config {
 		for host in from.hosts {
 			let _ = match host {
 				Host::Tcp(addr) => config.host(&addr.to_string()),
+				#[cfg(unix)]
 				Host::Unix(path) => config.host_path(&path),
+				#[cfg(not(unix))]
+				Host::Unix(path) => config.host(path.to_str().unwrap()),
 			};
 		}
 		for port in from.ports {
@@ -161,6 +164,7 @@ impl From<postgres::config::Host> for Host {
 	fn from(from: postgres::config::Host) -> Self {
 		match from {
 			postgres::config::Host::Tcp(addr) => Host::Tcp(addr),
+			#[cfg(unix)]
 			postgres::config::Host::Unix(path) => Host::Unix(path),
 		}
 	}
