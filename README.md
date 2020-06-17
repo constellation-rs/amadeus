@@ -4,7 +4,7 @@
 [![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/streaming_algorithms.svg?maxAge=2592000)](#License)
 [![Build Status](https://dev.azure.com/alecmocatta/streaming_algorithms/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/streaming_algorithms/_build?definitionId=16)
 
-[📖 Docs](https://docs.rs/streaming_algorithms/0.1.2) | [💬 Chat](https://constellation.zulipchat.com/#narrow/stream/213236-subprojects)
+[📖 Docs](https://docs.rs/streaming_algorithms/0.2.0/streaming_algorithms/) | [💬 Chat](https://constellation.zulipchat.com/#narrow/stream/213236-subprojects)
 
 SIMD-accelerated implementations of various [streaming algorithms](https://en.wikipedia.org/wiki/Streaming_algorithm).
 

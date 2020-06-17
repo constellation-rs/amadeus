@@ -23,7 +23,7 @@
 //!
 //! As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
-#![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.2.0")]
 #![feature(specialization)]
 #![warn(
 	missing_copy_implementations,
