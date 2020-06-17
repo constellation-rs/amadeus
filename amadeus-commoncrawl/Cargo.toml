@@ -38,4 +38,5 @@ serde_closure = "0.2"
 url = { version = "2.1", features = ["serde"] }
 
 # dependency of reqwest/native-tls; ensure it's vendored to simplify cross-compilation
+[target.'cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
