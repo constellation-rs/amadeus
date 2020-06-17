@@ -1,40 +1,13 @@
-#[cfg(feature = "constellation")]
-use constellation::*;
 use futures::FutureExt;
-use std::{
-	panic, panic::AssertUnwindSafe, time::{Duration, SystemTime}
-};
+use std::{panic, panic::AssertUnwindSafe, time::SystemTime};
 
-use amadeus::prelude::*;
+use amadeus::dist::prelude::*;
 
-fn main() {
-	#[cfg(feature = "constellation")]
-	init(Resources::default());
-
-	tokio::runtime::Builder::new()
-		.threaded_scheduler()
-		.enable_all()
-		.build()
-		.unwrap()
-		.block_on(async {
-			let thread_pool_time = {
-				let thread_pool = ThreadPool::new(None);
-				run(&thread_pool).await
-			};
-			#[cfg(feature = "constellation")]
-			let process_pool_time = {
-				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
-				run(&process_pool).await
-			};
-			#[cfg(not(feature = "constellation"))]
-			let process_pool_time = "-";
-
-			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
-		})
-}
-
-async fn run<P: amadeus_core::pool::ProcessPool + std::panic::RefUnwindSafe>(pool: &P) -> Duration {
+#[tokio::test]
+async fn cloudfront() {
 	let start = SystemTime::now();
+
+	let pool = &ThreadPool::new(None);
 
 	let res = AssertUnwindSafe((0i32..1_000).into_dist_stream().for_each(
 		pool,
@@ -47,7 +20,5 @@ async fn run<P: amadeus_core::pool::ProcessPool + std::panic::RefUnwindSafe>(poo
 
 	assert!(res.is_err());
 
-	println!("done");
-
-	start.elapsed().unwrap()
+	println!("in {:?}", start.elapsed().unwrap());
 }

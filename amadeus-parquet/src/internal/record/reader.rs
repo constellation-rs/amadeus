@@ -130,7 +130,7 @@ impl Reader for ByteArrayReader {
 
 pub struct FixedLenByteArrayReader<T> {
 	pub(super) column: TypedTripletIter<FixedLenByteArrayType>,
-	pub(super) marker: PhantomData<fn(T)>,
+	pub(super) marker: PhantomData<fn() -> T>,
 }
 impl<T> Reader for FixedLenByteArrayReader<T> {
 	type Item = T;
@@ -207,7 +207,7 @@ impl Reader for VecU8Reader {
 
 pub struct BoxFixedLenByteArrayReader<T> {
 	pub(super) column: TypedTripletIter<FixedLenByteArrayType>,
-	pub(super) marker: PhantomData<fn(T)>,
+	pub(super) marker: PhantomData<fn() -> T>,
 }
 impl<T> Reader for BoxFixedLenByteArrayReader<T> {
 	type Item = Box<T>;
@@ -649,7 +649,7 @@ where
 pub struct TupleReader<T>(pub(super) T);
 
 /// A convenience Reader that maps the read value using [`TryInto`].
-pub struct TryIntoReader<R: Reader, T>(pub(super) R, pub(super) PhantomData<fn(T)>);
+pub struct TryIntoReader<R: Reader, T>(pub(super) R, pub(super) PhantomData<fn() -> T>);
 impl<R: Reader, T> Reader for TryIntoReader<R, T>
 where
 	R::Item: TryInto<T>,

@@ -1,37 +1,41 @@
-use crate::dist_stream::{DistributedStream, StreamTask, StreamTaskAsync};
+use crate::dist_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync};
 
 mod collections;
 mod iterator;
 mod slice;
 pub use self::{collections::*, iterator::*, slice::*};
 
-pub trait IntoDistributedStream {
-	type DistStream: DistributedStream<Item = Self::Item>;
-	type Item;
-	fn into_dist_stream(self) -> Self::DistStream
-	where
-		Self: Sized;
-	fn dist_stream_mut(&mut self) -> <&mut Self as IntoDistributedStream>::DistStream
-	where
-		for<'a> &'a mut Self: IntoDistributedStream,
-	{
-		<&mut Self as IntoDistributedStream>::into_dist_stream(self)
-	}
-	fn dist_stream(&self) -> <&Self as IntoDistributedStream>::DistStream
-	where
-		for<'a> &'a Self: IntoDistributedStream,
-	{
-		<&Self as IntoDistributedStream>::into_dist_stream(self)
-	}
-}
+impl_par_dist_rename! {
+	pub trait IntoParallelStream {
+		type ParStream: ParallelStream<Item = Self::Item>;
+		type Item;
 
-impl<T: DistributedStream> IntoDistributedStream for T {
-	type DistStream = Self;
-	type Item = <Self as DistributedStream>::Item;
-	fn into_dist_stream(self) -> Self::DistStream
-	where
-		Self: Sized,
-	{
-		self
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized;
+		fn dist_stream_mut(&mut self) -> <&mut Self as IntoParallelStream>::ParStream
+		where
+			for<'a> &'a mut Self: IntoParallelStream,
+		{
+			<&mut Self as IntoParallelStream>::into_par_stream(self)
+		}
+		fn par_stream(&self) -> <&Self as IntoParallelStream>::ParStream
+		where
+			for<'a> &'a Self: IntoParallelStream,
+		{
+			<&Self as IntoParallelStream>::into_par_stream(self)
+		}
+	}
+
+	impl<T: ParallelStream> IntoParallelStream for T {
+		type ParStream = Self;
+		type Item = <Self as ParallelStream>::Item;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			self
+		}
 	}
 }

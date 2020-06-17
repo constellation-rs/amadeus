@@ -213,7 +213,7 @@ impl From<io::Error> for AwsError {
 }
 impl<E> From<RusotoError<E>> for AwsError
 where
-	AwsError: From<E>,
+	E: Into<AwsError>,
 {
 	fn from(err: RusotoError<E>) -> Self {
 		match err {

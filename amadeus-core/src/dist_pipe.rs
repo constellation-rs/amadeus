@@ -21,238 +21,239 @@ pub trait PipeTaskAsync<Source> {
 
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Self::Item>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()>;
 }
 
-#[must_use]
-pub trait DistributedPipe<Source> {
-	type Item;
-	type Task: PipeTask<Source, Item = Self::Item> + ProcessSend;
+impl_par_dist_rename! {
+	#[must_use]
+	pub trait ParallelPipe<Source> {
+		type Item;
+		type Task: PipeTask<Source, Item = Self::Item> + Send + 'static;
 
-	fn task(&self) -> Self::Task;
+		fn task(&self) -> Self::Task;
 
-	fn for_each<F>(self, f: F) -> ForEach<Self, F>
-	where
-		F: FnMut(Self::Item) + Clone + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		assert_distributed_sink(ForEach::new(self, f))
+		fn inspect<F>(self, f: F) -> Inspect<Self, F>
+		where
+			F: FnMut(&Self::Item) + Clone + Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_pipe(Inspect::new(self, f))
+		}
+
+		fn update<F>(self, f: F) -> Update<Self, F>
+		where
+			F: FnMut(&mut Self::Item) + Clone + Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_pipe(Update::new(self, f))
+		}
+
+		fn map<B, F>(self, f: F) -> Map<Self, F>
+		where
+			F: FnMut(Self::Item) -> B + Clone + Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_pipe(Map::new(self, f))
+		}
+
+		fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
+		where
+			F: FnMut(Self::Item) -> B + Clone + Send + 'static,
+			B: Stream,
+			Self: Sized,
+		{
+			assert_parallel_pipe(FlatMap::new(self, f))
+		}
+
+		fn filter<F, Fut>(self, f: F) -> Filter<Self, F>
+		where
+			F: FnMut(&Self::Item) -> Fut + Clone + Send + 'static,
+			Fut: Future<Output = bool>,
+			Self: Sized,
+		{
+			assert_parallel_pipe(Filter::new(self, f))
+		}
+
+		// #[must_use]
+		// fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
+		// where
+		// 	C: IntoParallelStream<Item = Self::Item>,
+		// 	Self: Sized,
+		// {
+		// 	Chain::new(self, chain.into_par_stream())
+		// }
+
+		fn for_each<F>(self, f: F) -> ForEach<Self, F>
+		where
+			F: FnMut(Self::Item) + Clone + Send + 'static,
+			Self::Item: 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(ForEach::new(self, f))
+		}
+
+		fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
+		where
+			ID: FnMut() -> B + Clone + Send + 'static,
+			F: FnMut(B, Either<Self::Item, B>) -> B + Clone + Send + 'static,
+			B: Send + 'static,
+			Self::Item: 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Fold::new(self, identity, op))
+		}
+
+		fn count(self) -> Count<Self>
+		where
+			Self::Item: 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Count::new(self))
+		}
+
+		fn sum<B>(self) -> Sum<Self, B>
+		where
+			B: iter::Sum<Self::Item> + iter::Sum<B> + Send + 'static,
+			Self::Item: 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Sum::new(self))
+		}
+
+		fn combine<F>(self, f: F) -> Combine<Self, F>
+		where
+			F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + Send + 'static,
+			Self::Item: Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Combine::new(self, f))
+		}
+
+		fn max(self) -> Max<Self>
+		where
+			Self::Item: Ord + Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Max::new(self))
+		}
+
+		fn max_by<F>(self, f: F) -> MaxBy<Self, F>
+		where
+			F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + Send + 'static,
+			Self::Item: Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(MaxBy::new(self, f))
+		}
+
+		fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
+		where
+			F: FnMut(&Self::Item) -> B + Clone + Send + 'static,
+			B: Ord + 'static,
+			Self::Item: Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(MaxByKey::new(self, f))
+		}
+
+		fn min(self) -> Min<Self>
+		where
+			Self::Item: Ord + Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Min::new(self))
+		}
+
+		fn min_by<F>(self, f: F) -> MinBy<Self, F>
+		where
+			F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + Send + 'static,
+			Self::Item: Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(MinBy::new(self, f))
+		}
+
+		fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
+		where
+			F: FnMut(&Self::Item) -> B + Clone + Send + 'static,
+			B: Ord + 'static,
+			Self::Item: Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(MinByKey::new(self, f))
+		}
+
+		fn most_frequent(self, n: usize, probability: f64, tolerance: f64) -> MostFrequent<Self>
+		where
+			Self::Item: Hash + Eq + Clone + Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(MostFrequent::new(self, n, probability, tolerance))
+		}
+
+		fn most_distinct<A, B>(
+			self, n: usize, probability: f64, tolerance: f64, error_rate: f64,
+		) -> MostDistinct<Self>
+		where
+			Self: ParallelPipe<Source, Item = (A, B)> + Sized,
+			A: Hash + Eq + Clone + Send + 'static,
+			B: Hash + 'static,
+		{
+			assert_parallel_sink(MostDistinct::new(
+				self,
+				n,
+				probability,
+				tolerance,
+				error_rate,
+			))
+		}
+
+		fn sample_unstable(self, samples: usize) -> SampleUnstable<Self>
+		where
+			Self::Item: Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(SampleUnstable::new(self, samples))
+		}
+
+		fn all<F>(self, f: F) -> All<Self, F>
+		where
+			F: FnMut(Self::Item) -> bool + Clone + Send + 'static,
+			Self::Item: 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(All::new(self, f))
+		}
+
+		fn any<F>(self, f: F) -> Any<Self, F>
+		where
+			F: FnMut(Self::Item) -> bool + Clone + Send + 'static,
+			Self::Item: 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Any::new(self, f))
+		}
+
+		fn collect<B>(self) -> Collect<Self, B>
+		where
+			B: FromParallelStream<Self::Item>,
+			Self: Sized,
+		{
+			assert_parallel_sink(Collect::new(self))
+		}
+
+		fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
+		where
+			T: Clone + 'a,
+			Source: 'a,
+			Self: ParallelPipe<&'a Source, Item = &'a T> + Sized,
+		{
+			assert_parallel_pipe(Cloned::new(self))
+		}
 	}
-
-	fn inspect<F>(self, f: F) -> Inspect<Self, F>
-	where
-		F: FnMut(&Self::Item) + Clone + ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_pipe(Inspect::new(self, f))
+	#[inline(always)]
+	pub(crate) fn assert_parallel_pipe<T, I: ParallelPipe<Source, Item = T>, Source>(i: I) -> I {
+		i
 	}
-
-	fn update<F>(self, f: F) -> Update<Self, F>
-	where
-		F: FnMut(&mut Self::Item) + Clone + ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_pipe(Update::new(self, f))
-	}
-
-	fn map<B, F>(self, f: F) -> Map<Self, F>
-	where
-		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_pipe(Map::new(self, f))
-	}
-
-	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
-	where
-		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
-		B: Stream,
-		Self: Sized,
-	{
-		assert_distributed_pipe(FlatMap::new(self, f))
-	}
-
-	fn filter<F, Fut>(self, f: F) -> Filter<Self, F>
-	where
-		F: FnMut(&Self::Item) -> Fut + Clone + ProcessSend,
-		Fut: Future<Output = bool>,
-		Self: Sized,
-	{
-		assert_distributed_pipe(Filter::new(self, f))
-	}
-
-	// #[must_use]
-	// fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
-	// where
-	// 	C: IntoDistributedStream<Item = Self::Item>,
-	// 	Self: Sized,
-	// {
-	// 	Chain::new(self, chain.into_dist_stream())
-	// }
-
-	fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
-	where
-		ID: FnMut() -> B + Clone + ProcessSend,
-		F: FnMut(B, Either<Self::Item, B>) -> B + Clone + ProcessSend,
-		B: ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		assert_distributed_sink(Fold::new(self, identity, op))
-	}
-
-	fn count(self) -> Count<Self>
-	where
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		assert_distributed_sink(Count::new(self))
-	}
-
-	fn sum<B>(self) -> Sum<Self, B>
-	where
-		B: iter::Sum<Self::Item> + iter::Sum<B> + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		assert_distributed_sink(Sum::new(self))
-	}
-
-	fn combine<F>(self, f: F) -> Combine<Self, F>
-	where
-		F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + ProcessSend,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(Combine::new(self, f))
-	}
-
-	fn max(self) -> Max<Self>
-	where
-		Self::Item: Ord + ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(Max::new(self))
-	}
-
-	fn max_by<F>(self, f: F) -> MaxBy<Self, F>
-	where
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(MaxBy::new(self, f))
-	}
-
-	fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
-	where
-		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
-		B: Ord + 'static,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(MaxByKey::new(self, f))
-	}
-
-	fn min(self) -> Min<Self>
-	where
-		Self::Item: Ord + ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(Min::new(self))
-	}
-
-	fn min_by<F>(self, f: F) -> MinBy<Self, F>
-	where
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(MinBy::new(self, f))
-	}
-
-	fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
-	where
-		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
-		B: Ord + 'static,
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(MinByKey::new(self, f))
-	}
-
-	fn most_frequent(self, n: usize, probability: f64, tolerance: f64) -> MostFrequent<Self>
-	where
-		Self::Item: Hash + Eq + Clone + ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(MostFrequent::new(self, n, probability, tolerance))
-	}
-
-	fn most_distinct<A, B>(
-		self, n: usize, probability: f64, tolerance: f64, error_rate: f64,
-	) -> MostDistinct<Self>
-	where
-		Self: DistributedPipe<Source, Item = (A, B)> + Sized,
-		A: Hash + Eq + Clone + ProcessSend,
-		B: Hash + 'static,
-	{
-		assert_distributed_sink(MostDistinct::new(
-			self,
-			n,
-			probability,
-			tolerance,
-			error_rate,
-		))
-	}
-
-	fn sample_unstable(self, samples: usize) -> SampleUnstable<Self>
-	where
-		Self::Item: ProcessSend,
-		Self: Sized,
-	{
-		assert_distributed_sink(SampleUnstable::new(self, samples))
-	}
-
-	fn all<F>(self, f: F) -> All<Self, F>
-	where
-		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		assert_distributed_sink(All::new(self, f))
-	}
-
-	fn any<F>(self, f: F) -> Any<Self, F>
-	where
-		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
-		Self::Item: 'static,
-		Self: Sized,
-	{
-		assert_distributed_sink(Any::new(self, f))
-	}
-
-	fn collect<B>(self) -> Collect<Self, B>
-	where
-		B: FromDistributedStream<Self::Item>,
-		Self: Sized,
-	{
-		assert_distributed_sink::<B, _, _, _>(Collect::new(self))
-	}
-
-	fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
-	where
-		T: Clone + 'a,
-		Source: 'a,
-		Self: DistributedPipe<&'a Source, Item = &'a T> + Sized,
-	{
-		assert_distributed_pipe::<T, _, _>(Cloned::new(self))
-	}
-}
-
-#[inline(always)]
-pub(crate) fn assert_distributed_pipe<T, I: DistributedPipe<Source, Item = T>, Source>(i: I) -> I {
-	i
 }

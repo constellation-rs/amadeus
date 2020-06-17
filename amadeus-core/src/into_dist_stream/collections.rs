@@ -5,7 +5,7 @@ use std::{
 	}, hash::{BuildHasher, Hash}, iter, option, result, slice, str, vec
 };
 
-use super::{IntoDistributedStream, IterIter};
+use super::{IntoDistributedStream, IntoParallelStream, IterDistStream, IterParStream};
 use crate::pool::ProcessSend;
 
 pub struct TupleCloned<I: Iterator>(I);
@@ -18,323 +18,325 @@ impl<'a, 'b, I: Iterator<Item = (&'a A, &'b B)>, A: Clone + 'a, B: Clone + 'b> I
 	}
 }
 
-impl<T> IntoDistributedStream for Vec<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<vec::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+impl_par_dist_rename! {
+	impl<T> IntoParallelStream for Vec<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<vec::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Clone> IntoDistributedStream for &'a Vec<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<iter::Cloned<slice::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Clone> IntoParallelStream for &'a Vec<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<slice::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
-}
 
-impl<T> IntoDistributedStream for VecDeque<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<vec_deque::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<T> IntoParallelStream for VecDeque<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<vec_deque::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Clone> IntoDistributedStream for &'a VecDeque<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<iter::Cloned<vec_deque::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Clone> IntoParallelStream for &'a VecDeque<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<vec_deque::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
-}
 
-impl<T: Ord> IntoDistributedStream for BinaryHeap<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<binary_heap::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<T: Ord> IntoParallelStream for BinaryHeap<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<binary_heap::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Ord + Clone> IntoDistributedStream for &'a BinaryHeap<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<iter::Cloned<binary_heap::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Ord + Clone> IntoParallelStream for &'a BinaryHeap<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<binary_heap::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
-}
 
-impl<T> IntoDistributedStream for LinkedList<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<linked_list::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<T> IntoParallelStream for LinkedList<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<linked_list::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Clone> IntoDistributedStream for &'a LinkedList<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<iter::Cloned<linked_list::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Clone> IntoParallelStream for &'a LinkedList<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<linked_list::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
-}
 
-impl<T, S> IntoDistributedStream for HashSet<T, S>
-where
-	T: Eq + Hash + ProcessSend,
-	S: BuildHasher + Default,
-{
-	type DistStream = IterIter<hash_set::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<T, S> IntoParallelStream for HashSet<T, S>
 	where
-		Self: Sized,
+		T: Eq + Hash + ProcessSend,
+		S: BuildHasher + Default,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<hash_set::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Clone, S> IntoDistributedStream for &'a HashSet<T, S>
-where
-	T: Eq + Hash + ProcessSend,
-	S: BuildHasher + Default,
-{
-	type DistStream = IterIter<iter::Cloned<hash_set::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Clone, S> IntoParallelStream for &'a HashSet<T, S>
 	where
-		Self: Sized,
+		T: Eq + Hash + ProcessSend,
+		S: BuildHasher + Default,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<hash_set::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
-}
 
-impl<K, V, S> IntoDistributedStream for HashMap<K, V, S>
-where
-	K: Eq + Hash + ProcessSend,
-	V: ProcessSend,
-	S: BuildHasher + Default,
-{
-	type DistStream = IterIter<hash_map::IntoIter<K, V>>;
-	type Item = (K, V);
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<K, V, S> IntoParallelStream for HashMap<K, V, S>
 	where
-		Self: Sized,
+		K: Eq + Hash + ProcessSend,
+		V: ProcessSend,
+		S: BuildHasher + Default,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<hash_map::IntoIter<K, V>>;
+		type Item = (K, V);
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, K: Clone, V: Clone, S> IntoDistributedStream for &'a HashMap<K, V, S>
-where
-	K: Eq + Hash + ProcessSend,
-	V: ProcessSend,
-	S: BuildHasher + Default,
-{
-	type DistStream = IterIter<TupleCloned<hash_map::Iter<'a, K, V>>>;
-	type Item = (K, V);
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, K: Clone, V: Clone, S> IntoParallelStream for &'a HashMap<K, V, S>
 	where
-		Self: Sized,
+		K: Eq + Hash + ProcessSend,
+		V: ProcessSend,
+		S: BuildHasher + Default,
 	{
-		IterIter(TupleCloned(self.iter()))
+		type ParStream = IterParStream<TupleCloned<hash_map::Iter<'a, K, V>>>;
+		type Item = (K, V);
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(TupleCloned(self.iter()))
+		}
 	}
-}
 
-impl<T> IntoDistributedStream for BTreeSet<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<btree_set::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<T> IntoParallelStream for BTreeSet<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<btree_set::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Clone> IntoDistributedStream for &'a BTreeSet<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<iter::Cloned<btree_set::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Clone> IntoParallelStream for &'a BTreeSet<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<btree_set::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
-}
 
-impl<K, V> IntoDistributedStream for BTreeMap<K, V>
-where
-	K: ProcessSend,
-	V: ProcessSend,
-{
-	type DistStream = IterIter<btree_map::IntoIter<K, V>>;
-	type Item = (K, V);
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<K, V> IntoParallelStream for BTreeMap<K, V>
 	where
-		Self: Sized,
+		K: ProcessSend,
+		V: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<btree_map::IntoIter<K, V>>;
+		type Item = (K, V);
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, K: Clone, V: Clone> IntoDistributedStream for &'a BTreeMap<K, V>
-where
-	K: ProcessSend,
-	V: ProcessSend,
-{
-	type DistStream = IterIter<TupleCloned<btree_map::Iter<'a, K, V>>>;
-	type Item = (K, V);
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, K: Clone, V: Clone> IntoParallelStream for &'a BTreeMap<K, V>
 	where
-		Self: Sized,
+		K: ProcessSend,
+		V: ProcessSend,
 	{
-		IterIter(TupleCloned(self.iter()))
+		type ParStream = IterParStream<TupleCloned<btree_map::Iter<'a, K, V>>>;
+		type Item = (K, V);
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(TupleCloned(self.iter()))
+		}
 	}
-}
 
-impl IntoDistributedStream for String {
-	type DistStream = IterIter<IntoChars>;
-	type Item = char;
+	impl IntoParallelStream for String {
+		type ParStream = IterParStream<IntoChars>;
+		type Item = char;
 
-	fn into_dist_stream(self) -> Self::DistStream
-	where
-		Self: Sized,
-	{
-		IterIter(self.into_chars())
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_chars())
+		}
 	}
-}
-impl<'a> IntoDistributedStream for &'a String {
-	type DistStream = IterIter<str::Chars<'a>>;
-	type Item = char;
+	impl<'a> IntoParallelStream for &'a String {
+		type ParStream = IterParStream<str::Chars<'a>>;
+		type Item = char;
 
-	fn into_dist_stream(self) -> Self::DistStream
-	where
-		Self: Sized,
-	{
-		IterIter(self.chars())
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.chars())
+		}
 	}
-}
 
-impl<T> IntoDistributedStream for Option<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<option::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<T> IntoParallelStream for Option<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<option::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Clone> IntoDistributedStream for &'a Option<T>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<iter::Cloned<option::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Clone> IntoParallelStream for &'a Option<T>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<option::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
-}
 
-impl<T, E> IntoDistributedStream for Result<T, E>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<result::IntoIter<T>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<T, E> IntoParallelStream for Result<T, E>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.into_iter())
+		type ParStream = IterParStream<result::IntoIter<T>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.into_iter())
+		}
 	}
-}
-impl<'a, T: Clone, E> IntoDistributedStream for &'a Result<T, E>
-where
-	T: ProcessSend,
-{
-	type DistStream = IterIter<iter::Cloned<result::Iter<'a, T>>>;
-	type Item = T;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<'a, T: Clone, E> IntoParallelStream for &'a Result<T, E>
 	where
-		Self: Sized,
+		T: ProcessSend,
 	{
-		IterIter(self.iter().cloned())
+		type ParStream = IterParStream<iter::Cloned<result::Iter<'a, T>>>;
+		type Item = T;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self.iter().cloned())
+		}
 	}
 }

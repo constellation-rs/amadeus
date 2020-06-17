@@ -11,18 +11,43 @@
 )] // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
 #![allow(unreachable_code, unused_braces, clippy::type_complexity)]
 
+#[cfg(feature = "constellation")]
+use constellation::*;
 use std::time::{Duration, SystemTime};
 
 use amadeus::dist::prelude::*;
 use data::Webpage;
 
-#[tokio::test]
-async fn commoncrawl() {
-	return; // TODO: runs for a long time
+fn main() {
+	#[cfg(feature = "constellation")]
+	init(Resources::default());
 
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			return; // TODO: runs for a long time
+
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
+
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
+}
+
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
-
-	let pool = &ThreadPool::new(None);
 
 	let webpages = CommonCrawl::new("CC-MAIN-2020-24").await.unwrap();
 	let _ = webpages
@@ -99,5 +124,5 @@ async fn commoncrawl() {
 		).await;
 	println!("{:?}", top);
 
-	println!("in {:?}", start.elapsed().unwrap());
+	start.elapsed().unwrap()
 }

@@ -4,23 +4,85 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{DistributedPipe, PipeTask, PipeTaskAsync};
+use super::{Filter, FlatMap, Fold, Inspect, Map, ParallelPipe, PipeTask, PipeTaskAsync, Update};
 use crate::sink::Sink;
 
-pub struct Identity;
-impl<Item> DistributedPipe<Item> for Identity {
-	type Item = Item;
-	type Task = IdentityTask;
+// TODO: add type parameter to Identity when type the type system includes HRTB in the ParallelPipe impl https://github.com/dtolnay/ghost/
 
-	fn task(&self) -> Self::Task {
-		IdentityTask
+pub struct Identity;
+
+impl_par_dist! {
+	impl<Itemm> ParallelPipe<Itemm> for Identity {
+		type Item = Itemm;
+		type Task = IdentityTask;
+
+		fn task(&self) -> Self::Task {
+			IdentityTask
+		}
+	}
+}
+
+// These sortof work around https://github.com/rust-lang/rust/issues/73433
+mod workaround {
+	use super::*;
+
+	impl Identity {
+		pub fn inspect<F>(self, f: F) -> Inspect<Self, F>
+		where
+			F: Clone + Send + 'static,
+			Self: Sized,
+		{
+			Inspect::new(self, f)
+		}
+
+		pub fn update<T, F>(self, f: F) -> Update<Self, F>
+		where
+			F: Clone + Send + 'static,
+			Self: Sized,
+		{
+			Update::new(self, f)
+		}
+
+		pub fn map<F>(self, f: F) -> Map<Self, F>
+		where
+			F: Clone + Send + 'static,
+			Self: Sized,
+		{
+			Map::new(self, f)
+		}
+
+		pub fn flat_map<F>(self, f: F) -> FlatMap<Self, F>
+		where
+			F: Clone + Send + 'static,
+			Self: Sized,
+		{
+			FlatMap::new(self, f)
+		}
+
+		pub fn filter<F>(self, f: F) -> Filter<Self, F>
+		where
+			F: Clone + Send + 'static,
+			Self: Sized,
+		{
+			Filter::new(self, f)
+		}
+
+		pub fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
+		where
+			ID: FnMut() -> B + Clone + Send + 'static,
+			F: Clone + Send + 'static,
+			B: Send + 'static,
+			Self: Sized,
+		{
+			Fold::new(self, identity, op)
+		}
 	}
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct IdentityTask;
-impl<Source> PipeTask<Source> for IdentityTask {
-	type Item = Source;
+impl<Item> PipeTask<Item> for IdentityTask {
+	type Item = Item;
 	type Async = IdentityTask;
 	fn into_async(self) -> Self::Async {
 		IdentityTask
@@ -31,7 +93,7 @@ impl<Item> PipeTaskAsync<Item> for IdentityTask {
 
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
-		sink: Pin<&mut impl Sink<Self::Item>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		sink.poll_forward(cx, stream)
 	}

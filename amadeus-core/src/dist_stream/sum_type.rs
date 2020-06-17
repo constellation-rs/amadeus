@@ -4,39 +4,39 @@ use std::{
 };
 use sum::Sum2;
 
-use super::{
-	DistributedPipe, DistributedStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync
-};
+use super::{ParallelPipe, ParallelStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync};
 use crate::sink::Sink;
 
-impl<A: DistributedStream, B: DistributedStream<Item = A::Item>> DistributedStream for Sum2<A, B> {
-	type Item = A::Item;
-	type Task = Sum2<A::Task, B::Task>;
+impl_par_dist! {
+	impl<A: ParallelStream, B: ParallelStream<Item = A::Item>> ParallelStream for Sum2<A, B> {
+		type Item = A::Item;
+		type Task = Sum2<A::Task, B::Task>;
 
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		match self {
-			Self::A(i) => i.size_hint(),
-			Self::B(i) => i.size_hint(),
+		fn size_hint(&self) -> (usize, Option<usize>) {
+			match self {
+				Self::A(i) => i.size_hint(),
+				Self::B(i) => i.size_hint(),
+			}
+		}
+		fn next_task(&mut self) -> Option<Self::Task> {
+			match self {
+				Self::A(i) => i.next_task().map(Sum2::A),
+				Self::B(i) => i.next_task().map(Sum2::B),
+			}
 		}
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		match self {
-			Self::A(i) => i.next_task().map(Sum2::A),
-			Self::B(i) => i.next_task().map(Sum2::B),
-		}
-	}
-}
 
-impl<A: DistributedPipe<Source>, B: DistributedPipe<Source, Item = A::Item>, Source>
-	DistributedPipe<Source> for Sum2<A, B>
-{
-	type Item = A::Item;
-	type Task = Sum2<A::Task, B::Task>;
+	impl<A: ParallelPipe<Source>, B: ParallelPipe<Source, Item = A::Item>, Source>
+		ParallelPipe<Source> for Sum2<A, B>
+	{
+		type Item = A::Item;
+		type Task = Sum2<A::Task, B::Task>;
 
-	fn task(&self) -> Self::Task {
-		match self {
-			Self::A(i) => Sum2::A(i.task()),
-			Self::B(i) => Sum2::B(i.task()),
+		fn task(&self) -> Self::Task {
+			match self {
+				Self::A(i) => Sum2::A(i.task()),
+				Self::B(i) => Sum2::B(i.task()),
+			}
 		}
 	}
 }
@@ -68,7 +68,7 @@ impl<A: StreamTaskAsync, B: StreamTaskAsync<Item = A::Item>> StreamTaskAsync for
 	type Item = A::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		match self.as_pin_mut() {
 			Sum2::A(task) => task.poll_run(cx, sink),
@@ -84,7 +84,7 @@ impl<A: PipeTaskAsync<Source>, B: PipeTaskAsync<Source, Item = A::Item>, Source>
 
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Self::Item>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		match self.as_pin_mut() {
 			Sum2::A(task) => task.poll_run(cx, stream, sink),

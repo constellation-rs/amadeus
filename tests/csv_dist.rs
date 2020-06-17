@@ -1,12 +1,39 @@
-use std::{path::PathBuf, time::SystemTime};
+#[cfg(feature = "constellation")]
+use constellation::*;
+use std::{
+	path::PathBuf, time::{Duration, SystemTime}
+};
 
 use amadeus::dist::prelude::*;
 
-#[tokio::test]
-async fn cloudfront() {
-	let start = SystemTime::now();
+fn main() {
+	#[cfg(feature = "constellation")]
+	init(Resources::default());
 
-	let pool = &ThreadPool::new(None);
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
+
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
+}
+
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+	let start = SystemTime::now();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct GameDerived {
@@ -55,5 +82,5 @@ async fn cloudfront() {
 		100_000
 	);
 
-	println!("in {:?}", start.elapsed().unwrap());
+	start.elapsed().unwrap()
 }

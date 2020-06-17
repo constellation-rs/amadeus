@@ -5,55 +5,62 @@ use std::{
 	iter, ops::{Range, RangeFrom, RangeInclusive}, pin::Pin, task::{Context, Poll}
 };
 
-use super::{DistributedStream, IntoDistributedStream, StreamTask, StreamTaskAsync};
+use super::{
+	DistributedStream, IntoDistributedStream, IntoParallelStream, ParallelStream, StreamTask, StreamTaskAsync
+};
 use crate::{pool::ProcessSend, sink::Sink};
 
 pub trait IteratorExt: Iterator + Sized {
-	fn dist(self) -> IterIter<Self> {
-		IterIter(self)
+	fn par(self) -> IterParStream<Self> {
+		IterParStream(self)
+	}
+	fn dist(self) -> IterDistStream<Self> {
+		IterDistStream(self)
 	}
 }
 impl<I: Iterator + Sized> IteratorExt for I {}
 
-pub struct IterIter<I>(pub(super) I);
+impl_par_dist_rename! {
+	pub struct IterParStream<I>(pub(crate) I);
 
-impl<I: Iterator> DistributedStream for IterIter<I>
-where
-	I::Item: ProcessSend,
-{
-	type Item = I::Item;
-	type Task = IterIterTask<I::Item>;
+	impl<I: Iterator> ParallelStream for IterParStream<I>
+	where
+		I::Item: Send + 'static,
+	{
+		type Item = I::Item;
+		type Task = IterStreamTask<I::Item>;
 
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.0.size_hint()
-	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.0.next().map(IterIterTask::new)
+		fn size_hint(&self) -> (usize, Option<usize>) {
+			self.0.size_hint()
+		}
+		fn next_task(&mut self) -> Option<Self::Task> {
+			self.0.next().map(IterStreamTask::new)
+		}
 	}
 }
 
 #[pin_project]
 #[derive(Serialize, Deserialize)]
-pub struct IterIterTask<T>(Option<T>);
-impl<T> IterIterTask<T> {
+pub struct IterStreamTask<T>(Option<T>);
+impl<T> IterStreamTask<T> {
 	fn new(t: T) -> Self {
 		Self(Some(t))
 	}
 }
 
-impl<T> StreamTask for IterIterTask<T> {
+impl<T> StreamTask for IterStreamTask<T> {
 	type Item = T;
-	type Async = IterIterTask<T>;
+	type Async = IterStreamTask<T>;
 
 	fn into_async(self) -> Self::Async {
 		self
 	}
 }
-impl<T> StreamTaskAsync for IterIterTask<T> {
+impl<T> StreamTaskAsync for IterStreamTask<T> {
 	type Item = T;
 
 	fn poll_run(
-		mut self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+		mut self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		let stream = stream::iter(iter::from_fn(|| self.0.take()));
 		pin_mut!(stream);
@@ -61,50 +68,52 @@ impl<T> StreamTaskAsync for IterIterTask<T> {
 	}
 }
 
-impl<Idx> IntoDistributedStream for Range<Idx>
-where
-	Self: Iterator,
-	<Self as Iterator>::Item: ProcessSend,
-{
-	type DistStream = IterIter<Self>;
-	type Item = <Self as Iterator>::Item;
-
-	fn into_dist_stream(self) -> Self::DistStream
+impl_par_dist_rename! {
+	impl<Idx> IntoParallelStream for Range<Idx>
 	where
-		Self: Sized,
+		Self: Iterator,
+		<Self as Iterator>::Item: ProcessSend,
 	{
-		IterIter(self)
+		type ParStream = IterParStream<Self>;
+		type Item = <Self as Iterator>::Item;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self)
+		}
 	}
-}
 
-impl<Idx> IntoDistributedStream for RangeFrom<Idx>
-where
-	Self: Iterator,
-	<Self as Iterator>::Item: ProcessSend,
-{
-	type DistStream = IterIter<Self>;
-	type Item = <Self as Iterator>::Item;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<Idx> IntoParallelStream for RangeFrom<Idx>
 	where
-		Self: Sized,
+		Self: Iterator,
+		<Self as Iterator>::Item: ProcessSend,
 	{
-		IterIter(self)
+		type ParStream = IterParStream<Self>;
+		type Item = <Self as Iterator>::Item;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self)
+		}
 	}
-}
 
-impl<Idx> IntoDistributedStream for RangeInclusive<Idx>
-where
-	Self: Iterator,
-	<Self as Iterator>::Item: ProcessSend,
-{
-	type DistStream = IterIter<Self>;
-	type Item = <Self as Iterator>::Item;
-
-	fn into_dist_stream(self) -> Self::DistStream
+	impl<Idx> IntoParallelStream for RangeInclusive<Idx>
 	where
-		Self: Sized,
+		Self: Iterator,
+		<Self as Iterator>::Item: ProcessSend,
 	{
-		IterIter(self)
+		type ParStream = IterParStream<Self>;
+		type Item = <Self as Iterator>::Item;
+
+		fn into_par_stream(self) -> Self::ParStream
+		where
+			Self: Sized,
+		{
+			IterParStream(self)
+		}
 	}
 }

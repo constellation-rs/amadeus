@@ -18,7 +18,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, util::IoError, Source as DSource
+	dist_stream::{DistributedStream, ParallelStream}, into_dist_stream::IntoDistributedStream, util::{DistParStream, IoError}, Source as DSource
 };
 
 const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
@@ -196,10 +196,17 @@ where
 	type Error = PostgresError;
 
 	#[cfg(not(feature = "doc"))]
+	type ParStream = impl ParallelStream<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type ParStream = amadeus_core::util::ImplParallelStream<Result<Self::Item, Self::Error>>;
+	#[cfg(not(feature = "doc"))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
+	fn par_stream(self) -> Self::ParStream {
+		DistParStream::new(self.dist_stream())
+	}
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
 		let ret = self

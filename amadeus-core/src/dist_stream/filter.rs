@@ -1,3 +1,4 @@
+use derive_new::new;
 use futures::{pin_mut, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -5,55 +6,49 @@ use std::{
 	future::Future, pin::Pin, task::{Context, Poll}
 };
 
-use super::{
-	DistributedPipe, DistributedStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync
-};
-use crate::{
-	pool::ProcessSend, sink::{Sink, SinkFilter, SinkFilterState}
-};
+use super::{ParallelPipe, ParallelStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync};
+use crate::sink::{Sink, SinkFilter, SinkFilterState};
 
+#[derive(new)]
 #[must_use]
 pub struct Filter<I, F> {
 	i: I,
 	f: F,
 }
-impl<I, F> Filter<I, F> {
-	pub(crate) fn new(i: I, f: F) -> Self {
-		Self { i, f }
-	}
-}
 
-impl<I: DistributedStream, F, Fut> DistributedStream for Filter<I, F>
-where
-	F: FnMut(&I::Item) -> Fut + Clone + ProcessSend,
-	Fut: Future<Output = bool>,
-{
-	type Item = I::Item;
-	type Task = FilterTask<I::Task, F>;
+impl_par_dist! {
+	impl<I: ParallelStream, F, Fut> ParallelStream for Filter<I, F>
+	where
+		F: FnMut(&I::Item) -> Fut + Clone + Send + 'static,
+		Fut: Future<Output = bool>,
+	{
+		type Item = I::Item;
+		type Task = FilterTask<I::Task, F>;
 
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		(0, self.i.size_hint().1)
+		fn size_hint(&self) -> (usize, Option<usize>) {
+			(0, self.i.size_hint().1)
+		}
+		fn next_task(&mut self) -> Option<Self::Task> {
+			self.i.next_task().map(|task| {
+				let f = self.f.clone();
+				FilterTask { task, f }
+			})
+		}
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| {
+
+	impl<I: ParallelPipe<Source>, F, Fut, Source> ParallelPipe<Source> for Filter<I, F>
+	where
+		F: FnMut(&<I as ParallelPipe<Source>>::Item) -> Fut + Clone + Send + 'static,
+		Fut: Future<Output = bool>,
+	{
+		type Item = I::Item;
+		type Task = FilterTask<I::Task, F>;
+
+		fn task(&self) -> Self::Task {
+			let task = self.i.task();
 			let f = self.f.clone();
 			FilterTask { task, f }
-		})
-	}
-}
-
-impl<I: DistributedPipe<Source>, F, Fut, Source> DistributedPipe<Source> for Filter<I, F>
-where
-	F: FnMut(&<I as DistributedPipe<Source>>::Item) -> Fut + Clone + ProcessSend,
-	Fut: Future<Output = bool>,
-{
-	type Item = I::Item;
-	type Task = FilterTask<I::Task, F>;
-
-	fn task(&self) -> Self::Task {
-		let task = self.i.task();
-		let f = self.f.clone();
-		FilterTask { task, f }
+		}
 	}
 }
 
@@ -111,7 +106,7 @@ where
 	type Item = C::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
@@ -131,7 +126,7 @@ where
 
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Self::Item>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);

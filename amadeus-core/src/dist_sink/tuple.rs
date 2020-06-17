@@ -1,7 +1,7 @@
 #![allow(non_snake_case, clippy::type_complexity, irrefutable_let_patterns, clippy::new_without_default, unused_mut, unreachable_code)]
 
 use futures::{pin_mut, ready, stream, Stream, StreamExt};
-use pin_project::{pin_project, project};
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
 	pin::Pin, task::{Context, Poll}
@@ -9,7 +9,7 @@ use std::{
 use sum::*;
 
 use super::{
-	DistributedPipe, DistributedSink, Factory, PipeTask, PipeTaskAsync, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, Factory, ParallelPipe, ParallelSink, PipeTask, PipeTaskAsync, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::{
 	pool::ProcessSend, sink::{Sink, SinkMap}
@@ -41,20 +41,43 @@ where
 macro_rules! impl_tuple {
 	($reduceafactory:ident $reducea:ident $reduceaasync:ident $reducebfactory:ident $reduceb:ident $reducebasync:ident $async:ident $enum:ident $($copy:ident)? : $($i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $num:tt $t:ident $($copyb:ident)? , $comma:tt)*) => (
 		impl<
-				$($i: DistributedPipe<Source>,)*
 				Source,
-				$($r: DistributedSink<$i, Source, $o>,)*
+				$($r: ParallelSink<Source, Output = $o>,)*
 				$($o,)*
-			> DistributedSink<($($i,)*), Source, ($($o,)*)> for ($($r,)*)
+			> ParallelSink<Source> for ($($r,)*)
 				where Source: $($copy)*,
 		{
+			type Output = ($($o,)*);
+			type Pipe = ($($r::Pipe,)*);
+			type ReduceAFactory = $reduceafactory<$($r::ReduceAFactory,)*>;
+			type ReduceA = $reducea<$($r::ReduceA,)*>;
+			type ReduceC = $reduceb<$($r::ReduceC,)*>;
+
+			fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC) {
+				$(let ($iterator, $reducera, $t) = self.$num.reducers();)*
+				(
+					($($iterator,)*),
+					$reduceafactory($($reducera,)*),
+					$reduceb{$($t,)*},
+				)
+			}
+		}
+		impl<
+				Source,
+				$($r: DistributedSink<Source, Output = $o>,)*
+				$($o,)*
+			> DistributedSink<Source> for ($($r,)*)
+				where Source: $($copy)*,
+		{
+			type Output = ($($o,)*);
+			type Pipe = ($($r::Pipe,)*);
 			type ReduceAFactory = $reduceafactory<$($r::ReduceAFactory,)*>;
 			type ReduceBFactory = $reducebfactory<$($r::ReduceBFactory,)*>;
 			type ReduceA = $reducea<$($r::ReduceA,)*>;
 			type ReduceB = $reduceb<$($r::ReduceB,)*>;
 			type ReduceC = $reduceb<$($r::ReduceC,)*>;
 
-			fn reducers(self) -> (($($i,)*), Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+			fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 				$(let ($iterator, $reducera, $reducerb, $t) = self.$num.reducers();)*
 				(
 					($($iterator,)*),
@@ -65,6 +88,17 @@ macro_rules! impl_tuple {
 			}
 		}
 
+		impl<Source, $($i: ParallelPipe<Source>,)*>
+			ParallelPipe<Source> for ($($i,)*)
+				where Source: $($copy)*,
+		{
+			type Item = $enum<$($i::Item,)*>;
+			type Task = ($($i::Task,)*);
+
+			fn task(&self) -> Self::Task {
+				($(self.$num.task(),)*)
+			}
+		}
 		impl<Source, $($i: DistributedPipe<Source>,)*>
 			DistributedPipe<Source> for ($($i,)*)
 				where Source: $($copy)*,
@@ -109,7 +143,7 @@ macro_rules! impl_tuple {
 			#[allow(non_snake_case)]
 			fn poll_run(
 				self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Source>>,
-				mut sink: Pin<&mut impl Sink<Self::Item>>,
+				mut sink: Pin<&mut impl Sink<Item = Self::Item>>,
 			) -> Poll<()> {
 				let mut self_ = self.project();
 				// buffer, copy to each
@@ -381,7 +415,7 @@ impl_tuple!(ReduceA6Factory ReduceA6 ReduceA6Async ReduceC6Factory ReduceC6 Redu
 impl_tuple!(ReduceA7Factory ReduceA7 ReduceA7Async ReduceC7Factory ReduceC7 ReduceC7Async AsyncTuple7 Sum7 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A Copy,, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B Copy,, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C Copy,, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D Copy,, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E Copy,, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F Copy,, I6 R6 O6 C6 iterator_6 reducer_a_6 reducer_b_6 6 G Copy,,);
 impl_tuple!(ReduceA8Factory ReduceA8 ReduceA8Async ReduceC8Factory ReduceC8 ReduceC8Async AsyncTuple8 Sum8 Copy: I0 R0 O0 C0 iterator_0 reducer_a_0 reducer_b_0 0 A Copy,, I1 R1 O1 C1 iterator_1 reducer_a_1 reducer_b_1 1 B Copy,, I2 R2 O2 C2 iterator_2 reducer_a_2 reducer_b_2 2 C Copy,, I3 R3 O3 C3 iterator_3 reducer_a_3 reducer_b_3 3 D Copy,, I4 R4 O4 C4 iterator_4 reducer_a_4 reducer_b_4 4 E Copy,, I5 R5 O5 C5 iterator_5 reducer_a_5 reducer_b_5 5 F Copy,, I6 R6 O6 C6 iterator_6 reducer_a_6 reducer_b_6 6 G Copy,, I7 R7 O7 C7 iterator_7 reducer_a_7 reducer_b_7 7 H Copy,,);
 
-#[pin_project]
+#[pin_project(project = PeekableProj)]
 #[derive(Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct Peekable<'a, St: Stream> {
@@ -391,10 +425,8 @@ pub struct Peekable<'a, St: Stream> {
 }
 
 impl<'a, St: Stream> Peekable<'a, St> {
-	#[project]
 	pub fn poll_peek(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<&mut St::Item>> {
-		#[project]
-		let Peekable { mut stream, peeked } = self.project();
+		let PeekableProj { mut stream, peeked } = self.project();
 
 		Poll::Ready(loop {
 			if peeked.is_some() {
@@ -411,10 +443,8 @@ impl<'a, St: Stream> Peekable<'a, St> {
 impl<'a, S: Stream> Stream for Peekable<'a, S> {
 	type Item = S::Item;
 
-	#[project]
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-		#[project]
-		let Peekable { stream, peeked } = self.project();
+		let PeekableProj { stream, peeked } = self.project();
 		if let Some(item) = peeked.take() {
 			return Poll::Ready(Some(item));
 		}

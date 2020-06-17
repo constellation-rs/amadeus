@@ -25,7 +25,7 @@
 //! where `10.0.0.1` is the address of the master. See [here](https://github.com/constellation-rs/constellation)
 //! for instructions on setting up the cluster.
 
-use amadeus::prelude::*;
+use amadeus::dist::prelude::*;
 use constellation::{init, Resources};
 use data::Webpage;
 use std::env;
@@ -52,7 +52,7 @@ fn main() {
 	let (count, (most_frequent_ips, most_diverse_ips)) = webpages
 		.dist_stream()
 		.map(FnMut!(|webpage: Result<_, _>| webpage.unwrap()))
-		.fork(
+		.pipe_fork(
 			&pool,
 			Identity
 				.map(FnMut!(|webpage: Webpage<'static>| webpage))

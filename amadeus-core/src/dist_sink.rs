@@ -2,8 +2,10 @@ mod all;
 mod any;
 mod collect;
 mod combine;
+mod combiner;
 mod count;
 mod fold;
+mod folder;
 mod for_each;
 mod max;
 mod sample;
@@ -20,7 +22,7 @@ use crate::pool::ProcessSend;
 use super::dist_pipe::*;
 
 pub use self::{
-	all::*, any::*, collect::*, combine::*, count::*, fold::*, for_each::*, max::*, sample::*, sum::*, tuple::*
+	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, max::*, sample::*, sum::*, tuple::*
 };
 
 #[must_use]
@@ -55,24 +57,42 @@ pub trait Factory {
 }
 
 #[must_use]
-pub trait DistributedSink<I: DistributedPipe<Source>, Source, B> {
+pub trait DistributedSink<Source> {
+	type Output;
+	type Pipe: DistributedPipe<Source>;
 	type ReduceAFactory: Factory<Item = Self::ReduceA> + Clone + ProcessSend;
 	type ReduceBFactory: Factory<Item = Self::ReduceB>;
-	type ReduceA: ReducerSend<Item = <I as DistributedPipe<Source>>::Item> + ProcessSend;
+	type ReduceA: ReducerSend<Item = <Self::Pipe as DistributedPipe<Source>>::Item> + ProcessSend;
 	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
-	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = B>;
+	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self::Output>;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC);
+	fn reducers(
+		self,
+	) -> (
+		Self::Pipe,
+		Self::ReduceAFactory,
+		Self::ReduceBFactory,
+		Self::ReduceC,
+	);
 }
 
 #[inline(always)]
-pub(crate) fn assert_distributed_sink<
-	T,
-	R: DistributedSink<I, Source, T>,
-	I: DistributedPipe<Source>,
-	Source,
->(
-	r: R,
-) -> R {
+pub(crate) fn assert_distributed_sink<R: DistributedSink<Source>, Source>(r: R) -> R {
+	r
+}
+
+#[must_use]
+pub trait ParallelSink<Source> {
+	type Output;
+	type Pipe: ParallelPipe<Source>;
+	type ReduceAFactory: Factory<Item = Self::ReduceA>;
+	type ReduceA: ReducerSend<Item = <Self::Pipe as ParallelPipe<Source>>::Item> + Send + 'static;
+	type ReduceC: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self::Output>;
+
+	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC);
+}
+
+#[inline(always)]
+pub(crate) fn assert_parallel_sink<R: ParallelSink<Source>, Source>(r: R) -> R {
 	r
 }

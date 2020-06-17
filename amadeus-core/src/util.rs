@@ -1,10 +1,12 @@
+use derive_new::new;
 use futures::{ready, Stream};
-use pin_project::{pin_project, project};
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
 	any::type_name, error, fmt, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
+use crate::dist_stream::{DistributedStream, ParallelStream};
 #[cfg(feature = "doc")]
 use crate::{
 	dist_stream::{DistributedStream, StreamTask, StreamTaskAsync}, sink::Sink
@@ -21,7 +23,7 @@ where
 		ResultExpandIter::new(self.0.map(IntoIterator::into_iter))
 	}
 }
-#[pin_project]
+#[pin_project(project=ResultExpandIterProj)]
 pub enum ResultExpandIter<T, E> {
 	Ok(#[pin] T),
 	Err(Option<E>),
@@ -51,12 +53,10 @@ where
 	T: Stream,
 {
 	type Item = Result<T::Item, E>;
-	#[project]
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		#[project]
 		let ret = match self.project() {
-			ResultExpandIter::Ok(t) => ready!(t.poll_next(cx)).map(Ok),
-			ResultExpandIter::Err(e) => e.take().map(Err),
+			ResultExpandIterProj::Ok(t) => ready!(t.poll_next(cx)).map(Ok),
+			ResultExpandIterProj::Err(e) => e.take().map(Err),
 		};
 		Poll::Ready(ret)
 	}
@@ -92,35 +92,55 @@ impl From<IoError> for io::Error {
 	}
 }
 
-#[cfg(feature = "doc")]
-#[doc(hidden)]
-pub struct ImplDistributedStream<T>(PhantomData<fn(T)>);
-#[cfg(feature = "doc")]
-impl<T> ImplDistributedStream<T> {
-	pub fn new<U>(_drop: U) -> Self
-	where
-		U: DistributedStream<Item = T>,
-	{
-		Self(PhantomData)
-	}
-}
-#[cfg(feature = "doc")]
-impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
-	type Item = T;
-	type Task = ImplTask<T>;
+#[derive(new)]
+#[repr(transparent)]
+pub struct DistParStream<S>(S);
+impl<S> ParallelStream for DistParStream<S>
+where
+	S: DistributedStream,
+{
+	type Item = S::Item;
+	type Task = S::Task;
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		unreachable!()
+		self.0.size_hint()
 	}
 	fn next_task(&mut self) -> Option<Self::Task> {
-		unreachable!()
+		self.0.next_task()
+	}
+}
+
+impl_par_dist_rename! {
+	#[cfg(feature = "doc")]
+	#[doc(hidden)]
+	pub struct ImplParallelStream<T>(PhantomData<fn() -> T>);
+	#[cfg(feature = "doc")]
+	impl<T> ImplParallelStream<T> {
+		pub fn new<U>(_drop: U) -> Self
+		where
+			U: ParallelStream<Item = T>,
+		{
+			Self(PhantomData)
+		}
+	}
+	#[cfg(feature = "doc")]
+	impl<T: 'static> ParallelStream for ImplParallelStream<T> {
+		type Item = T;
+		type Task = ImplTask<T>;
+
+		fn size_hint(&self) -> (usize, Option<usize>) {
+			unreachable!()
+		}
+		fn next_task(&mut self) -> Option<Self::Task> {
+			unreachable!()
+		}
 	}
 }
 
 #[cfg(feature = "doc")]
 #[doc(hidden)]
 #[derive(Serialize, Deserialize)]
-pub struct ImplTask<T>(PhantomData<fn(T)>);
+pub struct ImplTask<T>(PhantomData<fn() -> T>);
 #[cfg(feature = "doc")]
 impl<T> StreamTask for ImplTask<T>
 where
@@ -138,7 +158,7 @@ impl<T: 'static> StreamTaskAsync for ImplTask<T> {
 	type Item = T;
 
 	fn poll_run(
-		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Self::Item>>,
+		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		unreachable!()
 	}
@@ -153,7 +173,7 @@ pub fn try_type_coerce<A, B>(a: A) -> Option<B> {
 		fn eq(self) -> Option<B>;
 	}
 
-	struct Foo<A, B>(A, PhantomData<fn(B)>);
+	struct Foo<A, B>(A, PhantomData<fn() -> B>);
 
 	impl<A, B> Eq<B> for Foo<A, B> {
 		default fn eq(self) -> Option<B> {

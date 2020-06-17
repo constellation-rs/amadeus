@@ -1,15 +1,42 @@
 #![type_length_limit = "1319139"]
 #![allow(clippy::cognitive_complexity, clippy::type_complexity)]
 
-use std::{collections::HashMap, path::PathBuf, time::SystemTime};
+#[cfg(feature = "constellation")]
+use constellation::*;
+use std::{
+	collections::HashMap, path::PathBuf, time::{Duration, SystemTime}
+};
 
 use amadeus::dist::prelude::*;
 
-#[tokio::test]
-async fn cloudfront() {
-	let start = SystemTime::now();
+fn main() {
+	#[cfg(feature = "constellation")]
+	init(Resources::default());
 
-	let pool = &ThreadPool::new(None);
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None);
+				run(&thread_pool).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
+
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
+}
+
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+	let start = SystemTime::now();
 
 	let rows = Parquet::<_, Value>::new(ParquetDirectory::new(PathBuf::from(
 		"amadeus-testing/parquet/cf-accesslogs/",
@@ -1009,5 +1036,5 @@ async fn cloudfront() {
 		14_444
 	);
 
-	println!("in {:?}", start.elapsed().unwrap());
+	start.elapsed().unwrap()
 }

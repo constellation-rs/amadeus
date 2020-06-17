@@ -1,3 +1,4 @@
+use derive_new::new;
 use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -6,28 +7,26 @@ use std::{
 };
 
 use super::{
-	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, Factory, ParallelPipe, ParallelSink, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
+#[derive(new)]
 #[must_use]
 pub struct Any<I, F> {
 	i: I,
 	f: F,
 }
-impl<I, F> Any<I, F> {
-	pub(crate) fn new(i: I, f: F) -> Self {
-		Self { i, f }
-	}
-}
 
-impl<I: DistributedPipe<Source>, Source, F> DistributedSink<I, Source, bool> for Any<I, F>
+impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for Any<I, F>
 where
 	F: FnMut(I::Item) -> bool + Clone + ProcessSend,
 	I::Item: 'static,
 {
-	type ReduceAFactory = AnyReduceFactory<I::Item, F>;
-	type ReduceBFactory = BoolOrReduceFactory;
+	type Output = bool;
+	type Pipe = I;
+	type ReduceAFactory = AnyReducerFactory<I::Item, F>;
+	type ReduceBFactory = BoolOrReducerFactory;
 	type ReduceA = AnyReducer<I::Item, F>;
 	type ReduceB = BoolOrReducer;
 	type ReduceC = BoolOrReducer;
@@ -35,8 +34,27 @@ where
 	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
 		(
 			self.i,
-			AnyReduceFactory(self.f, PhantomData),
-			BoolOrReduceFactory,
+			AnyReducerFactory(self.f, PhantomData),
+			BoolOrReducerFactory,
+			BoolOrReducer(true),
+		)
+	}
+}
+impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source> for Any<I, F>
+where
+	F: FnMut(I::Item) -> bool + Clone + Send + 'static,
+	I::Item: 'static,
+{
+	type Output = bool;
+	type Pipe = I;
+	type ReduceAFactory = AnyReducerFactory<I::Item, F>;
+	type ReduceA = AnyReducer<I::Item, F>;
+	type ReduceC = BoolOrReducer;
+
+	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceC) {
+		(
+			self.i,
+			AnyReducerFactory(self.f, PhantomData),
 			BoolOrReducer(true),
 		)
 	}
@@ -47,8 +65,8 @@ where
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct AnyReduceFactory<A, F>(F, PhantomData<fn(A)>);
-impl<A, F> Factory for AnyReduceFactory<A, F>
+pub struct AnyReducerFactory<A, F>(F, PhantomData<fn() -> A>);
+impl<A, F> Factory for AnyReducerFactory<A, F>
 where
 	F: FnMut(A) -> bool + Clone,
 {
@@ -57,7 +75,7 @@ where
 		AnyReducer(self.0.clone(), true, PhantomData)
 	}
 }
-impl<A, F> Clone for AnyReduceFactory<A, F>
+impl<A, F> Clone for AnyReducerFactory<A, F>
 where
 	F: Clone,
 {
@@ -72,7 +90,7 @@ where
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct AnyReducer<A, F>(F, bool, PhantomData<fn(A)>);
+pub struct AnyReducer<A, F>(F, bool, PhantomData<fn() -> A>);
 
 impl<A, F> Reducer for AnyReducer<A, F>
 where
@@ -127,8 +145,8 @@ where
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BoolOrReduceFactory;
-impl Factory for BoolOrReduceFactory {
+pub struct BoolOrReducerFactory;
+impl Factory for BoolOrReducerFactory {
 	type Item = BoolOrReducer;
 	fn make(&self) -> Self::Item {
 		BoolOrReducer(true)

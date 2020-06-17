@@ -220,7 +220,7 @@ impl Schema for ByteArraySchema {
 	}
 }
 
-pub struct FixedByteArraySchema<T>(pub(super) PhantomData<fn(T)>);
+pub struct FixedByteArraySchema<T>(pub(super) PhantomData<fn() -> T>);
 impl<T> Default for FixedByteArraySchema<T> {
 	fn default() -> Self {
 		Self(PhantomData)
@@ -1707,7 +1707,7 @@ where
 /// # Ok(())
 /// # }
 /// ```
-pub struct RootSchema<T>(pub String, pub T::Schema, pub PhantomData<fn(T)>)
+pub struct RootSchema<T>(pub String, pub T::Schema, pub PhantomData<fn() -> T>)
 where
 	T: ParquetData;
 impl<T> Default for RootSchema<T>

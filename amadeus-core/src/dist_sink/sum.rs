@@ -1,138 +1,79 @@
-use futures::{ready, Stream};
-use pin_project::pin_project;
+use derive_new::new;
+use educe::Educe;
+use replace_with::replace_with_or_abort;
 use serde::{Deserialize, Serialize};
-use std::{
-	iter, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}
-};
+use std::{iter, marker::PhantomData, mem};
 
 use super::{
-	DistributedPipe, DistributedSink, Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	folder_par_sink, FolderSync, FolderSyncReducer, FolderSyncReducerFactory, ParallelPipe, ParallelSink
 };
-use crate::pool::ProcessSend;
 
+#[derive(new)]
 #[must_use]
 pub struct Sum<I, B> {
 	i: I,
 	marker: PhantomData<fn() -> B>,
 }
-impl<I, B> Sum<I, B> {
-	pub(crate) fn new(i: I) -> Self {
-		Self {
-			i,
-			marker: PhantomData,
-		}
+
+impl_par_dist! {
+	impl<I: ParallelPipe<Source>, Source, B> ParallelSink<Source>
+		for Sum<I, B>
+	where
+		B: iter::Sum<I::Item> + iter::Sum<B> + Send+'static,
+		I::Item: 'static,
+	{
+		folder_par_sink!(SumFolder<B>, SumFolder<B>, self, SumFolder::new(), SumFolder::new());
 	}
 }
 
-impl<I: DistributedPipe<Source>, B, Source> DistributedSink<I, Source, B> for Sum<I, B>
-where
-	B: iter::Sum<I::Item> + iter::Sum<B> + ProcessSend,
-	I::Item: 'static,
-{
-	type ReduceAFactory = SumReduceFactory<I::Item, B>;
-	type ReduceBFactory = SumReduceFactory<B, B>;
-	type ReduceA = SumReducer<I::Item, B>;
-	type ReduceB = SumReducer<B, B>;
-	type ReduceC = SumReducer<B, B>;
-
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
-		(
-			self.i,
-			SumReduceFactory(PhantomData),
-			SumReduceFactory::new(),
-			SumReducer(Some(iter::empty::<B>().sum()), PhantomData),
-		)
-	}
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Educe, Serialize, Deserialize, new)]
+#[educe(Clone)]
 #[serde(bound = "")]
-pub struct SumReduceFactory<A, B>(PhantomData<fn(A, B)>);
-impl<A, B> SumReduceFactory<A, B> {
-	pub fn new() -> Self {
-		Self(PhantomData)
-	}
+pub struct SumFolder<B> {
+	marker: PhantomData<fn() -> B>,
 }
-impl<A, B> Default for SumReduceFactory<A, B> {
-	fn default() -> Self {
-		Self(PhantomData)
-	}
-}
-impl<A, B> Factory for SumReduceFactory<A, B>
+
+impl<A, B> FolderSync<A> for SumFolder<B>
 where
-	B: iter::Sum<A> + iter::Sum,
+	B: iter::Sum<A> + iter::Sum<B>,
 {
-	type Item = SumReducer<A, B>;
-	fn make(&self) -> Self::Item {
-		SumReducer(Some(iter::empty::<B>().sum()), PhantomData)
+	type Output = B;
+
+	fn zero(&mut self) -> Self::Output {
+		iter::empty::<B>().sum()
 	}
-}
-impl<A, B> Clone for SumReduceFactory<A, B> {
-	fn clone(&self) -> Self {
-		Self(PhantomData)
+	fn push(&mut self, state: &mut Self::Output, item: A) {
+		*state = iter::once(mem::replace(state, iter::empty::<B>().sum()))
+			.chain(iter::once(iter::once(item).sum::<B>()))
+			.sum();
 	}
 }
 
-#[pin_project]
-#[derive(Serialize, Deserialize)]
-#[serde(
-	bound(serialize = "B: Serialize"),
-	bound(deserialize = "B: Deserialize<'de>")
-)]
-pub struct SumReducer<A, B>(Option<B>, PhantomData<fn(A)>);
-impl<A, B> SumReducer<A, B> {
-	pub(crate) fn new(b: B) -> Self {
-		Self(Some(b), PhantomData)
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SumZeroFolder<B> {
+	zero: Option<B>,
+}
+impl<B> SumZeroFolder<B> {
+	pub(crate) fn new(zero: B) -> Self {
+		Self { zero: Some(zero) }
 	}
 }
-impl<A, B> Reducer for SumReducer<A, B>
-where
-	B: iter::Sum<A> + iter::Sum,
-{
-	type Item = A;
-	type Output = B;
-	type Async = Self;
 
-	fn into_async(self) -> Self::Async {
-		self
-	}
-}
-impl<A, B> ReducerAsync for SumReducer<A, B>
+impl<B> FolderSync<B> for SumZeroFolder<B>
 where
-	B: iter::Sum<A> + iter::Sum,
+	Option<B>: iter::Sum<B>,
 {
-	type Item = A;
 	type Output = B;
 
-	#[inline(always)]
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context,
-		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
-	) -> Poll<()> {
-		let self_ = self.project();
-		let self_0 = self_.0.as_mut().unwrap();
-		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
-			*self_0 = iter::once(mem::replace(self_0, iter::empty::<A>().sum()))
-				.chain(iter::once(iter::once(item).sum()))
-				.sum();
-		}
-		Poll::Ready(())
+	fn zero(&mut self) -> Self::Output {
+		self.zero.take().unwrap()
 	}
-	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
-		Poll::Ready(self.project().0.take().unwrap())
+	fn push(&mut self, state: &mut Self::Output, item: B) {
+		replace_with_or_abort(state, |state| {
+			iter::once(state)
+				.chain(iter::once(iter::once(item).sum::<Option<B>>().unwrap()))
+				.sum::<Option<B>>()
+				.unwrap()
+		})
 	}
-}
-impl<A, B> ReducerProcessSend for SumReducer<A, B>
-where
-	A: 'static,
-	B: iter::Sum<A> + iter::Sum + ProcessSend,
-{
-	type Output = B;
-}
-impl<A, B> ReducerSend for SumReducer<A, B>
-where
-	A: 'static,
-	B: iter::Sum<A> + iter::Sum + Send + 'static,
-{
-	type Output = B;
 }

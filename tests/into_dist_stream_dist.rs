@@ -2,9 +2,9 @@ use either::Either;
 
 use amadeus::dist::prelude::*;
 
-#[tokio::test]
-async fn cloudfront() {
-	let pool = &ThreadPool::new(None);
+#[tokio::main]
+async fn main() {
+	let pool = ThreadPool::new(None);
 
 	<&[usize] as IntoDistributedStream>::into_dist_stream(&[1, 2, 3])
 		.map(FnMut!(|a: usize| a))

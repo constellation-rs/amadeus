@@ -48,9 +48,32 @@ pub use amadeus_core::{dist_pipe, dist_sink, dist_stream, into_dist_stream};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, List, Value}, dist_sink::FromDistributedStream, dist_stream::DistributedStream, into_dist_stream::{IntoDistributedStream, IteratorExt}, source::Source
+	data::{Data, List, Value}, dist_sink::{FromDistributedStream, FromParallelStream}, dist_stream::{DistributedStream, ParallelStream}, into_dist_stream::{IntoDistributedStream, IntoParallelStream, IteratorExt}, source::Source
 };
 
+// pub mod pool {
+// 	pub use amadeus_core::pool::
+
+pub mod dist {
+	pub mod prelude {
+		#[cfg(feature = "constellation")]
+		#[doc(no_inline)]
+		pub use super::super::pool::ProcessPool;
+		#[cfg(feature = "aws")]
+		#[doc(no_inline)]
+		pub use super::super::source::aws::{
+			AwsCredentials, AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File
+		};
+		#[doc(no_inline)]
+		pub use super::super::{
+			data, data::{
+				Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
+			}, dist_pipe::DistributedPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
+		};
+		#[doc(no_inline)]
+		pub use serde_closure::{Fn, FnMut, FnOnce};
+	}
+}
 pub mod prelude {
 	#[cfg(feature = "constellation")]
 	#[doc(no_inline)]
@@ -64,7 +87,7 @@ pub mod prelude {
 	pub use super::{
 		data, data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
-		}, dist_pipe::DistributedPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
+		}, dist_pipe::ParallelPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
 	};
 	#[doc(no_inline)]
 	pub use serde_closure::{Fn, FnMut, FnOnce};

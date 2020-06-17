@@ -1,3 +1,4 @@
+use derive_new::new;
 use futures::{pin_mut, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -5,53 +6,47 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{
-	DistributedPipe, DistributedStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync
-};
-use crate::{
-	pool::ProcessSend, sink::{Sink, SinkFlatMap}
-};
+use super::{ParallelPipe, ParallelStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync};
+use crate::sink::{Sink, SinkFlatMap};
 
+#[derive(new)]
 #[must_use]
 pub struct FlatMap<I, F> {
 	i: I,
 	f: F,
 }
-impl<I, F> FlatMap<I, F> {
-	pub(crate) fn new(i: I, f: F) -> Self {
-		Self { i, f }
-	}
-}
 
-impl<I: DistributedStream, F, R: Stream> DistributedStream for FlatMap<I, F>
-where
-	F: FnMut(I::Item) -> R + Clone + ProcessSend,
-{
-	type Item = R::Item;
-	type Task = FlatMapTask<I::Task, F>;
+impl_par_dist! {
+	impl<I: ParallelStream, F, R: Stream> ParallelStream for FlatMap<I, F>
+	where
+		F: FnMut(I::Item) -> R + Clone + Send + 'static,
+	{
+		type Item = R::Item;
+		type Task = FlatMapTask<I::Task, F>;
 
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		(0, None)
+		fn size_hint(&self) -> (usize, Option<usize>) {
+			(0, None)
+		}
+		fn next_task(&mut self) -> Option<Self::Task> {
+			self.i.next_task().map(|task| {
+				let f = self.f.clone();
+				FlatMapTask { task, f }
+			})
+		}
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.i.next_task().map(|task| {
+
+	impl<I: ParallelPipe<Source>, F, R: Stream, Source> ParallelPipe<Source> for FlatMap<I, F>
+	where
+		F: FnMut(<I as ParallelPipe<Source>>::Item) -> R + Clone + Send + 'static,
+	{
+		type Item = R::Item;
+		type Task = FlatMapTask<I::Task, F>;
+
+		fn task(&self) -> Self::Task {
+			let task = self.i.task();
 			let f = self.f.clone();
 			FlatMapTask { task, f }
-		})
-	}
-}
-
-impl<I: DistributedPipe<Source>, F, R: Stream, Source> DistributedPipe<Source> for FlatMap<I, F>
-where
-	F: FnMut(<I as DistributedPipe<Source>>::Item) -> R + Clone + ProcessSend,
-{
-	type Item = R::Item;
-	type Task = FlatMapTask<I::Task, F>;
-
-	fn task(&self) -> Self::Task {
-		let task = self.i.task();
-		let f = self.f.clone();
-		FlatMapTask { task, f }
+		}
 	}
 }
 
@@ -101,7 +96,7 @@ impl<C: StreamTaskAsync, F: FnMut(C::Item) -> R + Clone, R: Stream> StreamTaskAs
 	type Item = R::Item;
 
 	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Self::Item>>,
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
@@ -120,7 +115,7 @@ where
 
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Self::Item>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);

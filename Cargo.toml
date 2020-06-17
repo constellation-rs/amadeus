@@ -46,6 +46,7 @@ amadeus-parquet = { version = "=0.2.0", path = "amadeus-parquet", optional = tru
 amadeus-postgres = { version = "=0.2.0", path = "amadeus-postgres", optional = true }
 amadeus-serde = { version = "=0.2.0", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
+derive-new = "0.5"
 futures = "0.3"
 num_cpus = "1.13"
 pin-project = "0.4"
@@ -57,7 +58,7 @@ tokio = { version = "0.2", features = ["rt-threaded", "rt-util"] }
 [dev-dependencies]
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
-streaming_algorithms = "0.1"
+streaming_algorithms = { version = "0.1", path = "../streaming_algorithms" }
 tokio = { version = "0.2", features = ["macros"] }
 
 [[example]]
@@ -65,44 +66,69 @@ name = "common_crawl"
 required-features = ["commoncrawl", "constellation"]
 
 [[test]]
-name = "into_dist_stream"
+name = "into_dist_stream_dist"
 harness = false
 
 [[test]]
-name = "panic"
+name = "panic_dist"
 harness = false
 
 [[test]]
-name = "threads"
+name = "threads_dist"
 harness = false
 
 [[test]]
 name = "cloudfront"
+required-features = ["aws"]
+
+[[test]]
+name = "cloudfront_dist"
 harness = false
 required-features = ["aws"]
 
 [[test]]
 name = "commoncrawl"
+required-features = ["commoncrawl"]
+
+[[test]]
+name = "commoncrawl_dist"
 harness = false
 required-features = ["commoncrawl"]
 
 [[test]]
 name = "parquet"
+required-features = ["parquet"]
+
+[[test]]
+name = "parquet_dist"
 harness = false
 required-features = ["parquet"]
 
 [[test]]
 name = "csv"
+required-features = ["csv"]
+
+[[test]]
+name = "csv_dist"
 harness = false
 required-features = ["csv"]
 
 [[test]]
 name = "json"
+required-features = ["json"]
+
+[[test]]
+name = "json_dist"
 harness = false
 required-features = ["json"]
 
 [[test]]
 name = "postgres"
+required-features = ["postgres"]
+test = false # TODO set up postgres on CI
+
+[[test]]
+name = "postgres_dist"
 harness = false
 required-features = ["postgres"]
 test = false # TODO set up postgres on CI
