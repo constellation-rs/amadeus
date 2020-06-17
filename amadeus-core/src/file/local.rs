@@ -204,13 +204,12 @@ impl File for &OsStr {
 // 	}
 // }
 
+// To support converting back to fs::File:
 // https://github.com/vasi/positioned-io/blob/a03c792f5b6f99cb4f72e146befdfc8b1f6e1d28/src/raf.rs
 
 struct LocalFileInner {
 	file: fs::File,
 	len: AtomicU64,
-	#[cfg(windows)]
-	pos: u64,
 }
 pub struct LocalFile {
 	inner: Arc<LocalFileInner>,
@@ -222,36 +221,12 @@ impl LocalFile {
 		Self::from_file(fs::File::open(path)?)
 	}
 
-	#[cfg(unix)]
 	fn from_file(mut file: fs::File) -> io::Result<Self> {
-		let old_pos = file.seek(SeekFrom::Current(0))?;
 		let len = file.seek(SeekFrom::End(0))?;
-		if old_pos != len {
-			file.seek(SeekFrom::Start(old_pos))?;
-		}
 		let len = AtomicU64::new(len);
 		let inner = Arc::new(LocalFileInner { file, len });
 		Ok(Self { inner })
 	}
-
-	#[cfg(windows)]
-	fn from_file(mut file: fs::File) -> io::Result<Self> {
-		let pos = file.seek(SeekFrom::Current(0))?;
-		let len = file.seek(SeekFrom::End(0))?;
-		let len = AtomicU64::new(len);
-		let inner = Arc::new(LocalFileInner { file, len, pos });
-		Ok(Self { inner })
-	}
-
-	// #[cfg(unix)]
-	// fn into_file(self) -> io::Result<fs::File> {
-	// 	Ok(self.file)
-	// }
-
-	// #[cfg(windows)]
-	// fn into_file(mut self) -> io::Result<fs::File> {
-	// 	self.file.seek(SeekFrom::Start(self.pos)).map(|_| self.file)
-	// }
 }
 
 impl From<fs::File> for LocalFile {
@@ -259,11 +234,6 @@ impl From<fs::File> for LocalFile {
 		Self::from_file(file).unwrap()
 	}
 }
-// impl From<LocalFile> for fs::File {
-// 	fn from(file: LocalFile) -> Self {
-// 		file.into_file().unwrap()
-// 	}
-// }
 
 #[cfg(unix)]
 impl LocalFile {
