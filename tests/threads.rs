@@ -8,7 +8,7 @@ use tokio::time::delay_for as sleep;
 use amadeus::dist::prelude::*;
 
 #[tokio::test]
-async fn cloudfront() {
+async fn threads() {
 	let start = SystemTime::now();
 
 	let pool = &ThreadPool::new(None);

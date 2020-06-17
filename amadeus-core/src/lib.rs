@@ -43,23 +43,19 @@ macro_rules! impl_par_dist_rename {
 	}
 }
 macro_rules! rename {
-	([$($_from:ident $_to:ident)*] $($_body:tt)*) => (rename!(@inner [$] [$($_from $_to)*] $($_body)*););
-	(@inner [$d:tt] [$($_from:ident $_to:ident)*] $($_body:tt)*) => (
+	([$($from:ident $to:ident)*] $($body:tt)*) => (rename!(@inner [$] [$($from $to)*] $($body)*););
+	(@inner [$d:tt] [$($from:ident $to:ident)*] $($body:tt)*) => (
 		macro_rules! __rename {
 			$(
-				(@munch [$d ($d done:tt)*] $_from $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* $_to] $d ($d body)*});
+				(@munch [$d ($d done:tt)*] $from $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* $to] $d ($d body)*});
 			)*
-			// (@munch [$d ($d done:tt)*] $d head:expr $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* $d head] $d ($d body)*});
-			// (@munch [$d ($d done:tt)*] $d head:block $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* $d head] $d ($d body)*});
 			(@munch [$d ($d done:tt)*] { $d ($d head:tt)* } $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* { __rename!{$d ($d head)*} }] $d ($d body)*});
-			// (@munch [$d ($d done:tt)*] ( $d ($d head:tt)* ) $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* ( __rename!{$d ($d head)*} )] $d ($d body)*});
-			// (@munch [$d ($d done:tt)*] [ $d ($d head:tt)* ] $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* [ __rename!{$d ($d head)*} ]] $d ($d body)*});
 			(@munch [$d ($d done:tt)*] $d head:tt $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* $d head] $d ($d body)*});
 			(@munch [$d ($d done:tt)*]) => ($d ($d done)*);
 			(@__rename $d i:ident) => ($d i);
 			($d ($d body:tt)*) => (__rename!{@munch [] $d ($d body)*});
 		}
-		__rename!($($_body)*);
+		__rename!($($body)*);
 	);
 }
 

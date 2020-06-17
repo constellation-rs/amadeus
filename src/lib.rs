@@ -51,9 +51,6 @@ pub use crate::{
 	data::{Data, List, Value}, dist_sink::{FromDistributedStream, FromParallelStream}, dist_stream::{DistributedStream, ParallelStream}, into_dist_stream::{IntoDistributedStream, IntoParallelStream, IteratorExt}, source::Source
 };
 
-// pub mod pool {
-// 	pub use amadeus_core::pool::
-
 pub mod dist {
 	pub mod prelude {
 		#[cfg(feature = "constellation")]

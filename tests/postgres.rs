@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use amadeus::dist::prelude::*;
 
 #[tokio::test]
-async fn cloudfront() {
+async fn postgres() {
 	let start = SystemTime::now();
 
 	let pool = &ThreadPool::new(None);

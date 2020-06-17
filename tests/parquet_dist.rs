@@ -1,4 +1,4 @@
-#![type_length_limit = "1319139"]
+#![type_length_limit = "13225240"]
 #![allow(clippy::cognitive_complexity, clippy::type_complexity)]
 
 #[cfg(feature = "constellation")]

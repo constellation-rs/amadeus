@@ -4,7 +4,7 @@ use std::{panic, panic::AssertUnwindSafe, time::SystemTime};
 use amadeus::dist::prelude::*;
 
 #[tokio::test]
-async fn cloudfront() {
+async fn panic() {
 	let start = SystemTime::now();
 
 	let pool = &ThreadPool::new(None);

@@ -3,7 +3,7 @@ use either::Either;
 use amadeus::dist::prelude::*;
 
 #[tokio::test]
-async fn cloudfront() {
+async fn into_dist_stream() {
 	let pool = &ThreadPool::new(None);
 
 	<&[usize] as IntoDistributedStream>::into_dist_stream(&[1, 2, 3])

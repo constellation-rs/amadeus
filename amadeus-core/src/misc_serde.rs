@@ -1,5 +1,4 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-// use serde_json::Error as JsonError;
 use std::{io, sync::Arc};
 
 pub struct Serde<T>(T);
@@ -107,23 +106,6 @@ impl<'de> Deserialize<'de> for Serde<io::Error> {
 			.map(Self)
 	}
 }
-
-// impl Serialize for Serde<&JsonError> {
-// 	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-// 	where
-// 		S: Serializer,
-// 	{
-// 		panic!()
-// 	}
-// }
-// impl<'de> Deserialize<'de> for Serde<JsonError> {
-// 	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-// 	where
-// 		D: Deserializer<'de>,
-// 	{
-// 		panic!()
-// 	}
-// }
 
 pub fn serialize<T, S>(t: &T, serializer: S) -> Result<S::Ok, S::Error>
 where

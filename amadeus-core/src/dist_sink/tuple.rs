@@ -256,10 +256,6 @@ macro_rules! impl_tuple {
 						break Poll::Ready(())
 					}
 					if !progress {
-						// if let Poll::Ready(None) = stream.poll_next(cx) {
-						// 	panic!("xdfwrg");
-						// }
-						let ret = stream.as_mut().poll_next(cx);
 						break Poll::Pending;
 					}
 				}

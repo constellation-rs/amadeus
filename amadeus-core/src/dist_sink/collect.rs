@@ -294,7 +294,7 @@ impl<R: ReducerAsync> ReducerAsync for OptionReducer<R> {
 	fn poll_forward(
 		self: Pin<&mut Self>, _cx: &mut Context, _stream: Pin<&mut impl Stream<Item = Self::Item>>,
 	) -> Poll<()> {
-		todo!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/projects/3#card-40276549");
 		// let self_ = self.project();
 		// match (self_.0, item.is_some()) {
 		// 	(&mut Some(ref mut a), true) => {
@@ -384,7 +384,7 @@ impl<R: ReducerAsync, E> ReducerAsync for ResultReducerAsync<R, E> {
 	fn poll_forward(
 		self: Pin<&mut Self>, _cx: &mut Context, _stream: Pin<&mut impl Stream<Item = Self::Item>>,
 	) -> Poll<()> {
-		todo!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/projects/3#card-40276549");
 		// let self_ = self.project();
 		// match (self_.0, item.is_ok()) {
 		// 	(&mut Ok(ref mut a), true) => {

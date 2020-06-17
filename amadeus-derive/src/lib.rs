@@ -561,7 +561,7 @@ fn impl_tuple_struct(
 		}
 	}
 
-	unimplemented!("#[derive(Data)] on tuple structs not yet implemented")
+	todo!("#[derive(Data)] on tuple structs not yet implemented: Tracking at https://github.com/constellation-rs/amadeus/issues/62")
 }
 
 /// Implement on unit variant enums.
@@ -581,7 +581,7 @@ fn impl_enum(ast: &DeriveInput, data: &DataEnum) -> Result<TokenStream, Error> {
 		}
 	}
 
-	unimplemented!("#[derive(Data)] on enums not yet implemented")
+	todo!("#[derive(Data)] on enums not yet implemented: Tracking at https://github.com/constellation-rs/amadeus/issues/62")
 }
 
 // The below code adapted from https://github.com/serde-rs/serde/tree/c8e39594357bdecb9dfee889dbdfced735033469/serde_derive/src

@@ -3,7 +3,7 @@ use std::{path::PathBuf, time::SystemTime};
 use amadeus::dist::prelude::*;
 
 #[tokio::test]
-async fn cloudfront() {
+async fn json() {
 	let start = SystemTime::now();
 
 	let pool = &ThreadPool::new(None);

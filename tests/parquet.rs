@@ -1,4 +1,4 @@
-#![type_length_limit = "1319139"]
+#![type_length_limit = "13225240"]
 #![allow(clippy::cognitive_complexity, clippy::type_complexity)]
 
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
@@ -6,7 +6,7 @@ use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 use amadeus::dist::prelude::*;
 
 #[tokio::test]
-async fn cloudfront() {
+async fn parquet() {
 	let start = SystemTime::now();
 
 	let pool = &ThreadPool::new(None);
