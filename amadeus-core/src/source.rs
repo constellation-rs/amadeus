@@ -1,10 +1,12 @@
+use std::error::Error;
+
 use crate::{
 	dist_sink::{DistributedSink, ParallelSink}, dist_stream::{DistributedStream, ParallelStream}
 };
 
 pub trait Source {
 	type Item;
-	type Error: std::error::Error;
+	type Error: Error;
 
 	type ParStream: ParallelStream<Item = Result<Self::Item, Self::Error>>;
 	type DistStream: DistributedStream<Item = Result<Self::Item, Self::Error>>;
@@ -15,7 +17,7 @@ pub trait Source {
 
 pub trait Destination {
 	type Item;
-	type Error: std::error::Error;
+	type Error: Error;
 
 	type ParSink: ParallelSink<Self::Item>;
 	type DistSink: DistributedSink<Self::Item>;

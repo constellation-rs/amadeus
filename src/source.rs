@@ -5,7 +5,7 @@ use derive_new::new;
 use futures::pin_mut;
 use pin_project::pin_project;
 use std::{
-	marker::PhantomData, pin::Pin, task::{Context, Poll}
+	error::Error, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
 use crate::{
@@ -36,7 +36,7 @@ pub use amadeus_serde::{self as serde, Csv, Json};
 
 pub trait Source {
 	type Item: crate::data::Data;
-	type Error: std::error::Error;
+	type Error: Error;
 
 	type ParStream: ParallelStream<Item = Result<Self::Item, Self::Error>>;
 	type DistStream: DistributedStream<Item = Result<Self::Item, Self::Error>>;
@@ -47,7 +47,7 @@ pub trait Source {
 
 pub trait Destination {
 	type Item: crate::data::Data;
-	type Error: std::error::Error;
+	type Error: Error;
 
 	type ParSink: ParallelSink<Self::Item, Output = Result<(), Self::Error>>;
 	type DistSink: DistributedSink<Self::Item, Output = Result<(), Self::Error>>;
