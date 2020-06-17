@@ -152,76 +152,20 @@ impl<'a, A: Hash + Eq + Clone + Debug, C: Ord + Debug + 'a> Debug for TopIter<'a
 	}
 }
 
-/// For the result of a `std::iter::sum()` when an additive identity (i.e. zero) can't be constructed (in the case where we're summing an empty iterator).
-#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
-pub enum Zeroable<T> {
-	/// Zero
-	Zero,
-	/// Nonzero
-	Nonzero(T),
-}
-#[allow(clippy::missing_errors_doc)]
-impl<T> Zeroable<T> {
-	/// Transform to a `Result<T, E>`.
-	pub fn ok_or<E>(self, err: E) -> Result<T, E> {
-		match self {
-			Zeroable::Nonzero(v) => Ok(v),
-			Zeroable::Zero => Err(err),
-		}
-	}
-	/// Converts to an `Option<T>`.
-	pub fn nonzero(self) -> Option<T> {
-		match self {
-			Zeroable::Nonzero(v) => Some(v),
-			Zeroable::Zero => None,
-		}
-	}
-}
-impl<T> From<Option<T>> for Zeroable<T> {
-	fn from(a: Option<T>) -> Self {
-		match a {
-			Some(a) => Zeroable::Nonzero(a),
-			None => Zeroable::Zero,
-		}
-	}
-}
-impl<T> iter::Sum for Zeroable<T>
-where
-	Self: iter::Sum<T>,
-{
-	fn sum<I>(iter: I) -> Self
-	where
-		I: Iterator<Item = Self>,
-	{
-		iter.filter_map(|item| {
-			if let Zeroable::Nonzero(item) = item {
-				Some(item)
-			} else {
-				None
-			}
-		})
-		.sum()
-	}
-}
-
 impl<
 		A: Hash + Eq + Clone,
 		C: Ord + New + Clone + for<'a> ops::AddAssign<&'a C> + for<'a> UnionAssign<&'a C> + Intersect,
-	> iter::Sum<Top<A, C>> for Zeroable<Top<A, C>>
+	> iter::Sum<Top<A, C>> for Option<Top<A, C>>
 {
 	fn sum<I>(mut iter: I) -> Self
 	where
 		I: Iterator<Item = Top<A, C>>,
 	{
-		let mut total = if let Some(total) = iter.next() {
-			total
-		} else {
-			return Zeroable::Zero;
-		};
+		let mut total = iter.next()?;
 		for sample in iter {
 			total += sample;
 		}
-		Zeroable::Nonzero(total)
+		Some(total)
 	}
 }
 impl<
