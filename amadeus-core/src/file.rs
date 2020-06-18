@@ -1,3 +1,5 @@
+// TODO: Use WTF-8 rather than UTF-16
+
 #![allow(clippy::type_complexity)]
 
 mod local;
@@ -6,8 +8,9 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, ready};
 use pin_project::pin_project;
 use std::{
-	convert::TryFrom, error::Error, fmt, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
+	convert::TryFrom, error::Error, ffi, fmt, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
 };
+use widestring::U16String;
 
 use crate::pool::ProcessSend;
 
@@ -15,100 +18,169 @@ pub use local::LocalFile;
 
 const PAGE_SIZE: usize = 10 * 1024 * 1024; // `Reader` reads this many bytes at a time
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct OsString {
+	buf: U16String,
+}
+impl OsString {
+	pub fn new() -> Self {
+		Self {
+			buf: U16String::new(),
+		}
+	}
+	pub fn to_string_lossy(&self) -> String {
+		self.buf.to_string_lossy()
+	}
+	pub fn display<'a>(&'a self) -> impl fmt::Display + 'a {
+		struct Display<'a>(&'a OsString);
+		impl<'a> fmt::Display for Display<'a> {
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				self.0.to_string_lossy().fmt(f)
+			}
+		}
+		Display(self)
+	}
+}
+impl From<Vec<u8>> for OsString {
+	fn from(from: Vec<u8>) -> Self {
+		Self {
+			buf: String::from_utf8(from)
+				.expect("Not yet imlemented: Handling non-UTF-8")
+				.into(),
+		} // TODO
+	}
+}
+impl From<String> for OsString {
+	fn from(from: String) -> Self {
+		Self { buf: from.into() }
+	}
+}
+impl From<&str> for OsString {
+	fn from(from: &str) -> Self {
+		Self {
+			buf: U16String::from_str(from),
+		}
+	}
+}
+impl From<ffi::OsString> for OsString {
+	fn from(from: ffi::OsString) -> Self {
+		Self {
+			buf: U16String::from_os_str(&from),
+		}
+	}
+}
+impl From<&ffi::OsStr> for OsString {
+	fn from(from: &ffi::OsStr) -> Self {
+		Self {
+			buf: U16String::from_os_str(from),
+		}
+	}
+}
+pub struct InvalidOsString;
+impl TryFrom<OsString> for ffi::OsString {
+	type Error = InvalidOsString;
+
+	fn try_from(from: OsString) -> Result<Self, Self::Error> {
+		Ok(from.buf.to_os_string()) // TODO: this is lossy but it should error
+	}
+}
+impl PartialEq<Vec<u8>> for OsString {
+	fn eq(&self, other: &Vec<u8>) -> bool {
+		self == &OsString::from(other.clone())
+	}
+}
+impl PartialEq<String> for OsString {
+	fn eq(&self, other: &String) -> bool {
+		self == &OsString::from(other.clone())
+	}
+}
+impl PartialEq<str> for OsString {
+	fn eq(&self, other: &str) -> bool {
+		self == &OsString::from(other)
+	}
+}
+impl PartialEq<ffi::OsString> for OsString {
+	fn eq(&self, other: &ffi::OsString) -> bool {
+		self == &OsString::from(other.clone())
+	}
+}
+impl PartialEq<ffi::OsStr> for OsString {
+	fn eq(&self, other: &ffi::OsStr) -> bool {
+		self == &OsString::from(other)
+	}
+}
+impl fmt::Debug for OsString {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.display())
+	}
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct PathBuf {
-	wide: bool, // for if the Vec<u8> is actually utf16
-	components: Vec<Vec<u8>>,
-	file_name: Option<Vec<u8>>,
+	components: Vec<OsString>,
+	file_name: Option<OsString>,
 }
 impl PathBuf {
 	pub fn new() -> Self {
 		Self {
-			wide: false,
-			components: Vec::new(),
-			file_name: None,
-		}
-	}
-	pub fn new_wide() -> Self {
-		Self {
-			wide: true,
 			components: Vec::new(),
 			file_name: None,
 		}
 	}
 	pub fn push<S>(&mut self, component: S)
 	where
-		S: Into<Vec<u8>>,
+		S: Into<OsString>,
 	{
 		assert!(self.file_name.is_none());
 		self.components.push(component.into());
 	}
-	pub fn pop(&mut self) -> Option<Vec<u8>> {
+	pub fn pop(&mut self) -> Option<OsString> {
 		assert!(self.file_name.is_none());
 		self.components.pop()
 	}
-	pub fn last(&self) -> Option<String> {
+	pub fn last(&self) -> Option<&OsString> {
 		assert!(self.file_name.is_none());
-		self.components
-			.last()
-			.map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+		self.components.last()
 	}
 	pub fn set_file_name<S>(&mut self, file_name: Option<S>)
 	where
-		S: Into<Vec<u8>>,
+		S: Into<OsString>,
 	{
 		self.file_name = file_name.map(Into::into);
 	}
 	pub fn is_file(&self) -> bool {
 		self.file_name.is_some()
 	}
-	pub fn file_name(&self) -> Option<String> {
-		self.file_name
-			.as_ref()
-			.map(|file_name| String::from_utf8_lossy(file_name).into_owned())
+	pub fn file_name(&self) -> Option<&OsString> {
+		self.file_name.as_ref()
 	}
 	pub fn depth(&self) -> usize {
 		self.components.len()
 	}
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
-		self.components
-			.iter()
-			.map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+	pub fn iter<'a>(&'a self) -> impl Iterator<Item = &OsString> + 'a {
+		self.components.iter()
 	}
-}
-impl Default for PathBuf {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-impl fmt::Display for PathBuf {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let mut res: fmt::Result = self
-			.iter()
-			.map(|component| write!(f, "{}/", component))
-			.collect();
-		if let Some(file_name) = self.file_name() {
-			res = res.and_then(|()| write!(f, "{}", file_name));
+	pub fn display<'a>(&'a self) -> impl fmt::Display + 'a {
+		struct Display<'a>(&'a PathBuf);
+		impl<'a> fmt::Display for Display<'a> {
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				let mut res: fmt::Result = self
+					.0
+					.iter()
+					.map(|component| write!(f, "{}/", component.to_string_lossy()))
+					.collect();
+				if let Some(file_name) = self.0.file_name() {
+					res = res.and_then(|()| write!(f, "{}", file_name.to_string_lossy()));
+				}
+				res
+			}
 		}
-		res
+		Display(self)
 	}
 }
 impl fmt::Debug for PathBuf {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		fmt::Debug::fmt(&self.to_string(), f)
-	}
-}
-impl PartialEq<str> for PathBuf {
-	fn eq(&self, other: &str) -> bool {
-		let mut vec: Vec<u8> = Vec::new();
-		for component in self.components.iter() {
-			vec.extend(component);
-			vec.push(b'/');
-		}
-		if let Some(file_name) = &self.file_name {
-			vec.extend(file_name);
-		}
-		&*vec == other.as_bytes()
+		write!(f, "{}", self.display())
 	}
 }
 

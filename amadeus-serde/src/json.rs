@@ -7,7 +7,7 @@ use std::{
 };
 
 use amadeus_core::{
-	file::{File, Page, Partition}, into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::{DistParStream, ResultExpandIter}, Source
+	file::{File, Page, Partition}, into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, ResultExpandIter}, Source
 };
 
 use super::{SerdeData, SerdeDeserialize};
@@ -47,9 +47,11 @@ where
 	>;
 
 	#[cfg(not(feature = "doc"))]
-	type ParStream = impl ParallelStream<Item = Result<Self::Item, Self::Error>>;
+	type ParStream =
+		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type ParStream = amadeus_core::util::ImplParallelStream<Result<Self::Item, Self::Error>>;
+	type ParStream =
+		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
 	#[cfg(not(feature = "doc"))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
@@ -73,7 +75,7 @@ where
 				)
 				.flat_map(|page| {
 					async move {
-						let mut buf = Vec::new();
+						let mut buf = Vec::with_capacity(10 * 1024 * 1024);
 						let reader = Page::reader(page);
 						pin_mut!(reader);
 						let buf = PassError::new(

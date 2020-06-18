@@ -11,7 +11,7 @@ use serde_closure::*;
 use std::{io, time};
 
 use amadeus_core::{
-	into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::DistParStream, Source
+	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::DistParStream, Source
 };
 use amadeus_types::Webpage;
 
@@ -59,9 +59,11 @@ impl Source for CommonCrawl {
 	type Error = io::Error;
 
 	#[cfg(not(feature = "doc"))]
-	type ParStream = impl ParallelStream<Item = Result<Self::Item, Self::Error>>;
+	type ParStream =
+		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type ParStream = amadeus_core::util::ImplParallelStream<Result<Self::Item, Self::Error>>;
+	type ParStream =
+		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
 	#[cfg(not(feature = "doc"))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]

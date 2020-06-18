@@ -62,7 +62,7 @@ impl PostgresData for Bson {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -71,7 +71,7 @@ impl PostgresData for Json {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -80,7 +80,7 @@ impl PostgresData for Enum {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -89,7 +89,7 @@ impl PostgresData for Url {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -98,7 +98,7 @@ impl PostgresData for Webpage<'static> {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -107,7 +107,7 @@ impl PostgresData for IpAddr {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -116,16 +116,16 @@ impl PostgresData for Decimal {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
 impl PostgresData for Group {
 	fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -134,12 +134,12 @@ where
 	T: PostgresData,
 {
 	default fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 	default fn decode(
 		_type_: &Type, _buf: Option<&[u8]>,
 	) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 /// BYTEA
@@ -148,7 +148,7 @@ impl PostgresData for List<u8> {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -159,10 +159,10 @@ where
 	S: BuildHasher + Clone + 'static,
 {
 	fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -171,7 +171,7 @@ impl PostgresData for Date {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -193,7 +193,7 @@ impl PostgresData for Time {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -244,16 +244,16 @@ impl PostgresData for Timezone {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
 impl PostgresData for Value {
 	fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
 
@@ -270,7 +270,7 @@ macro_rules! array {
 			fn decode(
 				_type_: &Type, _buf: Option<&[u8]>,
 			) -> Result<Self, Box<dyn Error + Sync + Send>> {
-				unimplemented!()
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 			}
 		}
 
@@ -283,7 +283,7 @@ macro_rules! array {
 			fn decode(
 				_type_: &Type, _buf: Option<&[u8]>,
 			) -> Result<Self, Box<dyn Error + Sync + Send>> {
-				unimplemented!()
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 			}
 		}
 	)*};
@@ -295,10 +295,10 @@ macro_rules! tuple {
 	($len:tt $($t:ident $i:tt)*) => (
 		impl<$($t,)*> PostgresData for ($($t,)*) where $($t: PostgresData,)* {
 			fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
-				unimplemented!()
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 			}
 			fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
-				unimplemented!()
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 			}
 		}
 	);

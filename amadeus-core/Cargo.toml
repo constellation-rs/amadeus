@@ -36,3 +36,4 @@ serde_closure = "0.2"
 streaming_algorithms = "0.2"
 sum = { version = "0.1", features = ["serde"] }
 walkdir = "2.2"
+widestring = "0.4"

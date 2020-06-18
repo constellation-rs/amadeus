@@ -99,34 +99,16 @@ impl Directory for &Path {
 					return true;
 				}
 				let mut path = path.strip_prefix(self).unwrap();
-				let mut path_buf = if !cfg!(windows) {
-					super::PathBuf::new()
-				} else {
-					super::PathBuf::new_wide()
-				};
+				let mut path_buf = super::PathBuf::new();
 				let mut file_name = None;
-				#[cfg(unix)]
-				let into = |osstr: &OsStr| -> Vec<u8> {
-					std::os::unix::ffi::OsStrExt::as_bytes(osstr).to_owned()
-				};
-				#[cfg(windows)]
-				let into = |osstr: &OsStr| -> Vec<u8> {
-					std::os::windows::ffi::OsStrExt::encode_wide(osstr)
-						.flat_map(|char| {
-							let char = char.to_be();
-							std::iter::once(u8::try_from(char >> 8).unwrap())
-								.chain(std::iter::once(u8::try_from(char & 0xff).unwrap()))
-						})
-						.collect()
-				};
 				if !is_dir {
 					file_name = Some(path.file_name().unwrap());
 					path = path.parent().unwrap();
 				}
 				for component in path {
-					path_buf.push(into(component));
+					path_buf.push(component);
 				}
-				path_buf.set_file_name(file_name.map(into));
+				path_buf.set_file_name(file_name);
 				f(&path_buf)
 			})
 			.filter_map(|e| match e {

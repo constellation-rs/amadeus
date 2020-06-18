@@ -9,7 +9,7 @@ use std::{
 use crate::par_stream::{DistributedStream, ParallelStream};
 #[cfg(feature = "doc")]
 use crate::{
-	par_stream::{DistributedStream, StreamTask, StreamTaskAsync}, sink::Sink
+	par_stream::{StreamTask, StreamTaskAsync}, sink::Sink
 };
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
@@ -110,30 +110,40 @@ where
 	}
 }
 
-impl_par_dist_rename! {
-	#[cfg(feature = "doc")]
-	#[doc(hidden)]
-	pub struct ImplParallelStream<T>(PhantomData<fn() -> T>);
-	#[cfg(feature = "doc")]
-	impl<T> ImplParallelStream<T> {
-		pub fn new<U>(_drop: U) -> Self
-		where
-			U: ParallelStream<Item = T>,
-		{
-			Self(PhantomData)
-		}
+#[cfg(feature = "doc")]
+#[doc(hidden)]
+pub struct ImplDistributedStream<T>(PhantomData<fn() -> T>);
+#[cfg(feature = "doc")]
+impl<T> ImplDistributedStream<T> {
+	pub fn new<U>(_drop: U) -> Self
+	where
+		U: DistributedStream<Item = T>,
+	{
+		Self(PhantomData)
 	}
-	#[cfg(feature = "doc")]
-	impl<T: 'static> ParallelStream for ImplParallelStream<T> {
-		type Item = T;
-		type Task = ImplTask<T>;
+}
+#[cfg(feature = "doc")]
+impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
+	type Item = T;
+	type Task = ImplTask<T>;
 
-		fn size_hint(&self) -> (usize, Option<usize>) {
-			unreachable!()
-		}
-		fn next_task(&mut self) -> Option<Self::Task> {
-			unreachable!()
-		}
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		unreachable!()
+	}
+	fn next_task(&mut self) -> Option<Self::Task> {
+		unreachable!()
+	}
+}
+#[cfg(feature = "doc")]
+impl<T: 'static> ParallelStream for ImplDistributedStream<T> {
+	type Item = T;
+	type Task = ImplTask<T>;
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		unreachable!()
+	}
+	fn next_task(&mut self) -> Option<Self::Task> {
+		unreachable!()
 	}
 }
 

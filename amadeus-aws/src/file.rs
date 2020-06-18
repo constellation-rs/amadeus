@@ -73,11 +73,10 @@ impl Directory for S3Directory {
 				let file_name = path.pop().unwrap();
 				skip = skip
 					&& path.len() >= current_path.depth()
-					&& path
+					&& current_path.iter().eq(path
 						.iter()
 						.take(current_path.depth())
-						.copied()
-						.eq(current_path.iter());
+						.copied());
 				if skip {
 					return false;
 				}

@@ -23,7 +23,7 @@ use std::{
 };
 
 use amadeus_core::{
-	into_par_stream::IntoDistributedStream, par_stream::{DistributedStream, ParallelStream}, util::{DistParStream, IoError}, Source as DSource
+	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, IoError}, Source as DSource
 };
 
 const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
@@ -205,9 +205,11 @@ where
 	type Error = PostgresError;
 
 	#[cfg(not(feature = "doc"))]
-	type ParStream = impl ParallelStream<Item = Result<Self::Item, Self::Error>>;
+	type ParStream =
+		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
-	type ParStream = amadeus_core::util::ImplParallelStream<Result<Self::Item, Self::Error>>;
+	type ParStream =
+		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
 	#[cfg(not(feature = "doc"))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
