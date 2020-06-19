@@ -21,7 +21,7 @@ async fn cloudfront() {
 	.await
 	.unwrap();
 
-	let ((), (count, count2)) = rows
+	let ((), (count, count2, ())) = rows
 		.par_stream()
 		.pipe_fork(
 			pool,
@@ -30,9 +30,9 @@ async fn cloudfront() {
 				// println!("{:?}", x.url);
 			}),
 			(
-				Identity.map(|_: &Result<_, _>| ()).count(),
-				Identity.cloned().count(),
-				// Identity.for_each(|_: &Result<_, _>| ())
+				Identity.map(|_: &_| ()).count(),
+				Identity.count(),
+				Identity.for_each(|_: &_| ()),
 			),
 		)
 		.await;

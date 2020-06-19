@@ -45,7 +45,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	.await
 	.unwrap();
 
-	let ((), (count, count2)) = rows
+	let ((), (count, count2, ())) = rows
 		.dist_stream()
 		.pipe_fork(
 			pool,
@@ -54,9 +54,9 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				// println!("{:?}", x.url);
 			})),
 			(
-				Identity.map(FnMut!(|_x: &Result<_, _>| ())).count(),
-				Identity.cloned().count(),
-				// Identity.for_each(FnMut!(|_: &Result<_, _>| ()))
+				Identity.map(FnMut!(|_: &_| ())).count(),
+				Identity.count(),
+				Identity.for_each(FnMut!(|_: &_| ())),
 			),
 		)
 		.await;

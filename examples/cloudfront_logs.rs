@@ -13,14 +13,14 @@
 //! ```
 
 use amadeus::prelude::*;
-use data::CloudfrontRow;
+// use data::CloudfrontRow;
 
 #[allow(unreachable_code)]
 #[tokio::main]
 async fn main() {
-	let pool = &ThreadPool::new(None).unwrap();
+	let _pool = &ThreadPool::new(None).unwrap();
 
-	let rows = Cloudfront::new_with(
+	let _rows = Cloudfront::new_with(
 		AwsRegion::UsEast1,
 		"us-east-1.data-analytics",
 		"cflogworkshop/raw/cf-accesslogs/",

@@ -1,5 +1,9 @@
 #![type_length_limit = "13225240"]
-#![allow(clippy::cognitive_complexity, clippy::type_complexity)]
+#![allow(
+	clippy::cognitive_complexity,
+	clippy::type_complexity,
+	clippy::suspicious_map
+)]
 
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 

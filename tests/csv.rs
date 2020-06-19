@@ -1,3 +1,5 @@
+#![allow(clippy::suspicious_map)]
+
 use std::{path::PathBuf, time::SystemTime};
 
 use amadeus::prelude::*;
