@@ -1,3 +1,8 @@
+// TODO:
+// Check types? These might work??
+// select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
+// select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;
+
 #![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.0")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
@@ -18,7 +23,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_stream::DistributedStream, into_dist_stream::IntoDistributedStream, util::IoError, Source as DSource
+	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, IoError}, Source as DSource
 };
 
 const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
@@ -79,8 +84,8 @@ impl str::FromStr for Table {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		if s.contains(&['"', '.', '\0'] as &[char]) {
-			unimplemented!(
-				"Table parsing not yet implemented. Construct it with Table::new instead"
+			todo!(
+				"Table parsing not yet implemented. Construct it with Table::new instead. Tracking at https://github.com/constellation-rs/amadeus/issues/63"
 			);
 		}
 		Ok(Self {
@@ -106,7 +111,10 @@ impl From<ConnectParams> for postgres::config::Config {
 		for host in from.hosts {
 			let _ = match host {
 				Host::Tcp(addr) => config.host(&addr.to_string()),
+				#[cfg(unix)]
 				Host::Unix(path) => config.host_path(&path),
+				#[cfg(not(unix))]
+				Host::Unix(path) => config.host(path.to_str().unwrap()),
 			};
 		}
 		for port in from.ports {
@@ -161,6 +169,7 @@ impl From<postgres::config::Host> for Host {
 	fn from(from: postgres::config::Host) -> Self {
 		match from {
 			postgres::config::Host::Tcp(addr) => Host::Tcp(addr),
+			#[cfg(unix)]
 			postgres::config::Host::Unix(path) => Host::Unix(path),
 		}
 	}
@@ -196,10 +205,19 @@ where
 	type Error = PostgresError;
 
 	#[cfg(not(feature = "doc"))]
+	type ParStream =
+		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type ParStream =
+		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
+	#[cfg(not(feature = "doc"))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
+	fn par_stream(self) -> Self::ParStream {
+		DistParStream::new(self.dist_stream())
+	}
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
 		let ret = self
@@ -210,7 +228,7 @@ where
 				let (client, connection) = postgres::config::Config::from(config)
 					.connect(postgres::tls::NoTls)
 					.await
-					.unwrap();
+					.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
 				tokio::spawn(async move {
 					let _ = connection.await;
 				});
@@ -227,15 +245,15 @@ where
 							DisplayFmt::new(|f| Row::query(f, None)),
 							table
 						);
-						let stmt = client.prepare(&query).await.unwrap();
-						let stream = client.copy_out(&stmt).await.unwrap();
+						let stmt = client.prepare(&query).await.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
+						let stream = client.copy_out(&stmt).await.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
 						BinaryCopyOutStream::new(stream)
 							.map_ok(|row| {
 								Row::decode(
 									&postgres::types::Type::RECORD,
 									row.as_ref().map(|bytes| bytes.as_ref()),
 								)
-								.unwrap()
+								.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 							})
 							.map_err(Into::into)
 					}
@@ -249,8 +267,8 @@ where
 	}
 }
 
-#[pin_project]
 /// A stream of rows deserialized from the PostgreSQL binary copy format.
+#[pin_project]
 pub struct BinaryCopyOutStream {
 	#[pin]
 	stream: CopyOutStream,
@@ -394,9 +412,6 @@ impl<'a> Display for Names<'a> {
 		EscapeIdentifier(self.1).fmt(f)
 	}
 }
-
-// select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
-// select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PostgresError {

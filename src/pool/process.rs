@@ -131,7 +131,7 @@ impl ProcessPoolInner {
 							let receiver = Receiver::<Option<Request>>::new(parent);
 							let sender = Sender::<Result<Response, Panicked>>::new(parent);
 
-							let thread_pool = ThreadPool::new(tasks_per_core);
+							let thread_pool = ThreadPool::new(tasks_per_core).unwrap();
 
 							while let Some(work) = receiver.recv().await.unwrap() {
 								let ret = panic::catch_unwind(panic::AssertUnwindSafe(|| {
@@ -184,9 +184,9 @@ impl ProcessPoolInner {
 	}
 	async fn spawn<F, Fut, T>(&self, work: F) -> Result<T, Panicked>
 	where
-		F: FnOnce(&ThreadPool) -> Fut + ProcessSend,
+		F: FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: ProcessSend,
+		T: ProcessSend + 'static,
 	{
 		let process_index = self.i.get();
 		let process = &self.processes[process_index];
@@ -272,9 +272,9 @@ impl ProcessPool {
 	}
 	pub fn spawn<F, Fut, T>(&self, work: F) -> impl Future<Output = Result<T, Panicked>> + Send
 	where
-		F: FnOnce(&ThreadPool) -> Fut + ProcessSend,
+		F: FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: ProcessSend,
+		T: ProcessSend + 'static,
 	{
 		let inner = self.0.clone();
 		async move { inner.spawn(work).await }

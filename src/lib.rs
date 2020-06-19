@@ -6,7 +6,7 @@
 
 #![doc(html_root_url = "https://docs.rs/amadeus/0.2.0")]
 #![doc(
-	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
+	html_logo_url = "https://raw.githubusercontent.com/constellation-rs/amadeus/master/logo.svg?sanitize=true"
 )]
 #![feature(specialization)]
 #![warn(
@@ -44,13 +44,33 @@ pub mod data;
 pub mod pool;
 pub mod source;
 
-pub use amadeus_core::{dist_pipe, dist_sink, dist_stream, into_dist_stream};
+pub use amadeus_core::{into_par_stream, par_pipe, par_sink, par_stream};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, List, Value}, dist_sink::FromDistributedStream, dist_stream::DistributedStream, into_dist_stream::{IntoDistributedStream, IteratorExt}, source::Source
+	data::{Data, List, Value}, into_par_stream::{IntoDistributedStream, IntoParallelStream, IteratorExt}, par_sink::{FromDistributedStream, FromParallelStream}, par_stream::{DistributedStream, ParallelStream}, source::Source
 };
 
+pub mod dist {
+	pub mod prelude {
+		#[cfg(feature = "constellation")]
+		#[doc(no_inline)]
+		pub use super::super::pool::ProcessPool;
+		#[cfg(feature = "aws")]
+		#[doc(no_inline)]
+		pub use super::super::source::aws::{
+			AwsCredentials, AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File
+		};
+		#[doc(no_inline)]
+		pub use super::super::{
+			data, data::{
+				Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
+			}, par_pipe::DistributedPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
+		};
+		#[doc(no_inline)]
+		pub use serde_closure::{Fn, FnMut, FnOnce};
+	}
+}
 pub mod prelude {
 	#[cfg(feature = "constellation")]
 	#[doc(no_inline)]
@@ -64,8 +84,6 @@ pub mod prelude {
 	pub use super::{
 		data, data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
-		}, dist_pipe::DistributedPipe, dist_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
+		}, par_pipe::ParallelPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
 	};
-	#[doc(no_inline)]
-	pub use serde_closure::{Fn, FnMut, FnOnce};
 }

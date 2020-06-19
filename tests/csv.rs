@@ -1,39 +1,14 @@
-#[cfg(feature = "constellation")]
-use constellation::*;
-use std::{
-	path::PathBuf, time::{Duration, SystemTime}
-};
+#![allow(clippy::suspicious_map)]
+
+use std::{path::PathBuf, time::SystemTime};
 
 use amadeus::prelude::*;
 
-fn main() {
-	#[cfg(feature = "constellation")]
-	init(Resources::default());
-
-	tokio::runtime::Builder::new()
-		.threaded_scheduler()
-		.enable_all()
-		.build()
-		.unwrap()
-		.block_on(async {
-			let thread_pool_time = {
-				let thread_pool = ThreadPool::new(None);
-				run(&thread_pool).await
-			};
-			#[cfg(feature = "constellation")]
-			let process_pool_time = {
-				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
-				run(&process_pool).await
-			};
-			#[cfg(not(feature = "constellation"))]
-			let process_pool_time = "-";
-
-			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
-		})
-}
-
-async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+#[tokio::test]
+async fn csv() {
 	let start = SystemTime::now();
+
+	let pool = &ThreadPool::new(None).unwrap();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct GameDerived {
@@ -49,8 +24,8 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		.await
 		.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		100_000
@@ -70,17 +45,17 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		.await
 		.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				// println!("{:?}", value);
 				let _: GameDerived2 = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		100_000
 	);
 
-	start.elapsed().unwrap()
+	println!("in {:?}", start.elapsed().unwrap());
 }

@@ -73,11 +73,10 @@ impl Directory for S3Directory {
 				let file_name = path.pop().unwrap();
 				skip = skip
 					&& path.len() >= current_path.depth()
-					&& path
+					&& current_path.iter().eq(path
 						.iter()
 						.take(current_path.depth())
-						.copied()
-						.eq(current_path.iter());
+						.copied());
 				if skip {
 					return false;
 				}
@@ -232,7 +231,7 @@ impl Page for S3Page {
 		self.inner.len
 	}
 	fn set_len(&self, _len: u64) -> Result<(), Self::Error> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/61")
 	}
 	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
 		let self_ = S3Page {
@@ -281,6 +280,6 @@ impl Page for S3Page {
 		})
 	}
 	fn write(&self, _offset: u64, _buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>> {
-		unimplemented!()
+		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/61")
 	}
 }

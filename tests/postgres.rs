@@ -1,37 +1,14 @@
-#[cfg(feature = "constellation")]
-use constellation::*;
-use std::time::{Duration, SystemTime};
+#![allow(clippy::suspicious_map)]
+
+use std::time::SystemTime;
 
 use amadeus::prelude::*;
 
-fn main() {
-	#[cfg(feature = "constellation")]
-	init(Resources::default());
-
-	tokio::runtime::Builder::new()
-		.threaded_scheduler()
-		.enable_all()
-		.build()
-		.unwrap()
-		.block_on(async {
-			let thread_pool_time = {
-				let thread_pool = ThreadPool::new(None);
-				run(&thread_pool, 2).await
-			};
-			#[cfg(feature = "constellation")]
-			let process_pool_time = {
-				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
-				run(&process_pool, processes * 2).await
-			};
-			#[cfg(not(feature = "constellation"))]
-			let process_pool_time = "-";
-
-			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
-		})
-}
-
-async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Duration {
+#[tokio::test]
+async fn postgres() {
 	let start = SystemTime::now();
+
+	let pool = &ThreadPool::new(None).unwrap();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct Weather {
@@ -57,8 +34,8 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Dura
 		)],
 	)]);
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(&pool)
 			.await,
 		4
@@ -73,16 +50,16 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P, tasks: usize) -> Dura
 	// 	)],
 	// )]);
 	// assert_eq!(
-	// 	rows.dist_stream()
-	// 		.map(FnMut!(|row: Result<Value, _>| -> Value {
+	// 	rows.par_stream()
+	// 		.map(|row: Result<Value, _>| -> Value {
 	// 			let value = row.unwrap();
 	// 			// println!("{:?}", value);
 	// 			// let _: GameDerived = value.clone().downcast().unwrap();
 	// 			value
-	// 		}))
+	// 		})
 	// 		.count(&pool).await,
 	// 	4
 	// );
 
-	start.elapsed().unwrap()
+	println!("in {:?}", start.elapsed().unwrap());
 }

@@ -4,8 +4,8 @@ use std::{
 	error::Error, future::Future, panic::{RefUnwindSafe, UnwindSafe}
 };
 
-pub trait ProcessSend: Send + Serialize + for<'de> Deserialize<'de> + 'static {}
-impl<T: ?Sized> ProcessSend for T where T: Send + Serialize + for<'de> Deserialize<'de> + 'static {}
+pub trait ProcessSend: Send + Serialize + for<'de> Deserialize<'de> {}
+impl<T: ?Sized> ProcessSend for T where T: Send + Serialize + for<'de> Deserialize<'de> {}
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
@@ -15,9 +15,9 @@ pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin 
 	fn processes(&self) -> usize;
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
+		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: ProcessSend;
+		T: ProcessSend + 'static;
 }
 
 pub trait ThreadPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
@@ -40,9 +40,9 @@ where
 	}
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
+		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: ProcessSend,
+		T: ProcessSend + 'static,
 	{
 		(*self).spawn(work)
 	}

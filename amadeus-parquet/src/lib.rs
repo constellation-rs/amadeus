@@ -21,7 +21,7 @@ use std::{
 };
 
 use amadeus_core::{
-	dist_stream::DistributedStream, file::{Directory, File, Page, Partition, PathBuf}, into_dist_stream::IntoDistributedStream, util::ResultExpandIter, Source
+	file::{Directory, File, Page, Partition, PathBuf}, into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, ResultExpandIter}, Source
 };
 
 pub use internal::record::ParquetData;
@@ -69,10 +69,19 @@ where
 	>;
 
 	#[cfg(not(feature = "doc"))]
+	type ParStream =
+		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
+	#[cfg(feature = "doc")]
+	type ParStream =
+		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
+	#[cfg(not(feature = "doc"))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 	#[cfg(feature = "doc")]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
+	fn par_stream(self) -> Self::ParStream {
+		DistParStream::new(self.dist_stream())
+	}
 	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
 		let ret = self
@@ -88,7 +97,7 @@ where
 				)
 				.flat_map(|page| {
 					async move {
-						let mut buf = Vec::new();
+						let mut buf = Vec::with_capacity(10 * 1024 * 1024);
 						let reader = Page::reader(page);
 						pin_mut!(reader);
 						let buf = PassError::new(
@@ -162,11 +171,12 @@ where
 			.partitions_filter(|path| {
 				let skip;
 				if !path.is_file() {
-					let dir_name = path.last().unwrap();
+					let dir_name = path.last().unwrap().to_string_lossy();
+
 					skip = dir_name.starts_with('.') // Hidden files
 						|| (dir_name.starts_with('_') && !dir_name.contains('=')) // ARROW-1079: Filter out "private" directories starting with underscore;
 				} else {
-					let file_name = path.file_name().unwrap();
+					let file_name = path.file_name().unwrap().to_string_lossy();
 					let extension = file_name.rfind('.').map(|offset| &file_name[offset + 1..]);
 					skip = file_name.starts_with('.') // Hidden files
 							|| file_name == "_metadata" || file_name == "_common_metadata" // Summary metadata

@@ -99,38 +99,16 @@ impl Directory for &Path {
 					return true;
 				}
 				let mut path = path.strip_prefix(self).unwrap();
-				let mut path_buf = if !cfg!(windows) {
-					super::PathBuf::new()
-				} else {
-					super::PathBuf::new_wide()
-				};
+				let mut path_buf = super::PathBuf::new();
 				let mut file_name = None;
-				#[cfg(unix)]
-				let into = |osstr: &OsStr| -> Vec<u8> {
-					std::os::unix::ffi::OsStrExt::as_bytes(osstr).to_owned()
-				};
-				#[cfg(windows)]
-				let into = |osstr: &OsStr| -> Vec<u8> {
-					std::os::windows::ffi::OsStrExt::encode_wide(osstr)
-						.flat_map(|char| {
-							let char = char.to_be();
-							[
-								u8::try_from(char >> 8).unwrap(),
-								u8::try_from(char & 0xff).unwrap(),
-							]
-							.iter()
-							.copied()
-						})
-						.collect()
-				};
 				if !is_dir {
 					file_name = Some(path.file_name().unwrap());
 					path = path.parent().unwrap();
 				}
 				for component in path {
-					path_buf.push(into(component));
+					path_buf.push(component);
 				}
-				path_buf.set_file_name(file_name.map(into));
+				path_buf.set_file_name(file_name);
 				f(&path_buf)
 			})
 			.filter_map(|e| match e {
@@ -208,13 +186,12 @@ impl File for &OsStr {
 // 	}
 // }
 
+// To support converting back to fs::File:
 // https://github.com/vasi/positioned-io/blob/a03c792f5b6f99cb4f72e146befdfc8b1f6e1d28/src/raf.rs
 
 struct LocalFileInner {
 	file: fs::File,
 	len: AtomicU64,
-	#[cfg(windows)]
-	pos: u64,
 }
 pub struct LocalFile {
 	inner: Arc<LocalFileInner>,
@@ -226,36 +203,12 @@ impl LocalFile {
 		Self::from_file(fs::File::open(path)?)
 	}
 
-	#[cfg(unix)]
 	fn from_file(mut file: fs::File) -> io::Result<Self> {
-		let old_pos = file.seek(SeekFrom::Current(0))?;
 		let len = file.seek(SeekFrom::End(0))?;
-		if old_pos != len {
-			file.seek(SeekFrom::Start(old_pos))?;
-		}
 		let len = AtomicU64::new(len);
 		let inner = Arc::new(LocalFileInner { file, len });
 		Ok(Self { inner })
 	}
-
-	#[cfg(windows)]
-	fn from_file(mut file: fs::File) -> io::Result<Self> {
-		let pos = file.seek(SeekFrom::Current(0))?;
-		let len = file.seek(SeekFrom::End(0))?;
-		let len = AtomicU64::new(len);
-		let inner = Arc::new(LocalFileInner { file, len, pos });
-		Ok(Self { inner })
-	}
-
-	// #[cfg(unix)]
-	// fn into_file(self) -> io::Result<fs::File> {
-	// 	Ok(self.file)
-	// }
-
-	// #[cfg(windows)]
-	// fn into_file(mut self) -> io::Result<fs::File> {
-	// 	self.file.seek(SeekFrom::Start(self.pos)).map(|_| self.file)
-	// }
 }
 
 impl From<fs::File> for LocalFile {
@@ -263,11 +216,6 @@ impl From<fs::File> for LocalFile {
 		Self::from_file(file).unwrap()
 	}
 }
-// impl From<LocalFile> for fs::File {
-// 	fn from(file: LocalFile) -> Self {
-// 		file.into_file().unwrap()
-// 	}
-// }
 
 #[cfg(unix)]
 impl LocalFile {

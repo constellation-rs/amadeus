@@ -1,14 +1,15 @@
 #![allow(clippy::unsafe_derive_deserialize)]
 
 use ::serde::{Deserialize, Serialize};
+use derive_new::new;
 use futures::pin_mut;
 use pin_project::pin_project;
 use std::{
-	pin::Pin, task::{Context, Poll}
+	error::Error, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
 use crate::{
-	dist_pipe::DistributedPipe, dist_sink::DistributedSink, dist_stream::{DistributedStream, StreamTask, StreamTaskAsync}
+	par_sink::{DistributedSink, ParallelSink}, par_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync}
 };
 
 #[cfg(feature = "aws")]
@@ -35,21 +36,24 @@ pub use amadeus_serde::{self as serde, Csv, Json};
 
 pub trait Source {
 	type Item: crate::data::Data;
-	type Error: std::error::Error;
+	type Error: Error;
 
+	type ParStream: ParallelStream<Item = Result<Self::Item, Self::Error>>;
 	type DistStream: DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
+	fn par_stream(self) -> Self::ParStream;
 	fn dist_stream(self) -> Self::DistStream;
 }
 
-pub trait Destination<I>
-where
-	I: DistributedPipe<Self::Item>,
-{
+pub trait Destination {
 	type Item: crate::data::Data;
-	type Error: std::error::Error;
+	type Error: Error;
 
-	type DistSink: DistributedSink<I, Self::Item, Result<(), Self::Error>>;
+	type ParSink: ParallelSink<Self::Item, Output = Result<(), Self::Error>>;
+	type DistSink: DistributedSink<Self::Item, Output = Result<(), Self::Error>>;
+
+	fn par_sink(self) -> Self::ParSink;
+	fn dist_sink(self) -> Self::DistSink;
 }
 
 #[cfg(feature = "amadeus-serde")]
@@ -61,8 +65,12 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
+	type ParStream = <Self as amadeus_core::Source>::ParStream;
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
 
+	fn par_stream(self) -> Self::ParStream {
+		<Self as amadeus_core::Source>::par_stream(self)
+	}
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
 	}
@@ -76,8 +84,12 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
+	type ParStream = <Self as amadeus_core::Source>::ParStream;
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
 
+	fn par_stream(self) -> Self::ParStream {
+		<Self as amadeus_core::Source>::par_stream(self)
+	}
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
 	}
@@ -91,8 +103,12 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
+	type ParStream = <Self as amadeus_core::Source>::ParStream;
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
 
+	fn par_stream(self) -> Self::ParStream {
+		<Self as amadeus_core::Source>::par_stream(self)
+	}
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
 	}
@@ -105,8 +121,12 @@ where
 	type Item = <Self as amadeus_core::Source>::Item;
 	type Error = <Self as amadeus_core::Source>::Error;
 
+	type ParStream = <Self as amadeus_core::Source>::ParStream;
 	type DistStream = <Self as amadeus_core::Source>::DistStream;
 
+	fn par_stream(self) -> Self::ParStream {
+		<Self as amadeus_core::Source>::par_stream(self)
+	}
 	fn dist_stream(self) -> Self::DistStream {
 		<Self as amadeus_core::Source>::dist_stream(self)
 	}
@@ -116,13 +136,14 @@ impl Source for Cloudfront {
 	type Item = crate::data::CloudfrontRow;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistStream = IntoIter<<Self as amadeus_core::Source>::DistStream, Self::Item>;
+	type ParStream = IntoStream<<Self as amadeus_core::Source>::ParStream, Self::Item>;
+	type DistStream = IntoStream<<Self as amadeus_core::Source>::DistStream, Self::Item>;
 
+	fn par_stream(self) -> Self::ParStream {
+		IntoStream::new(<Self as amadeus_core::Source>::par_stream(self))
+	}
 	fn dist_stream(self) -> Self::DistStream {
-		IntoIter(
-			<Self as amadeus_core::Source>::dist_stream(self),
-			PhantomData,
-		)
+		IntoStream::new(<Self as amadeus_core::Source>::dist_stream(self))
 	}
 }
 #[cfg(feature = "commoncrawl")]
@@ -130,18 +151,39 @@ impl Source for CommonCrawl {
 	type Item = amadeus_types::Webpage<'static>;
 	type Error = <Self as amadeus_core::Source>::Error;
 
-	type DistStream = IntoIter<<Self as amadeus_core::Source>::DistStream, Self::Item>;
+	type ParStream = IntoStream<<Self as amadeus_core::Source>::ParStream, Self::Item>;
+	type DistStream = IntoStream<<Self as amadeus_core::Source>::DistStream, Self::Item>;
 
+	fn par_stream(self) -> Self::ParStream {
+		IntoStream::new(<Self as amadeus_core::Source>::par_stream(self))
+	}
 	fn dist_stream(self) -> Self::DistStream {
-		IntoIter(
-			<Self as amadeus_core::Source>::dist_stream(self),
-			PhantomData,
-		)
+		IntoStream::new(<Self as amadeus_core::Source>::dist_stream(self))
 	}
 }
-use std::marker::PhantomData;
-pub struct IntoIter<I, U>(I, PhantomData<fn() -> U>);
-impl<I, T, E, U> DistributedStream for IntoIter<I, U>
+
+#[derive(new)]
+pub struct IntoStream<I, U>(I, PhantomData<fn() -> U>);
+impl<I, T, E, U> ParallelStream for IntoStream<I, U>
+where
+	I: ParallelStream<Item = Result<T, E>>,
+	T: Into<U>,
+	U: 'static,
+{
+	type Item = Result<U, E>;
+	type Task = IntoTask<I::Task, U>;
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.0.size_hint()
+	}
+	fn next_task(&mut self) -> Option<Self::Task> {
+		self.0.next_task().map(|task| IntoTask {
+			task,
+			marker: PhantomData,
+		})
+	}
+}
+impl<I, T, E, U> DistributedStream for IntoStream<I, U>
 where
 	I: DistributedStream<Item = Result<T, E>>,
 	T: Into<U>,
@@ -160,6 +202,7 @@ where
 		})
 	}
 }
+
 #[pin_project]
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
@@ -192,7 +235,7 @@ where
 
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context,
-		sink: Pin<&mut impl amadeus_core::sink::Sink<Self::Item>>,
+		sink: Pin<&mut impl amadeus_core::sink::Sink<Item = Self::Item>>,
 	) -> Poll<()> {
 		let sink =
 			amadeus_core::sink::SinkMap::new(sink, |item: Result<_, _>| item.map(Into::into));
@@ -200,7 +243,7 @@ where
 		self.project().task.poll_run(cx, sink)
 	}
 }
-impl<I, T, E, U> Iterator for IntoIter<I, U>
+impl<I, T, E, U> Iterator for IntoStream<I, U>
 where
 	I: Iterator<Item = Result<T, E>>,
 	T: Into<U>,

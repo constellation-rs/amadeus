@@ -23,6 +23,8 @@ doc = []
 
 [dependencies]
 async-trait = "0.1"
+derive-new = "0.5"
+educe = "0.4"
 either = { version = "1.5", features = ["serde"] }
 futures = "0.3"
 owned_chars = "0.3"
@@ -31,6 +33,7 @@ rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
-streaming_algorithms = "0.1"
+streaming_algorithms = "0.2"
 sum = { version = "0.1", features = ["serde"] }
 walkdir = "2.2"
+widestring = "0.4"

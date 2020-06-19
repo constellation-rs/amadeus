@@ -11,55 +11,27 @@
 )] // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
 #![allow(unreachable_code, unused_braces, clippy::type_complexity)]
 
-#[cfg(feature = "constellation")]
-use constellation::*;
 use std::time::{Duration, SystemTime};
 
 use amadeus::prelude::*;
 use data::Webpage;
 
-fn main() {
-	#[cfg(feature = "constellation")]
-	init(Resources::default());
+#[tokio::test]
+async fn commoncrawl() {
+	return; // TODO: runs for a long time
 
-	tokio::runtime::Builder::new()
-		.threaded_scheduler()
-		.enable_all()
-		.build()
-		.unwrap()
-		.block_on(async {
-			return; // TODO: runs for a long time
-
-			let thread_pool_time = {
-				let thread_pool = ThreadPool::new(None);
-				run(&thread_pool).await
-			};
-			#[cfg(feature = "constellation")]
-			let process_pool_time = {
-				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
-				run(&process_pool).await
-			};
-			#[cfg(not(feature = "constellation"))]
-			let process_pool_time = "-";
-
-			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
-		})
-}
-
-async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
+
+	let pool = &ThreadPool::new(None).unwrap();
 
 	let webpages = CommonCrawl::new("CC-MAIN-2020-24").await.unwrap();
 	let _ = webpages
-		.dist_stream()
-		.all(
-			pool,
-			FnMut!(move |x: Result<Webpage<'static>, _>| -> bool {
-				let _x = x.unwrap();
-				// println!("{}", x.url);
-				start.elapsed().unwrap() < Duration::new(10, 0)
-			}),
-		)
+		.par_stream()
+		.all(pool, move |x: Result<Webpage<'static>, _>| -> bool {
+			let _x = x.unwrap();
+			// println!("{}", x.url);
+			start.elapsed().unwrap() < Duration::new(10, 0)
+		})
 		.await;
 
 	let webpages = CommonCrawl::new("CC-MAIN-2020-24").await.unwrap();
@@ -76,53 +48,53 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			streaming_algorithms::Top<usize,streaming_algorithms::HyperLogLogMagnitude<Vec<u8>>>,
 			streaming_algorithms::SampleUnstable<u32>,
 		),
-	) = webpages.dist_stream().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
-		.fork(
+	) = webpages.par_stream().map(|webpage:Result<_,_>|webpage.unwrap())
+		.pipe_fork(
 			&pool,
 			((
 				// Identity
-				// 	.map(FnMut!(|x: Webpage<'static>| -> usize { x.contents.len() }))
-				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+				// 	.map(|x: Webpage<'static>| -> usize { x.contents.len() })
+				// 	.map(|x: usize| -> u32 { x as u32 })
 				// 	.collect(),
 				// (),
 				// Identity
-				// 	.map(FnMut!(|x: Webpage<'static>| -> usize {
+				// 	.map(|x: Webpage<'static>| -> usize {
 				// 		x.contents.len()
-				// 	}))
-				// 	.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+				// 	})
+				// 	.map(|x: usize| -> u32 { x as u32 })
 				// 	.collect(),
 			),),
 			(
 				Identity
-					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
-					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.map(|x: &Webpage<'static>| -> usize { x.contents.len() })
+					.map(|x: usize| -> u32 { x as u32 })
 					.fold(
-						FnMut!(|| 0_u32),
-						FnMut!(|a: u32, b: either::Either<u32, u32>| a + b.into_inner()),
+						|| 0_u32,
+						|a: u32, b: either::Either<u32, u32>| a + b.into_inner(),
 					),
 				Identity
-					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
-					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.map(|x: &Webpage<'static>| -> usize { x.contents.len() })
+					.map(|x: usize| -> u32 { x as u32 })
 					.sum(),
 				Identity
-					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
-					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.map(|x: &Webpage<'static>| -> usize { x.contents.len() })
+					.map(|x: usize| -> u32 { x as u32 })
 					.collect(),
 				Identity
-					.map(FnMut!(|x: &Webpage<'static>| -> usize { x.contents.len() }))
-					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.map(|x: &Webpage<'static>| -> usize { x.contents.len() })
+					.map(|x: usize| -> u32 { x as u32 })
 					.most_frequent(100, 0.99, 2.0/1000.0),
 				Identity
-					.map(FnMut!(|x: &Webpage<'static>| { (x.contents.len(),x.contents[..5].to_owned()) }))
+					.map(|x: &Webpage<'static>| { (x.contents.len(),x.contents[..5].to_owned()) })
 					.most_distinct(100, 0.99, 2.0/1000.0, 0.0808),
 				Identity
 					.cloned()
-					.map(FnMut!(|x: Webpage<'static>| -> usize { x.contents.len() }))
-					.map(FnMut!(|x: usize| -> u32 { x as u32 }))
+					.map(|x: Webpage<'static>| -> usize { x.contents.len() })
+					.map(|x: usize| -> u32 { x as u32 })
 					.sample_unstable(100),
 			),
 		).await;
 	println!("{:?}", top);
 
-	start.elapsed().unwrap()
+	println!("in {:?}", start.elapsed().unwrap());
 }
