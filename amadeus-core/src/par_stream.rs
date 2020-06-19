@@ -1,4 +1,5 @@
 // TODO: P: Pool -> impl Pool: async_trait triggers https://github.com/rust-lang/rust/issues/71869
+// TODO: how to dedup??
 
 mod chain;
 mod cloned;
@@ -47,8 +48,6 @@ pub trait StreamTaskAsync {
 	) -> Poll<()>;
 }
 
-// TODO: how to dedup??
-
 #[async_trait(?Send)]
 #[must_use]
 pub trait DistributedStream {
@@ -59,7 +58,7 @@ pub trait DistributedStream {
 
 	fn inspect<F>(self, f: F) -> Inspect<Self, F>
 	where
-		F: FnMut(&Self::Item) + Clone + ProcessSend,
+		F: FnMut(&Self::Item) + Clone + ProcessSend + 'static,
 		Self: Sized,
 	{
 		assert_distributed_stream(Inspect::new(self, f))
@@ -67,7 +66,7 @@ pub trait DistributedStream {
 
 	fn update<F>(self, f: F) -> Update<Self, F>
 	where
-		F: FnMut(&mut Self::Item) + Clone + ProcessSend,
+		F: FnMut(&mut Self::Item) + Clone + ProcessSend + 'static,
 		Self: Sized,
 	{
 		assert_distributed_stream(Update::new(self, f))
@@ -75,7 +74,7 @@ pub trait DistributedStream {
 
 	fn map<B, F>(self, f: F) -> Map<Self, F>
 	where
-		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
+		F: FnMut(Self::Item) -> B + Clone + ProcessSend + 'static,
 		Self: Sized,
 	{
 		assert_distributed_stream(Map::new(self, f))
@@ -83,7 +82,7 @@ pub trait DistributedStream {
 
 	fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 	where
-		F: FnMut(Self::Item) -> B + Clone + ProcessSend,
+		F: FnMut(Self::Item) -> B + Clone + ProcessSend + 'static,
 		B: Stream,
 		Self: Sized,
 	{
@@ -92,7 +91,7 @@ pub trait DistributedStream {
 
 	fn filter<F, Fut>(self, f: F) -> Filter<Self, F>
 	where
-		F: FnMut(&Self::Item) -> Fut + Clone + ProcessSend,
+		F: FnMut(&Self::Item) -> Fut + Clone + ProcessSend + 'static,
 		Fut: Future<Output = bool>,
 		Self: Sized,
 	{
@@ -112,11 +111,12 @@ pub trait DistributedStream {
 	) -> B
 	where
 		P: ProcessPool,
-		R1F: Factory<Item = R1> + Clone + ProcessSend,
+		R1F: Factory<Item = R1> + Clone + ProcessSend + 'static,
 		R2F: Factory<Item = R2>,
-		R1: ReducerSend<Item = Self::Item> + ProcessSend,
-		R2: ReducerProcessSend<Item = <R1 as Reducer>::Output> + ProcessSend,
+		R1: ReducerSend<Item = Self::Item> + Send + 'static,
+		R2: ReducerProcessSend<Item = <R1 as Reducer>::Output> + ProcessSend + 'static,
 		R3: Reducer<Item = <R2 as ReducerProcessSend>::Output, Output = B>,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		// TODO: don't buffer tasks before sending. requires changes to ProcessPool
@@ -289,6 +289,11 @@ pub trait DistributedStream {
 	where
 		P: ProcessPool,
 		DistSink: DistributedSink<Self::Item, Output = A>,
+		<DistSink::Pipe as DistributedPipe<Self::Item>>::Task: 'static,
+		DistSink::ReduceAFactory: 'static,
+		DistSink::ReduceA: 'static,
+		DistSink::ReduceB: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		struct Connect<A, B>(A, B);
@@ -363,16 +368,26 @@ pub trait DistributedStream {
 			.await
 	}
 
+	// These messy bounds are unfortunately necessary as requiring 'static in ParallelSink breaks sink_b being e.g. Identity.count()
 	async fn pipe_fork<P, DistSinkA, DistSinkB, A, B>(
 		self, pool: &P, sink_a: DistSinkA, sink_b: DistSinkB,
 	) -> (A, B)
 	where
 		P: ProcessPool,
-
 		DistSinkA: DistributedSink<Self::Item, Output = A>,
-		DistSinkB: for<'a> DistributedSink<&'a Self::Item, Output = B>,
-
+		DistSinkB: for<'a> DistributedSink<&'a Self::Item, Output = B> + 'static,
+		<DistSinkA::Pipe as DistributedPipe<Self::Item>>::Task: 'static,
+		DistSinkA::ReduceAFactory: 'static,
+		DistSinkA::ReduceA: 'static,
+		DistSinkA::ReduceB: 'static,
+		<DistSinkB as DistributedSink<&'static Self::Item>>::ReduceAFactory: 'static,
+		<DistSinkB as DistributedSink<&'static Self::Item>>::ReduceA: 'static,
+		<DistSinkB as DistributedSink<&'static Self::Item>>::ReduceB: 'static,
+		<<DistSinkB as DistributedSink<&'static Self::Item>>::Pipe as DistributedPipe<
+			&'static Self::Item,
+		>>::Task: 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		struct Connect<A, B, C, RefAItem>(A, B, C, PhantomData<fn() -> RefAItem>);
@@ -475,10 +490,8 @@ pub trait DistributedStream {
 							if !ready.0 {
 								let stream = stream::poll_fn(|_cx| match pending {
 									Some(x) if !*given => {
-										// if x.is_some() {
 										*given = true;
 										progress = true;
-										// }
 										Poll::Ready(type_coerce(x.as_ref()))
 									}
 									_ => Poll::Pending,
@@ -490,10 +503,6 @@ pub trait DistributedStream {
 								});
 								pin_mut!(sink_);
 								ready.0 = self_.2.as_mut().poll_run(cx, stream, sink_).is_ready();
-								if ready.0 {
-									progress = true; // TODO
-								} else {
-								}
 							}
 							if !ready.1 {
 								let stream = stream::poll_fn(|_cx| {
@@ -502,7 +511,6 @@ pub trait DistributedStream {
 									}
 									match pending.take() {
 										Some(x) => {
-											// *pending = Some(None);
 											*given = false;
 											progress = true;
 											Poll::Ready(x)
@@ -515,10 +523,6 @@ pub trait DistributedStream {
 								let sink_ = SinkMap::new(self_.0.as_mut(), Sum2::A);
 								pin_mut!(sink_);
 								ready.1 = self_.1.as_mut().poll_run(cx, stream, sink_).is_ready();
-								if ready.1 {
-									progress = true; // TODO
-								} else {
-								}
 							}
 							if ready.0 && ready.1 {
 								break Poll::Ready(());
@@ -552,8 +556,9 @@ pub trait DistributedStream {
 	async fn for_each<P, F>(self, pool: &P, f: F)
 	where
 		P: ProcessPool,
-		F: FnMut(Self::Item) + Clone + ProcessSend,
+		F: FnMut(Self::Item) + Clone + ProcessSend + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::for_each(Identity, f))
@@ -563,10 +568,11 @@ pub trait DistributedStream {
 	async fn fold<P, ID, F, B>(self, pool: &P, identity: ID, op: F) -> B
 	where
 		P: ProcessPool,
-		ID: FnMut() -> B + Clone + ProcessSend,
-		F: FnMut(B, Either<Self::Item, B>) -> B + Clone + ProcessSend,
-		B: ProcessSend,
+		ID: FnMut() -> B + Clone + ProcessSend + 'static,
+		F: FnMut(B, Either<Self::Item, B>) -> B + Clone + ProcessSend + 'static,
+		B: ProcessSend + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(
@@ -580,6 +586,7 @@ pub trait DistributedStream {
 	where
 		P: ProcessPool,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::count(Identity))
@@ -589,8 +596,9 @@ pub trait DistributedStream {
 	async fn sum<P, S>(self, pool: &P) -> S
 	where
 		P: ProcessPool,
-		S: iter::Sum<Self::Item> + iter::Sum<S> + ProcessSend,
+		S: iter::Sum<Self::Item> + iter::Sum<S> + ProcessSend + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::sum(Identity))
@@ -600,8 +608,9 @@ pub trait DistributedStream {
 	async fn combine<P, F>(self, pool: &P, f: F) -> Option<Self::Item>
 	where
 		P: ProcessPool,
-		F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + ProcessSend,
-		Self::Item: ProcessSend,
+		F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + ProcessSend + 'static,
+		Self::Item: ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::combine(Identity, f))
@@ -611,7 +620,8 @@ pub trait DistributedStream {
 	async fn max<P>(self, pool: &P) -> Option<Self::Item>
 	where
 		P: ProcessPool,
-		Self::Item: Ord + ProcessSend,
+		Self::Item: Ord + ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::max(Identity))
@@ -621,8 +631,9 @@ pub trait DistributedStream {
 	async fn max_by<P, F>(self, pool: &P, f: F) -> Option<Self::Item>
 	where
 		P: ProcessPool,
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
-		Self::Item: ProcessSend,
+		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend + 'static,
+		Self::Item: ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::max_by(Identity, f))
@@ -632,9 +643,10 @@ pub trait DistributedStream {
 	async fn max_by_key<P, F, B>(self, pool: &P, f: F) -> Option<Self::Item>
 	where
 		P: ProcessPool,
-		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
+		F: FnMut(&Self::Item) -> B + Clone + ProcessSend + 'static,
 		B: Ord + 'static,
-		Self::Item: ProcessSend,
+		Self::Item: ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::max_by_key(Identity, f))
@@ -644,7 +656,8 @@ pub trait DistributedStream {
 	async fn min<P>(self, pool: &P) -> Option<Self::Item>
 	where
 		P: ProcessPool,
-		Self::Item: Ord + ProcessSend,
+		Self::Item: Ord + ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::min(Identity))
@@ -654,8 +667,9 @@ pub trait DistributedStream {
 	async fn min_by<P, F>(self, pool: &P, f: F) -> Option<Self::Item>
 	where
 		P: ProcessPool,
-		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend,
-		Self::Item: ProcessSend,
+		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + ProcessSend + 'static,
+		Self::Item: ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::min_by(Identity, f))
@@ -665,9 +679,10 @@ pub trait DistributedStream {
 	async fn min_by_key<P, F, B>(self, pool: &P, f: F) -> Option<Self::Item>
 	where
 		P: ProcessPool,
-		F: FnMut(&Self::Item) -> B + Clone + ProcessSend,
+		F: FnMut(&Self::Item) -> B + Clone + ProcessSend + 'static,
 		B: Ord + 'static,
-		Self::Item: ProcessSend,
+		Self::Item: ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::min_by_key(Identity, f))
@@ -679,7 +694,8 @@ pub trait DistributedStream {
 	) -> ::streaming_algorithms::Top<Self::Item, usize>
 	where
 		P: ProcessPool,
-		Self::Item: Hash + Eq + Clone + ProcessSend,
+		Self::Item: Hash + Eq + Clone + ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(
@@ -695,8 +711,9 @@ pub trait DistributedStream {
 	where
 		P: ProcessPool,
 		Self: DistributedStream<Item = (A, B)> + Sized,
-		A: Hash + Eq + Clone + ProcessSend,
+		A: Hash + Eq + Clone + ProcessSend + 'static,
 		B: Hash + 'static,
+		Self::Task: 'static,
 	{
 		self.pipe(
 			pool,
@@ -716,7 +733,8 @@ pub trait DistributedStream {
 	) -> ::streaming_algorithms::SampleUnstable<Self::Item>
 	where
 		P: ProcessPool,
-		Self::Item: ProcessSend,
+		Self::Item: ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(
@@ -729,8 +747,9 @@ pub trait DistributedStream {
 	async fn all<P, F>(self, pool: &P, f: F) -> bool
 	where
 		P: ProcessPool,
-		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
+		F: FnMut(Self::Item) -> bool + Clone + ProcessSend + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::all(Identity, f))
@@ -740,8 +759,9 @@ pub trait DistributedStream {
 	async fn any<P, F>(self, pool: &P, f: F) -> bool
 	where
 		P: ProcessPool,
-		F: FnMut(Self::Item) -> bool + Clone + ProcessSend,
+		F: FnMut(Self::Item) -> bool + Clone + ProcessSend + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::any(Identity, f))
@@ -752,7 +772,10 @@ pub trait DistributedStream {
 	where
 		P: ProcessPool,
 		B: FromDistributedStream<Self::Item>,
-		B::ReduceA: ProcessSend,
+		B::ReduceAFactory: ProcessSend + 'static,
+		B::ReduceA: ProcessSend + 'static,
+		B::ReduceB: ProcessSend + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, DistributedPipe::<Self::Item>::collect(Identity))
@@ -769,7 +792,7 @@ pub(crate) fn assert_distributed_stream<T, I: DistributedStream<Item = T>>(i: I)
 #[must_use]
 pub trait ParallelStream {
 	type Item;
-	type Task: StreamTask<Item = Self::Item> + Send + 'static;
+	type Task: StreamTask<Item = Self::Item> + Send;
 	fn size_hint(&self) -> (usize, Option<usize>);
 	fn next_task(&mut self) -> Option<Self::Task>;
 
@@ -829,6 +852,7 @@ pub trait ParallelStream {
 		R1F: Factory<Item = R1>,
 		R1: ReducerSend<Item = Self::Item> + Send + 'static,
 		R3: Reducer<Item = <R1 as ReducerSend>::Output, Output = B>,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		// TODO: don't buffer tasks before sending. requires changes to ThreadPool
@@ -931,6 +955,9 @@ pub trait ParallelStream {
 	where
 		P: ThreadPool,
 		ParSink: ParallelSink<Self::Item, Output = A>,
+		<ParSink::Pipe as ParallelPipe<Self::Item>>::Task: 'static,
+		ParSink::ReduceA: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		struct Connect<A, B>(A, B);
@@ -1000,16 +1027,22 @@ pub trait ParallelStream {
 			.await
 	}
 
+	// These messy bounds are unfortunately necessary as requiring 'static in ParallelSink breaks sink_b being e.g. Identity.count()
 	async fn pipe_fork<P, ParSinkA, ParSinkB, A, B>(
 		self, pool: &P, sink_a: ParSinkA, sink_b: ParSinkB,
 	) -> (A, B)
 	where
 		P: ThreadPool,
-
 		ParSinkA: ParallelSink<Self::Item, Output = A>,
-		ParSinkB: for<'a> ParallelSink<&'a Self::Item, Output = B>,
-
+		ParSinkB: for<'a> ParallelSink<&'a Self::Item, Output = B> + 'static,
+		<ParSinkA::Pipe as ParallelPipe<Self::Item>>::Task: 'static,
+		ParSinkA::ReduceA: 'static,
+		<ParSinkB as ParallelSink<&'static Self::Item>>::ReduceA: 'static,
+		<<ParSinkB as ParallelSink<&'static Self::Item>>::Pipe as ParallelPipe<
+			&'static Self::Item,
+		>>::Task: 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		struct Connect<A, B, C, RefAItem>(A, B, C, PhantomData<fn() -> RefAItem>);
@@ -1018,6 +1051,8 @@ pub trait ParallelStream {
 			A: ParallelStream,
 			B: ParallelPipe<A::Item>,
 			C: ParallelPipe<RefAItem>,
+			B::Task: 'static,
+			C::Task: 'static,
 			RefAItem: 'static,
 		{
 			type Item = Sum2<B::Item, C::Item>;
@@ -1107,10 +1142,8 @@ pub trait ParallelStream {
 							if !ready.0 {
 								let stream = stream::poll_fn(|_cx| match pending {
 									Some(x) if !*given => {
-										// if x.is_some() {
 										*given = true;
 										progress = true;
-										// }
 										Poll::Ready(type_coerce(x.as_ref()))
 									}
 									_ => Poll::Pending,
@@ -1122,10 +1155,6 @@ pub trait ParallelStream {
 								});
 								pin_mut!(sink_);
 								ready.0 = self_.2.as_mut().poll_run(cx, stream, sink_).is_ready();
-								if ready.0 {
-									progress = true; // TODO
-								} else {
-								}
 							}
 							if !ready.1 {
 								let stream = stream::poll_fn(|_cx| {
@@ -1134,7 +1163,6 @@ pub trait ParallelStream {
 									}
 									match pending.take() {
 										Some(x) => {
-											// *pending = Some(None);
 											*given = false;
 											progress = true;
 											Poll::Ready(x)
@@ -1147,10 +1175,6 @@ pub trait ParallelStream {
 								let sink_ = SinkMap::new(self_.0.as_mut(), Sum2::A);
 								pin_mut!(sink_);
 								ready.1 = self_.1.as_mut().poll_run(cx, stream, sink_).is_ready();
-								if ready.1 {
-									progress = true; // TODO
-								} else {
-								}
 							}
 							if ready.0 && ready.1 {
 								break Poll::Ready(());
@@ -1185,6 +1209,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		F: FnMut(Self::Item) + Clone + Send + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::for_each(Identity, f))
@@ -1198,6 +1223,7 @@ pub trait ParallelStream {
 		F: FnMut(B, Either<Self::Item, B>) -> B + Clone + Send + 'static,
 		B: Send + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(
@@ -1211,6 +1237,7 @@ pub trait ParallelStream {
 	where
 		P: ThreadPool,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::count(Identity))
@@ -1222,6 +1249,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		S: iter::Sum<Self::Item> + iter::Sum<S> + Send + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::sum(Identity))
@@ -1233,6 +1261,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + Send + 'static,
 		Self::Item: Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::combine(Identity, f))
@@ -1243,6 +1272,7 @@ pub trait ParallelStream {
 	where
 		P: ThreadPool,
 		Self::Item: Ord + Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::max(Identity))
@@ -1254,6 +1284,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + Send + 'static,
 		Self::Item: Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::max_by(Identity, f))
@@ -1266,6 +1297,7 @@ pub trait ParallelStream {
 		F: FnMut(&Self::Item) -> B + Clone + Send + 'static,
 		B: Ord + 'static,
 		Self::Item: Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::max_by_key(Identity, f))
@@ -1276,6 +1308,7 @@ pub trait ParallelStream {
 	where
 		P: ThreadPool,
 		Self::Item: Ord + Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::min(Identity))
@@ -1287,6 +1320,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + Send + 'static,
 		Self::Item: Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::min_by(Identity, f))
@@ -1299,6 +1333,7 @@ pub trait ParallelStream {
 		F: FnMut(&Self::Item) -> B + Clone + Send + 'static,
 		B: Ord + 'static,
 		Self::Item: Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::min_by_key(Identity, f))
@@ -1311,6 +1346,7 @@ pub trait ParallelStream {
 	where
 		P: ThreadPool,
 		Self::Item: Hash + Eq + Clone + Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(
@@ -1328,6 +1364,7 @@ pub trait ParallelStream {
 		Self: ParallelStream<Item = (A, B)> + Sized,
 		A: Hash + Eq + Clone + Send + 'static,
 		B: Hash + 'static,
+		Self::Task: 'static,
 	{
 		self.pipe(
 			pool,
@@ -1348,6 +1385,7 @@ pub trait ParallelStream {
 	where
 		P: ThreadPool,
 		Self::Item: Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(
@@ -1362,6 +1400,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		F: FnMut(Self::Item) -> bool + Clone + Send + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::all(Identity, f))
@@ -1373,6 +1412,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		F: FnMut(Self::Item) -> bool + Clone + Send + 'static,
 		Self::Item: 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::any(Identity, f))
@@ -1384,6 +1424,7 @@ pub trait ParallelStream {
 		P: ThreadPool,
 		B: FromParallelStream<Self::Item>,
 		B::ReduceA: Send + 'static,
+		Self::Task: 'static,
 		Self: Sized,
 	{
 		self.pipe(pool, ParallelPipe::<Self::Item>::collect(Identity))

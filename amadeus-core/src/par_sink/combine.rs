@@ -46,8 +46,8 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source>
 		for Combine<I, F>
 	where
-		F: FnMut(I::Item, I::Item) -> I::Item + Clone + Send  +'static,
-		I::Item: Send  +'static,
+		F: FnMut(I::Item, I::Item) -> I::Item + Clone + Send + 'static,
+		I::Item: Send + 'static,
 	{
 		combiner_par_sink!(ReduceFn<F, I::Item>, self, ReduceFn::new(self.f));
 	}

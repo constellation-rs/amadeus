@@ -19,8 +19,7 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, B> ParallelSink<Source>
 		for Sum<I, B>
 	where
-		B: iter::Sum<I::Item> + iter::Sum<B> + Send+'static,
-		I::Item: 'static,
+		B: iter::Sum<I::Item> + iter::Sum<B> + Send + 'static,
 	{
 		folder_par_sink!(SumFolder<B>, SumFolder<B>, self, SumFolder::new(), SumFolder::new());
 	}

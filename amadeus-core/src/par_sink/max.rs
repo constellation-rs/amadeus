@@ -49,8 +49,8 @@ impl_par_dist! {
 		for MaxByKey<I, F>
 	where
 		F: FnMut(&I::Item) -> B + Clone + Send + 'static,
-		I::Item: Send + 'static,
 		B: Ord + 'static,
+		I::Item: Send + 'static,
 	{
 		combiner_par_sink!(combine::MaxByKey<I::Item,F, B>, self, combine::MaxByKey::new(self.f));
 	}
@@ -98,8 +98,8 @@ impl_par_dist! {
 		for MinByKey<I, F>
 	where
 		F: FnMut(&I::Item) -> B + Clone + Send + 'static,
-		I::Item: Send + 'static,
 		B: Ord + 'static,
+		I::Item: Send + 'static,
 	{
 		combiner_par_sink!(combine::MinByKey<I::Item,F, B>, self, combine::MinByKey::new(self.f));
 	}

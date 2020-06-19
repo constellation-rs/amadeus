@@ -21,7 +21,7 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source>
 		for SampleUnstable<I>
 	where
-		I::Item: Send+ 'static,
+		I::Item: Send + 'static,
 	{
 		folder_par_sink!(SampleUnstableFolder, SumFolder<SASampleUnstable<I::Item>>, self, SampleUnstableFolder::new(self.samples), SumFolder::new());
 	}

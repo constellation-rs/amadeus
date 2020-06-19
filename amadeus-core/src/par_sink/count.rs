@@ -12,11 +12,7 @@ pub struct Count<I> {
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source>
-		for Count<I>
-	where
-		I::Item: 'static,
-	{
+	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source> for Count<I> {
 		folder_par_sink!(CountFolder, SumFolder<usize>, self, CountFolder::new(), SumFolder::new());
 	}
 }

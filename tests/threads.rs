@@ -11,7 +11,7 @@ use amadeus::dist::prelude::*;
 async fn threads() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None);
+	let pool = &ThreadPool::new(None).unwrap();
 	let parallel = 1000;
 
 	join_all((0..parallel).map(|i| async move {

@@ -4,7 +4,9 @@ use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{Filter, FlatMap, Fold, Inspect, Map, ParallelPipe, PipeTask, PipeTaskAsync, Update};
+use super::{
+	Count, Filter, FlatMap, Fold, ForEach, Inspect, Map, ParallelPipe, PipeTask, PipeTaskAsync, Update
+};
 use crate::sink::Sink;
 
 // TODO: add type parameter to Identity when type the type system includes HRTB in the ParallelPipe impl https://github.com/dtolnay/ghost/
@@ -12,8 +14,8 @@ use crate::sink::Sink;
 pub struct Identity;
 
 impl_par_dist! {
-	impl<Itemm> ParallelPipe<Itemm> for Identity {
-		type Item = Itemm;
+	impl<Item> ParallelPipe<Item> for Identity {
+		type Item = Item;
 		type Task = IdentityTask;
 
 		fn task(&self) -> Self::Task {
@@ -75,6 +77,17 @@ mod workaround {
 			Self: Sized,
 		{
 			Fold::new(self, identity, op)
+		}
+
+		pub fn count(self) -> Count<Self> {
+			Count::new(self)
+		}
+
+		pub fn for_each<F>(self, f: F) -> ForEach<Self, F>
+		where
+			F: Clone + Send + 'static,
+		{
+			ForEach::new(self, f)
 		}
 	}
 }

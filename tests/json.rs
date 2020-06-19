@@ -1,12 +1,12 @@
 use std::{path::PathBuf, time::SystemTime};
 
-use amadeus::dist::prelude::*;
+use amadeus::prelude::*;
 
 #[tokio::test]
 async fn json() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None);
+	let pool = &ThreadPool::new(None).unwrap();
 	let tasks = 100;
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
@@ -52,8 +52,8 @@ async fn json() {
 		.await
 		.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		3_605 * tasks
@@ -68,13 +68,13 @@ async fn json() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				// println!("{:?}", value);
 				let _: Result<BitcoinDerived, _> = value.clone().downcast();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		3_605 * tasks

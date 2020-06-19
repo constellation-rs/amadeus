@@ -4,7 +4,7 @@ use amadeus::dist::prelude::*;
 
 #[tokio::main]
 async fn main() {
-	let pool = ThreadPool::new(None);
+	let pool = ThreadPool::new(None).unwrap();
 
 	<&[usize] as IntoDistributedStream>::into_dist_stream(&[1, 2, 3])
 		.map(FnMut!(|a: usize| a))

@@ -17,7 +17,7 @@ fn main() {
 		.unwrap()
 		.block_on(async {
 			let thread_pool_time = {
-				let thread_pool = ThreadPool::new(None);
+				let thread_pool = ThreadPool::new(None).unwrap();
 				run(&thread_pool, 100).await
 			};
 			#[cfg(feature = "constellation")]

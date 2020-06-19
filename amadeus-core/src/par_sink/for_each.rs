@@ -20,8 +20,7 @@ pub struct ForEach<I, F> {
 
 impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for ForEach<I, F>
 where
-	F: FnMut(I::Item) + Clone + ProcessSend,
-	I::Item: 'static,
+	F: FnMut(I::Item) + Clone + ProcessSend + 'static,
 {
 	type Output = ();
 	type Pipe = I;
@@ -43,7 +42,6 @@ where
 impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source> for ForEach<I, F>
 where
 	F: FnMut(I::Item) + Clone + Send + 'static,
-	I::Item: 'static,
 {
 	type Output = ();
 	type Pipe = I;
@@ -128,15 +126,13 @@ where
 }
 impl<A, F> ReducerProcessSend for ForEachReducer<A, F>
 where
-	A: 'static,
-	F: FnMut(A) + Clone + ProcessSend,
+	F: FnMut(A) + Clone,
 {
 	type Output = ();
 }
 impl<A, F> ReducerSend for ForEachReducer<A, F>
 where
-	A: 'static,
-	F: FnMut(A) + Clone + Send + 'static,
+	F: FnMut(A) + Clone,
 {
 	type Output = ();
 }

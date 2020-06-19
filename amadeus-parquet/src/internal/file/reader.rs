@@ -207,7 +207,6 @@ impl<R: ParquetReader> SerializedFileReader<R> {
 	fn parse_metadata(buf: &mut Rc<RefCell<BufReader<R>>>) -> Result<ParquetMetaData> {
 		let buf = &mut *buf.borrow_mut();
 		let file_size = buf.len();
-		println!("file_size: {}", file_size);
 		if file_size < (FOOTER_SIZE as u64) {
 			return Err(general_err!(
 				"Invalid Parquet file. Size is smaller than footer"

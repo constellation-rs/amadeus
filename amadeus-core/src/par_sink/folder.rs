@@ -152,16 +152,14 @@ where
 }
 impl<A, C> ReducerProcessSend for FolderSyncReducer<A, C>
 where
-	A: 'static,
-	C: FolderSync<A> + ProcessSend,
-	C::Output: ProcessSend,
+	C: FolderSync<A>,
+	C::Output: ProcessSend + 'static,
 {
 	type Output = C::Output;
 }
 impl<A, C> ReducerSend for FolderSyncReducer<A, C>
 where
-	A: 'static,
-	C: FolderSync<A> + Send + 'static,
+	C: FolderSync<A>,
 	C::Output: Send + 'static,
 {
 	type Output = C::Output;

@@ -3,13 +3,31 @@
 
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
-use amadeus::dist::prelude::*;
+use amadeus::prelude::*;
 
 #[tokio::test]
 async fn parquet() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None);
+	let pool = &ThreadPool::new(None).unwrap();
+
+	let rows = Parquet::<_, Value>::new(vec![
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=02/part-00176-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=02/part-00176-ed461019-4a12-46fa-a3f3-246d58f0ee06.c000.snappy.parquet"),
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=04/part-00173-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=05/part-00025-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=05/part-00025-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=06/part-00185-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+		PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=07/part-00151-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet"),
+	]).await.unwrap();
+	assert_eq!(
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
+			.count(pool)
+			.await,
+		207_535
+	);
 
 	let rows = Parquet::<_, Value>::new(ParquetDirectory::new(PathBuf::from(
 		"amadeus-testing/parquet/cf-accesslogs/",
@@ -17,8 +35,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		207_535
@@ -28,8 +46,8 @@ async fn parquet() {
 	{
 		let rows = Parquet::<_, Value>::new(vec![S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=03/part-00137-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet", AwsCredentials::Anonymous);20]).await.unwrap();
 		assert_eq!(
-			rows.dist_stream()
-				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			rows.par_stream()
+				.map(|row: Result<_, _>| row.unwrap())
 				.count(pool)
 				.await,
 			45_167 * 20
@@ -44,8 +62,8 @@ async fn parquet() {
 		.await
 		.unwrap();
 		assert_eq!(
-			rows.dist_stream()
-				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			rows.par_stream()
+				.map(|row: Result<_, _>| row.unwrap())
 				.count(pool)
 				.await,
 			207_535
@@ -62,8 +80,8 @@ async fn parquet() {
 			S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=07/part-00151-96c249f4-3a10-4509-b6b8-693a5d90dbf3.c000.snappy.parquet", AwsCredentials::Anonymous),
 		]).await.unwrap();
 		assert_eq!(
-			rows.dist_stream()
-				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			rows.par_stream()
+				.map(|row: Result<_, _>| row.unwrap())
 				.count(pool)
 				.await,
 			207_535
@@ -78,8 +96,8 @@ async fn parquet() {
 		.await
 		.unwrap();
 		assert_eq!(
-			rows.dist_stream()
-				.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+			rows.par_stream()
+				.map(|row: Result<_, _>| row.unwrap())
 				.count(pool)
 				.await,
 			207_535
@@ -117,8 +135,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		42_000
@@ -130,12 +148,12 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: StockSimulatedDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		42_000
@@ -153,8 +171,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		42_000
@@ -166,12 +184,12 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: StockSimulatedDerivedProjection1 = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		42_000
@@ -186,8 +204,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		42_000
@@ -199,12 +217,12 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: StockSimulatedDerivedProjection2 = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		42_000
@@ -239,8 +257,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		10_000
@@ -252,8 +270,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		10_000
@@ -265,13 +283,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: TenKayVeeTwo = value.clone().downcast().unwrap();
 				let _: TenKayVeeTwoDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		10_000
@@ -312,8 +330,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		2
@@ -325,8 +343,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		2
@@ -338,13 +356,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: AlltypesDictionary = value.clone().downcast().unwrap();
 				let _: AlltypesDictionaryDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		2
@@ -385,8 +403,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		8
@@ -398,8 +416,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		8
@@ -411,13 +429,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: AlltypesPlain = value.clone().downcast().unwrap();
 				let _: AlltypesPlainDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		8
@@ -458,8 +476,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		2
@@ -471,8 +489,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		2
@@ -484,13 +502,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: AlltypesPlainSnappy = value.clone().downcast().unwrap();
 				let _: AlltypesPlainSnappyDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		2
@@ -504,7 +522,7 @@ async fn parquet() {
 	// 	"amadeus-testing/parquet/nation.dict-malformed.parquet",
 	// )]).await.unwrap();
 	// assert_eq!(
-	// 	rows.dist_stream().collect::<Vec<_>>(pool),
+	// 	rows.par_stream().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
 	// 		amadeus_parquet::internal::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
@@ -516,7 +534,7 @@ async fn parquet() {
 	// 	"amadeus-testing/parquet/nation.dict-malformed.parquet",
 	// )]).await.unwrap();
 	// assert_eq!(
-	// 	rows.dist_stream().collect::<Vec<_>>(pool),
+	// 	rows.par_stream().collect::<Vec<_>>(pool),
 	// 	[Err(amadeus::source::parquet::Error::Parquet(
 	// 		amadeus_parquet::internal::errors::ParquetError::General(String::from(
 	// 			"underlying IO error: failed to fill whole buffer"
@@ -539,8 +557,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		3
@@ -552,8 +570,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		3
@@ -565,13 +583,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: NestedLists = value.clone().downcast().unwrap();
 				let _: NestedListsDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		3
@@ -594,8 +612,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		6
@@ -607,8 +625,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		6
@@ -620,13 +638,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: NestedMaps = value.clone().downcast().unwrap();
 				let _: NestedMapsDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		6
@@ -688,8 +706,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		1
@@ -701,8 +719,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		1
@@ -714,13 +732,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Nonnullable = value.clone().downcast().unwrap();
 				let _: NonnullableDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		1
@@ -761,8 +779,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		7
@@ -774,8 +792,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		7
@@ -787,13 +805,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Nullable = value.clone().downcast().unwrap();
 				let _: NullableDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		7
@@ -810,8 +828,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		8
@@ -823,8 +841,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		8
@@ -836,13 +854,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Nulls = value.clone().downcast().unwrap();
 				let _: NullsDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		8
@@ -861,8 +879,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		6
@@ -874,8 +892,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		6
@@ -887,13 +905,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: Repeated = value.clone().downcast().unwrap();
 				let _: RepeatedDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		6
@@ -914,8 +932,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		5
@@ -927,8 +945,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		5
@@ -940,13 +958,13 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: TestDatapage = value.clone().downcast().unwrap();
 				let _: TestDatapageDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		5
@@ -985,8 +1003,8 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(pool)
 			.await,
 		14_444
@@ -998,12 +1016,12 @@ async fn parquet() {
 	.await
 	.unwrap();
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<Value, _>| -> Value {
+		rows.par_stream()
+			.map(|row: Result<Value, _>| -> Value {
 				let value = row.unwrap();
 				let _: CommitsDerived = value.clone().downcast().unwrap();
 				value
-			}))
+			})
 			.count(pool)
 			.await,
 		14_444

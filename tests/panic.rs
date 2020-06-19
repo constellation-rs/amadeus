@@ -1,20 +1,19 @@
 use futures::FutureExt;
 use std::{panic, panic::AssertUnwindSafe, time::SystemTime};
 
-use amadeus::dist::prelude::*;
+use amadeus::prelude::*;
 
 #[tokio::test]
 async fn panic() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None);
+	let pool = &ThreadPool::new(None).unwrap();
 
-	let res = AssertUnwindSafe((0i32..1_000).into_dist_stream().for_each(
-		pool,
-		FnMut!(|i| if i == 500 {
-			panic!("boom")
-		}),
-	))
+	let res = AssertUnwindSafe((0i32..1_000).into_par_stream().for_each(pool, |i| {
+		if i == 500 {
+			panic!("this is intended to panic")
+		}
+	}))
 	.catch_unwind()
 	.await;
 

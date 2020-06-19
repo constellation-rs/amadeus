@@ -20,8 +20,7 @@ pub struct Any<I, F> {
 
 impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for Any<I, F>
 where
-	F: FnMut(I::Item) -> bool + Clone + ProcessSend,
-	I::Item: 'static,
+	F: FnMut(I::Item) -> bool + Clone + ProcessSend + 'static,
 {
 	type Output = bool;
 	type Pipe = I;
@@ -43,7 +42,6 @@ where
 impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source> for Any<I, F>
 where
 	F: FnMut(I::Item) -> bool + Clone + Send + 'static,
-	I::Item: 'static,
 {
 	type Output = bool;
 	type Pipe = I;
@@ -131,15 +129,13 @@ where
 }
 impl<A, F> ReducerProcessSend for AnyReducer<A, F>
 where
-	A: 'static,
-	F: FnMut(A) -> bool + ProcessSend,
+	F: FnMut(A) -> bool,
 {
 	type Output = bool;
 }
 impl<A, F> ReducerSend for AnyReducer<A, F>
 where
-	A: 'static,
-	F: FnMut(A) -> bool + Send + 'static,
+	F: FnMut(A) -> bool,
 {
 	type Output = bool;
 }

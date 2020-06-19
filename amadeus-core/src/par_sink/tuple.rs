@@ -29,7 +29,7 @@ where
 			if let Poll::Ready(Some(enum_)) = stream.as_mut().poll_next(cx) {
 				unwrap(enum_)
 			} else {
-				unreachable!("a")
+				unreachable!()
 			},
 		)),
 		Some(_) => Poll::Pending,
@@ -176,8 +176,6 @@ macro_rules! impl_tuple {
 							ready.$num = self_.$t.as_mut().poll_run(cx, stream_, sink_).is_ready();
 							if ready.$num {
 								self_.given.$num = true;
-								progress = true; // TODO remove
-							} else {
 							}
 						}
 					)*
@@ -243,14 +241,9 @@ macro_rules! impl_tuple {
 					$(if !ready.$num {
 						let stream = Peekable{stream:stream.as_mut(),peeked:&mut *self_.peeked};
 						pin_mut!(stream);
-						ready.$num = {
-							let stream_ = substream(stream, |item| if let $enum::$t(_) = item { true } else { false }, |item| { progress = true; if let $enum::$t(item) = item { item } else { unreachable!("b") } });
-							pin_mut!(stream_);
-							self_.$t.as_mut().poll_forward(cx, stream_).is_ready()
-						};
-						if ready.$num {
-							progress = true; // TODO remove
-						}
+						let stream_ = substream(stream, |item| if let $enum::$t(_) = item { true } else { false }, |item| { progress = true; if let $enum::$t(item) = item { item } else { unreachable!() } });
+						pin_mut!(stream_);
+						ready.$num = self_.$t.as_mut().poll_forward(cx, stream_).is_ready();
 					})*
 					if $(ready.$num &&)* true {
 						break Poll::Ready(())
@@ -279,10 +272,10 @@ macro_rules! impl_tuple {
 				}
 			}
 		}
-		impl<$($t: Reducer,)*> ReducerProcessSend for $reducea<$($t,)*> where $($t: ProcessSend,)* $($t::Output: ProcessSend,)* {
+		impl<$($t: Reducer,)*> ReducerProcessSend for $reducea<$($t,)*> where $($t::Output: ProcessSend + 'static,)* {
 			type Output = ($($t::Output,)*);
 		}
-		impl<$($t: Reducer,)*> ReducerSend for $reducea<$($t,)*> where $($t: Send + 'static,)* $($t::Output: Send + 'static,)* {
+		impl<$($t: Reducer,)*> ReducerSend for $reducea<$($t,)*> where $($t::Output: Send + 'static,)* {
 			type Output = ($($t::Output,)*);
 		}
 
@@ -362,9 +355,6 @@ macro_rules! impl_tuple {
 						}).fuse();
 						pin_mut!(stream);
 						ready.$num = self_.$t.as_mut().poll_forward(cx, stream).is_ready();
-						if ready.$num {
-							progress = true; // TODO remove
-						}
 					})*
 					if let Some(peeked) = self_.peeked {
 						if $(peeked.$num.is_none() &&)* true {

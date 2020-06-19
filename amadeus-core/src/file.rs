@@ -201,16 +201,16 @@ pub trait File {
 	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error>;
 }
 #[async_trait(?Send)]
-pub trait Partition: ProcessSend {
+pub trait Partition: ProcessSend + 'static {
 	type Page: Page;
-	type Error: Error + Clone + PartialEq + ProcessSend;
+	type Error: Error + Clone + PartialEq + ProcessSend + 'static;
 
 	async fn pages(self) -> Result<Vec<Self::Page>, Self::Error>;
 }
 #[allow(clippy::len_without_is_empty)]
 #[async_trait]
 pub trait Page {
-	type Error: Error + Clone + PartialEq + Into<io::Error> + ProcessSend;
+	type Error: Error + Clone + PartialEq + Into<io::Error> + ProcessSend + 'static;
 
 	fn len(&self) -> u64;
 	fn set_len(&self, len: u64) -> Result<(), Self::Error>;

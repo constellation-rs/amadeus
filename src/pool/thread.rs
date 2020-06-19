@@ -1,6 +1,6 @@
 use futures::{future, FutureExt, TryFutureExt};
 use std::{
-	future::Future, panic::{RefUnwindSafe, UnwindSafe}, sync::Arc
+	future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, sync::Arc
 };
 use tokio::task::spawn;
 
@@ -17,13 +17,13 @@ struct ThreadPoolInner {
 #[derive(Debug)]
 pub struct ThreadPool(Arc<ThreadPoolInner>);
 impl ThreadPool {
-	pub fn new(tasks_per_core: Option<usize>) -> Self {
+	pub fn new(tasks_per_core: Option<usize>) -> io::Result<Self> {
 		let logical_cores = num_cpus::get();
 		let tasks_per_core = tasks_per_core.unwrap_or(DEFAULT_TASKS_PER_CORE);
-		ThreadPool(Arc::new(ThreadPoolInner {
+		Ok(ThreadPool(Arc::new(ThreadPoolInner {
 			logical_cores,
 			tasks_per_core,
-		}))
+		})))
 	}
 	pub fn threads(&self) -> usize {
 		self.0.logical_cores * self.0.tasks_per_core

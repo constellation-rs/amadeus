@@ -6,7 +6,7 @@
 
 #![doc(html_root_url = "https://docs.rs/amadeus/0.2.0")]
 #![doc(
-	html_logo_url = "https://raw.githubusercontent.com/alecmocatta/amadeus/master/logo.svg?sanitize=true"
+	html_logo_url = "https://raw.githubusercontent.com/constellation-rs/amadeus/master/logo.svg?sanitize=true"
 )]
 #![feature(specialization)]
 #![warn(
@@ -86,6 +86,4 @@ pub mod prelude {
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
 		}, par_pipe::ParallelPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
 	};
-	#[doc(no_inline)]
-	pub use serde_closure::{Fn, FnMut, FnOnce};
 }

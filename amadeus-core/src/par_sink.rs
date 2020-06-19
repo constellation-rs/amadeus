@@ -47,7 +47,7 @@ pub trait ReducerSend: Reducer<Output = <Self as ReducerSend>::Output> {
 	type Output: Send + 'static;
 }
 pub trait ReducerProcessSend: ReducerSend<Output = <Self as ReducerProcessSend>::Output> {
-	type Output: ProcessSend;
+	type Output: ProcessSend + 'static;
 }
 
 pub trait Factory {
@@ -62,7 +62,7 @@ pub trait DistributedSink<Source> {
 	type Pipe: DistributedPipe<Source>;
 	type ReduceAFactory: Factory<Item = Self::ReduceA> + Clone + ProcessSend;
 	type ReduceBFactory: Factory<Item = Self::ReduceB>;
-	type ReduceA: ReducerSend<Item = <Self::Pipe as DistributedPipe<Source>>::Item> + ProcessSend;
+	type ReduceA: ReducerSend<Item = <Self::Pipe as DistributedPipe<Source>>::Item> + Send;
 	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
 	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self::Output>;
 
@@ -86,7 +86,7 @@ pub trait ParallelSink<Source> {
 	type Output;
 	type Pipe: ParallelPipe<Source>;
 	type ReduceAFactory: Factory<Item = Self::ReduceA>;
-	type ReduceA: ReducerSend<Item = <Self::Pipe as ParallelPipe<Source>>::Item> + Send + 'static;
+	type ReduceA: ReducerSend<Item = <Self::Pipe as ParallelPipe<Source>>::Item> + Send;
 	type ReduceC: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self::Output>;
 
 	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC);

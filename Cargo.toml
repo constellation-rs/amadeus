@@ -62,7 +62,15 @@ streaming_algorithms = "0.2"
 tokio = { version = "0.2", features = ["macros", "time"] }
 
 [[example]]
-name = "common_crawl"
+name = "cloudfront_logs"
+required-features = ["aws"]
+
+[[example]]
+name = "commoncrawl"
+required-features = ["commoncrawl"]
+
+[[example]]
+name = "commoncrawl_dist"
 required-features = ["commoncrawl", "constellation"]
 
 [[test]]

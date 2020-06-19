@@ -29,7 +29,7 @@ impl_par_dist_rename! {
 	#[must_use]
 	pub trait ParallelPipe<Source> {
 		type Item;
-		type Task: PipeTask<Source, Item = Self::Item> + Send + 'static;
+		type Task: PipeTask<Source, Item = Self::Item> + Send;
 
 		fn task(&self) -> Self::Task;
 
@@ -87,7 +87,6 @@ impl_par_dist_rename! {
 		fn for_each<F>(self, f: F) -> ForEach<Self, F>
 		where
 			F: FnMut(Self::Item) + Clone + Send + 'static,
-			Self::Item: 'static,
 			Self: Sized,
 		{
 			assert_parallel_sink(ForEach::new(self, f))
@@ -98,7 +97,6 @@ impl_par_dist_rename! {
 			ID: FnMut() -> B + Clone + Send + 'static,
 			F: FnMut(B, Either<Self::Item, B>) -> B + Clone + Send + 'static,
 			B: Send + 'static,
-			Self::Item: 'static,
 			Self: Sized,
 		{
 			assert_parallel_sink(Fold::new(self, identity, op))
@@ -106,7 +104,6 @@ impl_par_dist_rename! {
 
 		fn count(self) -> Count<Self>
 		where
-			Self::Item: 'static,
 			Self: Sized,
 		{
 			assert_parallel_sink(Count::new(self))
@@ -115,7 +112,6 @@ impl_par_dist_rename! {
 		fn sum<B>(self) -> Sum<Self, B>
 		where
 			B: iter::Sum<Self::Item> + iter::Sum<B> + Send + 'static,
-			Self::Item: 'static,
 			Self: Sized,
 		{
 			assert_parallel_sink(Sum::new(self))
@@ -220,7 +216,6 @@ impl_par_dist_rename! {
 		fn all<F>(self, f: F) -> All<Self, F>
 		where
 			F: FnMut(Self::Item) -> bool + Clone + Send + 'static,
-			Self::Item: 'static,
 			Self: Sized,
 		{
 			assert_parallel_sink(All::new(self, f))
@@ -229,7 +224,6 @@ impl_par_dist_rename! {
 		fn any<F>(self, f: F) -> Any<Self, F>
 		where
 			F: FnMut(Self::Item) -> bool + Clone + Send + 'static,
-			Self::Item: 'static,
 			Self: Sized,
 		{
 			assert_parallel_sink(Any::new(self, f))

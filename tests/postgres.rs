@@ -1,12 +1,12 @@
 use std::time::SystemTime;
 
-use amadeus::dist::prelude::*;
+use amadeus::prelude::*;
 
 #[tokio::test]
 async fn postgres() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None);
+	let pool = &ThreadPool::new(None).unwrap();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct Weather {
@@ -32,8 +32,8 @@ async fn postgres() {
 		)],
 	)]);
 	assert_eq!(
-		rows.dist_stream()
-			.map(FnMut!(|row: Result<_, _>| row.unwrap()))
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
 			.count(&pool)
 			.await,
 		4
@@ -48,13 +48,13 @@ async fn postgres() {
 	// 	)],
 	// )]);
 	// assert_eq!(
-	// 	rows.dist_stream()
-	// 		.map(FnMut!(|row: Result<Value, _>| -> Value {
+	// 	rows.par_stream()
+	// 		.map(|row: Result<Value, _>| -> Value {
 	// 			let value = row.unwrap();
 	// 			// println!("{:?}", value);
 	// 			// let _: GameDerived = value.clone().downcast().unwrap();
 	// 			value
-	// 		}))
+	// 		})
 	// 		.count(&pool).await,
 	// 	4
 	// );

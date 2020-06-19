@@ -24,10 +24,9 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, ID, F, B> ParallelSink<Source>
 		for Fold<I, ID, F, B>
 	where
-		ID: FnMut() -> B + Clone + Send+'static,
-		F: FnMut(B, Either<I::Item, B>) -> B + Clone + Send+'static,
-		B: Send+'static,
-		I::Item: 'static,
+		ID: FnMut() -> B + Clone + Send + 'static,
+		F: FnMut(B, Either<I::Item, B>) -> B + Clone + Send + 'static,
+		B: Send + 'static,
 	{
 		folder_par_sink!(FoldFolder<I::Item, ID, F, B, StepA>, FoldFolder<I::Item, ID, F, B, StepB>, self, FoldFolder::new(self.identity.clone(), self.op.clone()), FoldFolder::new(self.identity, self.op));
 	}

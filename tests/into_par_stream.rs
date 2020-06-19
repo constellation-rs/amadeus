@@ -1,17 +1,17 @@
 use either::Either;
 
-use amadeus::dist::prelude::*;
+use amadeus::prelude::*;
 
 #[tokio::test]
-async fn into_dist_stream() {
-	let pool = &ThreadPool::new(None);
+async fn into_par_stream() {
+	let pool = &ThreadPool::new(None).unwrap();
 
-	<&[usize] as IntoDistributedStream>::into_dist_stream(&[1, 2, 3])
-		.map(FnMut!(|a: usize| a))
-		.for_each(&pool, FnMut!(|a: usize| println!("{:?}", a)))
+	<&[usize] as IntoParallelStream>::into_par_stream(&[1, 2, 3])
+		.map(|a: usize| a)
+		.for_each(&pool, |a: usize| println!("{:?}", a))
 		.await;
 
-	let res: usize = [1, 2, 3].into_dist_stream().sum(&pool).await;
+	let res: usize = [1, 2, 3].into_par_stream().sum(&pool).await;
 	assert_eq!(res, 6);
 
 	let slice = [
@@ -20,16 +20,16 @@ async fn into_dist_stream() {
 	];
 	for i in 0..slice.len() {
 		let res = slice[..i]
-			.dist_stream()
-			.into_dist_stream()
+			.par_stream()
+			.into_par_stream()
 			.fold(
 				&pool,
-				FnMut!(|| 0usize),
-				FnMut!(|a: usize, b: Either<usize, usize>| a + b.into_inner()),
+				|| 0usize,
+				|a: usize, b: Either<usize, usize>| a + b.into_inner(),
 			)
 			.await;
 		assert_eq!(res, slice[..i].iter().sum::<usize>());
 	}
-	let sum: usize = slice.iter().cloned().dist().sum(&pool).await;
+	let sum: usize = slice.iter().cloned().par().sum(&pool).await;
 	assert_eq!(sum, slice.iter().sum::<usize>());
 }

@@ -25,9 +25,9 @@ impl ProcessPoolTrait for ProcessPool {
 	}
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
+		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: ProcessSend,
+		T: ProcessSend + 'static,
 	{
 		Box::pin(ProcessPool::spawn(self, work).map_err(|e| Box::new(e) as _))
 	}
@@ -41,9 +41,9 @@ impl ProcessPoolTrait for ThreadPool {
 	}
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend,
+		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: ProcessSend,
+		T: ProcessSend + 'static,
 	{
 		let self_ = self.clone();
 		Box::pin(ThreadPool::spawn(self, move || work(&self_)).map_err(|e| Box::new(e) as _))

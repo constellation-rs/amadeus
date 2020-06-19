@@ -17,7 +17,7 @@
 
 //! An Apache Parquet implementation in Rust.
 //!
-//! **[Crates.io](https://crates.io/crates/amadeus-parquet) │ [Repo](https://github.com/alecmocatta/amadeus)**
+//! **[Crates.io](https://crates.io/crates/amadeus-parquet) │ [Repo](https://github.com/constellation-rs/amadeus)**
 
 // #![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.1.0")]
 // #![feature(

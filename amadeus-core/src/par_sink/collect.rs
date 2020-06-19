@@ -52,7 +52,7 @@ impl<I: DistributedPipe<Source>, Source, T: FromDistributedStream<I::Item>> Dist
 pub trait FromDistributedStream<T>: Sized {
 	type ReduceAFactory: Factory<Item = Self::ReduceA> + Clone + ProcessSend;
 	type ReduceBFactory: Factory<Item = Self::ReduceB>;
-	type ReduceA: ReducerSend<Item = T> + ProcessSend;
+	type ReduceA: ReducerSend<Item = T> + Send;
 	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
 	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self>;
 
@@ -62,7 +62,7 @@ pub trait FromDistributedStream<T>: Sized {
 
 pub trait FromParallelStream<T>: Sized {
 	type ReduceAFactory: Factory<Item = Self::ReduceA>;
-	type ReduceA: ReducerSend<Item = T> + Send + 'static;
+	type ReduceA: ReducerSend<Item = T> + Send;
 	type ReduceC: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self>;
 
 	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC);
@@ -143,14 +143,12 @@ impl<A, T: Extend<A>> ReducerAsync for PushReducer<A, T> {
 }
 impl<A, T: Extend<A>> ReducerProcessSend for PushReducer<A, T>
 where
-	A: 'static,
-	T: ProcessSend,
+	T: ProcessSend + 'static,
 {
 	type Output = T;
 }
 impl<A, T: Extend<A>> ReducerSend for PushReducer<A, T>
 where
-	A: 'static,
 	T: Send + 'static,
 {
 	type Output = T;
@@ -173,14 +171,12 @@ where
 }
 impl<A: IntoIterator<Item = B>, T: Extend<B>, B> ReducerProcessSend for ExtendReducer<A, T>
 where
-	A: 'static,
-	T: ProcessSend,
+	T: ProcessSend + 'static,
 {
 	type Output = T;
 }
 impl<A: IntoIterator<Item = B>, T: Extend<B>, B> ReducerSend for ExtendReducer<A, T>
 where
-	A: 'static,
 	T: Send + 'static,
 {
 	type Output = T;
@@ -314,14 +310,12 @@ impl<R: ReducerAsync> ReducerAsync for OptionReducer<R> {
 }
 impl<R: Reducer> ReducerProcessSend for OptionReducer<R>
 where
-	R: ProcessSend,
-	R::Output: ProcessSend,
+	R::Output: ProcessSend + 'static,
 {
 	type Output = Option<R::Output>;
 }
 impl<R: Reducer> ReducerSend for OptionReducer<R>
 where
-	R: Send + 'static,
 	R::Output: Send + 'static,
 {
 	type Output = Option<R::Output>;
@@ -404,24 +398,188 @@ impl<R: ReducerAsync, E> ReducerAsync for ResultReducerAsync<R, E> {
 }
 impl<R: Reducer, E> ReducerProcessSend for ResultReducer<R, E>
 where
-	R: ProcessSend,
-	R::Output: ProcessSend,
-	E: ProcessSend,
+	R::Output: ProcessSend + 'static,
+	E: ProcessSend + 'static,
 {
 	type Output = Result<R::Output, E>;
 }
 impl<R: Reducer, E> ReducerSend for ResultReducer<R, E>
 where
-	R: Send + 'static,
 	R::Output: Send + 'static,
 	E: Send + 'static,
 {
 	type Output = Result<R::Output, E>;
 }
 
+impl<T> FromParallelStream<T> for Vec<T>
+where
+	T: Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<T, Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<T> FromParallelStream<T> for VecDeque<T>
+where
+	T: Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<T, Vec<T>>;
+	type ReduceC = IntoReducer<ExtendReducer<Vec<T>>, Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<T: Ord> FromParallelStream<T> for BinaryHeap<T>
+where
+	T: Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<T, Vec<T>>;
+	type ReduceC = IntoReducer<ExtendReducer<Vec<T>>, Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<T> FromParallelStream<T> for LinkedList<T>
+where
+	T: Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<T, Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<T, S> FromParallelStream<T> for HashSet<T, S>
+where
+	T: Eq + Hash + Send + 'static,
+	S: BuildHasher + Default + Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<T, Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<K, V, S> FromParallelStream<(K, V)> for HashMap<K, V, S>
+where
+	K: Eq + Hash + Send + 'static,
+	V: Send + 'static,
+	S: BuildHasher + Default + Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<(K, V), Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<T> FromParallelStream<T> for BTreeSet<T>
+where
+	T: Ord + Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<T, Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<K, V> FromParallelStream<(K, V)> for BTreeMap<K, V>
+where
+	K: Ord + Send + 'static,
+	V: Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<(K, V), Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl FromParallelStream<char> for String {
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<char, Self>;
+	type ReduceC = PushReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl FromParallelStream<Self> for String {
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<Self>;
+	type ReduceC = PushReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl FromParallelStream<()> for () {
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<Self>;
+	type ReduceC = PushReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
+}
+
+impl<T, C: FromParallelStream<T>> FromParallelStream<Option<T>> for Option<C> {
+	type ReduceAFactory = OptionReducerFactory<C::ReduceAFactory>;
+	type ReduceA = OptionReducer<C::ReduceA>;
+	type ReduceC = OptionReducer<C::ReduceC>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		let (a, c) = C::reducers();
+		(OptionReducerFactory(a), OptionReducer(Some(c)))
+	}
+}
+
+impl<T, C: FromParallelStream<T>, E> FromParallelStream<Result<T, E>> for Result<C, E>
+where
+	E: Send + 'static,
+{
+	type ReduceAFactory = ResultReducerFactory<C::ReduceAFactory, E>;
+	type ReduceA = ResultReducer<C::ReduceA, E>;
+	type ReduceC = ResultReducer<C::ReduceC, E>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		let (a, c) = C::reducers();
+		(
+			ResultReducerFactory(a, PhantomData),
+			ResultReducer(c, PhantomData),
+		)
+	}
+}
+
 impl<T> FromDistributedStream<T> for Vec<T>
 where
-	T: ProcessSend,
+	T: ProcessSend + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
@@ -436,7 +594,7 @@ where
 
 impl<T> FromDistributedStream<T> for VecDeque<T>
 where
-	T: ProcessSend,
+	T: ProcessSend + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
@@ -451,7 +609,7 @@ where
 
 impl<T: Ord> FromDistributedStream<T> for BinaryHeap<T>
 where
-	T: ProcessSend,
+	T: ProcessSend + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
@@ -466,7 +624,7 @@ where
 
 impl<T> FromDistributedStream<T> for LinkedList<T>
 where
-	T: ProcessSend,
+	T: ProcessSend + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
@@ -481,7 +639,7 @@ where
 
 impl<T, S> FromDistributedStream<T> for HashSet<T, S>
 where
-	T: Eq + Hash + ProcessSend,
+	T: Eq + Hash + ProcessSend + 'static,
 	S: BuildHasher + Default + Send + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
@@ -497,8 +655,8 @@ where
 
 impl<K, V, S> FromDistributedStream<(K, V)> for HashMap<K, V, S>
 where
-	K: Eq + Hash + ProcessSend,
-	V: ProcessSend,
+	K: Eq + Hash + ProcessSend + 'static,
+	V: ProcessSend + 'static,
 	S: BuildHasher + Default + Send + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
@@ -514,7 +672,7 @@ where
 
 impl<T> FromDistributedStream<T> for BTreeSet<T>
 where
-	T: Ord + ProcessSend,
+	T: Ord + ProcessSend + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
@@ -529,8 +687,8 @@ where
 
 impl<K, V> FromDistributedStream<(K, V)> for BTreeMap<K, V>
 where
-	K: Ord + ProcessSend,
-	V: ProcessSend,
+	K: Ord + ProcessSend + 'static,
+	V: ProcessSend + 'static,
 {
 	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
@@ -598,7 +756,7 @@ impl<T, C: FromDistributedStream<T>> FromDistributedStream<Option<T>> for Option
 
 impl<T, C: FromDistributedStream<T>, E> FromDistributedStream<Result<T, E>> for Result<C, E>
 where
-	E: ProcessSend,
+	E: ProcessSend + 'static,
 {
 	type ReduceAFactory = ResultReducerFactory<C::ReduceAFactory, E>;
 	type ReduceBFactory = ResultReducerFactory<C::ReduceBFactory, E>;
