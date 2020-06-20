@@ -499,8 +499,18 @@ fn impl_struct(
 			}
 			#[inline(always)]
 			fn push(&mut self, t: #name #ty_generics) {
-				#(<<#field_types1 as __::CoreData>::Vec as __::ListVec<#field_types1>>::push(&mut self.#field_names1, t.#field_names2);)*
 				self.__len += 1;
+				#(<<#field_types1 as __::CoreData>::Vec as __::ListVec<#field_types1>>::push(&mut self.#field_names1, t.#field_names2);)*
+			}
+			#[inline(always)]
+			fn pop(&mut self) -> Option<#name #ty_generics> {
+				if self.__len == 0 {
+					return None;
+				}
+				self.__len -= 1;
+				Some(#name {
+					#(#field_names1: <<#field_types1 as __::CoreData>::Vec as __::ListVec<#field_types1>>::pop(&mut self.#field_names2).unwrap(),)*
+				})
 			}
 			#[inline(always)]
 			fn len(&self) -> usize {
@@ -516,12 +526,17 @@ fn impl_struct(
 				self_
 			}
 			#[inline(always)]
-			fn into_vec(self) -> __::Vec<#name #ty_generics> {
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			fn into_vec(mut self) -> __::Vec<#name #ty_generics> {
+				let mut vec = Vec::with_capacity(self.__len);
+				while let Some(el) = self.pop() {
+					vec.push(el);
+				}
+				vec.reverse();
+				vec
 			}
 			#[inline(always)]
 			fn into_iter_a(self) -> Self::IntoIter {
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+				self.into_vec().into_iter()
 			}
 			#[inline(always)]
 			fn iter_a<'a>(&'a self) -> __::Box<dyn __::Iterator<Item = &'a #name #ty_generics> + 'a> {

@@ -2312,6 +2312,14 @@ impl ListVec<Value> for ValueVec {
 			ValueVec::Value(list) => list.push(t),
 		}
 	}
+	fn pop(&mut self) -> Option<Value> {
+		match self {
+			ValueVec::U8(list) => list.pop().map(Value::U8),
+			ValueVec::U16(list) => list.pop().map(Value::U16),
+			ValueVec::List(list) => list.pop().map(Box::new).map(Value::List),
+			ValueVec::Value(list) => list.pop(),
+		}
+	}
 	#[inline(always)]
 	fn len(&self) -> usize {
 		match self {

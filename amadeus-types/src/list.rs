@@ -6,7 +6,11 @@ use std::{
 };
 
 use super::{AmadeusOrd, Data};
-use amadeus_core::util::type_coerce;
+use amadeus_core::{
+	par_sink::{
+		DefaultReducerFactory, ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer
+	}, pool::ProcessSend, util::type_coerce
+};
 
 pub struct List<T: Data> {
 	vec: T::Vec,
@@ -99,8 +103,10 @@ impl<T: Data> FromIterator<T> for List<T> {
 }
 impl<T: Data> Extend<T> for List<T> {
 	#[inline(always)]
-	fn extend<I: IntoIterator<Item = T>>(&mut self, _iter: I) {
-		unimplemented!()
+	fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+		for el in iter {
+			self.push(el);
+		}
 	}
 }
 impl<T: Data> Clone for List<T>
@@ -199,6 +205,7 @@ where
 impl<T: Data> UnwindSafe for List<T> where T: UnwindSafe {}
 impl<T: Data> RefUnwindSafe for List<T> where T: RefUnwindSafe {}
 impl<T: Data> Unpin for List<T> where T: Unpin {}
+// Implementers of ListVec must be Send/Sync if T is Send/Sync!
 unsafe impl<T: Data> Send for List<T> where T: Send {}
 unsafe impl<T: Data> Sync for List<T> where T: Sync {}
 
@@ -234,6 +241,7 @@ pub trait ListVec<T> {
 
 	fn new() -> Self;
 	fn push(&mut self, t: T);
+	fn pop(&mut self) -> Option<T>;
 	fn len(&self) -> usize;
 	fn from_vec(vec: Vec<T>) -> Self;
 	fn into_vec(self) -> Vec<T>;
@@ -269,6 +277,10 @@ impl<T> ListVec<T> for Vec<T> {
 	#[inline(always)]
 	fn push(&mut self, t: T) {
 		self.push(t)
+	}
+	#[inline(always)]
+	fn pop(&mut self) -> Option<T> {
+		self.pop()
 	}
 	#[inline(always)]
 	fn len(&self) -> usize {
@@ -329,18 +341,46 @@ impl<T> ListVec<T> for Vec<T> {
 		self.fmt(fmt)
 	}
 }
-#[doc(hidden)]
-pub trait ListVecRef<'a, T: 'a> {
-	type IntoIter: Iterator<Item = &'a T>;
+// #[doc(hidden)]
+// pub trait ListVecRef<'a, T: 'a> {
+// 	type IntoIter: Iterator<Item = &'a T>;
 
-	fn into_iter(self) -> Self::IntoIter;
+// 	fn into_iter(self) -> Self::IntoIter;
+// }
+// impl<'a, T: 'a> ListVecRef<'a, T> for &'a Vec<T> {
+// 	type IntoIter = std::slice::Iter<'a, T>;
+
+// 	#[inline(always)]
+// 	fn into_iter(self) -> Self::IntoIter {
+// 		IntoIterator::into_iter(self)
+// 	}
+// }
+
+impl<T: Data> FromParallelStream<T> for List<T>
+where
+	T: Send + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceA = PushReducer<T, Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+		Default::default()
+	}
 }
-impl<'a, T: 'a> ListVecRef<'a, T> for &'a Vec<T> {
-	type IntoIter = std::slice::Iter<'a, T>;
 
-	#[inline(always)]
-	fn into_iter(self) -> Self::IntoIter {
-		IntoIterator::into_iter(self)
+impl<T: Data> FromDistributedStream<T> for List<T>
+where
+	T: ProcessSend + 'static,
+{
+	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
+	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
+	type ReduceA = PushReducer<T, Self>;
+	type ReduceB = ExtendReducer<Self>;
+	type ReduceC = ExtendReducer<Self>;
+
+	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+		Default::default()
 	}
 }
 

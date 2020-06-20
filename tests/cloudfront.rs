@@ -21,7 +21,7 @@ async fn cloudfront() {
 	.await
 	.unwrap();
 
-	let ((), (count, count2, ())) = rows
+	let ((), (count, count2, (), list)): ((), (usize, usize, (), List<CloudfrontRow>)) = rows
 		.par_stream()
 		.pipe_fork(
 			pool,
@@ -33,11 +33,15 @@ async fn cloudfront() {
 				Identity.map(|_: &_| ()).count(),
 				Identity.count(),
 				Identity.for_each(|_: &_| ()),
+				Identity.cloned().map(Result::unwrap).collect(),
 			),
 		)
 		.await;
 	assert_eq!(count, count2);
 	assert_eq!(count, 207_928);
+
+	assert_eq!(list.len(), count);
+	for _el in list {}
 
 	println!("in {:?}", start.elapsed().unwrap());
 }
