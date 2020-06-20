@@ -1239,7 +1239,6 @@ impl ParquetData for Time {
 	}
 }
 
-#[inline(always)]
 fn date_time_from_parquet(date_time: Sum3<Int96, i64, i64>) -> Result<DateTime> {
 	match date_time {
 		Sum3::A(date_time) => {
