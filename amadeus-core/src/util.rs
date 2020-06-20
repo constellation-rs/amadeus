@@ -1,9 +1,9 @@
 use derive_new::new;
 use futures::{ready, Stream};
 use pin_project::pin_project;
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{
-	any::type_name, error, fmt, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
+	any::type_name, error, fmt, hash::{Hash, Hasher}, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
 use crate::par_stream::{DistributedStream, ParallelStream};
@@ -170,6 +170,48 @@ impl<T: 'static> StreamTaskAsync for ImplTask<T> {
 	fn poll_run(
 		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()> {
+		unreachable!()
+	}
+}
+
+// This is a dumb hack to avoid triggering https://github.com/rust-lang/rust/issues/48214 in amadeus-derive: see https://github.com/taiki-e/pin-project/issues/102#issuecomment-540472282
+#[doc(hidden)]
+pub struct Wrapper<'a, T: ?Sized>(&'a T);
+impl<'a, T: ?Sized> Hash for Wrapper<'a, T>
+where
+	T: Hash,
+{
+	fn hash<H: Hasher>(&self, _state: &mut H) {
+		unreachable!()
+	}
+}
+impl<'a, T: ?Sized> Serialize for Wrapper<'a, T>
+where
+	T: Serialize,
+{
+	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		unreachable!()
+	}
+}
+impl<'a, 'de, T: ?Sized> Deserialize<'de> for Wrapper<'a, T>
+where
+	T: Deserialize<'de>,
+{
+	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		unreachable!()
+	}
+}
+impl<'a, T: ?Sized> fmt::Debug for Wrapper<'a, T>
+where
+	T: fmt::Debug,
+{
+	fn fmt(&self, _f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		unreachable!()
 	}
 }

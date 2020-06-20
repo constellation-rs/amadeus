@@ -37,7 +37,7 @@ use crate::internal::{
 	}, errors::{ParquetError, Result}, file::reader::{FileReader, RowGroupReader}, schema::types::ColumnPath
 };
 use amadeus_types::{
-	Bson, Date, DateTime, Decimal, Enum, Group, Json, List, Time, Value, ValueRequired
+	Bson, Data, Date, DateTime, Decimal, Enum, Group, Json, List, Time, Value, ValueRequired
 };
 
 /// Default batch size for a reader
@@ -118,11 +118,11 @@ pub struct ByteArrayReader {
 	pub(super) column: TypedTripletIter<ByteArrayType>,
 }
 impl Reader for ByteArrayReader {
-	type Item = Vec<u8>;
+	type Item = List<u8>;
 
 	#[inline]
 	fn read(&mut self, _def_level: i16, _rep_level: i16) -> Result<Self::Item> {
-		self.column.read().map(|data| data.into())
+		self.column.read().map(|data| Vec::from(data).into())
 	}
 
 	reader_passthrough!(column);
@@ -132,7 +132,7 @@ pub struct FixedLenByteArrayReader<T> {
 	pub(super) column: TypedTripletIter<FixedLenByteArrayType>,
 	pub(super) marker: PhantomData<fn() -> T>,
 }
-impl<T> Reader for FixedLenByteArrayReader<T> {
+impl<T: Data> Reader for FixedLenByteArrayReader<T> {
 	type Item = T;
 
 	#[inline]
@@ -209,7 +209,7 @@ pub struct BoxFixedLenByteArrayReader<T> {
 	pub(super) column: TypedTripletIter<FixedLenByteArrayType>,
 	pub(super) marker: PhantomData<fn() -> T>,
 }
-impl<T> Reader for BoxFixedLenByteArrayReader<T> {
+impl<T: Data> Reader for BoxFixedLenByteArrayReader<T> {
 	type Item = Box<T>;
 
 	#[inline]
@@ -284,7 +284,7 @@ pub struct KeyValueReader<K, V> {
 	pub(super) values_reader: V,
 }
 impl<K: Reader, V: Reader> Reader for KeyValueReader<K, V> {
-	type Item = Vec<(K::Item, V::Item)>;
+	type Item = List<(K::Item, V::Item)>;
 
 	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item> {
 		let mut pairs = Vec::new();
@@ -311,7 +311,7 @@ impl<K: Reader, V: Reader> Reader for KeyValueReader<K, V> {
 			}
 		}
 
-		Ok(pairs)
+		Ok(pairs.into())
 	}
 
 	#[inline]
@@ -439,9 +439,7 @@ impl Reader for ValueReader {
 			}
 			ValueReader::ByteArray(ref mut reader) => reader
 				.read(def_level, rep_level)
-				.map(Into::into)
-				.map(Box::new)
-				.map(Value::List),
+				.map(|vec| Value::List(Box::new(vec.into_iter().map(Value::from).collect()))),
 			ValueReader::Bson(ref mut reader) => reader.read(def_level, rep_level).map(Value::Bson),
 			ValueReader::String(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::String)
@@ -650,7 +648,7 @@ pub struct TupleReader<T>(pub(super) T);
 
 /// A convenience Reader that maps the read value using [`TryInto`].
 pub struct TryIntoReader<R: Reader, T>(pub(super) R, pub(super) PhantomData<fn() -> T>);
-impl<R: Reader, T> Reader for TryIntoReader<R, T>
+impl<R: Reader, T: Data> Reader for TryIntoReader<R, T>
 where
 	R::Item: TryInto<T>,
 	<R::Item as TryInto<T>>::Error: Error,
@@ -688,7 +686,7 @@ where
 
 /// A convenience Reader that maps the read value using the supplied closure.
 pub struct MapReader<R: Reader, F>(pub(super) R, pub(super) F);
-impl<R: Reader, F, T> Reader for MapReader<R, F>
+impl<R: Reader, F, T: Data> Reader for MapReader<R, F>
 where
 	F: FnMut(R::Item) -> Result<T>,
 {

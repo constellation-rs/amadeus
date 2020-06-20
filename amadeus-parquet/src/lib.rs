@@ -4,6 +4,7 @@
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 #![cfg_attr(test, feature(test))]
+#![allow(incomplete_features)]
 #[cfg(test)]
 extern crate test;
 

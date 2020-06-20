@@ -6,6 +6,7 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.0")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
+#![allow(incomplete_features)]
 
 mod impls;
 
@@ -37,20 +38,6 @@ where
 	fn decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
 	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>>;
-}
-
-impl<T> PostgresData for Box<T>
-where
-	T: PostgresData,
-{
-	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
-		T::query(f, name)
-	}
-	default fn decode(
-		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
-		T::decode(type_, buf).map(Box::new)
-	}
 }
 
 #[derive(Serialize, Deserialize)]

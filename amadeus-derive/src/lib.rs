@@ -89,6 +89,8 @@ fn impl_struct(
 ) -> Result<TokenStream, Error> {
 	let name = &ast.ident;
 	let visibility = &ast.vis;
+	let vec_name = Ident::new(&format!("{}Vec", name), Span::call_site());
+	let dynamic_type_name = Ident::new(&format!("{}DynamicType", name), Span::call_site());
 	let serde_name = Ident::new(&format!("{}Serde", name), Span::call_site());
 	let schema_name = Ident::new(&format!("{}Schema", name), Span::call_site());
 	let reader_name = Ident::new(&format!("{}Reader", name), Span::call_site());
@@ -456,14 +458,118 @@ fn impl_struct(
 			#parquet_includes
 			#postgres_includes
 			#serde_includes
-			pub use ::amadeus_types::{AmadeusOrd, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete};
+			pub use ::amadeus_core::util::Wrapper;
+			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec};
 			pub use #amadeus_path::data::Data;
-			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, marker::{Send, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
+			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, hash::{Hash, Hasher}, marker::{Send, Sized, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
 		#parquet_derives
 		#postgres_derives
 		#serde_derives
+
+		#visibility struct #vec_name #impl_generics #where_clause_with_data {
+			#(#field_names1: <#field_types1 as __::CoreData>::Vec,)*
+			__len: usize,
+		}
+		#visibility struct #dynamic_type_name #impl_generics #where_clause_with_data {
+			#(#field_names1: <#field_types1 as __::CoreData>::DynamicType,)*
+		}
+		#[automatically_derived]
+		impl #impl_generics __::CoreData for #name #ty_generics #where_clause_with_data {
+			type Vec = #vec_name #ty_generics;
+			type DynamicType = #dynamic_type_name #ty_generics;
+
+			fn new_vec(type_: Self::DynamicType) -> Self::Vec {
+				#vec_name {
+					#(#field_names1: <#field_types1 as __::CoreData>::new_vec(type_.#field_names2),)*
+					__len: 0,
+				}
+			}
+		}
+		impl #impl_generics __::ListVec<#name #ty_generics> for #vec_name #ty_generics #where_clause_with_data {
+			type IntoIter = std::vec::IntoIter<#name #ty_generics>;
+
+			#[inline(always)]
+			fn new() -> Self {
+				#vec_name {
+					#(#field_names1: <<#field_types1 as __::CoreData>::Vec as __::ListVec<#field_types1>>::new(),)*
+					__len: 0,
+				}
+			}
+			#[inline(always)]
+			fn push(&mut self, t: #name #ty_generics) {
+				#(<<#field_types1 as __::CoreData>::Vec as __::ListVec<#field_types1>>::push(&mut self.#field_names1, t.#field_names2);)*
+				self.__len += 1;
+			}
+			#[inline(always)]
+			fn len(&self) -> usize {
+				self.__len
+			}
+			#[inline(always)]
+			fn from_vec(vec: __::Vec<#name #ty_generics>) -> Self {
+				// TODO: reserve capacity
+				let mut self_ = Self::new();
+				for el in vec {
+					self_.push(el);
+				}
+				self_
+			}
+			#[inline(always)]
+			fn into_vec(self) -> __::Vec<#name #ty_generics> {
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			}
+			#[inline(always)]
+			fn into_iter_a(self) -> Self::IntoIter {
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			}
+			#[inline(always)]
+			fn iter_a<'a>(&'a self) -> __::Box<dyn __::Iterator<Item = &'a #name #ty_generics> + 'a> {
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			}
+			#[inline(always)]
+			fn clone_a(&self) -> Self
+			where
+				#name #ty_generics: __::Clone,
+			{
+				#vec_name {
+					#(#field_names1: self.#field_names2.clone_a(),)*
+					__len: self.__len,
+				}
+			}
+			#[inline(always)]
+			fn hash_a<H>(&self, _state: &mut H)
+			where
+				H: __::Hasher,
+				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Hash,
+			{
+				// #(self.#field_names1.hash_a(state);)*
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			}
+			#[inline(always)]
+			fn serialize_a<S>(&self, _serializer: S) -> __::Result<S::Ok, S::Error>
+			where
+				S: __::Serializer,
+				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Serialize,
+			{
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			}
+			#[inline(always)]
+			fn deserialize_a<'de, D>(_deserializer: D) -> __::Result<Self, D::Error>
+			where
+				D: __::Deserializer<'de>,
+				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Deserialize<'de>,
+				Self: __::Sized,
+			{
+				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			}
+			fn fmt_a(&self, fmt: &mut __::fmt::Formatter) -> __::Result<(), __::fmt::Error>
+			where
+				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Debug,
+			{
+				__::fmt::Formatter::debug_list(fmt).entries(self.iter_a()).finish()
+			}
+		}
 
 		#[automatically_derived]
 		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {}

@@ -6,7 +6,7 @@ use sum::{Sum2, Sum3};
 
 use amadeus_core::util::type_coerce;
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+	Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
 #[cfg(debug_assertions)]
@@ -68,7 +68,7 @@ impl ParquetData for Bson {
 	) -> Self::Reader {
 		MapReader(
 			byte_array_reader(&schema.0, path, def_level, rep_level, paths, batch_size),
-			|x| Ok(From::from(x)),
+			|x| Ok(Bson::from(Vec::from(x))),
 		)
 	}
 }
@@ -91,7 +91,7 @@ impl ParquetData for String {
 		MapReader(
 			byte_array_reader(&schema.0, path, def_level, rep_level, paths, batch_size),
 			|x| {
-				String::from_utf8(x)
+				String::from_utf8(Vec::from(x))
 					.map_err(|err: FromUtf8Error| ParquetError::General(err.to_string()))
 			},
 		)
@@ -339,7 +339,7 @@ impl Reader for DecimalReader {
 				scale,
 			} => reader
 				.read(def_level, rep_level)
-				.map(|bytes| Decimal::from_bytes(bytes, *precision as i32, *scale as i32)),
+				.map(|bytes| Decimal::from_bytes(bytes.into(), *precision as i32, *scale as i32)),
 		}
 	}
 
@@ -523,7 +523,7 @@ fn parse_list<T: ParquetData>(
 	Err(ParquetError::General(String::from("Couldn't parse Vec<T>")))
 }
 
-impl<T> ParquetData for List<T>
+impl<T: Data> ParquetData for List<T>
 where
 	T: ParquetData,
 {
@@ -664,7 +664,7 @@ impl<K, V, S> ParquetData for HashMap<K, V, S>
 where
 	K: ParquetData + Hash + Eq,
 	V: ParquetData,
-	S: BuildHasher + Default,
+	S: BuildHasher + Default + Clone + Send + 'static,
 {
 	type Schema = MapSchema<K::Schema, V::Schema>;
 	type Reader = impl Reader<Item = Self>;
@@ -765,7 +765,11 @@ where
 				keys_reader,
 				values_reader,
 			},
-			|x: Vec<_>| Ok(From::from(x.into_iter().collect::<HashMap<_, _, S>>())),
+			|x: List<_>| {
+				Ok(From::from(
+					Vec::from(x).into_iter().collect::<HashMap<_, _, S>>(),
+				))
+			},
 		)
 	}
 }

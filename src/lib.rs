@@ -17,24 +17,14 @@
 	unused_import_braces,
 	unused_qualifications,
 	unused_results,
-	// unreachable_pub,
+	unreachable_pub,
 	clippy::pedantic,
 )]
 #![allow(
-	clippy::inline_always,
+	incomplete_features,
 	clippy::module_name_repetitions,
 	clippy::similar_names,
-	clippy::needless_pass_by_value,
-	clippy::trivially_copy_pass_by_ref,
 	clippy::if_not_else,
-	clippy::type_complexity,
-	clippy::unseparated_literal_suffix,
-	clippy::doc_markdown,
-	clippy::use_self,
-	clippy::module_inception,
-	clippy::unreadable_literal,
-	clippy::default_trait_access,
-	clippy::match_same_arms,
 	clippy::must_use_candidate,
 	clippy::missing_errors_doc
 )]
@@ -48,7 +38,7 @@ pub use amadeus_core::{into_par_stream, par_pipe, par_sink, par_stream};
 
 #[doc(inline)]
 pub use crate::{
-	data::{Data, List, Value}, into_par_stream::{IntoDistributedStream, IntoParallelStream, IteratorExt}, par_sink::{FromDistributedStream, FromParallelStream}, par_stream::{DistributedStream, ParallelStream}, source::Source
+	data::{Data, List, Value}, into_par_stream::{IntoDistributedStream, IntoParallelStream, IteratorExt}, par_sink::{FromDistributedStream, FromParallelStream}, par_stream::{DistributedStream, ParallelStream}, source::{Destination, Source}
 };
 
 pub mod dist {

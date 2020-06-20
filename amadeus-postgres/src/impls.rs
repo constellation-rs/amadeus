@@ -1,12 +1,27 @@
-use super::{Names, PostgresData};
-use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
-};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use postgres::types::{FromSql, Type, WasNull};
 use std::{
 	collections::HashMap, error::Error, fmt::{self, Display}, hash::{BuildHasher, Hash}
 };
+
+use super::{Names, PostgresData};
+use amadeus_types::{
+	Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
+};
+
+impl<T> PostgresData for Box<T>
+where
+	T: PostgresData,
+{
+	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
+		T::query(f, name)
+	}
+	default fn decode(
+		type_: &::postgres::types::Type, buf: Option<&[u8]>,
+	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+		T::decode(type_, buf).map(Box::new)
+	}
+}
 
 macro_rules! forward {
 	($($t:ty : $pt:ty),*) => (
@@ -129,7 +144,7 @@ impl PostgresData for Group {
 	}
 }
 
-impl<T> PostgresData for List<T>
+impl<T: Data> PostgresData for List<T>
 where
 	T: PostgresData,
 {

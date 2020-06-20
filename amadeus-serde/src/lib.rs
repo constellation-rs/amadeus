@@ -2,6 +2,7 @@
 #![feature(array_value_iter)]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
+#![allow(incomplete_features)]
 
 mod csv;
 mod impls;

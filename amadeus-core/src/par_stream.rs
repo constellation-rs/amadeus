@@ -19,7 +19,7 @@ use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	cmp::Ordering, future::Future, hash::Hash, iter, marker::PhantomData, ops::FnMut, pin::Pin, task::{Context, Poll}, vec
+	cmp::Ordering, collections::HashMap, future::Future, hash::Hash, iter, marker::PhantomData, ops::FnMut, pin::Pin, task::{Context, Poll}, vec
 };
 
 use crate::{
@@ -578,6 +578,25 @@ pub trait DistributedStream {
 		self.pipe(
 			pool,
 			DistributedPipe::<Self::Item>::fold(Identity, identity, op),
+		)
+		.await
+	}
+
+	async fn group_by<P, A, B, ID, F, C>(self, pool: &P, identity: ID, op: F) -> HashMap<A, C>
+	where
+		P: ProcessPool,
+		A: Eq + Hash + ProcessSend + 'static,
+		B: 'static,
+		ID: FnMut() -> C + Clone + ProcessSend + 'static,
+		F: FnMut(C, Either<B, C>) -> C + Clone + ProcessSend + 'static,
+		C: ProcessSend + 'static,
+		Self::Item: 'static,
+		Self::Task: 'static,
+		Self: DistributedStream<Item = (A, B)> + Sized,
+	{
+		self.pipe(
+			pool,
+			DistributedPipe::<Self::Item>::group_by(Identity, identity, op),
 		)
 		.await
 	}
@@ -1229,6 +1248,25 @@ pub trait ParallelStream {
 		self.pipe(
 			pool,
 			ParallelPipe::<Self::Item>::fold(Identity, identity, op),
+		)
+		.await
+	}
+
+	async fn group_by<P, A, B, ID, F, C>(self, pool: &P, identity: ID, op: F) -> HashMap<A, C>
+	where
+		P: ThreadPool,
+		A: Eq + Hash + Send + 'static,
+		B: 'static,
+		ID: FnMut() -> C + Clone + Send + 'static,
+		F: FnMut(C, Either<B, C>) -> C + Clone + Send + 'static,
+		C: Send + 'static,
+		Self::Item: 'static,
+		Self::Task: 'static,
+		Self: ParallelStream<Item = (A, B)> + Sized,
+	{
+		self.pipe(
+			pool,
+			ParallelPipe::<Self::Item>::group_by(Identity, identity, op),
 		)
 		.await
 	}

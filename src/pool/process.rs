@@ -26,7 +26,7 @@ mod future_ext {
 	/// Extension trait to provide convenient [`block()`](FutureExt1::block) method on futures.
 	///
 	/// Named `FutureExt1` to avoid clashing with [`futures::future::FutureExt`].
-	pub trait FutureExt1: Future {
+	pub(crate) trait FutureExt1: Future {
 		/// Convenience method over `futures::executor::block_on(future)`.
 		fn block(self) -> Self::Output
 		where

@@ -51,6 +51,8 @@ use std::{
 	collections::HashMap, fmt::{self, Debug}
 };
 
+use amadeus_types::Data;
+
 use crate::internal::{
 	basic::Repetition, column::reader::ColumnReader, errors::Result, schema::types::{ColumnPath, Type}
 };
@@ -148,7 +150,7 @@ pub(crate) use self::predicate::Predicate;
 ///     event: String,
 /// }
 /// ```
-pub trait ParquetData: Sized {
+pub trait ParquetData: Data + Sized {
 	// Clone + PartialEq + Debug + 'static
 	type Schema: Schema;
 	type Reader: Reader<Item = Self>;
@@ -181,7 +183,7 @@ pub trait Schema: Debug {
 /// repeated values.
 pub trait Reader {
 	/// Type returned by the Reader.
-	type Item;
+	type Item: Data;
 
 	/// Read a value.
 	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item>;

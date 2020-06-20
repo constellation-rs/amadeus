@@ -7,7 +7,7 @@ use std::{
 };
 
 use amadeus_types::{
-	Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
+	Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
 };
 
 use super::{SerdeData, SerdeDeserialize, SerdeSerialize};
@@ -162,7 +162,7 @@ impl SerdeData for Group {
 	}
 }
 
-impl<T> SerdeData for List<T>
+impl<T: Data> SerdeData for List<T>
 where
 	T: SerdeData,
 {

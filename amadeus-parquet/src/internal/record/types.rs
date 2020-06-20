@@ -1,6 +1,8 @@
 //! Implementations of Rust types that correspond to Parquet logical types.
 //! [`ParquetData`](super::ParquetData) is implemented for each of them.
 
+use amadeus_types::Data;
+
 use super::schemas::ValueSchema;
 use crate::internal::errors::Result;
 
@@ -12,6 +14,15 @@ use crate::internal::errors::Result;
 /// Parquet schema string.
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
 pub struct Root<T>(pub T);
+
+impl<T: Data> Data for Root<T> {
+	type Vec = Vec<Self>;
+	type DynamicType = T::DynamicType;
+
+	fn new_vec(_type: Self::DynamicType) -> Self::Vec {
+		unimplemented!()
+	}
+}
 
 /// This trait lets one downcast a generic type like [`Value`] to a specific type like
 /// `u64`.

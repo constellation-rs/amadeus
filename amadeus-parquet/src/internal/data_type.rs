@@ -35,6 +35,14 @@ use crate::internal::{
 pub struct Int96 {
 	value: [u32; 3],
 }
+impl amadeus_types::Data for Int96 {
+	type Vec = Vec<Self>;
+	type DynamicType = ();
+
+	fn new_vec(_type: Self::DynamicType) -> Self::Vec {
+		Vec::new()
+	}
+}
 
 impl Int96 {
 	/// Creates new INT96 type struct.

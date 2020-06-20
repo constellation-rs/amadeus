@@ -1,6 +1,6 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.0")]
 #![feature(iter_order_by)]
-#![feature(specialization)]
+#![feature(min_specialization)]
 
 //! Implementations of Rust types that correspond to Parquet logical types.
 //! [`Record`](super::Record) is implemented for each of them.
@@ -51,6 +51,7 @@ macro_rules! tuple {
 }
 
 mod array;
+mod data;
 mod decimal;
 mod group;
 mod http;
@@ -65,7 +66,7 @@ use std::{
 };
 
 pub use self::{
-	array::{Bson, Enum, Json}, decimal::Decimal, group::Group, http::{IpAddr, ParseAddrError, ParseUrlError, ParseWebpageError, Url, Webpage}, list::List, ord::AmadeusOrd, time::{
+	array::{Bson, Enum, Json}, data::Data, decimal::Decimal, group::Group, http::{IpAddr, ParseAddrError, ParseUrlError, ParseWebpageError, Url, Webpage}, list::{List, ListVec}, ord::AmadeusOrd, time::{
 		Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, ParseDateError, Time, TimeWithoutTimezone, Timezone
 	}, value::{Schema, SchemaIncomplete, Value}, value_required::ValueRequired
 };

@@ -2,6 +2,7 @@
 #![feature(never_type)]
 #![feature(specialization)]
 #![feature(read_initializer)]
+#![allow(incomplete_features)]
 #![recursion_limit = "25600"]
 
 macro_rules! impl_par_dist {

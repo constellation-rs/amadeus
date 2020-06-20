@@ -12,7 +12,7 @@ use std::{
 use amadeus_core::{
 	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, ResultExpandIter}, Source
 };
-use amadeus_types::{DateTime, IpAddr, Url};
+use amadeus_types::{Data, DateTime, IpAddr, Url};
 
 use super::{list, retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER};
 
@@ -155,6 +155,14 @@ pub struct CloudfrontRow {
 	pub http_version: String,
 	pub fle_status: Option<String>,
 	pub fle_encrypted_fields: Option<String>,
+}
+impl Data for CloudfrontRow {
+	type Vec = Vec<Self>;
+	type DynamicType = ();
+
+	fn new_vec(_type: Self::DynamicType) -> Self::Vec {
+		Vec::new()
+	}
 }
 impl CloudfrontRow {
 	#[inline(always)]

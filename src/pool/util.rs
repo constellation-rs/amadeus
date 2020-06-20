@@ -57,13 +57,13 @@ use std::{
 
 #[cfg(feature = "constellation")]
 #[derive(Debug)]
-pub struct RoundRobin(AtomicUsize, usize);
+pub(crate) struct RoundRobin(AtomicUsize, usize);
 #[cfg(feature = "constellation")]
 impl RoundRobin {
-	pub fn new(start: usize, limit: usize) -> Self {
+	pub(crate) fn new(start: usize, limit: usize) -> Self {
 		Self(AtomicUsize::new(start), limit)
 	}
-	pub fn get(&self) -> usize {
+	pub(crate) fn get(&self) -> usize {
 		let i = self.0.fetch_add(1, Ordering::Relaxed);
 		if i >= self.1 && i % self.1 == 0 {
 			let _ = self.0.fetch_sub(self.1, Ordering::Relaxed);
@@ -101,12 +101,12 @@ impl Debug for Panicked {
 	}
 }
 
-pub struct OnDrop<F: FnOnce()>(Option<F>);
+pub(crate) struct OnDrop<F: FnOnce()>(Option<F>);
 impl<F: FnOnce()> OnDrop<F> {
-	pub fn new(f: F) -> Self {
+	pub(crate) fn new(f: F) -> Self {
 		Self(Some(f))
 	}
-	pub fn cancel(mut self) {
+	pub(crate) fn cancel(mut self) {
 		let _ = self.0.take().unwrap();
 		mem::forget(self);
 	}
@@ -118,20 +118,20 @@ impl<F: FnOnce()> Drop for OnDrop<F> {
 }
 
 #[derive(Debug)]
-pub struct Synchronize {
+pub(crate) struct Synchronize {
 	nonce: AtomicUsize,
 	running: AtomicBool,
 	wake: Mutex<Vec<Waker>>,
 }
 impl Synchronize {
-	pub fn new() -> Self {
+	pub(crate) fn new() -> Self {
 		Self {
 			nonce: AtomicUsize::new(0),
 			running: AtomicBool::new(false),
 			wake: Mutex::new(Vec::new()),
 		}
 	}
-	pub fn synchronize<'a, F>(&'a self, f: F) -> impl Future<Output = ()> + 'a
+	pub(crate) fn synchronize<'a, F>(&'a self, f: F) -> impl Future<Output = ()> + 'a
 	where
 		F: Future<Output = ()> + 'a,
 		Self: 'a,
@@ -162,6 +162,6 @@ impl Synchronize {
 	}
 }
 
-pub fn assert_sync_and_send<T: Send + Sync>(t: T) -> T {
+pub(crate) fn assert_sync_and_send<T: Send + Sync>(t: T) -> T {
 	t
 }
