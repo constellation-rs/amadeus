@@ -71,6 +71,10 @@ pub use self::{
 	}, value::{Schema, SchemaIncomplete, Value}, value_required::ValueRequired
 };
 
+pub mod __internal {
+	pub use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
+}
+
 /// This trait lets one downcast a generic type like [`Value`] to a specific type like
 /// `u64`.
 ///

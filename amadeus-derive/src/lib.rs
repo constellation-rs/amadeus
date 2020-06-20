@@ -459,7 +459,7 @@ fn impl_struct(
 			#postgres_includes
 			#serde_includes
 			pub use ::amadeus_core::util::Wrapper;
-			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec};
+			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec, __internal::{Serialize as Serialize_, Deserialize as Deserialize_, Serializer as Serializer_, Deserializer as Deserializer_}};
 			pub use #amadeus_path::data::Data;
 			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, hash::{Hash, Hasher}, marker::{Send, Sized, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
@@ -527,8 +527,8 @@ fn impl_struct(
 			}
 			#[inline(always)]
 			fn into_vec(mut self) -> __::Vec<#name #ty_generics> {
-				let mut vec = Vec::with_capacity(self.__len);
-				while let Some(el) = self.pop() {
+				let mut vec = __::Vec::with_capacity(self.__len);
+				while let __::Some(el) = self.pop() {
 					vec.push(el);
 				}
 				vec.reverse();
@@ -564,16 +564,16 @@ fn impl_struct(
 			#[inline(always)]
 			fn serialize_a<S>(&self, _serializer: S) -> __::Result<S::Ok, S::Error>
 			where
-				S: __::Serializer,
-				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Serialize,
+				S: __::Serializer_,
+				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Serialize_,
 			{
 				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
 			}
 			#[inline(always)]
 			fn deserialize_a<'de, D>(_deserializer: D) -> __::Result<Self, D::Error>
 			where
-				D: __::Deserializer<'de>,
-				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Deserialize<'de>,
+				D: __::Deserializer_<'de>,
+				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Deserialize_<'de>,
 				Self: __::Sized,
 			{
 				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
