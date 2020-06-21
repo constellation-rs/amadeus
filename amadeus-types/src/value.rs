@@ -2347,16 +2347,16 @@ impl ListVec<Value> for ValueVec {
 		// TODO
 		self.into_vec().into_iter()
 	}
-	#[inline(always)]
-	fn iter_a<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Value> + 'a> {
-		todo!()
-		// Box::new(match self {
-		// 	Self::U8(vec) => vec.iter().map(Value::U8),
-		// 	Self::U16(vec) => vec.iter().map(Value::U16),
-		// 	Self::List(vec) => vec.iter().map(Value::List),
-		// 	Self::Value(vec) => vec.iter(),
-		// })
-	}
+	// #[inline(always)]
+	// fn iter_a<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Value> + 'a> {
+	// 	todo!()
+	// 	// Box::new(match self {
+	// 	// 	Self::U8(vec) => vec.iter().map(Value::U8),
+	// 	// 	Self::U16(vec) => vec.iter().map(Value::U16),
+	// 	// 	Self::List(vec) => vec.iter().map(Value::List),
+	// 	// 	Self::Value(vec) => vec.iter(),
+	// 	// })
+	// }
 	#[inline(always)]
 	fn clone_a(&self) -> Self
 	where

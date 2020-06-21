@@ -47,10 +47,10 @@ impl<T: Data> List<T> {
 	pub fn into_boxed_slice(self) -> Box<[T]> {
 		self.vec.into_vec().into_boxed_slice()
 	}
-	#[inline(always)]
-	pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
-		self.into_iter()
-	}
+	// #[inline(always)]
+	// pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
+	// 	self.into_iter()
+	// }
 }
 impl<T: Data> Default for List<T> {
 	#[inline(always)]
@@ -86,15 +86,15 @@ impl<T: Data> IntoIterator for List<T> {
 		<T as Data>::Vec::into_iter_a(self.vec)
 	}
 }
-impl<'a, T: Data> IntoIterator for &'a List<T> {
-	type Item = &'a T;
-	type IntoIter = Box<dyn Iterator<Item = &'a T> + 'a>;
+// impl<'a, T: Data> IntoIterator for &'a List<T> {
+// 	type Item = &'a T;
+// 	type IntoIter = Box<dyn Iterator<Item = &'a T> + 'a>;
 
-	#[inline(always)]
-	fn into_iter(self) -> Self::IntoIter {
-		<T as Data>::Vec::iter_a(&self.vec)
-	}
-}
+// 	#[inline(always)]
+// 	fn into_iter(self) -> Self::IntoIter {
+// 		<T as Data>::Vec::iter_a(&self.vec)
+// 	}
+// }
 impl<T: Data> FromIterator<T> for List<T> {
 	#[inline(always)]
 	fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
@@ -126,7 +126,9 @@ where
 {
 	#[inline(always)]
 	fn eq(&self, other: &List<U>) -> bool {
-		self.iter().eq_by(other.iter(), |a, b| a.eq(&b))
+		self.clone()
+			.into_iter()
+			.eq_by(other.clone().into_iter(), |a, b| a.eq(&b))
 	}
 }
 impl<T: Data> Eq for List<T> where T: Eq {}
@@ -136,8 +138,9 @@ where
 {
 	#[inline(always)]
 	fn partial_cmp(&self, other: &List<U>) -> Option<Ordering> {
-		self.iter()
-			.partial_cmp_by(other.iter(), |a, b| a.partial_cmp(&b))
+		self.clone()
+			.into_iter()
+			.partial_cmp_by(other.clone().into_iter(), |a, b| a.partial_cmp(&b))
 	}
 }
 impl<T: Data> Ord for List<T>
@@ -146,7 +149,9 @@ where
 {
 	#[inline(always)]
 	fn cmp(&self, other: &Self) -> Ordering {
-		self.iter().cmp_by(other.iter(), |a, b| a.cmp(&b))
+		self.clone()
+			.into_iter()
+			.cmp_by(other.clone().into_iter(), |a, b| a.cmp(&b))
 	}
 }
 impl<T: Data> AmadeusOrd for List<T>
@@ -155,7 +160,9 @@ where
 {
 	#[inline(always)]
 	fn amadeus_cmp(&self, other: &Self) -> Ordering {
-		self.iter().cmp_by(other.iter(), |a, b| a.amadeus_cmp(&b))
+		self.clone()
+			.into_iter()
+			.cmp_by(other.clone().into_iter(), |a, b| a.amadeus_cmp(&b))
 	}
 }
 impl<T: Data> Hash for List<T>
@@ -236,7 +243,10 @@ impl<'a, T> Deref for ValueRef<'a, T> {
 }
 
 #[doc(hidden)]
-pub trait ListVec<T> {
+pub trait ListVec<T>
+where
+	T: Data,
+{
 	type IntoIter: Iterator<Item = T>;
 
 	fn new() -> Self;
@@ -246,7 +256,7 @@ pub trait ListVec<T> {
 	fn from_vec(vec: Vec<T>) -> Self;
 	fn into_vec(self) -> Vec<T>;
 	fn into_iter_a(self) -> Self::IntoIter;
-	fn iter_a<'a>(&'a self) -> Box<dyn Iterator<Item = &'a T> + 'a>;
+	// fn iter_a<'a>(&'a self) -> Box<dyn Iterator<Item = &'a T> + 'a>;
 	fn clone_a(&self) -> Self
 	where
 		T: Clone;
@@ -267,7 +277,7 @@ pub trait ListVec<T> {
 	where
 		T: Debug;
 }
-impl<T> ListVec<T> for Vec<T> {
+impl<T: Data> ListVec<T> for Vec<T> {
 	type IntoIter = std::vec::IntoIter<T>;
 
 	#[inline(always)]
@@ -298,10 +308,10 @@ impl<T> ListVec<T> for Vec<T> {
 	fn into_iter_a(self) -> Self::IntoIter {
 		self.into_iter()
 	}
-	#[inline(always)]
-	fn iter_a<'a>(&'a self) -> Box<dyn Iterator<Item = &'a T> + 'a> {
-		Box::new(self.iter())
-	}
+	// #[inline(always)]
+	// fn iter_a<'a>(&'a self) -> Box<dyn Iterator<Item = &'a T> + 'a> {
+	// 	Box::new(self.iter())
+	// }
 	#[inline(always)]
 	fn clone_a(&self) -> Self
 	where

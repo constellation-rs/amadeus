@@ -171,8 +171,8 @@ where
 		S: Serializer,
 	{
 		let mut serializer = serializer.serialize_seq(Some(self.len()))?;
-		for item in self.iter() {
-			serializer.serialize_element(&SerdeSerialize(&*item))?;
+		for item in self.clone().into_iter() {
+			serializer.serialize_element(&SerdeSerialize(&item))?;
 		}
 		serializer.end()
 	}

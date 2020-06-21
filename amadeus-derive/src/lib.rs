@@ -538,10 +538,10 @@ fn impl_struct(
 			fn into_iter_a(self) -> Self::IntoIter {
 				self.into_vec().into_iter()
 			}
-			#[inline(always)]
-			fn iter_a<'a>(&'a self) -> __::Box<dyn __::Iterator<Item = &'a #name #ty_generics> + 'a> {
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
-			}
+			// #[inline(always)]
+			// fn iter_a<'a>(&'a self) -> __::Box<dyn __::Iterator<Item = &'a #name #ty_generics> + 'a> {
+			// 	todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+			// }
 			#[inline(always)]
 			fn clone_a(&self) -> Self
 			where
@@ -582,7 +582,7 @@ fn impl_struct(
 			where
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Debug,
 			{
-				__::fmt::Formatter::debug_list(fmt).entries(self.iter_a()).finish()
+				__::fmt::Formatter::debug_list(fmt).entries(self.clone_a().into_iter_a()).finish()
 			}
 		}
 
