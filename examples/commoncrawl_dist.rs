@@ -4,7 +4,7 @@
 //! page, 255 TiB Common Crawl dataset.
 //!
 //! The download, parsing and analysis is farmed out to a process pool
-//! leveraging Amadeus, the distributed data analysis library for Rust.
+//! leveraging Amadeus, the distributed data processing library for Rust.
 //!
 //! ## Usage
 //!

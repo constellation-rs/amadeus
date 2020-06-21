@@ -4,13 +4,15 @@
 
 use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{
-	cmp::Ordering, collections::HashMap, convert::TryInto, hash::{BuildHasher, Hash, Hasher}, sync::Arc
+	cmp::Ordering, collections::HashMap, convert::TryInto, fmt, fmt::Debug, hash::{BuildHasher, Hash, Hasher}, iter::FromIterator, sync::Arc
 };
 
+use crate::list::ListVec;
+
 use super::{
-	AmadeusOrd, Bson, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
+	AmadeusOrd, Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastError, DowncastFrom, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, ValueRequired, Webpage
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1563,7 +1565,7 @@ impl From<IpAddr> for Value {
 		Self::IpAddr(value)
 	}
 }
-impl<T> From<List<T>> for Value
+impl<T: Data> From<List<T>> for Value
 where
 	T: Into<Self>,
 {
@@ -1633,7 +1635,7 @@ where
 }
 macro_rules! array_from {
 	($($i:tt)*) => {$(
-		impl<T> From<[T; $i]> for Value
+		impl<T: Data> From<[T; $i]> for Value
 		where
 			T: Into<Self>
 		{
@@ -1796,7 +1798,7 @@ impl DowncastFrom<Value> for IpAddr {
 		self_.into_ip_addr()
 	}
 }
-impl<T> DowncastFrom<Value> for List<T>
+impl<T: Data> DowncastFrom<Value> for List<T>
 where
 	T: DowncastFrom<Value>,
 {
@@ -1859,7 +1861,7 @@ impl DowncastFrom<Value> for Option<Value> {
 }
 macro_rules! array_downcast {
 	($($i:tt)*) => {$(
-		impl<T> DowncastFrom<Value> for [T; $i]
+		impl<T: Data> DowncastFrom<Value> for [T; $i]
 		where
 			T: DowncastFrom<Value>
 		{
@@ -2042,7 +2044,7 @@ impl PartialEq<IpAddr> for Value {
 			.unwrap_or(false)
 	}
 }
-impl<T> PartialEq<List<T>> for Value
+impl<T: Data> PartialEq<List<T>> for Value
 where
 	Value: PartialEq<T>,
 {
@@ -2206,5 +2208,300 @@ tuple!(tuple_partialeq);
 // 	#[inline]
 // 	fn current_rep_level(&self) -> i16 {
 // 		self.0.current_rep_level()
+// 	}
+// }
+
+impl From<Vec<u8>> for List<Value> {
+	#[inline(always)]
+	fn from(vec: Vec<u8>) -> Self {
+		Self::from_(ValueVec::U8(vec))
+	}
+}
+impl FromIterator<u8> for List<Value> {
+	#[inline(always)]
+	fn from_iter<I: IntoIterator<Item = u8>>(iter: I) -> Self {
+		Vec::from_iter(iter).into()
+	}
+}
+impl Extend<u8> for List<Value> {
+	#[inline(always)]
+	fn extend<I: IntoIterator<Item = u8>>(&mut self, _iter: I) {
+		unimplemented!()
+	}
+}
+
+// #[derive(Clone, Debug)]
+// enum Value {
+// 	U8(u8),
+// 	U16(u16),
+// 	List(Box<List<Value>>),
+// }
+// impl Value {
+// 	fn u8(self) -> u8 {
+// 		if let Self::U8(ret) = self {
+// 			ret
+// 		} else {
+// 			panic!()
+// 		}
+// 	}
+// 	fn u16(self) -> u16 {
+// 		if let Self::U16(ret) = self {
+// 			ret
+// 		} else {
+// 			panic!()
+// 		}
+// 	}
+// 	fn list(self) -> List<Value> {
+// 		if let Self::List(ret) = self {
+// 			*ret
+// 		} else {
+// 			panic!()
+// 		}
+// 	}
+// }
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub enum ValueType {
+	U8,
+	U16,
+	List,
+}
+#[doc(hidden)]
+#[derive(Clone, Hash, Serialize, Deserialize)]
+pub enum ValueVec {
+	U8(Vec<u8>),
+	U16(Vec<u16>),
+	List(Vec<List<Value>>),
+	Value(Vec<Value>),
+}
+impl Debug for ValueVec {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Self::U8(self_) => fmt.debug_tuple("U8").field(self_).finish(),
+			Self::U16(self_) => fmt.debug_tuple("U16").field(self_).finish(),
+			Self::List(self_) => fmt.debug_tuple("List").field(self_).finish(),
+			Self::Value(self_) => self_.fmt(fmt),
+		}
+	}
+}
+impl Data for Value {
+	type Vec = ValueVec;
+	type DynamicType = ValueType;
+
+	fn new_vec(type_: Self::DynamicType) -> Self::Vec {
+		match type_ {
+			ValueType::U8 => ValueVec::U8(ListVec::new()),
+			ValueType::U16 => ValueVec::U16(ListVec::new()),
+			ValueType::List => ValueVec::List(ListVec::new()),
+		}
+	}
+}
+impl ListVec<Value> for ValueVec {
+	type IntoIter = std::vec::IntoIter<Value>;
+
+	#[inline(always)]
+	fn new() -> Self {
+		Self::Value(vec![])
+	}
+	#[inline(always)]
+	fn push(&mut self, t: Value) {
+		match self {
+			ValueVec::U8(list) => list.push(t.into_u8().unwrap()),
+			ValueVec::U16(list) => list.push(t.into_u16().unwrap()),
+			ValueVec::List(list) => list.push(t.into_list().unwrap()),
+			ValueVec::Value(list) => list.push(t),
+		}
+	}
+	fn pop(&mut self) -> Option<Value> {
+		match self {
+			ValueVec::U8(list) => list.pop().map(Value::U8),
+			ValueVec::U16(list) => list.pop().map(Value::U16),
+			ValueVec::List(list) => list.pop().map(Box::new).map(Value::List),
+			ValueVec::Value(list) => list.pop(),
+		}
+	}
+	#[inline(always)]
+	fn len(&self) -> usize {
+		match self {
+			ValueVec::U8(list) => list.len(),
+			ValueVec::U16(list) => list.len(),
+			ValueVec::List(list) => list.len(),
+			ValueVec::Value(list) => list.len(),
+		}
+	}
+	#[inline(always)]
+	fn from_vec(vec: Vec<Value>) -> Self {
+		Self::Value(vec)
+	}
+	#[inline(always)]
+	fn into_vec(self) -> Vec<Value> {
+		match self {
+			Self::U8(vec) => vec.into_iter().map(Into::into).collect(),
+			Self::U16(vec) => vec.into_iter().map(Into::into).collect(),
+			Self::List(vec) => vec.into_iter().map(Into::into).collect(),
+			Self::Value(vec) => vec,
+		}
+	}
+	#[inline(always)]
+	fn into_iter_a(self) -> Self::IntoIter {
+		// TODO
+		self.into_vec().into_iter()
+	}
+	// #[inline(always)]
+	// fn iter_a<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Value> + 'a> {
+	// 	todo!()
+	// 	// Box::new(match self {
+	// 	// 	Self::U8(vec) => vec.iter().map(Value::U8),
+	// 	// 	Self::U16(vec) => vec.iter().map(Value::U16),
+	// 	// 	Self::List(vec) => vec.iter().map(Value::List),
+	// 	// 	Self::Value(vec) => vec.iter(),
+	// 	// })
+	// }
+	#[inline(always)]
+	fn clone_a(&self) -> Self
+	where
+		Value: Clone,
+	{
+		self.clone()
+	}
+	#[inline(always)]
+	fn hash_a<H>(&self, state: &mut H)
+	where
+		H: Hasher,
+		Value: Hash,
+	{
+		self.hash(state)
+	}
+	#[inline(always)]
+	fn serialize_a<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+		Value: Serialize,
+	{
+		self.serialize(serializer)
+	}
+	#[inline(always)]
+	fn deserialize_a<'de, D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+		Value: Deserialize<'de>,
+		Self: Sized,
+	{
+		Self::deserialize(deserializer)
+	}
+	fn fmt_a(&self, fmt: &mut fmt::Formatter) -> fmt::Result
+	where
+		Value: Debug,
+	{
+		self.fmt(fmt)
+	}
+}
+
+// struct Iter<'a, T>(std::slice::Iter<'a, T>);
+// impl<'a> Iterator for Iter<'a, u8> {
+// 	type Item = ValueRef<'a, Value>;
+
+// 	#[inline(always)]
+// 	fn next(&mut self) -> Option<Self::Item> {
+// 		self.0
+// 			.next()
+// 			.map(|next| ValueRef(ManuallyDrop::new(Value::U8(*next)), &()))
+// 	}
+// }
+// impl<'a> Iterator for Iter<'a, u16> {
+// 	type Item = ValueRef<'a, Value>;
+
+// 	#[inline(always)]
+// 	fn next(&mut self) -> Option<Self::Item> {
+// 		self.0
+// 			.next()
+// 			.map(|next| ValueRef(ManuallyDrop::new(Value::U16(*next)), &()))
+// 	}
+// }
+// impl<'a> Iterator for Iter<'a, List<Value>> {
+// 	type Item = ValueRef<'a, Value>;
+
+// 	#[inline(always)]
+// 	fn next(&mut self) -> Option<Self::Item> {
+// 		self.0.next().map(|next| {
+// 			ValueRef(
+// 				ManuallyDrop::new(Value::List(Box::new(unsafe { ptr::read(next) }))),
+// 				&(),
+// 			)
+// 		})
+// 	}
+// }
+// impl<'a> Iterator for Iter<'a, Value> {
+// 	type Item = ValueRef<'a, Value>;
+
+// 	#[inline(always)]
+// 	fn next(&mut self) -> Option<Self::Item> {
+// 		self.0
+// 			.next()
+// 			.map(|next| ValueRef(ManuallyDrop::new(unsafe { ptr::read(next) }), &()))
+// 	}
+// }
+
+// // TODO! Iterating a List<Value>{vec:ValueVec::List(..)} will leak a load of boxes.
+
+// // impl<'a,T> Drop for ValueRef<'a,T> {
+// // 	fn drop(&mut self) {
+// // 		if let Some(self_) = try_type_coerce::<&mut ValueRef<'a,T>,&mut ValueRef<'a,Value>>(self) {
+// // 			match unsafe { ManuallyDrop::take(&mut self_.0) } {
+// // 				Value::Bool(x) => assert_copy(x),
+// // 				Value::U8(x) => assert_copy(x),
+// // 				Value::I8(x) => assert_copy(x),
+// // 				Value::U16(x) => assert_copy(x),
+// // 				Value::I16(x) => assert_copy(x),
+// // 				Value::U32(x) => assert_copy(x),
+// // 				Value::I32(x) => assert_copy(x),
+// // 				Value::U64(x) => assert_copy(x),
+// // 				Value::I64(x) => assert_copy(x),
+// // 				Value::F32(x) => assert_copy(x),
+// // 				Value::F64(x) => assert_copy(x),
+// // 				Value::Date(x) => assert_copy(x),
+// // 				Value::DateWithoutTimezone(x) => assert_copy(x),
+// // 				Value::Time(x) => assert_copy(x),
+// // 				Value::TimeWithoutTimezone(x) => assert_copy(x),
+// // 				Value::DateTime(x) => assert_copy(x),
+// // 				Value::DateTimeWithoutTimezone(x) => assert_copy(x),
+// // 				Value::Timezone(x) => assert_copy(x),
+// // 				Value::Decimal(x) => forget(x),
+// // 				Value::Bson(x) => forget(x),
+// // 				Value::String(x) => forget(x),
+// // 				Value::Json(x) => forget(x),
+// // 				Value::Enum(x) => forget(x),
+// // 				Value::Url(x) => forget(x),
+// // 				Value::Webpage(x) => forget(x),
+// // 				Value::IpAddr(x) => assert_copy(x),
+// // 				Value::List(x) => forget(*x),
+// // 				Value::Map(x) => forget(x),
+// // 				Value::Group(x) => forget(x),
+// // 				Value::Option(x) => forget(x),
+// // 			}
+// // 		}
+// // 	}
+// // }
+// // fn assert_copy<T: Copy>(_t: T) {}
+
+// impl<'a, T> Serialize for ValueRef<'a, T>
+// where
+// 	T: Serialize,
+// {
+// 	#[inline(always)]
+// 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+// 	where
+// 		S: Serializer,
+// 	{
+// 		(**self).serialize(serializer)
+// 	}
+// }
+// impl<'a, T> AmadeusOrd for ValueRef<'a, T>
+// where
+// 	T: AmadeusOrd,
+// {
+// 	#[inline(always)]
+// 	fn amadeus_cmp(&self, _other: &Self) -> Ordering {
+// 		unimplemented!()
 // 	}
 // }

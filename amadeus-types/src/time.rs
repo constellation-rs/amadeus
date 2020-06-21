@@ -455,6 +455,12 @@ impl Time {
 	pub fn timezone(&self) -> Timezone {
 		self.timezone
 	}
+	pub fn truncate_minutes(&self, minutes: u8) -> Self {
+		Self {
+			time: self.time.truncate_minutes(minutes),
+			timezone: self.timezone,
+		}
+	}
 }
 impl AmadeusOrd for Time {
 	fn amadeus_cmp(&self, other: &Self) -> Ordering {
@@ -563,6 +569,12 @@ impl DateTime {
 			chrono::DateTime::<Utc>::from_utc(self.date_time.as_chrono()?, Utc)
 				.with_timezone(&ChronoTimezone(self.timezone)),
 		)
+	}
+	pub fn truncate_minutes(&self, minutes: u8) -> Self {
+		Self {
+			date_time: self.date_time.truncate_minutes(minutes),
+			timezone: self.timezone,
+		}
 	}
 }
 impl AmadeusOrd for DateTime {
@@ -737,6 +749,13 @@ impl TimeWithoutTimezone {
 	pub fn as_chrono(&self) -> Option<NaiveTime> {
 		Some(self.0)
 	}
+	pub fn truncate_minutes(&self, minutes: u8) -> Self {
+		assert!(
+			minutes != 0 && 60 % minutes == 0,
+			"minutes must be a divisor of 60"
+		);
+		Self::new(self.hour(), self.minute() / minutes * minutes, 0, 0).unwrap()
+	}
 	// /// Create a TimeWithoutTimezone from the number of milliseconds since midnight
 	// pub fn from_millis(millis: u32) -> Option<Self> {
 	// 	if millis < u32::try_from(SECONDS_PER_DAY * MILLIS_PER_SECOND).unwrap() {
@@ -874,6 +893,12 @@ impl DateTimeWithoutTimezone {
 	#[doc(hidden)]
 	pub fn as_chrono(&self) -> Option<NaiveDateTime> {
 		Some(self.date.as_chrono()?.and_time(self.time.as_chrono()?))
+	}
+	pub fn truncate_minutes(&self, minutes: u8) -> Self {
+		Self {
+			date: self.date,
+			time: self.time.truncate_minutes(minutes),
+		}
 	}
 	// /// Create a DateTimeWithoutTimezone from the number of milliseconds since the Unix epoch
 	// pub fn from_millis(millis: i64) -> Self {

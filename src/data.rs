@@ -24,6 +24,7 @@ pub use amadeus_types::{
 
 pub trait Data:
 	Clone
+	+ amadeus_types::Data
 	+ AmadeusOrd
 	+ ParquetData
 	+ PostgresData
@@ -113,7 +114,9 @@ pub mod serde_data {
 	}
 }
 
-#[derive(amadeus_derive::Data, Clone, Eq, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
+#[derive(
+	amadeus_derive::Data, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize, Debug,
+)]
 #[amadeus(crate = "crate")]
 pub struct CloudfrontRow {
 	pub time: DateTime,

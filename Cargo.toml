@@ -2,7 +2,7 @@
 
 [package]
 name = "amadeus"
-version = "0.2.0"
+version = "0.2.1"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -14,7 +14,7 @@ parquet postgres aws s3 cloudfront elb json csv logs hadoop hdfs arrow common cr
 """
 repository = "https://github.com/alecmocatta/amadeus"
 homepage = "https://github.com/alecmocatta/amadeus"
-documentation = "https://docs.rs/amadeus/0.2.0"
+documentation = "https://docs.rs/amadeus/0.2.1"
 readme = "README.md"
 edition = "2018"
 
@@ -37,16 +37,17 @@ doc = ["amadeus-core/doc", "amadeus-aws/doc", "amadeus-commoncrawl/doc", "amadeu
 features = ["doc", "constellation", "aws", "commoncrawl", "postgres", "csv", "json"]
 
 [dependencies]
-amadeus-core = { version = "=0.2.0", path = "amadeus-core" }
-amadeus-derive = { version = "=0.2.0", path = "amadeus-derive" }
-amadeus-types = { version = "=0.2.0", path = "amadeus-types" }
-amadeus-aws = { version = "=0.2.0", path = "amadeus-aws", optional = true }
-amadeus-commoncrawl = { version = "=0.2.0", path = "amadeus-commoncrawl", optional = true }
-amadeus-parquet = { version = "=0.2.0", path = "amadeus-parquet", optional = true }
-amadeus-postgres = { version = "=0.2.0", path = "amadeus-postgres", optional = true }
-amadeus-serde = { version = "=0.2.0", path = "amadeus-serde", optional = true }
+amadeus-core = { version = "=0.2.1", path = "amadeus-core" }
+amadeus-derive = { version = "=0.2.1", path = "amadeus-derive" }
+amadeus-types = { version = "=0.2.1", path = "amadeus-types" }
+amadeus-aws = { version = "=0.2.1", path = "amadeus-aws", optional = true }
+amadeus-commoncrawl = { version = "=0.2.1", path = "amadeus-commoncrawl", optional = true }
+amadeus-parquet = { version = "=0.2.1", path = "amadeus-parquet", optional = true }
+amadeus-postgres = { version = "=0.2.1", path = "amadeus-postgres", optional = true }
+amadeus-serde = { version = "=0.2.1", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
 derive-new = "0.5"
+doc-comment = "0.3"
 futures = "0.3"
 num_cpus = "1.13"
 pin-project = "0.4"
@@ -63,6 +64,10 @@ tokio = { version = "0.2", features = ["macros", "time"] }
 
 [[example]]
 name = "cloudfront_logs"
+required-features = ["aws"]
+
+[[example]]
+name = "columnar"
 required-features = ["aws"]
 
 [[example]]

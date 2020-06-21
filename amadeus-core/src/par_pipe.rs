@@ -102,6 +102,17 @@ impl_par_dist_rename! {
 			assert_parallel_sink(Fold::new(self, identity, op))
 		}
 
+		fn group_by<A, B, ID, F, C>(self, identity: ID, op: F) -> GroupBy<Self, ID, F, C>
+		where
+			A: Eq + Hash + Send + 'static,
+			ID: FnMut() -> C + Clone + Send + 'static,
+			F: FnMut(C, Either<B, C>) -> C + Clone + Send + 'static,
+			C: Send + 'static,
+			Self: ParallelPipe<Source, Item = (A, B)> + Sized,
+		{
+			assert_parallel_sink(GroupBy::new(self, identity, op))
+		}
+
 		fn count(self) -> Count<Self>
 		where
 			Self: Sized,
