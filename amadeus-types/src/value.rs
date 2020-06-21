@@ -146,7 +146,7 @@ pub enum Value {
 
 	// Complex types
 	/// List of elements.
-	List(Box<List<Value>>),
+	List(List<Value>),
 	/// Map of key-value pairs.
 	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
@@ -1326,7 +1326,7 @@ impl Value {
 	/// If the `Value` is an List, return it. Returns Err otherwise.
 	pub fn into_list(self) -> Result<List<Self>, DowncastError> {
 		if let Self::List(ret) = self {
-			Ok(*ret)
+			Ok(ret)
 		} else {
 			Err(DowncastError {
 				from: self.type_name(),
@@ -1570,15 +1570,13 @@ where
 	T: Into<Self>,
 {
 	default fn from(value: List<T>) -> Self {
-		Self::List(Box::new(
-			value.into_iter().map(Into::into).collect::<List<_>>(),
-		))
+		Self::List(value.into_iter().map(Into::into).collect::<List<_>>())
 	}
 }
 #[doc(hidden)]
 impl From<List<Self>> for Value {
 	fn from(value: List<Self>) -> Self {
-		Self::List(Box::new(value))
+		Self::List(value)
 	}
 }
 impl<K, V, S> From<HashMap<K, V, S>> for Value
@@ -2316,7 +2314,7 @@ impl ListVec<Value> for ValueVec {
 		match self {
 			ValueVec::U8(list) => list.pop().map(Value::U8),
 			ValueVec::U16(list) => list.pop().map(Value::U16),
-			ValueVec::List(list) => list.pop().map(Box::new).map(Value::List),
+			ValueVec::List(list) => list.pop().map(Value::List),
 			ValueVec::Value(list) => list.pop(),
 		}
 	}

@@ -436,7 +436,7 @@ impl SerdeData for Value {
 					vec.push(elem.0);
 				}
 
-				Ok(Value::List(Box::new(vec.into())))
+				Ok(Value::List(vec.into()))
 			}
 
 			fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
