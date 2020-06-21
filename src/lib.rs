@@ -30,6 +30,9 @@
 )]
 #![deny(unsafe_code)]
 
+#[cfg(doctest)]
+doc_comment::doctest!("../README.md");
+
 pub mod data;
 pub mod pool;
 pub mod source;

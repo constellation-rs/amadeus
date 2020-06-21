@@ -47,6 +47,7 @@ amadeus-postgres = { version = "=0.2.0", path = "amadeus-postgres", optional = t
 amadeus-serde = { version = "=0.2.0", path = "amadeus-serde", optional = true }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
 derive-new = "0.5"
+doc-comment = "0.3"
 futures = "0.3"
 num_cpus = "1.13"
 pin-project = "0.4"
@@ -63,6 +64,10 @@ tokio = { version = "0.2", features = ["macros", "time"] }
 
 [[example]]
 name = "cloudfront_logs"
+required-features = ["aws"]
+
+[[example]]
+name = "columnar"
 required-features = ["aws"]
 
 [[example]]

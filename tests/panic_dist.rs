@@ -39,7 +39,7 @@ async fn run<P: amadeus_core::pool::ProcessPool + std::panic::RefUnwindSafe>(poo
 	let res = AssertUnwindSafe((0i32..1_000).into_dist_stream().for_each(
 		pool,
 		FnMut!(|i| if i == 500 {
-			panic!("boom")
+			panic!("this is intended to panic")
 		}),
 	))
 	.catch_unwind()
