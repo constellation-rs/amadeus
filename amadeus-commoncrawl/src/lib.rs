@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.2.1")]
+#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.2.2")]
 #![feature(type_alias_impl_trait)]
 
 mod commoncrawl;
@@ -58,15 +58,15 @@ impl Source for CommonCrawl {
 	type Item = Webpage<'static>;
 	type Error = io::Error;
 
-	#[cfg(not(feature = "doc"))]
+	#[cfg(not(doc))]
 	type ParStream =
 		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(feature = "doc")]
+	#[cfg(doc)]
 	type ParStream =
 		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
-	#[cfg(not(feature = "doc"))]
+	#[cfg(not(doc))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(feature = "doc")]
+	#[cfg(doc)]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {
@@ -88,7 +88,7 @@ impl Source for CommonCrawl {
 				WarcParser::new(body)
 			}
 			.flatten_stream()));
-		#[cfg(feature = "doc")]
+		#[cfg(doc)]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
 	}

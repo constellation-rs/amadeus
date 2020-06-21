@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.2.1")]
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.2.2")]
 #![feature(bufreader_seek_relative)]
 #![feature(read_initializer)]
 #![feature(specialization)]
@@ -69,15 +69,15 @@ where
 		<<<F as File>::Partition as Partition>::Page as Page>::Error,
 	>;
 
-	#[cfg(not(feature = "doc"))]
+	#[cfg(not(doc))]
 	type ParStream =
 		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(feature = "doc")]
+	#[cfg(doc)]
 	type ParStream =
 		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
-	#[cfg(not(feature = "doc"))]
+	#[cfg(not(doc))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(feature = "doc")]
+	#[cfg(doc)]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {
@@ -116,7 +116,7 @@ where
 			.map(ResultExpandIter::new)
 			.flatten_stream()
 			.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))));
-		#[cfg(feature = "doc")]
+		#[cfg(doc)]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
 	}
