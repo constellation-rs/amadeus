@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.0")]
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.1")]
 #![feature(iter_order_by)]
 #![feature(min_specialization)]
 

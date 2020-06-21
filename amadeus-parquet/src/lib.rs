@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.2.0")]
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.2.1")]
 #![feature(bufreader_seek_relative)]
 #![feature(read_initializer)]
 #![feature(specialization)]
