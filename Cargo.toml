@@ -30,11 +30,9 @@ parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
 postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
-# "doc" works around https://github.com/rust-lang/rust/issues/58011
-doc = ["amadeus-core/doc", "amadeus-aws/doc", "amadeus-commoncrawl/doc", "amadeus-postgres/doc", "amadeus-serde/doc"] # "amadeus-parquet/doc" when https://github.com/rust-lang/cargo/issues/3494 is resolved
 
 [package.metadata.docs.rs]
-features = ["doc", "constellation", "aws", "commoncrawl", "postgres", "csv", "json"]
+features = ["constellation", "aws", "commoncrawl", "parquet", "postgres", "csv", "json"]
 
 [dependencies]
 amadeus-core = { version = "=0.2.1", path = "amadeus-core" }

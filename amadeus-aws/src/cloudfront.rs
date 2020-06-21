@@ -54,15 +54,15 @@ impl Source for Cloudfront {
 	type Item = CloudfrontRow;
 	type Error = AwsError;
 
-	#[cfg(not(feature = "doc"))]
+	#[cfg(not(doc))]
 	type ParStream =
 		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(feature = "doc")]
+	#[cfg(doc)]
 	type ParStream =
 		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
-	#[cfg(not(feature = "doc"))]
+	#[cfg(not(doc))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(feature = "doc")]
+	#[cfg(doc)]
 	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {
@@ -124,7 +124,7 @@ impl Source for Cloudfront {
 			.map(FnMut!(
 				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(self::identity)
 			));
-		#[cfg(feature = "doc")]
+		#[cfg(doc)]
 		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
 		ret
 	}

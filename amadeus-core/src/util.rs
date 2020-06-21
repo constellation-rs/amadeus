@@ -6,10 +6,8 @@ use std::{
 	any::type_name, error, fmt, hash::{Hash, Hasher}, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
-use crate::par_stream::{DistributedStream, ParallelStream};
-#[cfg(feature = "doc")]
 use crate::{
-	par_stream::{StreamTask, StreamTaskAsync}, sink::Sink
+	par_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync}, sink::Sink
 };
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
@@ -110,10 +108,8 @@ where
 	}
 }
 
-#[cfg(feature = "doc")]
 #[doc(hidden)]
 pub struct ImplDistributedStream<T>(PhantomData<fn() -> T>);
-#[cfg(feature = "doc")]
 impl<T> ImplDistributedStream<T> {
 	pub fn new<U>(_drop: U) -> Self
 	where
@@ -122,7 +118,6 @@ impl<T> ImplDistributedStream<T> {
 		Self(PhantomData)
 	}
 }
-#[cfg(feature = "doc")]
 impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
 	type Item = T;
 	type Task = ImplTask<T>;
@@ -134,7 +129,6 @@ impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
 		unreachable!()
 	}
 }
-#[cfg(feature = "doc")]
 impl<T: 'static> ParallelStream for ImplDistributedStream<T> {
 	type Item = T;
 	type Task = ImplTask<T>;
@@ -147,11 +141,9 @@ impl<T: 'static> ParallelStream for ImplDistributedStream<T> {
 	}
 }
 
-#[cfg(feature = "doc")]
 #[doc(hidden)]
 #[derive(Serialize, Deserialize)]
 pub struct ImplTask<T>(PhantomData<fn() -> T>);
-#[cfg(feature = "doc")]
 impl<T> StreamTask for ImplTask<T>
 where
 	T: 'static,
@@ -163,7 +155,6 @@ where
 		self
 	}
 }
-#[cfg(feature = "doc")]
 impl<T: 'static> StreamTaskAsync for ImplTask<T> {
 	type Item = T;
 
