@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.2.1")]
+#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.2.2")]
 #![feature(type_alias_impl_trait)]
 
 mod cloudfront;
