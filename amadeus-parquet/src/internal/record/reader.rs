@@ -439,17 +439,14 @@ impl Reader for ValueReader {
 			}
 			ValueReader::ByteArray(ref mut reader) => reader
 				.read(def_level, rep_level)
-				.map(|vec| Value::List(Box::new(vec.into_iter().map(Value::from).collect()))),
+				.map(|vec| Value::List(vec.into_iter().map(Value::from).collect())),
 			ValueReader::Bson(ref mut reader) => reader.read(def_level, rep_level).map(Value::Bson),
 			ValueReader::String(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::String)
 			}
 			ValueReader::Json(ref mut reader) => reader.read(def_level, rep_level).map(Value::Json),
 			ValueReader::Enum(ref mut reader) => reader.read(def_level, rep_level).map(Value::Enum),
-			ValueReader::List(ref mut reader) => reader
-				.read(def_level, rep_level)
-				.map(Box::new)
-				.map(Value::List),
+			ValueReader::List(ref mut reader) => reader.read(def_level, rep_level).map(Value::List),
 			ValueReader::Map(ref mut reader) => reader.read(def_level, rep_level).map(Value::Map),
 			ValueReader::Group(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::Group)
@@ -1002,7 +999,7 @@ mod tests {
 	}
 	macro_rules! listv {
 		( $( $e:expr ), * ) => {
-			Value::List(Box::new(list!($($e),*)))
+			Value::List(list!($($e),*))
 		}
 	}
 

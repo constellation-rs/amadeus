@@ -93,7 +93,7 @@ use std::error::Error;
 #[derive(Data, Clone, PartialEq, Debug)]
 struct LogLine {
     uri: Option<String>,
-    requestip: Option<IpAddr>
+    requestip: Option<IpAddr>,
 }
 
 #[tokio::main]
@@ -105,7 +105,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "us-east-1.data-analytics",
         "cflogworkshop/optimized/cf-accesslogs/",
         AwsCredentials::Anonymous,
-    ))).await?;
+    )))
+    .await?;
 
     let top_pages = rows
         .par_stream()
@@ -139,7 +140,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "us-east-1.data-analytics",
         "cflogworkshop/optimized/cf-accesslogs/",
         AwsCredentials::Anonymous,
-    ))).await?;
+    )))
+    .await?;
 
     let top_pages = rows
         .par_stream()
@@ -174,11 +176,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "us-east-1.data-analytics",
         "cflogworkshop/optimized/cf-accesslogs/",
         AwsCredentials::Anonymous,
-    ))).await?;
+    )))
+    .await?;
 
     // Note: this isn't yet implemented!
-    rows
-        .par_stream()
+    rows.par_stream()
         .pipe(Postgres::new("127.0.0.1", PostgresTable::new("accesslogs")));
 
     Ok(())
@@ -200,7 +202,7 @@ use std::error::Error;
 #[derive(Data, Clone, PartialEq, Debug)]
 struct LogLine {
     uri: Option<String>,
-    requestip: Option<IpAddr>
+    requestip: Option<IpAddr>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -220,7 +222,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "us-east-1.data-analytics",
                 "cflogworkshop/optimized/cf-accesslogs/",
                 AwsCredentials::Anonymous,
-            ))).await?;
+            )))
+            .await?;
 
             let top_pages = rows
                 .dist_stream()

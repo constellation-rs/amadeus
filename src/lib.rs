@@ -30,7 +30,12 @@
 )]
 #![deny(unsafe_code)]
 
-#[cfg(doctest)]
+#[cfg(all(
+	feature = "aws",
+	feature = "parquet",
+	feature = "constellation",
+	doctest
+))]
 doc_comment::doctest!("../README.md");
 
 pub mod data;

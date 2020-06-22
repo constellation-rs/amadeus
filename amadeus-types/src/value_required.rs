@@ -71,7 +71,7 @@ pub enum ValueRequired {
 
 	// Complex types
 	/// List of elements.
-	List(Box<List<Value>>),
+	List(List<Value>),
 	/// Map of key-value pairs.
 	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
