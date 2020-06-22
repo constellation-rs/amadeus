@@ -53,14 +53,14 @@ pub mod dist {
 	pub mod prelude {
 		#[cfg(feature = "constellation")]
 		#[doc(no_inline)]
-		pub use super::super::pool::ProcessPool;
+		pub use crate::pool::ProcessPool;
 		#[cfg(feature = "aws")]
 		#[doc(no_inline)]
-		pub use super::super::source::aws::{
+		pub use crate::source::aws::{
 			AwsCredentials, AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File
 		};
 		#[doc(no_inline)]
-		pub use super::super::{
+		pub use crate::{
 			data, data::{
 				Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
 			}, par_pipe::DistributedPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
@@ -72,14 +72,14 @@ pub mod dist {
 pub mod prelude {
 	#[cfg(feature = "constellation")]
 	#[doc(no_inline)]
-	pub use super::pool::ProcessPool;
+	pub use crate::pool::ProcessPool;
 	#[cfg(feature = "aws")]
 	#[doc(no_inline)]
-	pub use super::source::aws::{
+	pub use crate::source::aws::{
 		AwsCredentials, AwsError, AwsRegion, CloudfrontRow, S3Directory, S3File
 	};
 	#[doc(no_inline)]
-	pub use super::{
+	pub use crate::{
 		data, data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
 		}, par_pipe::ParallelPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value

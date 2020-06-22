@@ -52,11 +52,11 @@ async fn main() {
 	println!("{} log lines analysed.", count);
 	println!("sample: {:#?}", sample);
 	println!(
-		"histogram: {:?}",
+		"histogram:\n    {}",
 		histogram
 			.into_iter()
 			.map(|(time, count)| format!("{}: {}", time, count))
 			.collect::<Vec<_>>()
-			.join("\n")
+			.join("\n    ")
 	);
 }
