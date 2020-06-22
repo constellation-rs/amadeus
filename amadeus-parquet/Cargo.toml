@@ -25,6 +25,7 @@ async-trait = "0.1"
 brotli = "3.3"
 byteorder = "1.2"
 chrono = { version = "0.4", default-features = false }
+educe = "0.4"
 flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = false }
 futures = "0.3"
 fxhash = "0.2"

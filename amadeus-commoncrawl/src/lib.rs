@@ -18,6 +18,7 @@ use amadeus_types::Webpage;
 use commoncrawl::WarcParser;
 
 /// See https://commoncrawl.s3.amazonaws.com/crawl-data/index.html
+#[derive(Clone, Debug)]
 pub struct CommonCrawl {
 	urls: Vec<String>,
 }

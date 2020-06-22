@@ -5,7 +5,7 @@ use derive_new::new;
 use futures::pin_mut;
 use pin_project::pin_project;
 use std::{
-	error::Error, marker::PhantomData, pin::Pin, task::{Context, Poll}
+	error::Error, fmt::Debug, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
 use crate::{
@@ -34,7 +34,7 @@ pub use amadeus_postgres::{self as postgres, Postgres};
 #[doc(inline)]
 pub use amadeus_serde::{self as serde, Csv, Json};
 
-pub trait Source {
+pub trait Source: Clone + Debug {
 	type Item: crate::data::Data;
 	type Error: Error;
 
@@ -45,7 +45,7 @@ pub trait Source {
 	fn dist_stream(self) -> Self::DistStream;
 }
 
-pub trait Destination {
+pub trait Destination: Clone + Debug {
 	type Item: crate::data::Data;
 	type Error: Error;
 

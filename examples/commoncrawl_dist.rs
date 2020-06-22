@@ -52,7 +52,7 @@ fn main() {
 			let (count, (most_frequent_ips, most_diverse_ips)) = webpages
 				.dist_stream()
 				.map(FnMut!(|webpage: Result<_, _>| webpage.unwrap()))
-				.pipe_fork(
+				.fork(
 					&pool,
 					Identity
 						.map(FnMut!(|webpage: Webpage<'static>| webpage))

@@ -49,7 +49,7 @@ async fn commoncrawl() {
 			streaming_algorithms::SampleUnstable<u32>,
 		),
 	) = webpages.par_stream().map(|webpage:Result<_,_>|webpage.unwrap())
-		.pipe_fork(
+		.fork(
 			&pool,
 			((
 				// Identity

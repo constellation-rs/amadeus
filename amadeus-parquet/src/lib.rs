@@ -11,6 +11,7 @@ extern crate test;
 mod internal;
 
 use async_trait::async_trait;
+use educe::Educe;
 use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use internal::{
 	errors::ParquetError as InternalParquetError, file::reader::{FileReader, ParquetReader, SerializedFileReader}
@@ -36,6 +37,8 @@ pub mod derive {
 	};
 }
 
+#[derive(Educe)]
+#[educe(Clone, Debug)]
 pub struct Parquet<File, Row>
 where
 	File: amadeus_core::file::File,

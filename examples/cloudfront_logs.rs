@@ -32,7 +32,7 @@ async fn main() {
 	let (sample, (histogram, count)) = rows
 		.par_stream()
 		.map(Result::unwrap)
-		.pipe_fork(
+		.fork(
 			pool,
 			Identity.sample_unstable(10),
 			(

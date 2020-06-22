@@ -30,7 +30,14 @@ where
 	type ReduceB = BoolOrReducer;
 	type ReduceC = BoolOrReducer;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+	fn reducers(
+		self,
+	) -> (
+		Self::Pipe,
+		Self::ReduceAFactory,
+		Self::ReduceBFactory,
+		Self::ReduceC,
+	) {
 		(
 			self.i,
 			AnyReducerFactory(self.f, PhantomData),
@@ -49,7 +56,7 @@ where
 	type ReduceA = AnyReducer<I::Item, F>;
 	type ReduceC = BoolOrReducer;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceC) {
+	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC) {
 		(
 			self.i,
 			AnyReducerFactory(self.f, PhantomData),

@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::{
-	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, GroupBy, Inspect, Map, Max, MaxBy, MaxByKey, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, PipeTask, PipeTaskAsync, SampleUnstable, Sum, Update
+	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, GroupBy, Inspect, Map, Max, MaxBy, MaxByKey, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, Pipe, PipeTask, PipeTaskAsync, SampleUnstable, Sum, Update
 };
 use crate::sink::Sink;
 
@@ -30,6 +30,10 @@ mod workaround {
 
 	#[doc(hidden)]
 	impl Identity {
+		pub fn pipe<S, A>(self, sink: S) -> Pipe<Self, S> {
+			Pipe::new(self, sink)
+		}
+
 		pub fn inspect<F>(self, f: F) -> Inspect<Self, F>
 		where
 			F: Clone + Send + 'static,

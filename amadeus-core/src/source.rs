@@ -1,10 +1,10 @@
-use std::error::Error;
+use std::{error::Error, fmt::Debug};
 
 use crate::{
 	par_sink::{DistributedSink, ParallelSink}, par_stream::{DistributedStream, ParallelStream}
 };
 
-pub trait Source {
+pub trait Source: Clone + Debug {
 	type Item;
 	type Error: Error;
 
@@ -15,7 +15,7 @@ pub trait Source {
 	fn dist_stream(self) -> Self::DistStream;
 }
 
-pub trait Destination {
+pub trait Destination: Clone + Debug {
 	type Item;
 	type Error: Error;
 

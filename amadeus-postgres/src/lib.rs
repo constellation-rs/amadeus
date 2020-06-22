@@ -14,6 +14,7 @@ mod impls;
 pub use postgres as _internal;
 
 use bytes::{Buf, Bytes};
+use educe::Educe;
 use futures::{ready, stream, FutureExt, Stream, StreamExt, TryStreamExt};
 use pin_project::pin_project;
 use postgres::{CopyOutStream, Error as InternalPostgresError};
@@ -40,13 +41,13 @@ where
 	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>>;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum Source {
 	Table(Table),
 	Query(String),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Table {
 	schema: Option<String>,
 	table: String,
@@ -82,7 +83,7 @@ impl str::FromStr for Table {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ConnectParams {
 	hosts: Vec<Host>,
 	ports: Vec<u16>,
@@ -147,7 +148,7 @@ impl str::FromStr for ConnectParams {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 enum Host {
 	Tcp(String),
 	Unix(PathBuf),
@@ -162,6 +163,8 @@ impl From<postgres::config::Host> for Host {
 	}
 }
 
+#[derive(Educe)]
+#[educe(Clone, Debug)]
 pub struct Postgres<Row>
 where
 	Row: PostgresData,

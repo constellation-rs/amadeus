@@ -369,7 +369,7 @@ pub trait DistributedStream {
 	}
 
 	// These messy bounds are unfortunately necessary as requiring 'static in ParallelSink breaks sink_b being e.g. Identity.count()
-	async fn pipe_fork<P, DistSinkA, DistSinkB, A, B>(
+	async fn fork<P, DistSinkA, DistSinkB, A, B>(
 		self, pool: &P, sink_a: DistSinkA, sink_b: DistSinkB,
 	) -> (A, B)
 	where
@@ -1047,7 +1047,7 @@ pub trait ParallelStream {
 	}
 
 	// These messy bounds are unfortunately necessary as requiring 'static in ParallelSink breaks sink_b being e.g. Identity.count()
-	async fn pipe_fork<P, ParSinkA, ParSinkB, A, B>(
+	async fn fork<P, ParSinkA, ParSinkB, A, B>(
 		self, pool: &P, sink_a: ParSinkA, sink_b: ParSinkB,
 	) -> (A, B)
 	where

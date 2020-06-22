@@ -77,7 +77,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			streaming_algorithms::SampleUnstable<u32>,
 		),
 	) = webpages.dist_stream().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
-		.pipe_fork(
+		.fork(
 			&pool,
 			((
 				// Identity

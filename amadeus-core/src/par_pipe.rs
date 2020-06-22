@@ -75,14 +75,31 @@ impl_par_dist_rename! {
 			assert_parallel_pipe(Filter::new(self, f))
 		}
 
+		fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
+		where
+			T: Clone + 'a,
+			Source: 'a,
+			Self: ParallelPipe<&'a Source, Item = &'a T> + Sized,
+		{
+			assert_parallel_pipe(Cloned::new(self))
+		}
+
 		// #[must_use]
 		// fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
 		// where
 		// 	C: IntoParallelStream<Item = Self::Item>,
 		// 	Self: Sized,
 		// {
-		// 	Chain::new(self, chain.into_par_stream())
+		// 	assert_parallel_pipe(Chain::new(self, chain.into_par_stream()))
 		// }
+
+		fn pipe<S>(self, sink: S) -> Pipe<Self, S>
+		where
+			S: ParallelSink<Self::Item>,
+			Self: Sized,
+		{
+			assert_parallel_sink(Pipe::new(self, sink))
+		}
 
 		fn for_each<F>(self, f: F) -> ForEach<Self, F>
 		where
@@ -246,15 +263,6 @@ impl_par_dist_rename! {
 			Self: Sized,
 		{
 			assert_parallel_sink(Collect::new(self))
-		}
-
-		fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
-		where
-			T: Clone + 'a,
-			Source: 'a,
-			Self: ParallelPipe<&'a Source, Item = &'a T> + Sized,
-		{
-			assert_parallel_pipe(Cloned::new(self))
 		}
 	}
 	#[inline(always)]
