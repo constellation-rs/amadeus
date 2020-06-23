@@ -12,8 +12,7 @@
 //! cargo run --example common_crawl --release
 //! ```
 
-use amadeus::dist::prelude::*;
-use data::Webpage;
+use amadeus::{data::Webpage, dist::prelude::*};
 
 #[allow(unreachable_code)]
 #[tokio::main]

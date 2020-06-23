@@ -61,7 +61,7 @@ pub mod dist {
 		};
 		#[doc(no_inline)]
 		pub use crate::{
-			data, data::{
+			data::{
 				Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
 			}, par_pipe::DistributedPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, DistributedStream, FromDistributedStream, IntoDistributedStream, IteratorExt, List, Value
 		};
@@ -80,7 +80,7 @@ pub mod prelude {
 	};
 	#[doc(no_inline)]
 	pub use crate::{
-		data, data::{
+		data::{
 			Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Downcast, DowncastFrom, Enum, Group, Time, TimeWithoutTimezone, Timezone
 		}, par_pipe::ParallelPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
 	};

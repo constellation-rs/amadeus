@@ -13,8 +13,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use amadeus::prelude::*;
-use data::Webpage;
+use amadeus::{data::Webpage, prelude::*};
 
 #[tokio::test]
 async fn commoncrawl() {

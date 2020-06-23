@@ -15,8 +15,7 @@
 use constellation::*;
 use std::time::{Duration, SystemTime};
 
-use amadeus::dist::prelude::*;
-use data::Webpage;
+use amadeus::{data::Webpage, dist::prelude::*};
 
 fn main() {
 	#[cfg(feature = "constellation")]
