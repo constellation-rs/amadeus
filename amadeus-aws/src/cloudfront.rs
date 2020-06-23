@@ -16,6 +16,7 @@ use amadeus_types::{Data, DateTime, IpAddr, Url};
 
 use super::{list, retry, AwsCredentials, AwsError, AwsRegion, Ref, RUSOTO_DISPATCHER};
 
+#[derive(Clone, Debug)]
 pub struct Cloudfront {
 	region: AwsRegion,
 	bucket: String,

@@ -1,3 +1,4 @@
+use educe::Educe;
 use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
@@ -12,7 +13,8 @@ use amadeus_core::{
 
 use super::{SerdeData, SerdeDeserialize};
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Clone, Debug)]
 pub struct Json<File, Row>
 where
 	File: amadeus_core::file::File,

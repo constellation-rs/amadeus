@@ -29,9 +29,7 @@ async fn postgres() {
 	// https://datahub.io/cryptocurrency/bitcoin
 	let rows = Postgres::<Weather>::new(vec![(
 		"postgres://postgres:a@localhost/alec".parse().unwrap(),
-		vec![amadeus::source::postgres::Source::Table(
-			"weather".parse().unwrap(),
-		)],
+		vec![PostgresSelect::Table("weather".parse().unwrap())],
 	)]);
 	assert_eq!(
 		rows.par_stream()

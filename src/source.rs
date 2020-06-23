@@ -5,7 +5,7 @@ use derive_new::new;
 use futures::pin_mut;
 use pin_project::pin_project;
 use std::{
-	error::Error, marker::PhantomData, pin::Pin, task::{Context, Poll}
+	error::Error, fmt::Debug, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
 use crate::{
@@ -23,18 +23,18 @@ pub mod aws {
 }
 #[cfg(feature = "commoncrawl")]
 #[doc(inline)]
-pub use amadeus_commoncrawl::{self as commoncrawl, CommonCrawl};
+pub use amadeus_commoncrawl::CommonCrawl;
 #[cfg(feature = "parquet")]
 #[doc(inline)]
-pub use amadeus_parquet::{self as parquet, Parquet, ParquetDirectory};
+pub use amadeus_parquet::{Parquet, ParquetDirectory};
 #[cfg(feature = "postgres")]
 #[doc(inline)]
-pub use amadeus_postgres::{self as postgres, Postgres};
+pub use amadeus_postgres::{Postgres, PostgresSelect, PostgresTable};
 #[cfg(feature = "amadeus-serde")]
 #[doc(inline)]
-pub use amadeus_serde::{self as serde, Csv, Json};
+pub use amadeus_serde::{Csv, Json};
 
-pub trait Source {
+pub trait Source: Clone + Debug {
 	type Item: crate::data::Data;
 	type Error: Error;
 
@@ -45,7 +45,7 @@ pub trait Source {
 	fn dist_stream(self) -> Self::DistStream;
 }
 
-pub trait Destination {
+pub trait Destination: Clone + Debug {
 	type Item: crate::data::Data;
 	type Error: Error;
 

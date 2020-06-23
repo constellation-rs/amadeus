@@ -13,8 +13,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use amadeus::prelude::*;
-use data::Webpage;
+use amadeus::{data::Webpage, prelude::*};
 
 #[tokio::test]
 async fn commoncrawl() {
@@ -49,7 +48,7 @@ async fn commoncrawl() {
 			streaming_algorithms::SampleUnstable<u32>,
 		),
 	) = webpages.par_stream().map(|webpage:Result<_,_>|webpage.unwrap())
-		.pipe_fork(
+		.fork(
 			&pool,
 			((
 				// Identity

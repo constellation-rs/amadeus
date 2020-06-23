@@ -34,8 +34,6 @@ fn main() {
 async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	let start = SystemTime::now();
 
-	let _ = DistributedPipe::<&Result<CloudfrontRow, AwsError>>::count(Identity);
-
 	let rows = Cloudfront::new_with(
 		AwsRegion::UsEast1,
 		"us-east-1.data-analytics",
@@ -45,9 +43,10 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	.await
 	.unwrap();
 
-	let ((), (count, count2, ())) = rows
+	let ((), (count, count2, (), list)): ((), (usize, usize, (), List<CloudfrontRow>)) = rows
+		.clone()
 		.dist_stream()
-		.pipe_fork(
+		.fork(
 			pool,
 			Identity.for_each(FnMut!(|x: Result<CloudfrontRow, _>| {
 				let _x = x.unwrap();
@@ -57,11 +56,24 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 				Identity.map(FnMut!(|_: &_| ())).count(),
 				Identity.count(),
 				Identity.for_each(FnMut!(|_: &_| ())),
+				Identity
+					.cloned()
+					.map(FnMut!(|x: Result<_, _>| x.unwrap()))
+					.collect(),
 			),
 		)
 		.await;
 	assert_eq!(count, count2);
 	assert_eq!(count, 207_928);
+
+	assert_eq!(list.len(), count);
+	for _el in list {}
+
+	let count3 = rows
+		.dist_stream()
+		.pipe(pool, Identity.pipe(Identity.count()))
+		.await;
+	assert_eq!(count3, 207_928);
 
 	start.elapsed().unwrap()
 }

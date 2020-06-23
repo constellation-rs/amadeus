@@ -10,8 +10,6 @@ async fn cloudfront() {
 
 	let start = SystemTime::now();
 
-	let _ = ParallelPipe::<&Result<CloudfrontRow, AwsError>>::count(Identity);
-
 	let rows = Cloudfront::new_with(
 		AwsRegion::UsEast1,
 		"us-east-1.data-analytics",
@@ -22,8 +20,9 @@ async fn cloudfront() {
 	.unwrap();
 
 	let ((), (count, count2, (), list)): ((), (usize, usize, (), List<CloudfrontRow>)) = rows
+		.clone()
 		.par_stream()
-		.pipe_fork(
+		.fork(
 			pool,
 			Identity.for_each(|x: Result<CloudfrontRow, _>| {
 				let _x = x.unwrap();
@@ -42,6 +41,12 @@ async fn cloudfront() {
 
 	assert_eq!(list.len(), count);
 	for _el in list {}
+
+	let count3 = rows
+		.par_stream()
+		.pipe(pool, Identity.pipe(Identity.count()))
+		.await;
+	assert_eq!(count3, 207_928);
 
 	println!("in {:?}", start.elapsed().unwrap());
 }

@@ -3,7 +3,7 @@
 // select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
 // select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;
 
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.3")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 #![allow(incomplete_features)]
@@ -14,6 +14,7 @@ mod impls;
 pub use postgres as _internal;
 
 use bytes::{Buf, Bytes};
+use educe::Educe;
 use futures::{ready, stream, FutureExt, Stream, StreamExt, TryStreamExt};
 use pin_project::pin_project;
 use postgres::{CopyOutStream, Error as InternalPostgresError};
@@ -24,7 +25,7 @@ use std::{
 };
 
 use amadeus_core::{
-	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, IoError}, Source as DSource
+	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, IoError}, Source
 };
 
 const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
@@ -40,24 +41,24 @@ where
 	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>>;
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum Source {
-	Table(Table),
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum PostgresSelect {
+	Table(PostgresTable),
 	Query(String),
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Table {
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct PostgresTable {
 	schema: Option<String>,
 	table: String,
 }
-impl Table {
+impl PostgresTable {
 	pub fn new(schema: Option<String>, table: String) -> Self {
 		Self { schema, table }
 	}
 }
 
-impl Display for Table {
+impl Display for PostgresTable {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		if let Some(ref schema) = self.schema {
 			EscapeIdentifier(schema).fmt(f)?;
@@ -66,13 +67,13 @@ impl Display for Table {
 		EscapeIdentifier(&self.table).fmt(f)
 	}
 }
-impl str::FromStr for Table {
+impl str::FromStr for PostgresTable {
 	type Err = ();
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		if s.contains(&['"', '.', '\0'] as &[char]) {
 			todo!(
-				"Table parsing not yet implemented. Construct it with Table::new instead. Tracking at https://github.com/constellation-rs/amadeus/issues/63"
+				"Table parsing not yet implemented. Construct it with PostgresTable::new instead. Tracking at https://github.com/constellation-rs/amadeus/issues/63"
 			);
 		}
 		Ok(Self {
@@ -82,7 +83,7 @@ impl str::FromStr for Table {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ConnectParams {
 	hosts: Vec<Host>,
 	ports: Vec<u16>,
@@ -147,7 +148,7 @@ impl str::FromStr for ConnectParams {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 enum Host {
 	Tcp(String),
 	Unix(PathBuf),
@@ -162,11 +163,13 @@ impl From<postgres::config::Host> for Host {
 	}
 }
 
+#[derive(Educe)]
+#[educe(Clone, Debug)]
 pub struct Postgres<Row>
 where
 	Row: PostgresData,
 {
-	files: Vec<(ConnectParams, Vec<Source>)>,
+	files: Vec<(ConnectParams, Vec<PostgresSelect>)>,
 	marker: PhantomData<fn() -> Row>,
 }
 impl<Row> Postgres<Row>
@@ -175,7 +178,7 @@ where
 {
 	pub fn new<I>(files: I) -> Self
 	where
-		I: IntoIterator<Item = (ConnectParams, Vec<Source>)>,
+		I: IntoIterator<Item = (ConnectParams, Vec<PostgresSelect>)>,
 	{
 		Self {
 			files: files.into_iter().collect(),
@@ -184,7 +187,7 @@ where
 	}
 }
 
-impl<Row> DSource for Postgres<Row>
+impl<Row> Source for Postgres<Row>
 where
 	Row: PostgresData,
 {
@@ -211,7 +214,7 @@ where
 			.files
 			.into_dist_stream()
 			.flat_map(FnMut!(|(config, tables)| async move {
-				let (config, tables): (ConnectParams, Vec<Source>) = (config, tables);
+				let (config, tables): (ConnectParams, Vec<PostgresSelect>) = (config, tables);
 				let (client, connection) = postgres::config::Config::from(config)
 					.connect(postgres::tls::NoTls)
 					.await
@@ -220,12 +223,12 @@ where
 					let _ = connection.await;
 				});
 				let client = Arc::new(client);
-				stream::iter(tables.into_iter()).flat_map(move |table: Source| {
+				stream::iter(tables.into_iter()).flat_map(move |table: PostgresSelect| {
 					let client = client.clone();
 					async move {
 						let table = match table {
-							Source::Table(table) => table.to_string(),
-							Source::Query(query) => format!("({}) _", query),
+							PostgresSelect::Table(table) => table.to_string(),
+							PostgresSelect::Query(query) => format!("({}) _", query),
 						};
 						let query = format!(
 							"COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)",

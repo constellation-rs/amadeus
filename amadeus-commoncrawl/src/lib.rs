@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.2.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.2.3")]
 #![feature(type_alias_impl_trait)]
 
 mod commoncrawl;
@@ -18,6 +18,7 @@ use amadeus_types::Webpage;
 use commoncrawl::WarcParser;
 
 /// See https://commoncrawl.s3.amazonaws.com/crawl-data/index.html
+#[derive(Clone, Debug)]
 pub struct CommonCrawl {
 	urls: Vec<String>,
 }

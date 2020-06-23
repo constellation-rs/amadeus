@@ -167,43 +167,58 @@ impl<T: 'static> StreamTaskAsync for ImplTask<T> {
 
 // This is a dumb hack to avoid triggering https://github.com/rust-lang/rust/issues/48214 in amadeus-derive: see https://github.com/taiki-e/pin-project/issues/102#issuecomment-540472282
 #[doc(hidden)]
-pub struct Wrapper<'a, T: ?Sized>(&'a T);
+#[repr(transparent)]
+pub struct Wrapper<'a, T: ?Sized>(PhantomData<&'a ()>, T);
+impl<'a, T: ?Sized> Wrapper<'a, T> {
+	pub fn new(t: T) -> Self
+	where
+		T: Sized,
+	{
+		Self(PhantomData, t)
+	}
+	pub fn into_inner(self) -> T
+	where
+		T: Sized,
+	{
+		self.1
+	}
+}
 impl<'a, T: ?Sized> Hash for Wrapper<'a, T>
 where
 	T: Hash,
 {
-	fn hash<H: Hasher>(&self, _state: &mut H) {
-		unreachable!()
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.1.hash(state)
 	}
 }
 impl<'a, T: ?Sized> Serialize for Wrapper<'a, T>
 where
 	T: Serialize,
 {
-	fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		unreachable!()
+		self.1.serialize(serializer)
 	}
 }
 impl<'a, 'de, T: ?Sized> Deserialize<'de> for Wrapper<'a, T>
 where
 	T: Deserialize<'de>,
 {
-	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		unreachable!()
+		T::deserialize(deserializer).map(Wrapper::new)
 	}
 }
 impl<'a, T: ?Sized> fmt::Debug for Wrapper<'a, T>
 where
 	T: fmt::Debug,
 {
-	fn fmt(&self, _f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		unreachable!()
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		fmt::Debug::fmt(&self.1, f)
 	}
 }
 

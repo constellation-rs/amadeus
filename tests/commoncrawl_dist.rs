@@ -15,8 +15,7 @@
 use constellation::*;
 use std::time::{Duration, SystemTime};
 
-use amadeus::dist::prelude::*;
-use data::Webpage;
+use amadeus::{data::Webpage, dist::prelude::*};
 
 fn main() {
 	#[cfg(feature = "constellation")]
@@ -77,7 +76,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			streaming_algorithms::SampleUnstable<u32>,
 		),
 	) = webpages.dist_stream().map(FnMut!(|webpage:Result<_,_>|webpage.unwrap()))
-		.pipe_fork(
+		.fork(
 			&pool,
 			((
 				// Identity

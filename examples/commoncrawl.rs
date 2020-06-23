@@ -12,8 +12,7 @@
 //! cargo run --example common_crawl --release
 //! ```
 
-use amadeus::dist::prelude::*;
-use data::Webpage;
+use amadeus::{data::Webpage, dist::prelude::*};
 
 #[allow(unreachable_code)]
 #[tokio::main]
@@ -27,7 +26,7 @@ async fn main() {
 	let (count, (most_frequent_ips, most_diverse_ips)) = webpages
 		.dist_stream()
 		.map(FnMut!(|webpage: Result<_, _>| webpage.unwrap()))
-		.pipe_fork(
+		.fork(
 			&pool,
 			Identity
 				.map(FnMut!(|webpage: Webpage<'static>| webpage))

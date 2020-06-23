@@ -13,7 +13,6 @@
 
 #![type_length_limit = "13470730"]
 use amadeus::prelude::*;
-// use data::CloudfrontRow;
 
 #[allow(unreachable_code)]
 #[tokio::main]
@@ -32,7 +31,7 @@ async fn main() {
 	let (sample, (histogram, count)) = rows
 		.par_stream()
 		.map(Result::unwrap)
-		.pipe_fork(
+		.fork(
 			pool,
 			Identity.sample_unstable(10),
 			(
@@ -52,11 +51,11 @@ async fn main() {
 	println!("{} log lines analysed.", count);
 	println!("sample: {:#?}", sample);
 	println!(
-		"histogram: {:?}",
+		"histogram:\n    {}",
 		histogram
 			.into_iter()
 			.map(|(time, count)| format!("{}: {}", time, count))
 			.collect::<Vec<_>>()
-			.join("\n")
+			.join("\n    ")
 	);
 }

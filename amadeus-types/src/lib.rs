@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.3")]
 #![feature(iter_order_by)]
 #![feature(min_specialization)]
 
@@ -72,7 +72,9 @@ pub use self::{
 };
 
 pub mod __internal {
-	pub use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
+	pub use serde::{
+		de::{Deserializer, Error, SeqAccess, Visitor}, ser::{SerializeTuple, Serializer}, Deserialize, Serialize
+	};
 }
 
 /// This trait lets one downcast a generic type like [`Value`] to a specific type like

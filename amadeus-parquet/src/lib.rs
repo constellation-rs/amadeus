@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.2.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.2.3")]
 #![feature(bufreader_seek_relative)]
 #![feature(read_initializer)]
 #![feature(specialization)]
@@ -11,6 +11,7 @@ extern crate test;
 mod internal;
 
 use async_trait::async_trait;
+use educe::Educe;
 use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use internal::{
 	errors::ParquetError as InternalParquetError, file::reader::{FileReader, ParquetReader, SerializedFileReader}
@@ -36,6 +37,8 @@ pub mod derive {
 	};
 }
 
+#[derive(Educe)]
+#[educe(Clone, Debug)]
 pub struct Parquet<File, Row>
 where
 	File: amadeus_core::file::File,

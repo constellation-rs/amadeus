@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.2.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.2.3")]
 #![recursion_limit = "400"]
 #![allow(clippy::useless_let_if_seq)]
 
@@ -150,6 +150,12 @@ fn impl_struct(
 			.predicates
 			.push(syn::parse2(quote! { #ident: __::Data }).unwrap());
 	}
+	let mut where_clause_with_core_data = where_clause.clone();
+	for TypeParam { ident, .. } in ast.generics.type_params() {
+		where_clause_with_core_data
+			.predicates
+			.push(syn::parse2(quote! { #ident: __::CoreData }).unwrap());
+	}
 	let mut where_clause_with_parquet_data = where_clause.clone();
 	for TypeParam { ident, .. } in ast.generics.type_params() {
 		where_clause_with_parquet_data
@@ -278,7 +284,7 @@ fn impl_struct(
 			#[automatically_derived]
 			impl #impl_generics __::ParquetSchema for #schema_name #ty_generics #where_clause_with_parquet_data {
 				fn fmt(self_: __::Option<&Self>, r: __::Option<__::Repetition>, name: __::Option<&str>, f: &mut __::fmt::Formatter) -> __::fmt::Result {
-					__::DisplaySchemaGroup::new(r, name, None, f)
+					__::DisplaySchemaGroup::new(r, name, __::None, f)
 					#(
 						.field(__::Some(#field_renames1), self_.map(|self_|&self_.#field_names1))
 					)*
@@ -289,7 +295,7 @@ fn impl_struct(
 				#(#field_names1: <#field_types1 as __::ParquetData>::Reader,)*
 			}
 			#visibility struct #predicate_name #impl_generics #where_clause_with_parquet_data {
-				#(#field_names1: Option<<#field_types1 as __::ParquetData>::Predicate>,)*
+				#(#field_names1: __::Option<<#field_types1 as __::ParquetData>::Predicate>,)*
 			}
 			#[automatically_derived]
 			impl #impl_generics __::Reader for #reader_name #ty_generics #where_clause_with_parquet_data {
@@ -302,7 +308,7 @@ fn impl_struct(
 					)*
 					if #(#field_names1.is_err() ||)* false { // TODO: unlikely
 						#(#field_names1?;)*
-						unreachable!()
+						__::panic!("unreachable")
 					}
 					__::Ok(#name {
 						#(#field_names1: #field_names2.unwrap(),)*
@@ -327,14 +333,14 @@ fn impl_struct(
 				fn current_def_level(&self) -> i16 {
 					#(if true { self.#field_names1.current_def_level() } else)*
 					{
-						panic!("Current definition level: empty group reader")
+						__::panic!("Current definition level: empty group reader")
 					}
 				}
 				#[inline]
 				fn current_rep_level(&self) -> i16 {
 					#(if true { self.#field_names1.current_rep_level() } else)*
 					{
-						panic!("Current repetition level: empty group reader")
+						__::panic!("Current repetition level: empty group reader")
 					}
 				}
 			}
@@ -345,20 +351,20 @@ fn impl_struct(
 				type Reader = #reader_name #ty_generics;
 				type Predicate = #predicate_name #ty_generics;
 
-				fn parse(schema: &__::Type, predicate: Option<&Self::Predicate>, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::Schema)> {
+				fn parse(schema: &__::Type, predicate: __::Option<&Self::Predicate>, repetition: __::Option<__::Repetition>) -> __::ParquetResult<(__::String, Self::Schema)> {
 					if schema.is_group() && repetition == __::Some(__::Repetition::Required) {
-						let fields = schema.get_fields().iter().map(|field|(field.name(),field)).collect::<__::HashMap<_,_>>();
+						let fields = __::Iterator::collect::<__::HashMap<_,_>>(__::Iterator::map(schema.get_fields().iter(), |field|(field.name(),field)));
 						let name = stringify!(#name);
 						let schema_ = #schema_name{
-							#(#field_names1: fields.get(#field_renames1).ok_or_else(|| __::ParquetError::General(format!("Struct \"{}\" has field \"{}\" not in the schema", name, #field_renames2))).and_then(|x|<#field_types1 as __::ParquetData>::parse(&**x, predicate.and_then(|predicate| predicate.#field_names2.as_ref()), __::Some(x.get_basic_info().repetition())))?.1,)*
+							#(#field_names1: fields.get(#field_renames1).ok_or_else(|| __::ParquetError::General(__::format!("Struct \"{}\" has field \"{}\" not in the schema", name, #field_renames2))).and_then(|x|<#field_types1 as __::ParquetData>::parse(&**x, predicate.and_then(|predicate| predicate.#field_names2.as_ref()), __::Some(x.get_basic_info().repetition())))?.1,)*
 						};
-						return __::Ok((schema.name().to_owned(), schema_))
+						return __::Ok((__::ToOwned::to_owned(schema.name()), schema_))
 					}
-					__::Err(__::ParquetError::General(format!("Struct \"{}\" is not in the schema", stringify!(#name))))
+					__::Err(__::ParquetError::General(__::format!("Struct \"{}\" is not in the schema", stringify!(#name))))
 				}
 				fn reader(schema: &Self::Schema, mut path: &mut __::Vec<__::String>, def_level: i16, rep_level: i16, paths: &mut __::HashMap<__::ColumnPath, __::ColumnReader>, batch_size: usize) -> Self::Reader {
 					#(
-						path.push(#field_renames1.to_owned());
+						path.push(__::ToOwned::to_owned(#field_renames1));
 						let #field_names1 = <#field_types1 as __::ParquetData>::reader(&schema.#field_names2, path, def_level, rep_level, paths, batch_size);
 						path.pop().unwrap();
 					)*
@@ -396,14 +402,15 @@ fn impl_struct(
 						__::Write::write_str(f, ")")
 					}
 				}
-				fn decode(type_: &__::postgres::types::Type, buf: Option<&[u8]>) -> __::Result<Self, __::Box<__::Error + __::Sync + __::Send>> {
+				fn decode(type_: &__::postgres::types::Type, buf: __::Option<&[u8]>) -> __::Result<Self, __::Box<__::Error + __::Sync + __::Send>> {
 					let buf = buf.unwrap();
-					assert_eq!(type_, &__::postgres::types::Type::RECORD);
-
+					if type_ != &__::postgres::types::Type::RECORD {
+						__::panic!("{:?} != {:?}", type_, __::postgres::types::Type::RECORD);
+					}
 					let mut buf = buf;
 					let num_fields = __::read_be_i32(&mut buf)?;
 					if num_fields as usize != #num_fields {
-						return __::Err(__::Into::into(format!("invalid field count: {} vs {}", num_fields, #num_fields)));
+						return __::Err(__::Into::into(__::format!("invalid field count: {} vs {}", num_fields, #num_fields)));
 					}
 
 					__::Ok(Self {
@@ -459,24 +466,24 @@ fn impl_struct(
 			#postgres_includes
 			#serde_includes
 			pub use ::amadeus_core::util::Wrapper;
-			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec, __internal::{Serialize as Serialize_, Deserialize as Deserialize_, Serializer as Serializer_, Deserializer as Deserializer_}};
+			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec, __internal::{Serialize as Serialize_, Deserialize as Deserialize_, Serializer as Serializer_, Deserializer as Deserializer_, SerializeTuple, Error as SerdeError, Visitor, SeqAccess}};
 			pub use #amadeus_path::data::Data;
-			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, hash::{Hash, Hasher}, marker::{Send, Sized, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
+			pub use ::std::{borrow::ToOwned, boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, format, hash::{Hash, Hasher}, iter::{ExactSizeIterator, IntoIterator, Iterator}, marker::{PhantomData, Send, Sized, Sync}, result::Result::{self, Ok, Err}, string::String, panic, vec, vec::{IntoIter, Vec}, option::Option::{self, Some, None}};
 		}
 
 		#parquet_derives
 		#postgres_derives
 		#serde_derives
 
-		#visibility struct #vec_name #impl_generics #where_clause_with_data {
+		#visibility struct #vec_name #impl_generics #where_clause_with_core_data {
 			#(#field_names1: <#field_types1 as __::CoreData>::Vec,)*
 			__len: usize,
 		}
-		#visibility struct #dynamic_type_name #impl_generics #where_clause_with_data {
+		#visibility struct #dynamic_type_name #impl_generics #where_clause_with_core_data {
 			#(#field_names1: <#field_types1 as __::CoreData>::DynamicType,)*
 		}
 		#[automatically_derived]
-		impl #impl_generics __::CoreData for #name #ty_generics #where_clause_with_data {
+		impl #impl_generics __::CoreData for #name #ty_generics #where_clause_with_core_data {
 			type Vec = #vec_name #ty_generics;
 			type DynamicType = #dynamic_type_name #ty_generics;
 
@@ -487,8 +494,8 @@ fn impl_struct(
 				}
 			}
 		}
-		impl #impl_generics __::ListVec<#name #ty_generics> for #vec_name #ty_generics #where_clause_with_data {
-			type IntoIter = std::vec::IntoIter<#name #ty_generics>;
+		impl #impl_generics __::ListVec<#name #ty_generics> for #vec_name #ty_generics #where_clause_with_core_data {
+			type IntoIter = __::IntoIter<#name #ty_generics>;
 
 			#[inline(always)]
 			fn new() -> Self {
@@ -503,12 +510,12 @@ fn impl_struct(
 				#(<<#field_types1 as __::CoreData>::Vec as __::ListVec<#field_types1>>::push(&mut self.#field_names1, t.#field_names2);)*
 			}
 			#[inline(always)]
-			fn pop(&mut self) -> Option<#name #ty_generics> {
+			fn pop(&mut self) -> __::Option<#name #ty_generics> {
 				if self.__len == 0 {
-					return None;
+					return __::None;
 				}
 				self.__len -= 1;
-				Some(#name {
+				__::Some(#name {
 					#(#field_names1: <<#field_types1 as __::CoreData>::Vec as __::ListVec<#field_types1>>::pop(&mut self.#field_names2).unwrap(),)*
 				})
 			}
@@ -536,7 +543,7 @@ fn impl_struct(
 			}
 			#[inline(always)]
 			fn into_iter_a(self) -> Self::IntoIter {
-				self.into_vec().into_iter()
+				__::IntoIterator::into_iter(self.into_vec())
 			}
 			// #[inline(always)]
 			// fn iter_a<'a>(&'a self) -> __::Box<dyn __::Iterator<Item = &'a #name #ty_generics> + 'a> {
@@ -559,24 +566,24 @@ fn impl_struct(
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Hash,
 			{
 				// #(self.#field_names1.hash_a(state);)*
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+				__::panic!("Not yet implemented: Tracking at https://github.com/constellation-rs/amadeus/issues/69")
 			}
 			#[inline(always)]
-			fn serialize_a<S>(&self, _serializer: S) -> __::Result<S::Ok, S::Error>
+			fn serialize_a<S>(&self, serializer: S) -> __::Result<S::Ok, S::Error>
 			where
 				S: __::Serializer_,
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Serialize_,
 			{
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+				serializer.collect_seq(__::Iterator::map(self.clone_a().into_iter_a(), __::Wrapper::new))
 			}
 			#[inline(always)]
-			fn deserialize_a<'de, D>(_deserializer: D) -> __::Result<Self, D::Error>
+			fn deserialize_a<'de, D>(deserializer: D) -> __::Result<Self, D::Error>
 			where
 				D: __::Deserializer_<'de>,
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Deserialize_<'de>,
 				Self: __::Sized,
 			{
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+				<__::Vec<__::Wrapper<'static, #name #ty_generics>> as __::Deserialize_>::deserialize(deserializer).map(|vec| Self::from_vec(__::Iterator::collect(__::Iterator::map(__::IntoIterator::into_iter(vec), __::Wrapper::into_inner))))
 			}
 			fn fmt_a(&self, fmt: &mut __::fmt::Formatter) -> __::Result<(), __::fmt::Error>
 			where
@@ -607,26 +614,26 @@ fn impl_struct(
 			fn downcast_from(t: __::Value) -> __::Result<Self, __::DowncastError> {
 				let group = t.into_group()?;
 				let field_names = group.field_names().map(__::Clone::clone);
-				let mut fields = group.into_fields().into_iter();
+				let mut fields = __::IntoIterator::into_iter(group.into_fields());
 				let err = __::DowncastError{from:"group",to:stringify!(#name)};
-				__::Ok(if let Some(field_names) = field_names {
-					let mut fields = fields.map(__::Some).collect::<__::Vec<_>>();
+				__::Ok(if let __::Some(field_names) = field_names {
+					let mut fields = __::Iterator::collect::<__::Vec<_>>(__::Iterator::map(fields, __::Some));
 					#name {
 						#(#field_names1: __::Downcast::downcast(fields[*field_names.get(#field_renames1).ok_or(err)?].take().ok_or(err)?)?,)*
 					}
 				} else {
-					if fields.len() != #num_fields {
-						return Err(err);
+					if __::ExactSizeIterator::len(&fields) != #num_fields {
+						return __::Err(err);
 					}
 					#name {
-						#(#field_names1: __::Downcast::downcast(fields.next().unwrap())?,)*
+						#(#field_names1: __::Downcast::downcast(__::Iterator::next(&mut fields).unwrap())?,)*
 					}
 				})
 			}
 		}
 
 		#[automatically_derived]
-		impl #impl_generics __::From<#name #ty_generics> for __::Value where #where_clause_with_data {
+		impl #impl_generics __::From<#name #ty_generics> for __::Value #where_clause_with_data {
 			fn from(value: #name #ty_generics) -> Self {
 				__::Value::Group(__::Group::new(__::vec![
 					#(__::Into::into(value.#field_names1),)*

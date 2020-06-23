@@ -201,7 +201,7 @@ pub trait File {
 	async fn partitions(self) -> Result<Vec<Self::Partition>, Self::Error>;
 }
 #[async_trait(?Send)]
-pub trait Partition: ProcessSend + 'static {
+pub trait Partition: Clone + fmt::Debug + ProcessSend + 'static {
 	type Page: Page;
 	type Error: Error + Clone + PartialEq + ProcessSend + 'static;
 

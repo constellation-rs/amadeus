@@ -1,4 +1,5 @@
 use csv::Error as InternalCsvError;
+use educe::Educe;
 use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
@@ -41,7 +42,8 @@ use super::{SerdeData, SerdeDeserializeGroup};
 
 // trait File
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Clone, Debug)]
 pub struct Csv<File, Row>
 where
 	File: amadeus_core::file::File,

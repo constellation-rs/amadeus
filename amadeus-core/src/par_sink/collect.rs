@@ -27,7 +27,7 @@ impl<I: ParallelPipe<Source>, Source, T: FromParallelStream<I::Item>> ParallelSi
 	type ReduceA = T::ReduceA;
 	type ReduceC = T::ReduceC;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceC) {
+	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC) {
 		let (a, b) = T::reducers();
 		(self.i, a, b)
 	}
@@ -43,7 +43,14 @@ impl<I: DistributedPipe<Source>, Source, T: FromDistributedStream<I::Item>> Dist
 	type ReduceB = T::ReduceB;
 	type ReduceC = T::ReduceC;
 
-	fn reducers(self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+	fn reducers(
+		self,
+	) -> (
+		Self::Pipe,
+		Self::ReduceAFactory,
+		Self::ReduceBFactory,
+		Self::ReduceC,
+	) {
 		let (a, b, c) = T::reducers();
 		(self.i, a, b, c)
 	}

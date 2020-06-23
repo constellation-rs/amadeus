@@ -1,7 +1,7 @@
 use either::Either;
 use futures::Stream;
 use std::{
-	cmp::Ordering, future::Future, hash::Hash, iter, ops::FnMut, pin::Pin, task::{Context, Poll}
+	cmp::Ordering, future::Future, hash::Hash, iter, ops::{DerefMut, FnMut}, pin::Pin, task::{Context, Poll}
 };
 
 use crate::{pool::ProcessSend, sink::Sink};
@@ -23,6 +23,34 @@ pub trait PipeTaskAsync<Source> {
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 		sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()>;
+}
+
+impl<P, Source> PipeTaskAsync<Source> for Pin<P>
+where
+	P: DerefMut + Unpin,
+	P::Target: PipeTaskAsync<Source>,
+{
+	type Item = <P::Target as PipeTaskAsync<Source>>::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
+	) -> Poll<()> {
+		self.get_mut().as_mut().poll_run(cx, stream, sink)
+	}
+}
+impl<T: ?Sized, Source> PipeTaskAsync<Source> for &mut T
+where
+	T: PipeTaskAsync<Source> + Unpin,
+{
+	type Item = T::Item;
+
+	fn poll_run(
+		mut self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
+	) -> Poll<()> {
+		Pin::new(&mut **self).poll_run(cx, stream, sink)
+	}
 }
 
 impl_par_dist_rename! {
@@ -75,14 +103,31 @@ impl_par_dist_rename! {
 			assert_parallel_pipe(Filter::new(self, f))
 		}
 
+		fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
+		where
+			T: Clone + 'a,
+			Source: 'a,
+			Self: ParallelPipe<&'a Source, Item = &'a T> + Sized,
+		{
+			assert_parallel_pipe(Cloned::new(self))
+		}
+
 		// #[must_use]
 		// fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
 		// where
 		// 	C: IntoParallelStream<Item = Self::Item>,
 		// 	Self: Sized,
 		// {
-		// 	Chain::new(self, chain.into_par_stream())
+		// 	assert_parallel_pipe(Chain::new(self, chain.into_par_stream()))
 		// }
+
+		fn pipe<S>(self, sink: S) -> Pipe<Self, S>
+		where
+			S: ParallelSink<Self::Item>,
+			Self: Sized,
+		{
+			assert_parallel_sink(Pipe::new(self, sink))
+		}
 
 		fn for_each<F>(self, f: F) -> ForEach<Self, F>
 		where
@@ -246,15 +291,6 @@ impl_par_dist_rename! {
 			Self: Sized,
 		{
 			assert_parallel_sink(Collect::new(self))
-		}
-
-		fn cloned<'a, T>(self) -> Cloned<Self, T, Source>
-		where
-			T: Clone + 'a,
-			Source: 'a,
-			Self: ParallelPipe<&'a Source, Item = &'a T> + Sized,
-		{
-			assert_parallel_pipe(Cloned::new(self))
 		}
 	}
 	#[inline(always)]
