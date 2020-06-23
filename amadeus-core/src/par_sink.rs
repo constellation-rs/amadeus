@@ -16,7 +16,7 @@ mod tuple;
 
 use futures::Stream;
 use std::{
-	pin::Pin, task::{Context, Poll}
+	ops::DerefMut, pin::Pin, task::{Context, Poll}
 };
 
 use crate::pool::ProcessSend;
@@ -50,6 +50,41 @@ pub trait ReducerSend: Reducer<Output = <Self as ReducerSend>::Output> {
 }
 pub trait ReducerProcessSend: ReducerSend<Output = <Self as ReducerProcessSend>::Output> {
 	type Output: ProcessSend + 'static;
+}
+
+impl<P> ReducerAsync for Pin<P>
+where
+	P: DerefMut + Unpin,
+	P::Target: ReducerAsync,
+{
+	type Item = <P::Target as ReducerAsync>::Item;
+	type Output = <P::Target as ReducerAsync>::Output;
+
+	fn poll_forward(
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	) -> Poll<()> {
+		self.get_mut().as_mut().poll_forward(cx, stream)
+	}
+	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		self.get_mut().as_mut().poll_output(cx)
+	}
+}
+impl<T: ?Sized> ReducerAsync for &mut T
+where
+	T: ReducerAsync + Unpin,
+{
+	type Item = T::Item;
+	type Output = T::Output;
+
+	fn poll_forward(
+		mut self: Pin<&mut Self>, cx: &mut Context,
+		stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	) -> Poll<()> {
+		Pin::new(&mut **self).poll_forward(cx, stream)
+	}
+	fn poll_output(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		Pin::new(&mut **self).poll_output(cx)
+	}
 }
 
 pub trait Factory {

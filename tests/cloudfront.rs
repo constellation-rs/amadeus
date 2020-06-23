@@ -42,7 +42,10 @@ async fn cloudfront() {
 	assert_eq!(list.len(), count);
 	for _el in list {}
 
-	let count3 = rows.par_stream().pipe(pool, Identity.count()).await;
+	let count3 = rows
+		.par_stream()
+		.pipe(pool, Identity.pipe(Identity.count()))
+		.await;
 	assert_eq!(count3, 207_928);
 
 	println!("in {:?}", start.elapsed().unwrap());

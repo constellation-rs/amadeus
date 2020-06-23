@@ -190,6 +190,7 @@ fn impl_struct(
 	let field_names2 = &field_names;
 
 	let num_fields = field_names.len();
+	let n = &(0usize..num_fields).collect::<Vec<_>>();
 
 	// The field names specified via `#[amadeus(rename = "foo")]`, falling back to struct
 	// field names
@@ -459,9 +460,9 @@ fn impl_struct(
 			#postgres_includes
 			#serde_includes
 			pub use ::amadeus_core::util::Wrapper;
-			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec, __internal::{Serialize as Serialize_, Deserialize as Deserialize_, Serializer as Serializer_, Deserializer as Deserializer_}};
+			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec, __internal::{Serialize as Serialize_, Deserialize as Deserialize_, Serializer as Serializer_, Deserializer as Deserializer_, SerializeTuple, Error as SerdeError, Visitor, SeqAccess}};
 			pub use #amadeus_path::data::Data;
-			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, hash::{Hash, Hasher}, marker::{Send, Sized, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
+			pub use ::std::{boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, hash::{Hash, Hasher}, marker::{PhantomData, Send, Sized, Sync}, result::Result::{self, Ok, Err}, string::String, vec, vec::Vec, option::Option::{self, Some, None}, iter::Iterator};
 		}
 
 		#parquet_derives
@@ -562,21 +563,74 @@ fn impl_struct(
 				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
 			}
 			#[inline(always)]
-			fn serialize_a<S>(&self, _serializer: S) -> __::Result<S::Ok, S::Error>
+			fn serialize_a<S>(&self, serializer: S) -> __::Result<S::Ok, S::Error>
 			where
 				S: __::Serializer_,
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Serialize_,
 			{
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+				struct Wrap<'a,T,U>(&'a T,__::PhantomData<fn()->U>);
+				impl<'a,T,U> __::Serialize_ for Wrap<'a,T,U> where T: __::ListVec<U> + 'a, U: __::CoreData + __::Serialize_ {
+					fn serialize<S>(&self, serializer: S) -> __::Result<S::Ok, S::Error>
+					where
+						S: __::Serializer_,
+					{
+						self.0.serialize_a(serializer)
+					}
+				}
+				let mut tuple = serializer.serialize_tuple(1 + #num_fields)?;
+				__::SerializeTuple::serialize_element(&mut tuple, &self.__len)?;
+				#(__::SerializeTuple::serialize_element(&mut tuple, &Wrap(&self.#field_names1,__::PhantomData))?;)*
+				__::SerializeTuple::end(tuple)
 			}
 			#[inline(always)]
-			fn deserialize_a<'de, D>(_deserializer: D) -> __::Result<Self, D::Error>
+			fn deserialize_a<'de, D>(deserializer: D) -> __::Result<Self, D::Error>
 			where
 				D: __::Deserializer_<'de>,
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Deserialize_<'de>,
 				Self: __::Sized,
 			{
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/69")
+				struct TupleVisitor;
+				impl<'de> __::Visitor<'de> for TupleVisitor {
+					type Value = #vec_name #ty_generics;
+
+					fn expecting(&self, formatter: &mut __::fmt::Formatter) -> __::fmt::Result {
+						formatter.write_str(concat!("a tuple of size ", #num_fields))
+					}
+					#[inline]
+					#[allow(non_snake_case)]
+					fn visit_seq<A>(self, mut seq: A) -> __::Result<Self::Value, A::Error>
+					where
+						A: __::SeqAccess<'de>,
+					{
+						struct Wrap<T,U>(T, __::PhantomData<fn()->U>);
+						impl<'de,T,U> __::Deserialize_<'de> for Wrap<T,U> where T: __::ListVec<U>, U: __::CoreData + __::Deserialize_<'de> {
+							fn deserialize<D>(deserializer: D) -> __::Result<Self, D::Error>
+							where
+								D: __::Deserializer_<'de>,
+							{
+								Ok(Wrap(T::deserialize_a(deserializer)?, __::PhantomData))
+							}
+						}
+						let __len = match seq.next_element()? {
+							__::Some(value) => value,
+							__::None => return __::Err(__::SerdeError::invalid_length(0, &self)),
+						};
+						#(
+							let #field_names1 = match seq.next_element::<Wrap<_,_>>()? {
+								__::Some(value) => value,
+								__::None => return __::Err(__::SerdeError::invalid_length(1 + #n, &self)),
+							}.0;
+						)*
+
+						__::Ok(
+							#vec_name {
+								#(#field_names1,)*
+								__len,
+							}
+						)
+					}
+				}
+				__::Deserializer_::deserialize_tuple(deserializer, #num_fields, TupleVisitor)
 			}
 			fn fmt_a(&self, fmt: &mut __::fmt::Formatter) -> __::Result<(), __::fmt::Error>
 			where
@@ -626,7 +680,7 @@ fn impl_struct(
 		}
 
 		#[automatically_derived]
-		impl #impl_generics __::From<#name #ty_generics> for __::Value where #where_clause_with_data {
+		impl #impl_generics __::From<#name #ty_generics> for __::Value #where_clause_with_data {
 			fn from(value: #name #ty_generics) -> Self {
 				__::Value::Group(__::Group::new(__::vec![
 					#(__::Into::into(value.#field_names1),)*

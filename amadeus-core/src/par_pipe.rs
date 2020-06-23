@@ -1,7 +1,7 @@
 use either::Either;
 use futures::Stream;
 use std::{
-	cmp::Ordering, future::Future, hash::Hash, iter, ops::FnMut, pin::Pin, task::{Context, Poll}
+	cmp::Ordering, future::Future, hash::Hash, iter, ops::{DerefMut, FnMut}, pin::Pin, task::{Context, Poll}
 };
 
 use crate::{pool::ProcessSend, sink::Sink};
@@ -23,6 +23,34 @@ pub trait PipeTaskAsync<Source> {
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 		sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()>;
+}
+
+impl<P, Source> PipeTaskAsync<Source> for Pin<P>
+where
+	P: DerefMut + Unpin,
+	P::Target: PipeTaskAsync<Source>,
+{
+	type Item = <P::Target as PipeTaskAsync<Source>>::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
+	) -> Poll<()> {
+		self.get_mut().as_mut().poll_run(cx, stream, sink)
+	}
+}
+impl<T: ?Sized, Source> PipeTaskAsync<Source> for &mut T
+where
+	T: PipeTaskAsync<Source> + Unpin,
+{
+	type Item = T::Item;
+
+	fn poll_run(
+		mut self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
+		sink: Pin<&mut impl Sink<Item = Self::Item>>,
+	) -> Poll<()> {
+		Pin::new(&mut **self).poll_run(cx, stream, sink)
+	}
 }
 
 impl_par_dist_rename! {

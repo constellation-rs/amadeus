@@ -30,7 +30,7 @@ mod workaround {
 
 	#[doc(hidden)]
 	impl Identity {
-		pub fn pipe<S, A>(self, sink: S) -> Pipe<Self, S> {
+		pub fn pipe<S>(self, sink: S) -> Pipe<Self, S> {
 			Pipe::new(self, sink)
 		}
 

@@ -18,25 +18,38 @@ pub struct Pipe<A, B> {
 	b: B,
 }
 
+impl_par_dist! {
+	impl<A: ParallelPipe<Source>, B: ParallelPipe<A::Item>, Source> ParallelPipe<Source> for Pipe<A, B> {
+		type Item = B::Item;
+		type Task = JoinTask<A::Task, B::Task>;
+
+		fn task(&self) -> Self::Task {
+			let a = self.a.task();
+			let b = self.b.task();
+			JoinTask { a, b }
+		}
+	}
+}
+
 impl<A: ParallelPipe<Source>, B: ParallelSink<A::Item>, Source> ParallelSink<Source>
 	for Pipe<A, B>
 {
 	type Output = B::Output;
-	type Pipe = Join<A, B::Pipe>;
+	type Pipe = Pipe<A, B::Pipe>;
 	type ReduceAFactory = B::ReduceAFactory;
 	type ReduceA = B::ReduceA;
 	type ReduceC = B::ReduceC;
 
 	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC) {
 		let (a, b, c) = self.b.reducers();
-		(Join::new(self.a, a), b, c)
+		(Pipe::new(self.a, a), b, c)
 	}
 }
 impl<A: DistributedPipe<Source>, B: DistributedSink<A::Item>, Source> DistributedSink<Source>
 	for Pipe<A, B>
 {
 	type Output = B::Output;
-	type Pipe = Join<A, B::Pipe>;
+	type Pipe = Pipe<A, B::Pipe>;
 	type ReduceAFactory = B::ReduceAFactory;
 	type ReduceBFactory = B::ReduceBFactory;
 	type ReduceA = B::ReduceA;
@@ -52,27 +65,7 @@ impl<A: DistributedPipe<Source>, B: DistributedSink<A::Item>, Source> Distribute
 		Self::ReduceC,
 	) {
 		let (a, b, c, d) = self.b.reducers();
-		(Join::new(self.a, a), b, c, d)
-	}
-}
-
-#[derive(new)]
-#[must_use]
-pub struct Join<A, B> {
-	a: A,
-	b: B,
-}
-
-impl_par_dist! {
-	impl<A: ParallelPipe<Source>, B: ParallelPipe<A::Item>, Source> ParallelPipe<Source> for Join<A, B> {
-		type Item = B::Item;
-		type Task = JoinTask<A::Task, B::Task>;
-
-		fn task(&self) -> Self::Task {
-			let a = self.a.task();
-			let b = self.b.task();
-			JoinTask { a, b }
-		}
+		(Pipe::new(self.a, a), b, c, d)
 	}
 }
 

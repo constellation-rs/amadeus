@@ -69,7 +69,10 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	assert_eq!(list.len(), count);
 	for _el in list {}
 
-	let count3 = rows.dist_stream().pipe(pool, Identity.count()).await;
+	let count3 = rows
+		.dist_stream()
+		.pipe(pool, Identity.pipe(Identity.count()))
+		.await;
 	assert_eq!(count3, 207_928);
 
 	start.elapsed().unwrap()

@@ -19,7 +19,7 @@ use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use serde_closure::*;
 use std::{
-	cmp::Ordering, collections::HashMap, future::Future, hash::Hash, iter, marker::PhantomData, ops::FnMut, pin::Pin, task::{Context, Poll}, vec
+	cmp::Ordering, collections::HashMap, future::Future, hash::Hash, iter, marker::PhantomData, ops::{DerefMut, FnMut}, pin::Pin, task::{Context, Poll}, vec
 };
 
 use crate::{
@@ -46,6 +46,32 @@ pub trait StreamTaskAsync {
 	fn poll_run(
 		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
 	) -> Poll<()>;
+}
+
+impl<P> StreamTaskAsync for Pin<P>
+where
+	P: DerefMut + Unpin,
+	P::Target: StreamTaskAsync,
+{
+	type Item = <P::Target as StreamTaskAsync>::Item;
+
+	fn poll_run(
+		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
+	) -> Poll<()> {
+		self.get_mut().as_mut().poll_run(cx, sink)
+	}
+}
+impl<T: ?Sized> StreamTaskAsync for &mut T
+where
+	T: StreamTaskAsync + Unpin,
+{
+	type Item = T::Item;
+
+	fn poll_run(
+		mut self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
+	) -> Poll<()> {
+		Pin::new(&mut **self).poll_run(cx, sink)
+	}
 }
 
 #[async_trait(?Send)]
