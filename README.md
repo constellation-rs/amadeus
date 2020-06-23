@@ -87,7 +87,7 @@ This will read the Parquet partitions from the S3 bucket, and print the 100 most
 
 ```rust
 use amadeus::prelude::*;
-use data::{IpAddr, Url};
+use amadeus::data::{IpAddr, Url};
 use std::error::Error;
 
 #[derive(Data, Clone, PartialEq, Debug)]
@@ -195,8 +195,8 @@ Amadeus uses the [**Constellation**](https://github.com/constellation-rs/constel
 
 ```rust
 use amadeus::dist::prelude::*;
+use amadeus::data::{IpAddr, Url};
 use constellation::*;
-use data::{IpAddr, Url};
 use std::error::Error;
 
 #[derive(Data, Clone, PartialEq, Debug)]

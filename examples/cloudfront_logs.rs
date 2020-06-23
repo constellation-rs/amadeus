@@ -13,7 +13,6 @@
 
 #![type_length_limit = "13470730"]
 use amadeus::prelude::*;
-// use data::CloudfrontRow;
 
 #[allow(unreachable_code)]
 #[tokio::main]
