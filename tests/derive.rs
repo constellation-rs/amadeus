@@ -11,7 +11,7 @@ struct Row {
 	a: String,
 	b: u64,
 	c: f64,
-	d: List<Row>,
+	// d: List<Row>,
 	e: List<Value>,
 }
 
@@ -21,12 +21,12 @@ fn list() {
 		a: String::from("a"),
 		b: 1,
 		c: 2.0,
-		d: vec![].into(),
+		// d: vec![].into(),
 		e: vec![Value::U8(0)].into(),
 	}]
 	.into();
 	assert_eq!(
-		"[Row { a: \"a\", b: 1, c: 2.0, d: [], e: [U8(0)] }]",
+		"[Row { a: \"a\", b: 1, c: 2.0, e: [U8(0)] }]",
 		format!("{:?}", rows)
 	);
 	let json = serde_json::to_string(&rows).unwrap();
