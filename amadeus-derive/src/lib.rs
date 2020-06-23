@@ -190,7 +190,6 @@ fn impl_struct(
 	let field_names2 = &field_names;
 
 	let num_fields = field_names.len();
-	let n = &(0usize..num_fields).collect::<Vec<_>>();
 
 	// The field names specified via `#[amadeus(rename = "foo")]`, falling back to struct
 	// field names
@@ -568,19 +567,7 @@ fn impl_struct(
 				S: __::Serializer_,
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Serialize_,
 			{
-				struct Wrap<'a,T,U>(&'a T,__::PhantomData<fn()->U>);
-				impl<'a,T,U> __::Serialize_ for Wrap<'a,T,U> where T: __::ListVec<U> + 'a, U: __::CoreData + __::Serialize_ {
-					fn serialize<S>(&self, serializer: S) -> __::Result<S::Ok, S::Error>
-					where
-						S: __::Serializer_,
-					{
-						self.0.serialize_a(serializer)
-					}
-				}
-				let mut tuple = serializer.serialize_tuple(1 + #num_fields)?;
-				__::SerializeTuple::serialize_element(&mut tuple, &self.__len)?;
-				#(__::SerializeTuple::serialize_element(&mut tuple, &Wrap(&self.#field_names1,__::PhantomData))?;)*
-				__::SerializeTuple::end(tuple)
+				serializer.collect_seq(self.clone_a().into_iter_a().map(__::Wrapper::new))
 			}
 			#[inline(always)]
 			fn deserialize_a<'de, D>(deserializer: D) -> __::Result<Self, D::Error>
@@ -589,48 +576,7 @@ fn impl_struct(
 				for<'a> __::Wrapper<'a, #name #ty_generics>: __::Deserialize_<'de>,
 				Self: __::Sized,
 			{
-				struct TupleVisitor;
-				impl<'de> __::Visitor<'de> for TupleVisitor {
-					type Value = #vec_name #ty_generics;
-
-					fn expecting(&self, formatter: &mut __::fmt::Formatter) -> __::fmt::Result {
-						formatter.write_str(concat!("a tuple of size ", #num_fields))
-					}
-					#[inline]
-					#[allow(non_snake_case)]
-					fn visit_seq<A>(self, mut seq: A) -> __::Result<Self::Value, A::Error>
-					where
-						A: __::SeqAccess<'de>,
-					{
-						struct Wrap<T,U>(T, __::PhantomData<fn()->U>);
-						impl<'de,T,U> __::Deserialize_<'de> for Wrap<T,U> where T: __::ListVec<U>, U: __::CoreData + __::Deserialize_<'de> {
-							fn deserialize<D>(deserializer: D) -> __::Result<Self, D::Error>
-							where
-								D: __::Deserializer_<'de>,
-							{
-								Ok(Wrap(T::deserialize_a(deserializer)?, __::PhantomData))
-							}
-						}
-						let __len = match seq.next_element()? {
-							__::Some(value) => value,
-							__::None => return __::Err(__::SerdeError::invalid_length(0, &self)),
-						};
-						#(
-							let #field_names1 = match seq.next_element::<Wrap<_,_>>()? {
-								__::Some(value) => value,
-								__::None => return __::Err(__::SerdeError::invalid_length(1 + #n, &self)),
-							}.0;
-						)*
-
-						__::Ok(
-							#vec_name {
-								#(#field_names1,)*
-								__len,
-							}
-						)
-					}
-				}
-				__::Deserializer_::deserialize_tuple(deserializer, #num_fields, TupleVisitor)
+				<__::Vec<__::Wrapper<'static, #name #ty_generics>> as __::Deserialize_>::deserialize(deserializer).map(|vec| Self::from_vec(vec.into_iter().map(__::Wrapper::into_inner).collect()))
 			}
 			fn fmt_a(&self, fmt: &mut __::fmt::Formatter) -> __::Result<(), __::fmt::Error>
 			where
