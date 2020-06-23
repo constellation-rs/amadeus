@@ -95,19 +95,19 @@ amadeus_types::tuple!(tuple);
 #[cfg(feature = "amadeus-serde")]
 #[doc(hidden)]
 pub mod serde_data {
-	use super::Data;
+	use super::SerdeData;
 	use serde::{Deserializer, Serializer};
 
 	pub fn serialize<T, S>(self_: &T, serializer: S) -> Result<S::Ok, S::Error>
 	where
-		T: Data + ?Sized,
+		T: SerdeData + ?Sized,
 		S: Serializer,
 	{
 		self_.serialize(serializer)
 	}
 	pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 	where
-		T: Data,
+		T: SerdeData,
 		D: Deserializer<'de>,
 	{
 		T::deserialize(deserializer, None)
