@@ -188,7 +188,7 @@ where
 	T: Hash,
 {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.0.hash(state)
+		self.1.hash(state)
 	}
 }
 impl<'a, T: ?Sized> Serialize for Wrapper<'a, T>
@@ -199,7 +199,7 @@ where
 	where
 		S: Serializer,
 	{
-		self.0.serialize(serializer)
+		self.1.serialize(serializer)
 	}
 }
 impl<'a, 'de, T: ?Sized> Deserialize<'de> for Wrapper<'a, T>
@@ -218,7 +218,7 @@ where
 	T: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		fmt::Debug::fmt(&self.0, f)
+		fmt::Debug::fmt(&self.1, f)
 	}
 }
 
