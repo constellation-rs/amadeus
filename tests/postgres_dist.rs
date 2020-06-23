@@ -52,9 +52,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	// https://datahub.io/cryptocurrency/bitcoin
 	let rows = Postgres::<Weather>::new(vec![(
 		"postgres://postgres:a@localhost/alec".parse().unwrap(),
-		vec![amadeus::source::postgres::Source::Table(
-			"weather".parse().unwrap(),
-		)],
+		vec![PostgresSelect::Table("weather".parse().unwrap())],
 	)]);
 	assert_eq!(
 		rows.dist_stream()

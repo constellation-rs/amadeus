@@ -25,9 +25,8 @@
 //! where `10.0.0.1` is the address of the master. See [here](https://github.com/constellation-rs/constellation)
 //! for instructions on setting up the cluster.
 
-use amadeus::dist::prelude::*;
+use amadeus::{data::Webpage, dist::prelude::*};
 use constellation::{init, Resources};
-use data::Webpage;
 use std::env;
 
 #[allow(unreachable_code)]

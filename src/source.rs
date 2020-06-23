@@ -29,7 +29,7 @@ pub use amadeus_commoncrawl::CommonCrawl;
 pub use amadeus_parquet::{Parquet, ParquetDirectory};
 #[cfg(feature = "postgres")]
 #[doc(inline)]
-pub use amadeus_postgres::Postgres;
+pub use amadeus_postgres::{Postgres, PostgresSelect, PostgresTable};
 #[cfg(feature = "amadeus-serde")]
 #[doc(inline)]
 pub use amadeus_serde::{Csv, Json};
