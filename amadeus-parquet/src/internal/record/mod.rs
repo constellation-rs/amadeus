@@ -178,17 +178,6 @@ pub trait Schema: Debug {
 	) -> fmt::Result;
 }
 
-impl<T: ?Sized> Schema for Box<T>
-where
-	T: Schema,
-{
-	fn fmt(
-		self_: Option<&Self>, r: Option<Repetition>, name: Option<&str>, f: &mut fmt::Formatter,
-	) -> fmt::Result {
-		<T as Schema>::fmt(self_.map(|self_| &**self_), r, name, f)
-	}
-}
-
 /// This trait is implemented by Readers so the values of one or more columns can be read
 /// while taking into account the definition and repetition levels for optional and
 /// repeated values.
@@ -207,27 +196,4 @@ pub trait Reader {
 	fn current_def_level(&self) -> i16;
 	/// Get the current repetition level.
 	fn current_rep_level(&self) -> i16;
-}
-
-impl<T: ?Sized> Reader for Box<T>
-where
-	T: Reader,
-{
-	type Item = T::Item;
-
-	fn read(&mut self, def_level: i16, rep_level: i16) -> Result<Self::Item> {
-		(&mut **self).read(def_level, rep_level)
-	}
-	fn advance_columns(&mut self) -> Result<()> {
-		(&mut **self).advance_columns()
-	}
-	fn has_next(&self) -> bool {
-		(&**self).has_next()
-	}
-	fn current_def_level(&self) -> i16 {
-		(&**self).current_def_level()
-	}
-	fn current_rep_level(&self) -> i16 {
-		(&**self).current_rep_level()
-	}
 }

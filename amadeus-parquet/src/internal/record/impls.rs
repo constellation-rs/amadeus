@@ -523,13 +523,12 @@ fn parse_list<T: ParquetData>(
 	Err(ParquetError::General(String::from("Couldn't parse Vec<T>")))
 }
 
-// TODO: remove boxing of schema & reader
 impl<T: Data> ParquetData for List<T>
 where
 	T: ParquetData,
 {
-	default type Schema = ListSchema<Box<T::Schema>>;
-	default type Reader = RepeatedReader<Box<T::Reader>>;
+	default type Schema = ListSchema<T::Schema>;
+	default type Reader = RepeatedReader<T::Reader>;
 	type Predicate = T::Predicate;
 
 	default fn parse(
@@ -546,10 +545,10 @@ where
 		if repetition == Some(Repetition::Repeated) {
 			return Ok((
 				schema.name().to_owned(),
-				type_coerce(Box::new(ListSchema(
+				type_coerce(ListSchema(
 					T::parse(&schema, predicate, Some(Repetition::Required))?.1,
 					ListSchemaType::Repeated,
-				))),
+				)),
 			));
 		}
 		Err(ParquetError::General(String::from("Couldn't parse Vec<T>")))
@@ -560,9 +559,9 @@ where
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
 		let schema: &ListSchema<T::Schema> = type_coerce(schema);
-		type_coerce(Box::new(list_reader::<T>(
+		type_coerce(list_reader::<T>(
 			schema, path, def_level, rep_level, paths, batch_size,
-		)))
+		))
 	}
 }
 
