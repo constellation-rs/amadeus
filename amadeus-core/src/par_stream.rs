@@ -627,6 +627,17 @@ pub trait DistributedStream {
 		.await
 	}
 
+	async fn histogram<P>(self, pool: &P) -> Vec<(Self::Item, usize)>
+	where
+		P: ProcessPool,
+		Self::Item: Hash + Ord + ProcessSend + 'static,
+		Self::Task: 'static,
+		Self: Sized,
+	{
+		self.pipe(pool, DistributedPipe::<Self::Item>::histogram(Identity))
+			.await
+	}
+
 	async fn count<P>(self, pool: &P) -> usize
 	where
 		P: ProcessPool,
@@ -1295,6 +1306,17 @@ pub trait ParallelStream {
 			ParallelPipe::<Self::Item>::group_by(Identity, identity, op),
 		)
 		.await
+	}
+
+	async fn histogram<P>(self, pool: &P) -> Vec<(Self::Item, usize)>
+	where
+		P: ThreadPool,
+		Self::Item: Hash + Ord + Send + 'static,
+		Self::Task: 'static,
+		Self: Sized,
+	{
+		self.pipe(pool, ParallelPipe::<Self::Item>::histogram(Identity))
+			.await
 	}
 
 	async fn count<P>(self, pool: &P) -> usize
