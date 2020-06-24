@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-    <a href="https://docs.rs/amadeus/0.2.3/amadeus/">📖 Docs</a> | <a href="https://constellation.rs/amadeus">🌐 Home</a> | <a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬 Chat</a>
+    <a href="https://docs.rs/amadeus/0.2.4/amadeus/">📖 Docs</a> | <a href="https://constellation.rs/amadeus">🌐 Home</a> | <a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬 Chat</a>
 </p>
 
 ## Amadeus provides:
@@ -50,7 +50,7 @@ We aim to create a community that is welcoming and helpful to anyone that is int
 
 Amadeus has deep, pluggable, integration with various file formats, databases and interfaces:
 
-| Data format | [`Source`](https://docs.rs/amadeus/0.2.3/amadeus/trait.Source.html) | [`Destination`](https://docs.rs/amadeus/0.2.3/amadeus/trait.Destination.html) |
+| Data format | [`Source`](https://docs.rs/amadeus/0.2.4/amadeus/trait.Source.html) | [`Destination`](https://docs.rs/amadeus/0.2.4/amadeus/trait.Destination.html) |
 |---|---|---|
 | CSV | ✔ | ✔ |
 | JSON | ✔ | ✔ |

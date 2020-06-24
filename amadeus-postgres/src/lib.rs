@@ -3,7 +3,7 @@
 // select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
 // select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;
 
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.3")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.4")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 #![allow(incomplete_features)]
