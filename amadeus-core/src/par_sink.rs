@@ -8,6 +8,7 @@ mod fold;
 mod folder;
 mod for_each;
 mod group_by;
+mod histogram;
 mod max;
 mod pipe;
 mod sample;
@@ -24,7 +25,7 @@ use crate::pool::ProcessSend;
 use super::par_pipe::*;
 
 pub use self::{
-	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, group_by::*, max::*, pipe::*, sample::*, sum::*, tuple::*
+	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, group_by::*, histogram::*, max::*, pipe::*, sample::*, sum::*, tuple::*
 };
 
 #[must_use]

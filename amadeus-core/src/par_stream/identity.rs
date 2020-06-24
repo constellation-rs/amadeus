@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::{
-	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, GroupBy, Inspect, Map, Max, MaxBy, MaxByKey, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, Pipe, PipeTask, PipeTaskAsync, SampleUnstable, Sum, Update
+	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, GroupBy, Histogram, Inspect, Map, Max, MaxBy, MaxByKey, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, Pipe, PipeTask, PipeTaskAsync, SampleUnstable, Sum, Update
 };
 use crate::sink::Sink;
 
@@ -99,6 +99,10 @@ mod workaround {
 			C: Send + 'static,
 		{
 			GroupBy::new(self, identity, op)
+		}
+
+		pub fn histogram(self) -> Histogram<Self> {
+			Histogram::new(self)
 		}
 
 		pub fn count(self) -> Count<Self> {

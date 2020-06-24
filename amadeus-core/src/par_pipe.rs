@@ -158,6 +158,14 @@ impl_par_dist_rename! {
 			assert_parallel_sink(GroupBy::new(self, identity, op))
 		}
 
+		fn histogram(self) -> Histogram<Self>
+		where
+			Self::Item: Hash + Ord + Send + 'static,
+			Self: Sized,
+		{
+			assert_parallel_sink(Histogram::new(self))
+		}
+
 		fn count(self) -> Count<Self>
 		where
 			Self: Sized,
