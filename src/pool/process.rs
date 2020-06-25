@@ -12,7 +12,7 @@ use super::{
 	util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize}, ThreadPool
 };
 
-type Request = Box<
+type Request = st::Box<
 	dyn for<'a> st::FnOnce<(&'a ThreadPool,), Output = LocalBoxFuture<'static, Response>> + Send,
 >; // TODO: update once #![feature(unboxed_closures)] is stable
 type Response = Box<dyn st::Any + Send>;
@@ -192,7 +192,7 @@ impl ProcessPoolInner {
 		let process = &self.processes[process_index];
 		let x = process
 			.sender
-			.send(Some(Box::new(FnOnce!(move |thread_pool: &_| {
+			.send(Some(st::Box::new(FnOnce!(move |thread_pool: &_| {
 				let work: F = work;
 				work(thread_pool)
 					.map(|res| Box::new(res) as Response)
