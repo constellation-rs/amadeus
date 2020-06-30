@@ -1,7 +1,5 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-core/0.2.5")]
-#![feature(never_type)]
 #![feature(specialization)]
-#![feature(read_initializer)]
 #![allow(incomplete_features)]
 #![recursion_limit = "25600"]
 

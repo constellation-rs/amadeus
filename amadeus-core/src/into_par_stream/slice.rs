@@ -52,7 +52,9 @@ impl_par_dist_rename! {
 	}
 }
 
-pub struct Never(!);
+enum NeverInner {}
+
+pub struct Never(NeverInner);
 
 impl StreamTask for Never {
 	type Item = Self;

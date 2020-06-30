@@ -1,8 +1,10 @@
-use futures::{future, FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 use std::{
 	future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, sync::Arc
 };
-use tokio::task::spawn;
+use tokio::{
+	runtime::Handle, task::{JoinError, LocalSet}
+};
 
 use super::util::{assert_sync_and_send, Panicked};
 
@@ -35,8 +37,8 @@ impl ThreadPool {
 		T: Send + 'static,
 	{
 		let _self = self;
-		spawn(DuckSend(future::lazy(|_| work()).flatten()))
-			.map_err(tokio::task::JoinError::into_panic)
+		spawn_pinned(|| work())
+			.map_err(JoinError::into_panic)
 			.map_err(Panicked::from)
 	}
 }
@@ -58,42 +60,47 @@ fn _assert() {
 	let _ = assert_sync_and_send::<ThreadPool>;
 }
 
-// TODO remove when spawn_pinned exists https://github.com/tokio-rs/tokio/issues/2545
-
-use pin_project::pin_project;
-use std::{
-	pin::Pin, task::{Context, Poll}
-};
-#[pin_project]
-struct DuckSend<F>(#[pin] F);
-impl<F> Future for DuckSend<F>
+fn spawn_pinned<F, Fut, T>(task: F) -> impl Future<Output = Result<T, JoinError>> + Send
 where
-	F: Future,
+	F: FnOnce() -> Fut + Send + 'static,
+	Fut: Future<Output = T> + 'static,
+	T: Send + 'static,
 {
-	type Output = F::Output;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		// TODO!
-		// assert!(<F as IsSend>::is_send(), "{}", std::any::type_name::<F>());
-		self.project().0.poll(cx)
+	thread_local! {
+		static LOCAL: LocalSet = LocalSet::new();
 	}
+	let handle = Handle::current();
+	let handle1 = handle.clone();
+	handle.spawn_blocking(move || LOCAL.with(|local| handle1.block_on(local.run_until(task()))))
 }
-#[allow(unsafe_code)]
-unsafe impl<F> Send for DuckSend<F> {}
 
-trait IsSend {
-	fn is_send() -> bool;
-}
-impl<T: ?Sized> IsSend for T {
-	default fn is_send() -> bool {
-		false
-	}
-}
-impl<T: ?Sized> IsSend for T
-where
-	T: Send,
-{
-	fn is_send() -> bool {
-		true
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use futures::future::join_all;
+	use std::sync::{
+		atomic::{AtomicUsize, Ordering}, Arc
+	};
+
+	#[tokio::test]
+	async fn spawn_pinned_() {
+		const TASKS: usize = 1000;
+		const ITERS: usize = 1000;
+		let count = Arc::new(AtomicUsize::new((1..TASKS).sum()));
+		for _ in 0..ITERS {
+			join_all((0..TASKS).map(|i| {
+				let count = count.clone();
+				spawn_pinned(move || async move {
+					let _ = count.fetch_sub(i, Ordering::Relaxed);
+				})
+			}))
+			.await
+			.into_iter()
+			.collect::<Result<(), _>>()
+			.unwrap();
+			assert_eq!(count.load(Ordering::Relaxed), 0);
+			count.store((1..TASKS).sum(), Ordering::Relaxed);
+		}
 	}
 }
