@@ -1,3 +1,4 @@
+#![type_length_limit = "1774739"]
 #[cfg(feature = "constellation")]
 use constellation::*;
 use std::{

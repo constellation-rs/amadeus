@@ -43,6 +43,7 @@ amadeus-commoncrawl = { version = "=0.2.5", path = "amadeus-commoncrawl", option
 amadeus-parquet = { version = "=0.2.5", path = "amadeus-parquet", optional = true }
 amadeus-postgres = { version = "=0.2.5", path = "amadeus-postgres", optional = true }
 amadeus-serde = { version = "=0.2.5", path = "amadeus-serde", optional = true }
+async-std = { version = "1.6", features = ["unstable"] }
 constellation-rs = { version = "0.1", default-features = false, optional = true }
 derive-new = "0.5"
 doc-comment = "0.3"

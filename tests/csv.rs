@@ -1,3 +1,4 @@
+#![type_length_limit = "1353029"]
 #![allow(clippy::suspicious_map)]
 
 use std::{path::PathBuf, time::SystemTime};
