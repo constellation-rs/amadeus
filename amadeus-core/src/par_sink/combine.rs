@@ -3,9 +3,7 @@ use educe::Educe;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-use super::{
-	combiner_par_sink, FolderSync, FolderSyncReducer, FolderSyncReducerFactory, ParallelPipe, ParallelSink
-};
+use super::{combiner_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink};
 
 #[derive(Educe, Serialize, Deserialize, new)]
 #[educe(Clone(bound = "F: Clone"))]

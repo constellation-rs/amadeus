@@ -36,11 +36,10 @@ impl<A: ParallelPipe<Source>, B: ParallelSink<A::Item>, Source> ParallelSink<Sou
 {
 	type Output = B::Output;
 	type Pipe = Pipe<A, B::Pipe>;
-	type ReduceAFactory = B::ReduceAFactory;
 	type ReduceA = B::ReduceA;
 	type ReduceC = B::ReduceC;
 
-	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC) {
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC) {
 		let (a, b, c) = self.b.reducers();
 		(Pipe::new(self.a, a), b, c)
 	}
@@ -50,20 +49,11 @@ impl<A: DistributedPipe<Source>, B: DistributedSink<A::Item>, Source> Distribute
 {
 	type Output = B::Output;
 	type Pipe = Pipe<A, B::Pipe>;
-	type ReduceAFactory = B::ReduceAFactory;
-	type ReduceBFactory = B::ReduceBFactory;
 	type ReduceA = B::ReduceA;
 	type ReduceB = B::ReduceB;
 	type ReduceC = B::ReduceC;
 
-	fn reducers(
-		self,
-	) -> (
-		Self::Pipe,
-		Self::ReduceAFactory,
-		Self::ReduceBFactory,
-		Self::ReduceC,
-	) {
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 		let (a, b, c, d) = self.b.reducers();
 		(Pipe::new(self.a, a), b, c, d)
 	}

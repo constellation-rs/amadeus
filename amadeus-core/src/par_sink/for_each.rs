@@ -1,4 +1,5 @@
 use derive_new::new;
+use educe::Educe;
 use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,7 @@ use std::{
 };
 
 use super::{
-	DefaultReducerFactory, DistributedPipe, DistributedSink, Factory, ParallelPipe, ParallelSink, PushReducer, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, PushReducer, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -18,79 +19,46 @@ pub struct ForEach<I, F> {
 	f: F,
 }
 
-impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for ForEach<I, F>
-where
-	F: FnMut(I::Item) + Clone + ProcessSend + 'static,
-{
-	type Output = ();
-	type Pipe = I;
-	type ReduceAFactory = ForEachReducerFactory<I::Item, F>;
-	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
-	type ReduceA = ForEachReducer<I::Item, F>;
-	type ReduceB = PushReducer<()>;
-	type ReduceC = PushReducer<()>;
-
-	fn reducers(
-		self,
-	) -> (
-		Self::Pipe,
-		Self::ReduceAFactory,
-		Self::ReduceBFactory,
-		Self::ReduceC,
-	) {
-		(
-			self.i,
-			ForEachReducerFactory(self.f, PhantomData),
-			DefaultReducerFactory::new(),
-			PushReducer::new(()),
-		)
-	}
-}
 impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source> for ForEach<I, F>
 where
 	F: FnMut(I::Item) + Clone + Send + 'static,
 {
 	type Output = ();
 	type Pipe = I;
-	type ReduceAFactory = ForEachReducerFactory<I::Item, F>;
 	type ReduceA = ForEachReducer<I::Item, F>;
 	type ReduceC = PushReducer<()>;
 
-	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC) {
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC) {
 		(
 			self.i,
-			ForEachReducerFactory(self.f, PhantomData),
-			PushReducer::new(()),
+			ForEachReducer(self.f, PhantomData),
+			PushReducer::new(),
+		)
+	}
+}
+impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for ForEach<I, F>
+where
+	F: FnMut(I::Item) + Clone + ProcessSend + 'static,
+{
+	type Output = ();
+	type Pipe = I;
+	type ReduceA = ForEachReducer<I::Item, F>;
+	type ReduceB = PushReducer<()>;
+	type ReduceC = PushReducer<()>;
+
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
+		(
+			self.i,
+			ForEachReducer(self.f, PhantomData),
+			PushReducer::new(),
+			PushReducer::new(),
 		)
 	}
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(
-	bound(serialize = "F: Serialize"),
-	bound(deserialize = "F: Deserialize<'de>")
-)]
-pub struct ForEachReducerFactory<A, F>(F, PhantomData<fn() -> A>);
-impl<A, F> Factory for ForEachReducerFactory<A, F>
-where
-	F: FnMut(A) + Clone,
-{
-	type Item = ForEachReducer<A, F>;
-	fn make(&self) -> Self::Item {
-		ForEachReducer(self.0.clone(), PhantomData)
-	}
-}
-impl<A, F> Clone for ForEachReducerFactory<A, F>
-where
-	F: Clone,
-{
-	fn clone(&self) -> Self {
-		Self(self.0.clone(), PhantomData)
-	}
-}
-
 #[pin_project]
-#[derive(Serialize, Deserialize)]
+#[derive(Educe, Serialize, Deserialize)]
+#[educe(Clone(bound = "F: Clone"))]
 #[serde(
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
@@ -109,6 +77,19 @@ where
 		self
 	}
 }
+impl<A, F> ReducerProcessSend for ForEachReducer<A, F>
+where
+	F: FnMut(A) + Clone,
+{
+	type Output = ();
+}
+impl<A, F> ReducerSend for ForEachReducer<A, F>
+where
+	F: FnMut(A) + Clone,
+{
+	type Output = ();
+}
+
 impl<A, F> ReducerAsync for ForEachReducer<A, F>
 where
 	F: FnMut(A) + Clone,
@@ -130,16 +111,4 @@ where
 	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
 		Poll::Ready(())
 	}
-}
-impl<A, F> ReducerProcessSend for ForEachReducer<A, F>
-where
-	F: FnMut(A) + Clone,
-{
-	type Output = ();
-}
-impl<A, F> ReducerSend for ForEachReducer<A, F>
-where
-	F: FnMut(A) + Clone,
-{
-	type Output = ();
 }

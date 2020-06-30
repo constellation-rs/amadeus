@@ -7,7 +7,7 @@ use std::hash::Hash;
 use streaming_algorithms::{HyperLogLogMagnitude, SampleUnstable as SASampleUnstable, Top};
 
 use super::{
-	folder_par_sink, FolderSync, FolderSyncReducer, FolderSyncReducerFactory, ParallelPipe, ParallelSink, SumFolder, SumZeroFolder
+	folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink, SumFolder, SumZeroFolder
 };
 
 #[derive(new)]

@@ -9,7 +9,7 @@ use std::{
 	marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
-use super::{Factory, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend};
+use super::{Reducer, ReducerAsync, ReducerProcessSend, ReducerSend};
 use crate::pool::ProcessSend;
 
 mod macros {
@@ -18,16 +18,15 @@ mod macros {
 		($folder_a:ty, $folder_b:ty, $self:ident, $init_a:expr, $init_b:expr) => {
 			type Output = <Self::ReduceC as $crate::par_sink::Reducer>::Output;
 			type Pipe = I;
-			type ReduceAFactory = FolderSyncReducerFactory<I::Item, $folder_a>;
 			type ReduceA = FolderSyncReducer<I::Item, $folder_a>;
 			type ReduceC = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer>::Output, $folder_b>;
 
-			fn reducers($self) -> (I, Self::ReduceAFactory, Self::ReduceC) {
+			fn reducers($self) -> (I, Self::ReduceA, Self::ReduceC) {
 				let init_a = $init_a;
 				let init_b = $init_b;
 				(
 					$self.i,
-					FolderSyncReducerFactory::new(init_a),
+					FolderSyncReducer::new(init_a),
 					FolderSyncReducer::new(init_b),
 				)
 			}
@@ -38,19 +37,17 @@ mod macros {
 		($folder_a:ty, $folder_b:ty, $self:ident, $init_a:expr, $init_b:expr) => {
 			type Output = <Self::ReduceC as $crate::par_sink::Reducer>::Output;
 			type Pipe = I;
-			type ReduceAFactory = FolderSyncReducerFactory<I::Item, $folder_a>;
-			type ReduceBFactory = FolderSyncReducerFactory<<Self::ReduceA as $crate::par_sink::Reducer>::Output, $folder_b>;
 			type ReduceA = FolderSyncReducer<I::Item, $folder_a>;
 			type ReduceB = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer>::Output, $folder_b>;
 			type ReduceC = FolderSyncReducer<<Self::ReduceB as $crate::par_sink::Reducer>::Output, $folder_b>;
 
-			fn reducers($self) -> (I, Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+			fn reducers($self) -> (I, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 				let init_a = $init_a;
 				let init_b = $init_b;
 				(
 					$self.i,
-					FolderSyncReducerFactory::new(init_a),
-					FolderSyncReducerFactory::new(init_b.clone()),
+					FolderSyncReducer::new(init_a),
+					FolderSyncReducer::new(init_b.clone()),
 					FolderSyncReducer::new(init_b),
 				)
 			}
@@ -67,30 +64,6 @@ pub trait FolderSync<A> {
 
 	fn zero(&mut self) -> Self::Output;
 	fn push(&mut self, state: &mut Self::Output, item: A);
-}
-
-#[derive(Educe, Serialize, Deserialize, new)]
-#[educe(Clone(bound = "C: Clone"))]
-#[serde(
-	bound(serialize = "C: Serialize"),
-	bound(deserialize = "C: Deserialize<'de>")
-)]
-pub struct FolderSyncReducerFactory<A, C> {
-	folder: C,
-	marker: PhantomData<fn() -> A>,
-}
-impl<A, C> Factory for FolderSyncReducerFactory<A, C>
-where
-	C: FolderSync<A> + Clone,
-{
-	type Item = FolderSyncReducer<A, C>;
-
-	fn make(&self) -> Self::Item {
-		FolderSyncReducer {
-			folder: self.folder.clone(),
-			marker: PhantomData,
-		}
-	}
 }
 
 #[derive(Educe, Serialize, Deserialize, new)]
@@ -119,6 +92,20 @@ where
 			marker: PhantomData,
 		}
 	}
+}
+impl<A, C> ReducerProcessSend for FolderSyncReducer<A, C>
+where
+	C: FolderSync<A>,
+	C::Output: ProcessSend + 'static,
+{
+	type Output = C::Output;
+}
+impl<A, C> ReducerSend for FolderSyncReducer<A, C>
+where
+	C: FolderSync<A>,
+	C::Output: Send + 'static,
+{
+	type Output = C::Output;
 }
 
 #[pin_project]
@@ -149,18 +136,4 @@ where
 	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
 		Poll::Ready(self.project().state.take().unwrap())
 	}
-}
-impl<A, C> ReducerProcessSend for FolderSyncReducer<A, C>
-where
-	C: FolderSync<A>,
-	C::Output: ProcessSend + 'static,
-{
-	type Output = C::Output;
-}
-impl<A, C> ReducerSend for FolderSyncReducer<A, C>
-where
-	C: FolderSync<A>,
-	C::Output: Send + 'static,
-{
-	type Output = C::Output;
 }

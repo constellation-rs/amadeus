@@ -7,9 +7,7 @@ use std::{
 
 use super::{AmadeusOrd, Data};
 use amadeus_core::{
-	par_sink::{
-		DefaultReducerFactory, ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer
-	}, pool::ProcessSend, util::type_coerce
+	par_sink::{ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer}, pool::ProcessSend, util::type_coerce
 };
 
 pub struct List<T: Data> {
@@ -370,11 +368,10 @@ impl<T: Data> FromParallelStream<T> for List<T>
 where
 	T: Send + 'static,
 {
-	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+	fn reducers() -> (Self::ReduceA, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -383,13 +380,11 @@ impl<T: Data> FromDistributedStream<T> for List<T>
 where
 	T: ProcessSend + 'static,
 {
-	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
-	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
 	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+	fn reducers() -> (Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 		Default::default()
 	}
 }

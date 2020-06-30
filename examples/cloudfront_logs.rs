@@ -28,28 +28,30 @@ async fn main() {
 	.await
 	.unwrap();
 
-	let (sample, (histogram, count)) = rows
+	let histogram = rows // (sample, (histogram, count)) = rows
 		.par_stream()
 		.map(Result::unwrap)
-		.fork(
+		.pipe(
 			pool,
-			Identity.sample_unstable(10),
-			(
-				Identity
-					.map(|row: &CloudfrontRow| (row.time.truncate_minutes(60), ()))
-					.group_by(
-						|| 0,
-						|count, fold| count + fold.map_left(|()| 1).into_inner(),
-					),
-				Identity.count(),
-			),
+			// Identity.sample_unstable(10),
+			// (
+			Identity
+				.map(|row: CloudfrontRow| (row.time.truncate_minutes(60), ()))
+				.group_by(
+					Identity.count()
+					// || 0,
+					// |count, fold| count + fold.map_left(|()| 1).into_inner(),
+				),
+			// Identity.map(|row: CloudfrontRow| (row.time.truncate_minutes(60), ())).group_by(Identity.count()),
+			// 	Identity.count(),
+			// ),
 		)
 		.await;
 	let mut histogram = histogram.into_iter().collect::<Vec<_>>();
 	histogram.sort();
 
-	println!("{} log lines analysed.", count);
-	println!("sample: {:#?}", sample);
+	// println!("{} log lines analysed.", count);
+	// println!("sample: {:#?}", sample);
 	println!(
 		"histogram:\n    {}",
 		histogram

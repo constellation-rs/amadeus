@@ -1,4 +1,5 @@
 use derive_new::new;
+use educe::Educe;
 use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,7 @@ use std::{
 };
 
 use super::{
-	DistributedPipe, DistributedSink, Factory, ParallelPipe, ParallelSink, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
 use crate::pool::ProcessSend;
 
@@ -18,75 +19,70 @@ pub struct All<I, F> {
 	f: F,
 }
 
-impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for All<I, F>
-where
-	F: FnMut(I::Item) -> bool + Clone + ProcessSend + 'static,
-{
-	type Output = bool;
-	type Pipe = I;
-	type ReduceAFactory = AllReducerFactory<I::Item, F>;
-	type ReduceBFactory = BoolAndReducerFactory;
-	type ReduceA = AllReducer<I::Item, F>;
-	type ReduceB = BoolAndReducer;
-	type ReduceC = BoolAndReducer;
-
-	fn reducers(
-		self,
-	) -> (
-		Self::Pipe,
-		Self::ReduceAFactory,
-		Self::ReduceBFactory,
-		Self::ReduceC,
-	) {
-		(
-			self.i,
-			AllReducerFactory(self.f, PhantomData),
-			BoolAndReducerFactory,
-			BoolAndReducer(true),
-		)
-	}
-}
 impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source> for All<I, F>
 where
 	F: FnMut(I::Item) -> bool + Clone + Send + 'static,
 {
 	type Output = bool;
 	type Pipe = I;
-	type ReduceAFactory = AllReducerFactory<I::Item, F>;
 	type ReduceA = AllReducer<I::Item, F>;
 	type ReduceC = BoolAndReducer;
 
-	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC) {
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC) {
+		(self.i, AllReducer(self.f, PhantomData), BoolAndReducer)
+	}
+}
+impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for All<I, F>
+where
+	F: FnMut(I::Item) -> bool + Clone + ProcessSend + 'static,
+{
+	type Output = bool;
+	type Pipe = I;
+	type ReduceA = AllReducer<I::Item, F>;
+	type ReduceB = BoolAndReducer;
+	type ReduceC = BoolAndReducer;
+
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 		(
 			self.i,
-			AllReducerFactory(self.f, PhantomData),
-			BoolAndReducer(true),
+			AllReducer(self.f, PhantomData),
+			BoolAndReducer,
+			BoolAndReducer,
 		)
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Educe, Serialize, Deserialize)]
+#[educe(Clone(bound = "F: Clone"))]
 #[serde(
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct AllReducerFactory<A, F>(F, PhantomData<fn() -> A>);
-impl<A, F> Factory for AllReducerFactory<A, F>
+pub struct AllReducer<A, F>(F, PhantomData<fn() -> A>);
+
+impl<A, F> Reducer for AllReducer<A, F>
 where
-	F: FnMut(A) -> bool + Clone,
+	F: FnMut(A) -> bool,
 {
-	type Item = AllReducer<A, F>;
-	fn make(&self) -> Self::Item {
-		AllReducer(self.0.clone(), true, PhantomData)
+	type Item = A;
+	type Output = bool;
+	type Async = AllReducerAsync<A, F>;
+
+	fn into_async(self) -> Self::Async {
+		AllReducerAsync(self.0, true, PhantomData)
 	}
 }
-impl<A, F> Clone for AllReducerFactory<A, F>
+impl<A, F> ReducerProcessSend for AllReducer<A, F>
 where
-	F: Clone,
+	F: FnMut(A) -> bool,
 {
-	fn clone(&self) -> Self {
-		Self(self.0.clone(), PhantomData)
-	}
+	type Output = bool;
+}
+impl<A, F> ReducerSend for AllReducer<A, F>
+where
+	F: FnMut(A) -> bool,
+{
+	type Output = bool;
 }
 
 #[pin_project]
@@ -95,20 +91,9 @@ where
 	bound(serialize = "F: Serialize"),
 	bound(deserialize = "F: Deserialize<'de>")
 )]
-pub struct AllReducer<A, F>(F, bool, PhantomData<fn() -> A>);
+pub struct AllReducerAsync<A, F>(F, bool, PhantomData<fn() -> A>);
 
-impl<A, F> Reducer for AllReducer<A, F>
-where
-	F: FnMut(A) -> bool,
-{
-	type Item = A;
-	type Output = bool;
-	type Async = Self;
-	fn into_async(self) -> Self::Async {
-		self
-	}
-}
-impl<A, F> ReducerAsync for AllReducer<A, F>
+impl<A, F> ReducerAsync for AllReducerAsync<A, F>
 where
 	F: FnMut(A) -> bool,
 {
@@ -134,41 +119,29 @@ where
 		Poll::Ready(self.1)
 	}
 }
-impl<A, F> ReducerProcessSend for AllReducer<A, F>
-where
-	F: FnMut(A) -> bool,
-{
-	type Output = bool;
-}
-impl<A, F> ReducerSend for AllReducer<A, F>
-where
-	F: FnMut(A) -> bool,
-{
-	type Output = bool;
-}
 
-#[derive(Serialize, Deserialize)]
-pub struct BoolAndReducerFactory;
-impl Factory for BoolAndReducerFactory {
-	type Item = BoolAndReducer;
-	fn make(&self) -> Self::Item {
-		BoolAndReducer(true)
-	}
-}
-
-#[pin_project]
-#[derive(Serialize, Deserialize)]
-pub struct BoolAndReducer(bool);
+#[derive(Clone, Serialize, Deserialize)]
+pub struct BoolAndReducer;
 
 impl Reducer for BoolAndReducer {
 	type Item = bool;
 	type Output = bool;
-	type Async = Self;
+	type Async = BoolAndReducerAsync;
+
 	fn into_async(self) -> Self::Async {
-		self
+		BoolAndReducerAsync(true)
 	}
 }
-impl ReducerAsync for BoolAndReducer {
+impl ReducerProcessSend for BoolAndReducer {
+	type Output = bool;
+}
+impl ReducerSend for BoolAndReducer {
+	type Output = bool;
+}
+
+#[pin_project]
+pub struct BoolAndReducerAsync(bool);
+impl ReducerAsync for BoolAndReducerAsync {
 	type Item = bool;
 	type Output = bool;
 
@@ -189,10 +162,4 @@ impl ReducerAsync for BoolAndReducer {
 	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
 		Poll::Ready(self.0)
 	}
-}
-impl ReducerProcessSend for BoolAndReducer {
-	type Output = bool;
-}
-impl ReducerSend for BoolAndReducer {
-	type Output = bool;
 }

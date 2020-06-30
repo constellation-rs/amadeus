@@ -88,49 +88,38 @@ where
 	}
 }
 
-pub trait Factory {
-	type Item;
+#[must_use]
+pub trait ParallelSink<Source> {
+	type Output;
+	type Pipe: ParallelPipe<Source>;
+	type ReduceA: ReducerSend<Item = <Self::Pipe as ParallelPipe<Source>>::Item> + Clone + Send;
+	type ReduceC: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self::Output>;
 
-	fn make(&self) -> Self::Item;
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC);
+}
+
+#[inline(always)]
+pub(crate) fn assert_parallel_sink<R: ParallelSink<Source>, Source>(r: R) -> R {
+	r
 }
 
 #[must_use]
 pub trait DistributedSink<Source> {
 	type Output;
 	type Pipe: DistributedPipe<Source>;
-	type ReduceAFactory: Factory<Item = Self::ReduceA> + Clone + ProcessSend;
-	type ReduceBFactory: Factory<Item = Self::ReduceB>;
-	type ReduceA: ReducerSend<Item = <Self::Pipe as DistributedPipe<Source>>::Item> + Send;
-	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
+	type ReduceA: ReducerSend<Item = <Self::Pipe as DistributedPipe<Source>>::Item>
+		+ Clone
+		+ ProcessSend
+		+ Send;
+	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output>
+		+ Clone
+		+ ProcessSend;
 	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self::Output>;
 
-	fn reducers(
-		self,
-	) -> (
-		Self::Pipe,
-		Self::ReduceAFactory,
-		Self::ReduceBFactory,
-		Self::ReduceC,
-	);
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC);
 }
 
 #[inline(always)]
 pub(crate) fn assert_distributed_sink<R: DistributedSink<Source>, Source>(r: R) -> R {
-	r
-}
-
-#[must_use]
-pub trait ParallelSink<Source> {
-	type Output;
-	type Pipe: ParallelPipe<Source>;
-	type ReduceAFactory: Factory<Item = Self::ReduceA>;
-	type ReduceA: ReducerSend<Item = <Self::Pipe as ParallelPipe<Source>>::Item> + Send;
-	type ReduceC: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self::Output>;
-
-	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC);
-}
-
-#[inline(always)]
-pub(crate) fn assert_parallel_sink<R: ParallelSink<Source>, Source>(r: R) -> R {
 	r
 }

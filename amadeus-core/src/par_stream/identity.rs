@@ -11,6 +11,7 @@ use crate::sink::Sink;
 
 // TODO: add type parameter to Identity when type the type system includes HRTB in the ParallelPipe impl https://github.com/dtolnay/ghost/
 
+#[derive(Clone, Copy, Debug)]
 pub struct Identity;
 
 impl_par_dist! {
@@ -93,12 +94,8 @@ mod workaround {
 			Fold::new(self, identity, op)
 		}
 
-		pub fn group_by<ID, F, C>(self, identity: ID, op: F) -> GroupBy<Self, ID, F, C>
-		where
-			ID: FnMut() -> C + Clone + Send + 'static,
-			C: Send + 'static,
-		{
-			GroupBy::new(self, identity, op)
+		pub fn group_by<S>(self, sink: S) -> GroupBy<Self, S> {
+			GroupBy::new(self, sink)
 		}
 
 		pub fn histogram(self) -> Histogram<Self> {

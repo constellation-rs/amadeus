@@ -147,15 +147,17 @@ impl_par_dist_rename! {
 			assert_parallel_sink(Fold::new(self, identity, op))
 		}
 
-		fn group_by<A, B, ID, F, C>(self, identity: ID, op: F) -> GroupBy<Self, ID, F, C>
+		fn group_by<S, A, B>(self, sink: S) -> GroupBy<Self, S>
 		where
 			A: Eq + Hash + Send + 'static,
-			ID: FnMut() -> C + Clone + Send + 'static,
-			F: FnMut(C, Either<B, C>) -> C + Clone + Send + 'static,
-			C: Send + 'static,
+			S: ParallelSink<B>,
+			S::Pipe: Clone + Send + 'static,
+			S::ReduceA: 'static,
+			S::ReduceC: Clone,
+			S::Output: Send + 'static,
 			Self: ParallelPipe<Source, Item = (A, B)> + Sized,
 		{
-			assert_parallel_sink(GroupBy::new(self, identity, op))
+			assert_parallel_sink(GroupBy::new(self, sink))
 		}
 
 		fn histogram(self) -> Histogram<Self>

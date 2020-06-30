@@ -132,15 +132,13 @@ pub trait DistributedStream {
 		assert_distributed_stream(Chain::new(self, chain.into_dist_stream()))
 	}
 
-	async fn reduce<P, B, R1F, R2F, R1, R2, R3>(
-		mut self, pool: &P, reduce_a_factory: R1F, reduce_b_factory: R2F, reduce_c: R3,
+	async fn reduce<P, B, R1, R2, R3>(
+		mut self, pool: &P, reduce_a_factory: R1, reduce_b_factory: R2, reduce_c: R3,
 	) -> B
 	where
 		P: ProcessPool,
-		R1F: Factory<Item = R1> + Clone + ProcessSend + 'static,
-		R2F: Factory<Item = R2>,
-		R1: ReducerSend<Item = Self::Item> + Send + 'static,
-		R2: ReducerProcessSend<Item = <R1 as Reducer>::Output> + ProcessSend + 'static,
+		R1: ReducerSend<Item = Self::Item> + Clone + ProcessSend + 'static,
+		R2: ReducerProcessSend<Item = <R1 as Reducer>::Output> + Clone + ProcessSend + 'static,
 		R3: Reducer<Item = <R2 as ReducerProcessSend>::Output, Output = B>,
 		Self::Task: 'static,
 		Self: Sized,
@@ -191,7 +189,7 @@ pub trait DistributedStream {
 			.into_iter()
 			.filter(|tasks| !tasks.is_empty())
 			.map(|tasks| {
-				let reduce_b = reduce_b_factory.make();
+				let reduce_b = reduce_b_factory.clone();
 				let reduce_a_factory = reduce_a_factory.clone();
 				pool.spawn(FnOnce!(move |pool: &P::ThreadPool| {
 					#[pin_project]
@@ -257,7 +255,7 @@ pub trait DistributedStream {
 						.into_iter()
 						.filter(|tasks| !tasks.is_empty())
 						.map(|tasks| {
-							let reduce_a = reduce_a_factory.make();
+							let reduce_a = reduce_a_factory.clone();
 							pool.spawn(move || {
 								let sink = Connect(reduce_a.into_async());
 								async move {
@@ -316,7 +314,6 @@ pub trait DistributedStream {
 		P: ProcessPool,
 		DistSink: DistributedSink<Self::Item, Output = A>,
 		<DistSink::Pipe as DistributedPipe<Self::Item>>::Task: 'static,
-		DistSink::ReduceAFactory: 'static,
 		DistSink::ReduceA: 'static,
 		DistSink::ReduceB: 'static,
 		Self::Task: 'static,
@@ -403,10 +400,8 @@ pub trait DistributedStream {
 		DistSinkA: DistributedSink<Self::Item, Output = A>,
 		DistSinkB: for<'a> DistributedSink<&'a Self::Item, Output = B> + 'static,
 		<DistSinkA::Pipe as DistributedPipe<Self::Item>>::Task: 'static,
-		DistSinkA::ReduceAFactory: 'static,
 		DistSinkA::ReduceA: 'static,
 		DistSinkA::ReduceB: 'static,
-		<DistSinkB as DistributedSink<&'static Self::Item>>::ReduceAFactory: 'static,
 		<DistSinkB as DistributedSink<&'static Self::Item>>::ReduceA: 'static,
 		<DistSinkB as DistributedSink<&'static Self::Item>>::ReduceB: 'static,
 		<<DistSinkB as DistributedSink<&'static Self::Item>>::Pipe as DistributedPipe<
@@ -572,8 +567,8 @@ pub trait DistributedStream {
 		Connect(self, iterator_a, iterator_b, PhantomData)
 			.reduce(
 				pool,
-				ReduceA2Factory(reducer_a_a, reducer_b_a),
-				ReduceC2Factory(reducer_a_b, reducer_b_b),
+				ReduceA2::new(reducer_a_a, reducer_b_a),
+				ReduceC2::new(reducer_a_b, reducer_b_b),
 				ReduceC2::new(reducer_a_c, reducer_b_c),
 			)
 			.await
@@ -608,21 +603,23 @@ pub trait DistributedStream {
 		.await
 	}
 
-	async fn group_by<P, A, B, ID, F, C>(self, pool: &P, identity: ID, op: F) -> HashMap<A, C>
+	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Output>
 	where
 		P: ProcessPool,
 		A: Eq + Hash + ProcessSend + 'static,
 		B: 'static,
-		ID: FnMut() -> C + Clone + ProcessSend + 'static,
-		F: FnMut(C, Either<B, C>) -> C + Clone + ProcessSend + 'static,
-		C: ProcessSend + 'static,
-		Self::Item: 'static,
+		S: DistributedSink<B>,
+		S::Pipe: Clone + ProcessSend + 'static,
+		S::ReduceA: 'static,
+		S::ReduceB: 'static,
+		S::ReduceC: Clone,
+		S::Output: ProcessSend + 'static,
 		Self::Task: 'static,
 		Self: DistributedStream<Item = (A, B)> + Sized,
 	{
 		self.pipe(
 			pool,
-			DistributedPipe::<Self::Item>::group_by(Identity, identity, op),
+			DistributedPipe::<Self::Item>::group_by(Identity, sink),
 		)
 		.await
 	}
@@ -828,7 +825,6 @@ pub trait DistributedStream {
 	where
 		P: ProcessPool,
 		B: FromDistributedStream<Self::Item>,
-		B::ReduceAFactory: ProcessSend + 'static,
 		B::ReduceA: ProcessSend + 'static,
 		B::ReduceB: ProcessSend + 'static,
 		Self::Task: 'static,
@@ -902,11 +898,10 @@ pub trait ParallelStream {
 	// 	assert_parallel_stream(Chain::new(self, chain.into_par_stream()))
 	// }
 
-	async fn reduce<P, B, R1F, R1, R3>(mut self, pool: &P, reduce_a_factory: R1F, reduce_c: R3) -> B
+	async fn reduce<P, B, R1, R3>(mut self, pool: &P, reduce_a_factory: R1, reduce_c: R3) -> B
 	where
 		P: ThreadPool,
-		R1F: Factory<Item = R1>,
-		R1: ReducerSend<Item = Self::Item> + Send + 'static,
+		R1: ReducerSend<Item = Self::Item> + Clone + Send + 'static,
 		R3: Reducer<Item = <R1 as ReducerSend>::Output, Output = B>,
 		Self::Task: 'static,
 		Self: Sized,
@@ -957,7 +952,7 @@ pub trait ParallelStream {
 			.into_iter()
 			.filter(|tasks| !tasks.is_empty())
 			.map(|tasks| {
-				let reduce_a = reduce_a_factory.make();
+				let reduce_a = reduce_a_factory.clone();
 				pool.spawn(FnOnce!(move || {
 					#[pin_project]
 					struct Connect<B>(#[pin] B);
@@ -1254,7 +1249,7 @@ pub trait ParallelStream {
 		Connect(self, iterator_a, iterator_b, PhantomData)
 			.reduce(
 				pool,
-				ReduceA2Factory(reducer_a_a, reducer_b_a),
+				ReduceA2::new(reducer_a_a, reducer_b_a),
 				ReduceC2::new(reducer_a_b, reducer_b_b),
 			)
 			.await
@@ -1289,23 +1284,21 @@ pub trait ParallelStream {
 		.await
 	}
 
-	async fn group_by<P, A, B, ID, F, C>(self, pool: &P, identity: ID, op: F) -> HashMap<A, C>
+	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Output>
 	where
 		P: ThreadPool,
 		A: Eq + Hash + Send + 'static,
 		B: 'static,
-		ID: FnMut() -> C + Clone + Send + 'static,
-		F: FnMut(C, Either<B, C>) -> C + Clone + Send + 'static,
-		C: Send + 'static,
-		Self::Item: 'static,
+		S: ParallelSink<B>,
+		S::Pipe: Clone + Send + 'static,
+		S::ReduceA: 'static,
+		S::ReduceC: Clone,
+		S::Output: Send + 'static,
 		Self::Task: 'static,
 		Self: ParallelStream<Item = (A, B)> + Sized,
 	{
-		self.pipe(
-			pool,
-			ParallelPipe::<Self::Item>::group_by(Identity, identity, op),
-		)
-		.await
+		self.pipe(pool, ParallelPipe::<Self::Item>::group_by(Identity, sink))
+			.await
 	}
 
 	async fn histogram<P>(self, pool: &P) -> Vec<(Self::Item, usize)>
