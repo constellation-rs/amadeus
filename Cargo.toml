@@ -53,7 +53,7 @@ pin-project = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
 serde_traitobject = { version = "0.2", optional = true }
-tokio = { version = "0.2", features = ["rt-threaded", "rt-util"] }
+tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "blocking"] }
 
 [dev-dependencies]
 either = { version = "1.5", features = ["serde"] }

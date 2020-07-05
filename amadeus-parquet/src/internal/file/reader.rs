@@ -1223,7 +1223,7 @@ mod tests {
 				let mut def_levels = Some(vec![0; batch_size]);
 				let mut rep_levels = None::<Vec<i16>>;
 
-				for col_reader in readers.into_iter() {
+				for col_reader in readers {
 					match col_reader {
 						r @ ColumnReader::Int64ColumnReader(..) => {
 							let mut data_collected = Vec::with_capacity(num_rows);

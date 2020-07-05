@@ -1,6 +1,4 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.5")]
-#![feature(iter_order_by)]
-#![feature(min_specialization)]
 
 //! Implementations of Rust types that correspond to Parquet logical types.
 //! [`Record`](super::Record) is implemented for each of them.
@@ -58,6 +56,7 @@ mod http;
 mod list;
 mod ord;
 mod time;
+mod util;
 mod value;
 mod value_required;
 

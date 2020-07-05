@@ -439,7 +439,7 @@ impl Reader for ValueReader {
 			}
 			ValueReader::ByteArray(ref mut reader) => reader
 				.read(def_level, rep_level)
-				.map(|vec| Value::List(vec.into_iter().map(Value::from).collect())),
+				.map(|vec| Value::List(vec.map(Value::from))),
 			ValueReader::Bson(ref mut reader) => reader.read(def_level, rep_level).map(Value::Bson),
 			ValueReader::String(ref mut reader) => {
 				reader.read(def_level, rep_level).map(Value::String)

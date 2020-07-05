@@ -8,6 +8,7 @@ use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{
 	cmp::Ordering, collections::HashMap, convert::TryInto, fmt, fmt::Debug, hash::{BuildHasher, Hash, Hasher}, iter::FromIterator, sync::Arc
 };
+use vec_utils::VecExt;
 
 use crate::list::ListVec;
 
@@ -1569,14 +1570,8 @@ impl<T: Data> From<List<T>> for Value
 where
 	T: Into<Self>,
 {
-	default fn from(value: List<T>) -> Self {
-		Self::List(value.into_iter().map(Into::into).collect::<List<_>>())
-	}
-}
-#[doc(hidden)]
-impl From<List<Self>> for Value {
-	fn from(value: List<Self>) -> Self {
-		Self::List(value)
+	fn from(value: List<T>) -> Self {
+		Self::List(value.map(Into::into))
 	}
 }
 impl<K, V, S> From<HashMap<K, V, S>> for Value
@@ -1585,19 +1580,13 @@ where
 	V: Into<Self>,
 	S: BuildHasher,
 {
-	default fn from(value: HashMap<K, V, S>) -> Self {
+	fn from(value: HashMap<K, V, S>) -> Self {
 		Self::Map(
 			value
 				.into_iter()
 				.map(|(k, v)| (k.into(), v.into()))
 				.collect(),
 		)
-	}
-}
-#[doc(hidden)]
-impl From<HashMap<Self, Self>> for Value {
-	fn from(value: HashMap<Self, Self>) -> Self {
-		Self::Map(value)
 	}
 }
 impl From<Group> for Value {
@@ -1609,18 +1598,12 @@ impl<T> From<Option<T>> for Value
 where
 	T: Into<Self>,
 {
-	default fn from(value: Option<T>) -> Self {
+	fn from(value: Option<T>) -> Self {
 		Self::Option(
 			value
 				.map(Into::into)
 				.map(|x| <Option<ValueRequired> as From<Self>>::from(x).unwrap()),
 		)
-	}
-}
-#[doc(hidden)]
-impl From<Option<Self>> for Value {
-	fn from(value: Option<Self>) -> Self {
-		Self::Option(value.map(|x| <Option<ValueRequired>>::from(x).unwrap()))
 	}
 }
 impl<T> From<Box<T>> for Value
@@ -1800,18 +1783,10 @@ impl<T: Data> DowncastFrom<Value> for List<T>
 where
 	T: DowncastFrom<Value>,
 {
-	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
-		self_.into_list().and_then(|list| {
-			list.into_iter()
-				.map(Downcast::downcast)
-				.collect::<Result<List<_>, _>>()
-		})
-	}
-}
-#[doc(hidden)]
-impl DowncastFrom<Value> for List<Value> {
 	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
-		self_.into_list()
+		self_
+			.into_list()
+			.and_then(|list| list.try_map(Downcast::downcast))
 	}
 }
 impl<K, V, S> DowncastFrom<Value> for HashMap<K, V, S>
@@ -1820,19 +1795,12 @@ where
 	V: DowncastFrom<Value>,
 	S: BuildHasher + Default,
 {
-	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		self_.into_map().and_then(|map| {
 			map.into_iter()
 				.map(|(k, v)| Ok((k.downcast()?, v.downcast()?)))
 				.collect()
 		})
-	}
-}
-#[doc(hidden)]
-#[allow(clippy::implicit_hasher)]
-impl DowncastFrom<Value> for HashMap<Value, Value> {
-	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
-		self_.into_map()
 	}
 }
 impl DowncastFrom<Value> for Group {
@@ -1844,17 +1812,11 @@ impl<T> DowncastFrom<Value> for Option<T>
 where
 	T: DowncastFrom<Value>,
 {
-	default fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
+	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
 		match self_.into_option()? {
 			Some(t) => t.downcast().map(Some),
 			None => Ok(None),
 		}
-	}
-}
-#[doc(hidden)]
-impl DowncastFrom<Value> for Option<Value> {
-	fn downcast_from(self_: Value) -> Result<Self, DowncastError> {
-		self_.into_option()
 	}
 }
 macro_rules! array_downcast {
@@ -2334,9 +2296,9 @@ impl ListVec<Value> for ValueVec {
 	#[inline(always)]
 	fn into_vec(self) -> Vec<Value> {
 		match self {
-			Self::U8(vec) => vec.into_iter().map(Into::into).collect(),
-			Self::U16(vec) => vec.into_iter().map(Into::into).collect(),
-			Self::List(vec) => vec.into_iter().map(Into::into).collect(),
+			Self::U8(vec) => vec.map(Into::into),
+			Self::U16(vec) => vec.map(Into::into),
+			Self::List(vec) => vec.map(Into::into),
 			Self::Value(vec) => vec,
 		}
 	}

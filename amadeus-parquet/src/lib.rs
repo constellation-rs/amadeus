@@ -4,7 +4,21 @@
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
 #![cfg_attr(test, feature(test))]
-#![allow(incomplete_features)]
+#![warn(
+	// missing_copy_implementations,
+	// missing_debug_implementations,
+	// missing_docs,
+	// trivial_casts,
+	// trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	// unreachable_pub,
+	// clippy::pedantic
+)]
+// from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
+#![allow(dead_code, incomplete_features, clippy::all)]
+
 #[cfg(test)]
 extern crate test;
 

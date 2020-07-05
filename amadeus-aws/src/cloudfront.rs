@@ -8,6 +8,7 @@ use serde_closure::*;
 use std::{
 	convert::identity, io::{self}, time::Duration
 };
+use vec_utils::VecExt;
 
 use amadeus_core::{
 	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, ResultExpandIter}, Source
@@ -39,9 +40,7 @@ impl Cloudfront {
 
 		let objects = list(&client, &bucket, &prefix)
 			.await?
-			.into_iter()
-			.map(|object: Object| object.key.unwrap())
-			.collect();
+			.map(|object: Object| object.key.unwrap());
 
 		Ok(Self {
 			region,

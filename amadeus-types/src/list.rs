@@ -5,7 +5,7 @@ use std::{
 	cmp::Ordering, fmt::{self, Debug}, hash::{Hash, Hasher}, iter::FromIterator, mem::ManuallyDrop, ops::{Deref, DerefMut}, panic::{RefUnwindSafe, UnwindSafe}
 };
 
-use super::{AmadeusOrd, Data};
+use super::{util::IteratorExt, AmadeusOrd, Data};
 use amadeus_core::{
 	par_sink::{ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer}, pool::ProcessSend
 };
@@ -49,6 +49,22 @@ impl<T: Data> List<T> {
 	// pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
 	// 	self.into_iter()
 	// }
+	#[inline(always)]
+	pub fn map<F, U: Data>(self, f: F) -> List<U>
+	where
+		F: FnMut(T) -> U,
+	{
+		// TODO
+		self.into_iter().map(f).collect()
+	}
+	#[inline(always)]
+	pub fn try_map<F, U: Data, E>(self, f: F) -> Result<List<U>, E>
+	where
+		F: FnMut(T) -> Result<U, E>,
+	{
+		// TODO
+		self.into_iter().map(f).collect()
+	}
 }
 impl<T: Data> Default for List<T> {
 	#[inline(always)]
@@ -126,7 +142,7 @@ where
 	fn eq(&self, other: &List<U>) -> bool {
 		self.clone()
 			.into_iter()
-			.eq_by(other.clone().into_iter(), |a, b| a.eq(&b))
+			.eq_by_(other.clone().into_iter(), |a, b| a.eq(&b))
 	}
 }
 impl<T: Data> Eq for List<T> where T: Eq {}
@@ -138,7 +154,7 @@ where
 	fn partial_cmp(&self, other: &List<U>) -> Option<Ordering> {
 		self.clone()
 			.into_iter()
-			.partial_cmp_by(other.clone().into_iter(), |a, b| a.partial_cmp(&b))
+			.partial_cmp_by_(other.clone().into_iter(), |a, b| a.partial_cmp(&b))
 	}
 }
 impl<T: Data> Ord for List<T>
@@ -149,7 +165,7 @@ where
 	fn cmp(&self, other: &Self) -> Ordering {
 		self.clone()
 			.into_iter()
-			.cmp_by(other.clone().into_iter(), |a, b| a.cmp(&b))
+			.cmp_by_(other.clone().into_iter(), |a, b| a.cmp(&b))
 	}
 }
 impl<T: Data> AmadeusOrd for List<T>
@@ -160,7 +176,7 @@ where
 	fn amadeus_cmp(&self, other: &Self) -> Ordering {
 		self.clone()
 			.into_iter()
-			.cmp_by(other.clone().into_iter(), |a, b| a.amadeus_cmp(&b))
+			.cmp_by_(other.clone().into_iter(), |a, b| a.amadeus_cmp(&b))
 	}
 }
 impl<T: Data> Hash for List<T>
