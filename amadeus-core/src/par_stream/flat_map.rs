@@ -1,13 +1,9 @@
 use derive_new::new;
-use futures::{pin_mut, Stream};
-use pin_project::pin_project;
+use futures::Stream;
 use serde::{Deserialize, Serialize};
-use std::{
-	pin::Pin, task::{Context, Poll}
-};
 
-use super::{ParallelPipe, ParallelStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync};
-use crate::sink::{Sink, SinkFlatMap};
+use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
+use crate::pipe::{Pipe, StreamExt};
 
 #[derive(new)]
 #[must_use]
@@ -37,7 +33,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, R: Stream, Source> ParallelPipe<Source> for FlatMap<I, F>
 	where
-		F: FnMut(<I as ParallelPipe<Source>>::Item) -> R + Clone + Send + 'static,
+		F: FnMut(I::Item) -> R + Clone + Send + 'static,
 	{
 		type Item = R::Item;
 		type Task = FlatMapTask<I::Task, F>;
@@ -57,70 +53,19 @@ pub struct FlatMapTask<C, F> {
 }
 impl<C: StreamTask, F: FnMut(C::Item) -> R + Clone, R: Stream> StreamTask for FlatMapTask<C, F> {
 	type Item = R::Item;
-	type Async = FlatMapStreamTaskAsync<C::Async, F, R>;
+	type Async = crate::pipe::FlatMap<C::Async, F, R>;
+
 	fn into_async(self) -> Self::Async {
-		FlatMapStreamTaskAsync {
-			task: self.task.into_async(),
-			f: self.f,
-			fut: None,
-		}
+		self.task.into_async().flat_map(self.f)
 	}
 }
 impl<C: PipeTask<Source>, F: FnMut(C::Item) -> R + Clone, R: Stream, Source> PipeTask<Source>
 	for FlatMapTask<C, F>
 {
 	type Item = R::Item;
-	type Async = FlatMapStreamTaskAsync<C::Async, F, R>;
+	type Async = crate::pipe::FlatMap<C::Async, F, R>;
+
 	fn into_async(self) -> Self::Async {
-		FlatMapStreamTaskAsync {
-			task: self.task.into_async(),
-			f: self.f,
-			fut: None,
-		}
-	}
-}
-
-#[pin_project]
-#[derive(Serialize, Deserialize)]
-pub struct FlatMapStreamTaskAsync<C, F, Fut> {
-	#[pin]
-	task: C,
-	f: F,
-	#[pin]
-	fut: Option<Fut>,
-}
-
-impl<C: StreamTaskAsync, F: FnMut(C::Item) -> R + Clone, R: Stream> StreamTaskAsync
-	for FlatMapStreamTaskAsync<C, F, R>
-{
-	type Item = R::Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		let mut self_ = self.project();
-		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkFlatMap::new(self_.fut, sink, |item| f(item));
-		pin_mut!(sink);
-		task.poll_run(cx, sink)
-	}
-}
-
-impl<C: PipeTaskAsync<Source>, F, R: Stream, Source> PipeTaskAsync<Source>
-	for FlatMapStreamTaskAsync<C, F, R>
-where
-	F: FnMut(<C as PipeTaskAsync<Source>>::Item) -> R + Clone,
-{
-	type Item = R::Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		let mut self_ = self.project();
-		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkFlatMap::new(self_.fut, sink, |item| f(item));
-		pin_mut!(sink);
-		task.poll_run(cx, stream, sink)
+		self.task.into_async().flat_map(self.f)
 	}
 }

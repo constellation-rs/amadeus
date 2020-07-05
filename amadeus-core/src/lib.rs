@@ -1,6 +1,4 @@
 #![doc(html_root_url = "https://docs.rs/amadeus-core/0.2.5")]
-#![feature(specialization)]
-#![allow(incomplete_features)]
 #![recursion_limit = "25600"]
 
 macro_rules! impl_par_dist {
@@ -64,8 +62,8 @@ pub mod misc_serde;
 pub mod par_pipe;
 pub mod par_sink;
 pub mod par_stream;
+pub mod pipe;
 pub mod pool;
-pub mod sink;
 mod source;
 pub mod util;
 

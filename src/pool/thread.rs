@@ -1,7 +1,7 @@
-use async_std::sync::{channel, Sender};
+use async_std::sync::{channel, RecvError, Sender};
 use futures::{FutureExt, TryFutureExt};
 use std::{
-	any::Any, future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc
+	any::Any, future::Future, io, panic::{AssertUnwindSafe, RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc
 };
 use tokio::{
 	runtime::Handle, task::{JoinError, LocalSet}
@@ -71,7 +71,7 @@ struct Pool {
 }
 
 type Request = Box<dyn FnOnce() -> Box<dyn Future<Output = Response>> + Send>;
-type Response = Box<dyn Any + Send>;
+type Response = Result<Box<dyn Any + Send>, Box<dyn Any + Send + 'static>>;
 
 impl Pool {
 	fn new(threads: usize) -> Self {
@@ -103,18 +103,20 @@ impl Pool {
 	{
 		let sender = self.sender.clone();
 		async move {
+			let task: Request = Box::new(|| {
+				Box::new(
+					AssertUnwindSafe(task().map(|t| Box::new(t) as Box<dyn Any + Send>))
+						.catch_unwind(),
+				)
+			});
 			let (sender_, receiver) = channel::<Response>(1);
-			sender
-				.send((
-					Box::new(|| Box::new(task().map(|t| Box::new(t) as Box<dyn Any + Send>))),
-					sender_,
-				))
-				.await;
-			receiver
-				.recv()
-				.await
-				.map(|x| *Box::<dyn Any + Send>::downcast(x).unwrap())
-				.map_err(|_e| todo!())
+			sender.send((task, sender_)).await;
+			let res = receiver.recv().await;
+			#[allow(deprecated)]
+			res.map_err(|RecvError| unreachable!()).and_then(|x| {
+				x.map(|x| *Box::<dyn Any + Send>::downcast(x).unwrap())
+					.map_err(JoinError::panic)
+			})
 		}
 	}
 }

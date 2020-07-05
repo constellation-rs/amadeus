@@ -32,6 +32,6 @@ replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
 streaming_algorithms = "0.2"
-sum = { version = "0.1", features = ["serde"] }
+sum = { version = "0.1", features = ["futures", "serde"] }
 walkdir = "2.2"
 widestring = "0.4"

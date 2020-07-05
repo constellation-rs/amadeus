@@ -2,14 +2,14 @@
 
 use ::serde::{Deserialize, Serialize};
 use derive_new::new;
-use futures::pin_mut;
+use futures::Stream;
 use pin_project::pin_project;
 use std::{
 	error::Error, fmt::Debug, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
 use crate::{
-	par_sink::{DistributedSink, ParallelSink}, par_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync}
+	par_sink::{DistributedSink, ParallelSink}, par_stream::{DistributedStream, ParallelStream, StreamTask}
 };
 
 #[cfg(feature = "aws")]
@@ -226,21 +226,18 @@ where
 		}
 	}
 }
-impl<I, T, E, U> StreamTaskAsync for IntoTask<I, U>
+impl<I, T, E, U> Stream for IntoTask<I, U>
 where
-	I: StreamTaskAsync<Item = Result<T, E>>,
+	I: Stream<Item = Result<T, E>>,
 	T: Into<U>,
 {
 	type Item = Result<U, E>;
 
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context,
-		sink: Pin<&mut impl amadeus_core::sink::Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		let sink =
-			amadeus_core::sink::SinkMap::new(sink, |item: Result<_, _>| item.map(Into::into));
-		pin_mut!(sink);
-		self.project().task.poll_run(cx, sink)
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		self.project()
+			.task
+			.poll_next(cx)
+			.map(|t| t.map(|t| t.map(Into::into)))
 	}
 }
 impl<I, T, E, U> Iterator for IntoStream<I, U>

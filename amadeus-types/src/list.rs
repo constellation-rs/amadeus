@@ -7,7 +7,7 @@ use std::{
 
 use super::{AmadeusOrd, Data};
 use amadeus_core::{
-	par_sink::{ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer}, pool::ProcessSend, util::type_coerce
+	par_sink::{ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer}, pool::ProcessSend
 };
 
 pub struct List<T: Data> {
@@ -219,13 +219,13 @@ impl Deref for List<u8> {
 
 	#[inline(always)]
 	fn deref(&self) -> &Self::Target {
-		&*type_coerce::<_, &Vec<u8>>(&self.vec)
+		&*self.vec
 	}
 }
 impl DerefMut for List<u8> {
 	#[inline(always)]
 	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut *type_coerce::<_, &mut Vec<u8>>(&mut self.vec)
+		&mut *self.vec
 	}
 }
 

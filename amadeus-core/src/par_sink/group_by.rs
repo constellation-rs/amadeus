@@ -2,17 +2,19 @@
 
 use derive_new::new;
 use educe::Educe;
-use futures::{pin_mut, ready, stream, Stream, StreamExt};
+use futures::{future::join_all, pin_mut, ready, stream, Stream, StreamExt};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
-	collections::HashMap, hash::Hash, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}
+	collections::HashMap, future::Future, hash::Hash, marker::PhantomData, mem, pin::Pin, task::{Context, Poll}
 };
 
 use super::{
-	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, PipeTask, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
-use crate::{pool::ProcessSend, util::type_coerce};
+use crate::{
+	pipe::{Pipe, Sink, StreamExt as _}, pool::ProcessSend
+};
 
 #[derive(new)]
 #[must_use]
@@ -25,19 +27,27 @@ impl<A: ParallelPipe<Source, Item = (T, U)>, B: ParallelSink<U>, Source, T, U> P
 	for GroupBy<A, B>
 where
 	T: Eq + Hash + Send + 'static,
-	B::Pipe: Clone + Send + 'static,
+	<B::Pipe as ParallelPipe<U>>::Task: Clone + Send + 'static,
 	B::ReduceA: Clone + Send + 'static,
 	B::ReduceC: Clone,
 	B::Output: Send + 'static,
 {
 	type Output = HashMap<T, B::Output>;
 	type Pipe = A;
-	type ReduceA = GroupByReducerA<B::Pipe, B::ReduceA, T, U>;
-	type ReduceC = GroupByReducerB<B::ReduceC, T, <B::ReduceA as Reducer>::Output>;
+	type ReduceA = GroupByReducerA<<B::Pipe as ParallelPipe<U>>::Task, B::ReduceA, T, U>;
+	type ReduceC = GroupByReducerB<
+		B::ReduceC,
+		T,
+		<B::ReduceA as ReducerSend<<B::Pipe as ParallelPipe<U>>::Item>>::Output,
+	>;
 
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC) {
 		let (a, b, c) = self.b.reducers();
-		(self.a, GroupByReducerA::new(a, b), GroupByReducerB::new(c))
+		(
+			self.a,
+			GroupByReducerA::new(a.task(), b),
+			GroupByReducerB::new(c),
+		)
 	}
 }
 
@@ -45,7 +55,7 @@ impl<A: DistributedPipe<Source, Item = (T, U)>, B: DistributedSink<U>, Source, T
 	DistributedSink<Source> for GroupBy<A, B>
 where
 	T: Eq + Hash + ProcessSend + 'static,
-	B::Pipe: Clone + ProcessSend + 'static,
+	<B::Pipe as DistributedPipe<U>>::Task: Clone + ProcessSend + 'static,
 	B::ReduceA: Clone + ProcessSend + 'static,
 	B::ReduceB: Clone,
 	B::ReduceC: Clone,
@@ -53,15 +63,25 @@ where
 {
 	type Output = HashMap<T, B::Output>;
 	type Pipe = A;
-	type ReduceA = GroupByReducerA<B::Pipe, B::ReduceA, T, U>;
-	type ReduceB = GroupByReducerB<B::ReduceB, T, <B::ReduceA as Reducer>::Output>;
-	type ReduceC = GroupByReducerB<B::ReduceC, T, <B::ReduceB as Reducer>::Output>;
+	type ReduceA = GroupByReducerA<<B::Pipe as DistributedPipe<U>>::Task, B::ReduceA, T, U>;
+	type ReduceB = GroupByReducerB<
+		B::ReduceB,
+		T,
+		<B::ReduceA as ReducerSend<<B::Pipe as DistributedPipe<U>>::Item>>::Output,
+	>;
+	type ReduceC = GroupByReducerB<
+		B::ReduceC,
+		T,
+		<B::ReduceB as ReducerProcessSend<
+			<B::ReduceA as Reducer<<B::Pipe as DistributedPipe<U>>::Item>>::Output,
+		>>::Output,
+	>;
 
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 		let (a, b, c, d) = self.b.reducers();
 		(
 			self.a,
-			GroupByReducerA::new(a, b),
+			GroupByReducerA::new(a.task(), b),
 			GroupByReducerB::new(c),
 			GroupByReducerB::new(d),
 		)
@@ -76,30 +96,32 @@ where
 )]
 pub struct GroupByReducerA<P, R, T, U>(P, R, PhantomData<fn() -> (R, T, U)>);
 
-impl<P, R, T, U> Reducer for GroupByReducerA<P, R, T, U>
+impl<P, R, T, U> Reducer<(T, U)> for GroupByReducerA<P, R, T, U>
 where
-	R: Reducer + Clone,
+	P: PipeTask<U>,
+	R: Reducer<P::Item> + Clone,
 	T: Eq + Hash,
 {
-	type Item = (T, U);
 	type Output = HashMap<T, R::Output>;
-	type Async = GroupByReducerAAsync<P, R, R::Async, T, U>;
+	type Async = GroupByReducerAAsync<P::Async, R, R::Async, T, U>;
 
 	fn into_async(self) -> Self::Async {
-		GroupByReducerAAsync::new(self.0, self.1)
+		GroupByReducerAAsync::new(self.0.into_async(), self.1)
 	}
 }
-impl<P, R, T, U> ReducerProcessSend for GroupByReducerA<P, R, T, U>
+impl<P, R, T, U> ReducerProcessSend<(T, U)> for GroupByReducerA<P, R, T, U>
 where
-	R: Reducer + Clone,
+	P: PipeTask<U>,
+	R: Reducer<P::Item> + Clone,
 	T: Eq + Hash + ProcessSend + 'static,
 	R::Output: ProcessSend + 'static,
 {
 	type Output = HashMap<T, R::Output>;
 }
-impl<P, R, T, U> ReducerSend for GroupByReducerA<P, R, T, U>
+impl<P, R, T, U> ReducerSend<(T, U)> for GroupByReducerA<P, R, T, U>
 where
-	R: Reducer + Clone,
+	P: PipeTask<U>,
+	R: Reducer<P::Item> + Clone,
 	T: Eq + Hash + Send + 'static,
 	R::Output: Send + 'static,
 {
@@ -109,6 +131,7 @@ where
 #[pin_project]
 #[derive(new)]
 pub struct GroupByReducerAAsync<P, R, RA, T, U> {
+	#[pin]
 	pipe: P,
 	factory: R,
 	#[new(default)]
@@ -118,20 +141,17 @@ pub struct GroupByReducerAAsync<P, R, RA, T, U> {
 	marker: PhantomData<fn() -> (R, U)>,
 }
 
-impl<P, R, T, U> ReducerAsync for GroupByReducerAAsync<P, R, R::Async, T, U>
+impl<P, R, T, U> Sink<(T, U)> for GroupByReducerAAsync<P, R, R::Async, T, U>
 where
-	R: Reducer + Clone,
+	P: Pipe<U>,
+	R: Reducer<P::Item> + Clone,
 	T: Eq + Hash,
 {
-	type Item = (T, U);
-	type Output = HashMap<T, R::Output>;
-
 	#[inline(always)]
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context,
-		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	fn poll_pipe(
+		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = (T, U)>>,
 	) -> Poll<()> {
-		let self_ = self.project();
+		let mut self_ = self.project();
 		loop {
 			if !self_.pending.is_some() {
 				*self_.pending = Some(ready!(stream.as_mut().poll_next(cx)).map(|(t, u)| {
@@ -146,16 +166,17 @@ where
 			if let Some((t, u, r)) = self_.pending.as_mut().unwrap() {
 				let stream = stream::poll_fn(|_cx| {
 					if let Some(u) = u.take() {
-						Poll::Ready(Some(type_coerce(u)))
+						Poll::Ready(Some(u))
 					} else {
 						Poll::Pending
 					}
 				})
-				.fuse();
+				.fuse()
+				.pipe(self_.pipe.as_mut());
 				pin_mut!(stream);
 				let map = &mut *self_.map;
 				let r_ = r.as_mut().unwrap_or_else(|| map.get_mut(&t).unwrap());
-				let _ = r_.as_mut().poll_forward(cx, stream);
+				let _ = r_.as_mut().poll_pipe(cx, stream);
 				if u.is_some() {
 					return Poll::Pending;
 				}
@@ -167,29 +188,33 @@ where
 				for r in self_.map.values_mut() {
 					let stream = stream::empty();
 					pin_mut!(stream);
-					ready!(r.as_mut().poll_forward(cx, stream));
+					ready!(r.as_mut().poll_pipe(cx, stream));
 				}
 				return Poll::Ready(());
 			}
 		}
 	}
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let self_ = self.project();
-		Poll::Ready(
-			mem::take(self_.map)
-				.into_iter()
-				.map(|(k, mut v)| {
-					(
-						k,
-						if let Poll::Ready(x) = v.as_mut().poll_output(cx) {
-							x
-						} else {
-							todo!()
-						},
-					)
-				})
-				.collect(),
-		)
+}
+impl<P, R, T, U> ReducerAsync<(T, U)> for GroupByReducerAAsync<P, R, R::Async, T, U>
+where
+	P: Pipe<U>,
+	R: Reducer<P::Item> + Clone,
+	T: Eq + Hash,
+{
+	type Output = HashMap<T, R::Output>;
+
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move {
+			let self_ = self.project();
+			join_all(
+				mem::take(self_.map)
+					.into_iter()
+					.map(|(k, mut v)| async move { (k, v.as_mut().output().await) }),
+			)
+			.await
+			.into_iter()
+			.collect()
+		})
 	}
 }
 
@@ -201,12 +226,11 @@ where
 )]
 pub struct GroupByReducerB<R, T, U>(R, PhantomData<fn() -> (T, U)>);
 
-impl<R, T, U> Reducer for GroupByReducerB<R, T, U>
+impl<R, T, U> Reducer<HashMap<T, U>> for GroupByReducerB<R, T, U>
 where
-	R: Reducer + Clone,
+	R: Reducer<U> + Clone,
 	T: Eq + Hash,
 {
-	type Item = HashMap<T, U>;
 	type Output = HashMap<T, R::Output>;
 	type Async = GroupByReducerBAsync<R, R::Async, T, U>;
 
@@ -214,17 +238,17 @@ where
 		GroupByReducerBAsync::new(self.0)
 	}
 }
-impl<R, T, U> ReducerProcessSend for GroupByReducerB<R, T, U>
+impl<R, T, U> ReducerProcessSend<HashMap<T, U>> for GroupByReducerB<R, T, U>
 where
-	R: Reducer + Clone,
+	R: Reducer<U> + Clone,
 	T: Eq + Hash + ProcessSend + 'static,
 	R::Output: ProcessSend + 'static,
 {
 	type Output = HashMap<T, R::Output>;
 }
-impl<R, T, U> ReducerSend for GroupByReducerB<R, T, U>
+impl<R, T, U> ReducerSend<HashMap<T, U>> for GroupByReducerB<R, T, U>
 where
-	R: Reducer + Clone,
+	R: Reducer<U> + Clone,
 	T: Eq + Hash + Send + 'static,
 	R::Output: Send + 'static,
 {
@@ -242,19 +266,15 @@ pub struct GroupByReducerBAsync<R, RA, T, U> {
 	marker: PhantomData<fn() -> (T, U)>,
 }
 
-impl<R, T, U> ReducerAsync for GroupByReducerBAsync<R, R::Async, T, U>
+impl<R, T, U> Sink<HashMap<T, U>> for GroupByReducerBAsync<R, R::Async, T, U>
 where
-	R: Reducer + Clone,
-	R::Async: ReducerAsync,
+	R: Reducer<U> + Clone,
 	T: Eq + Hash,
 {
-	type Item = HashMap<T, U>;
-	type Output = HashMap<T, R::Output>;
-
 	#[inline(always)]
-	fn poll_forward(
+	fn poll_pipe(
 		self: Pin<&mut Self>, cx: &mut Context,
-		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+		mut stream: Pin<&mut impl Stream<Item = HashMap<T, U>>>,
 	) -> Poll<()> {
 		let self_ = self.project();
 		loop {
@@ -274,11 +294,11 @@ where
 			}
 			let pending = self_.pending.as_mut().unwrap();
 			if let Some(pending) = pending {
-				while let Some((k, (v, mut r))) = remove_arbitrary(pending) {
+				while let Some((k, (v, mut r))) = pop(pending) {
 					let mut v = Some(v);
 					let stream = stream::poll_fn(|_cx| {
 						if let Some(v) = v.take() {
-							Poll::Ready(Some(type_coerce::<U, R::Item>(v)))
+							Poll::Ready(Some(v))
 						} else {
 							Poll::Pending
 						}
@@ -286,7 +306,7 @@ where
 					pin_mut!(stream);
 					let map = &mut *self_.map;
 					let r_ = r.as_mut().unwrap_or_else(|| map.get_mut(&k).unwrap());
-					let _ = r_.as_mut().poll_forward(cx, stream);
+					let _ = r_.as_mut().poll_pipe(cx, stream);
 					if let Some(v) = v {
 						let _ = pending.insert(k, (v, r));
 						return Poll::Pending;
@@ -300,34 +320,38 @@ where
 				for r in self_.map.values_mut() {
 					let stream = stream::empty();
 					pin_mut!(stream);
-					ready!(r.as_mut().poll_forward(cx, stream));
+					ready!(r.as_mut().poll_pipe(cx, stream));
 				}
 				return Poll::Ready(());
 			}
 		}
 	}
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let self_ = self.project();
-		Poll::Ready(
-			mem::take(self_.map)
-				.into_iter()
-				.map(|(k, mut v)| {
-					(
-						k,
-						if let Poll::Ready(x) = ReducerAsync::poll_output(v.as_mut(), cx) {
-							x
-						} else {
-							todo!()
-						},
-					)
-				})
-				.collect(),
-		)
+}
+impl<R, T, U> ReducerAsync<HashMap<T, U>> for GroupByReducerBAsync<R, R::Async, T, U>
+where
+	R: Reducer<U> + Clone,
+	T: Eq + Hash,
+{
+	type Output = HashMap<T, R::Output>;
+
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move {
+			let self_ = self.project();
+			join_all(
+				mem::take(self_.map)
+					.into_iter()
+					.map(|(k, mut v)| async move { (k, v.as_mut().output().await) }),
+			)
+			.await
+			.into_iter()
+			.collect()
+		})
 	}
 }
 
+// https://github.com/rust-lang/rfcs/issues/1800#issuecomment-653757340
 #[allow(clippy::unnecessary_filter_map)]
-fn remove_arbitrary<K, V>(map: &mut HashMap<K, V>) -> Option<(K, V)>
+fn pop<K, V>(map: &mut HashMap<K, V>) -> Option<(K, V)>
 where
 	K: Eq + Hash,
 {

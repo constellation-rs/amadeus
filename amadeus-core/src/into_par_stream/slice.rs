@@ -1,12 +1,13 @@
+use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
 	iter, pin::Pin, slice, task::{Context, Poll}
 };
 
 use super::{
-	DistributedStream, IntoDistributedStream, IntoParallelStream, IterDistStream, IterParStream, ParallelStream, StreamTask, StreamTaskAsync
+	DistributedStream, IntoDistributedStream, IntoParallelStream, IterDistStream, IterParStream, ParallelStream, StreamTask
 };
-use crate::{pool::ProcessSend, sink::Sink};
+use crate::pool::ProcessSend;
 
 impl_par_dist_rename! {
 	impl<T> IntoParallelStream for [T]
@@ -64,12 +65,10 @@ impl StreamTask for Never {
 		self
 	}
 }
-impl StreamTaskAsync for Never {
+impl Stream for Never {
 	type Item = Self;
 
-	fn poll_run(
-		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
+	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
 		unreachable!()
 	}
 }

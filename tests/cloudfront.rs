@@ -1,4 +1,3 @@
-#![type_length_limit = "13470730"]
 #![allow(clippy::suspicious_map)]
 
 use amadeus::prelude::*;

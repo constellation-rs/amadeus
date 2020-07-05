@@ -20,7 +20,6 @@
 	clippy::pedantic,
 )]
 #![allow(
-	incomplete_features,
 	clippy::module_name_repetitions,
 	clippy::similar_names,
 	clippy::if_not_else,

@@ -4,13 +4,13 @@ use futures::{pin_mut, ready, Stream, StreamExt};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
-	collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque}, hash::{BuildHasher, Hash}, iter, marker::PhantomData, pin::Pin, task::{Context, Poll}
+	collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque}, future::Future, hash::{BuildHasher, Hash}, iter, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
 use super::{
 	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
-use crate::pool::ProcessSend;
+use crate::{pipe::Sink, pool::ProcessSend};
 
 #[derive(new)]
 #[must_use]
@@ -48,18 +48,21 @@ impl<I: DistributedPipe<Source>, Source, T: FromDistributedStream<I::Item>> Dist
 }
 
 pub trait FromParallelStream<T>: Sized {
-	type ReduceA: ReducerSend<Item = T> + Clone + Send;
-	type ReduceC: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self>;
+	type ReduceA: ReducerSend<T> + Clone + Send;
+	type ReduceC: Reducer<<Self::ReduceA as ReducerSend<T>>::Output, Output = Self>;
 
 	fn reducers() -> (Self::ReduceA, Self::ReduceC);
 }
 
 pub trait FromDistributedStream<T>: Sized {
-	type ReduceA: ReducerSend<Item = T> + Clone + ProcessSend;
-	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output>
+	type ReduceA: ReducerSend<T> + Clone + ProcessSend;
+	type ReduceB: ReducerProcessSend<<Self::ReduceA as ReducerSend<T>>::Output>
 		+ Clone
 		+ ProcessSend;
-	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self>;
+	type ReduceC: Reducer<
+		<Self::ReduceB as ReducerProcessSend<<Self::ReduceA as ReducerSend<T>>::Output>>::Output,
+		Output = Self,
+	>;
 
 	fn reducers() -> (Self::ReduceA, Self::ReduceB, Self::ReduceC);
 	// 	fn from_dist_stream<I>(dist_stream: I, pool: &Pool) -> Self where T: Serialize + DeserializeOwned + Send + 'static, I: IntoDistributedStream<Item = T>, <<I as IntoDistributedStream>::Iter as DistributedStream>::Task: Serialize + DeserializeOwned + Send + 'static;
@@ -70,8 +73,7 @@ pub trait FromDistributedStream<T>: Sized {
 #[serde(bound = "")]
 pub struct PushReducer<A, T = A>(PhantomData<fn() -> (T, A)>);
 
-impl<A, T: Default + Extend<A>> Reducer for PushReducer<A, T> {
-	type Item = A;
+impl<A, T: Default + Extend<A>> Reducer<A> for PushReducer<A, T> {
 	type Output = T;
 	type Async = PushReducerAsync<A, T>;
 
@@ -79,13 +81,13 @@ impl<A, T: Default + Extend<A>> Reducer for PushReducer<A, T> {
 		PushReducerAsync(Some(Default::default()), PhantomData)
 	}
 }
-impl<A, T: Default + Extend<A>> ReducerProcessSend for PushReducer<A, T>
+impl<A, T: Default + Extend<A>> ReducerProcessSend<A> for PushReducer<A, T>
 where
 	T: ProcessSend + 'static,
 {
 	type Output = T;
 }
-impl<A, T: Default + Extend<A>> ReducerSend for PushReducer<A, T>
+impl<A, T: Default + Extend<A>> ReducerSend<A> for PushReducer<A, T>
 where
 	T: Send + 'static,
 {
@@ -94,14 +96,10 @@ where
 
 #[pin_project]
 pub struct PushReducerAsync<A, T = A>(Option<T>, PhantomData<fn() -> A>);
-impl<A, T: Extend<A>> ReducerAsync for PushReducerAsync<A, T> {
-	type Item = A;
-	type Output = T;
-
+impl<A, T: Extend<A>> Sink<A> for PushReducerAsync<A, T> {
 	#[inline]
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context,
-		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	fn poll_pipe(
+		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = A>>,
 	) -> Poll<()> {
 		let self_ = self.project();
 		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
@@ -109,8 +107,12 @@ impl<A, T: Extend<A>> ReducerAsync for PushReducerAsync<A, T> {
 		}
 		Poll::Ready(())
 	}
-	fn poll_output(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
-		Poll::Ready(self.0.take().unwrap())
+}
+impl<A, T: Extend<A>> ReducerAsync<A> for PushReducerAsync<A, T> {
+	type Output = T;
+
+	fn output<'a>(mut self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move { self.0.take().unwrap() })
 	}
 }
 
@@ -118,8 +120,7 @@ impl<A, T: Extend<A>> ReducerAsync for PushReducerAsync<A, T> {
 #[educe(Clone, Default)]
 #[serde(bound = "")]
 pub struct ExtendReducer<A, T = A>(PhantomData<fn() -> (T, A)>);
-impl<A: IntoIterator<Item = B>, T: Default + Extend<B>, B> Reducer for ExtendReducer<A, T> {
-	type Item = A;
+impl<A: IntoIterator<Item = B>, T: Default + Extend<B>, B> Reducer<A> for ExtendReducer<A, T> {
 	type Output = T;
 	type Async = ExtendReducerAsync<A, T>;
 
@@ -127,14 +128,14 @@ impl<A: IntoIterator<Item = B>, T: Default + Extend<B>, B> Reducer for ExtendRed
 		ExtendReducerAsync(Some(T::default()), PhantomData)
 	}
 }
-impl<A: IntoIterator<Item = B>, T: Default + Extend<B>, B> ReducerProcessSend
+impl<A: IntoIterator<Item = B>, T: Default + Extend<B>, B> ReducerProcessSend<A>
 	for ExtendReducer<A, T>
 where
 	T: ProcessSend + 'static,
 {
 	type Output = T;
 }
-impl<A: IntoIterator<Item = B>, T: Default + Extend<B>, B> ReducerSend for ExtendReducer<A, T>
+impl<A: IntoIterator<Item = B>, T: Default + Extend<B>, B> ReducerSend<A> for ExtendReducer<A, T>
 where
 	T: Send + 'static,
 {
@@ -143,14 +144,10 @@ where
 
 #[pin_project]
 pub struct ExtendReducerAsync<A, T = A>(Option<T>, PhantomData<fn() -> A>);
-impl<A: IntoIterator<Item = B>, T: Extend<B>, B> ReducerAsync for ExtendReducerAsync<A, T> {
-	type Item = A;
-	type Output = T;
-
+impl<A: IntoIterator<Item = B>, T: Extend<B>, B> Sink<A> for ExtendReducerAsync<A, T> {
 	#[inline]
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context,
-		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	fn poll_pipe(
+		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = A>>,
 	) -> Poll<()> {
 		let self_ = self.project();
 		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
@@ -158,31 +155,27 @@ impl<A: IntoIterator<Item = B>, T: Extend<B>, B> ReducerAsync for ExtendReducerA
 		}
 		Poll::Ready(())
 	}
-	fn poll_output(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
-		Poll::Ready(self.0.take().unwrap())
+}
+impl<A: IntoIterator<Item = B>, T: Extend<B>, B> ReducerAsync<A> for ExtendReducerAsync<A, T> {
+	type Output = T;
+
+	fn output<'a>(mut self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move { self.0.take().unwrap() })
 	}
 }
 
 #[derive(Educe, Serialize, Deserialize)]
-#[educe(Clone(bound = "R: Clone"))] //, Default(bound = "R: Default"))]
+#[educe(Clone(bound = "R: Clone"), Default(bound = "R: Default"))]
 #[serde(
 	bound(serialize = "R: Serialize"),
 	bound(deserialize = "R: Deserialize<'de>")
 )]
 pub struct IntoReducer<R, T>(R, PhantomData<fn() -> T>);
-impl<R, T> Default for IntoReducer<R, T>
-where
-	R: Default,
-{
-	fn default() -> Self {
-		Self(R::default(), PhantomData)
-	}
-}
-impl<R: Reducer, T> Reducer for IntoReducer<R, T>
+
+impl<R: Reducer<Item>, T, Item> Reducer<Item> for IntoReducer<R, T>
 where
 	R::Output: Into<T>,
 {
-	type Item = R::Item;
 	type Output = T;
 	type Async = IntoReducerAsync<R::Async, T>;
 
@@ -194,30 +187,33 @@ where
 #[pin_project]
 pub struct IntoReducerAsync<R, T>(#[pin] R, PhantomData<fn() -> T>);
 
-impl<R: ReducerAsync, T> ReducerAsync for IntoReducerAsync<R, T>
+impl<R: ReducerAsync<Item>, T, Item> Sink<Item> for IntoReducerAsync<R, T>
 where
 	R::Output: Into<T>,
 {
-	type Item = R::Item;
-	type Output = T;
-
 	#[inline]
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	fn poll_pipe(
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
 	) -> Poll<()> {
 		let stream = stream.map(Into::into);
 		pin_mut!(stream);
-		self.project().0.poll_forward(cx, stream)
+		self.project().0.poll_pipe(cx, stream)
 	}
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.project().0.poll_output(cx).map(Into::into)
+}
+impl<R: ReducerAsync<Item>, T, Item> ReducerAsync<Item> for IntoReducerAsync<R, T>
+where
+	R::Output: Into<T>,
+{
+	type Output = T;
+
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move { self.project().0.output().await.into() })
 	}
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct OptionReducer<R>(R);
-impl<R: Reducer> Reducer for OptionReducer<R> {
-	type Item = Option<R::Item>;
+impl<R: Reducer<Item>, Item> Reducer<Option<Item>> for OptionReducer<R> {
 	type Output = Option<R::Output>;
 	type Async = OptionReducerAsync<R::Async>;
 
@@ -225,13 +221,13 @@ impl<R: Reducer> Reducer for OptionReducer<R> {
 		OptionReducerAsync(Some(self.0.into_async()))
 	}
 }
-impl<R: Reducer> ReducerProcessSend for OptionReducer<R>
+impl<R: Reducer<Item>, Item> ReducerProcessSend<Option<Item>> for OptionReducer<R>
 where
 	R::Output: ProcessSend + 'static,
 {
 	type Output = Option<R::Output>;
 }
-impl<R: Reducer> ReducerSend for OptionReducer<R>
+impl<R: Reducer<Item>, Item> ReducerSend<Option<Item>> for OptionReducer<R>
 where
 	R::Output: Send + 'static,
 {
@@ -241,13 +237,11 @@ where
 #[pin_project]
 pub struct OptionReducerAsync<R>(#[pin] Option<R>);
 
-impl<R: ReducerAsync> ReducerAsync for OptionReducerAsync<R> {
-	type Item = Option<R::Item>;
-	type Output = Option<R::Output>;
-
+impl<R: ReducerAsync<Item>, Item> Sink<Option<Item>> for OptionReducerAsync<R> {
 	#[inline]
-	fn poll_forward(
-		self: Pin<&mut Self>, _cx: &mut Context, _stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	fn poll_pipe(
+		self: Pin<&mut Self>, _cx: &mut Context,
+		_stream: Pin<&mut impl Stream<Item = Option<Item>>>,
 	) -> Poll<()> {
 		todo!("Tracking at https://github.com/constellation-rs/amadeus/projects/3#card-40276549");
 		// let self_ = self.project();
@@ -259,32 +253,24 @@ impl<R: ReducerAsync> ReducerAsync for OptionReducerAsync<R> {
 		// }
 		// self_.0.is_some()
 	}
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.project()
-			.0
-			.as_pin_mut()
-			.map(|r| r.poll_output(cx).map(Some))
-			.unwrap_or(Poll::Ready(None))
+}
+impl<R: ReducerAsync<Item>, Item> ReducerAsync<Option<Item>> for OptionReducerAsync<R> {
+	type Output = Option<R::Output>;
+
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move { Some(self.project().0.as_pin_mut()?.output().await) })
 	}
 }
 
 #[derive(Educe, Serialize, Deserialize)]
-#[educe(Clone(bound = "R: Clone"))] // , Default(bound = "R: Default"))]
+#[educe(Clone(bound = "R: Clone"), Default(bound = "R: Default"))]
 #[serde(
 	bound(serialize = "R: Serialize"),
 	bound(deserialize = "R: Deserialize<'de>")
 )]
 pub struct ResultReducer<R, E>(R, PhantomData<fn() -> E>);
-impl<R, E> Default for ResultReducer<R, E>
-where
-	R: Default,
-{
-	fn default() -> Self {
-		Self(R::default(), PhantomData)
-	}
-}
-impl<R: Reducer, E> Reducer for ResultReducer<R, E> {
-	type Item = Result<R::Item, E>;
+
+impl<R: Reducer<Item>, E, Item> Reducer<Result<Item, E>> for ResultReducer<R, E> {
 	type Output = Result<R::Output, E>;
 	type Async = ResultReducerAsync<R::Async, E>;
 
@@ -292,14 +278,14 @@ impl<R: Reducer, E> Reducer for ResultReducer<R, E> {
 		ResultReducerAsync::Ok(self.0.into_async())
 	}
 }
-impl<R: Reducer, E> ReducerProcessSend for ResultReducer<R, E>
+impl<R: Reducer<Item>, E, Item> ReducerProcessSend<Result<Item, E>> for ResultReducer<R, E>
 where
 	R::Output: ProcessSend + 'static,
 	E: ProcessSend + 'static,
 {
 	type Output = Result<R::Output, E>;
 }
-impl<R: Reducer, E> ReducerSend for ResultReducer<R, E>
+impl<R: Reducer<Item>, E, Item> ReducerSend<Result<Item, E>> for ResultReducer<R, E>
 where
 	R::Output: Send + 'static,
 	E: Send + 'static,
@@ -312,13 +298,11 @@ pub enum ResultReducerAsync<R, E> {
 	Ok(#[pin] R),
 	Err(Option<E>),
 }
-impl<R: ReducerAsync, E> ReducerAsync for ResultReducerAsync<R, E> {
-	type Item = Result<R::Item, E>;
-	type Output = Result<R::Output, E>;
-
+impl<R: ReducerAsync<Item>, E, Item> Sink<Result<Item, E>> for ResultReducerAsync<R, E> {
 	#[inline]
-	fn poll_forward(
-		self: Pin<&mut Self>, _cx: &mut Context, _stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	fn poll_pipe(
+		self: Pin<&mut Self>, _cx: &mut Context,
+		_stream: Pin<&mut impl Stream<Item = Result<Item, E>>>,
 	) -> Poll<()> {
 		todo!("Tracking at https://github.com/constellation-rs/amadeus/projects/3#card-40276549");
 		// let self_ = self.project();
@@ -331,11 +315,17 @@ impl<R: ReducerAsync, E> ReducerAsync for ResultReducerAsync<R, E> {
 		// }
 		// self_.0.is_ok()
 	}
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		match self.project() {
-			ResultReducerAsyncProj::Ok(a) => a.poll_output(cx).map(Ok),
-			ResultReducerAsyncProj::Err(b) => Poll::Ready(Err(b.take().unwrap())),
-		}
+}
+impl<R: ReducerAsync<Item>, E, Item> ReducerAsync<Result<Item, E>> for ResultReducerAsync<R, E> {
+	type Output = Result<R::Output, E>;
+
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move {
+			match self.project() {
+				ResultReducerAsyncProj::Ok(a) => Ok(a.output().await),
+				ResultReducerAsyncProj::Err(b) => Err(b.take().unwrap()),
+			}
+		})
 	}
 }
 

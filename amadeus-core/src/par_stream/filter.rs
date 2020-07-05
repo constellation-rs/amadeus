@@ -1,13 +1,8 @@
 use derive_new::new;
-use futures::{pin_mut, Stream};
-use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
-use std::{
-	future::Future, pin::Pin, task::{Context, Poll}
-};
 
-use super::{ParallelPipe, ParallelStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync};
-use crate::sink::{Sink, SinkFilter, SinkFilterState};
+use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
+use crate::pipe::{Pipe, StreamExt};
 
 #[derive(new)]
 #[must_use]
@@ -17,10 +12,9 @@ pub struct Filter<I, F> {
 }
 
 impl_par_dist! {
-	impl<I: ParallelStream, F, Fut> ParallelStream for Filter<I, F>
+	impl<I: ParallelStream, F> ParallelStream for Filter<I, F>
 	where
-		F: FnMut(&I::Item) -> Fut + Clone + Send + 'static,
-		Fut: Future<Output = bool>,
+		F: FnMut(&I::Item) -> bool + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = FilterTask<I::Task, F>;
@@ -36,10 +30,9 @@ impl_par_dist! {
 		}
 	}
 
-	impl<I: ParallelPipe<Source>, F, Fut, Source> ParallelPipe<Source> for Filter<I, F>
+	impl<I: ParallelPipe<Source>, F, Source> ParallelPipe<Source> for Filter<I, F>
 	where
-		F: FnMut(&<I as ParallelPipe<Source>>::Item) -> Fut + Clone + Send + 'static,
-		Fut: Future<Output = bool>,
+		F: FnMut(&I::Item) -> bool + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = FilterTask<I::Task, F>;
@@ -58,80 +51,25 @@ pub struct FilterTask<C, F> {
 	f: F,
 }
 
-impl<C: StreamTask, F, Fut> StreamTask for FilterTask<C, F>
+impl<C: StreamTask, F> StreamTask for FilterTask<C, F>
 where
-	F: FnMut(&C::Item) -> Fut + Clone,
-	Fut: Future<Output = bool>,
+	F: FnMut(&C::Item) -> bool,
 {
 	type Item = C::Item;
-	type Async = FilterStreamTaskAsync<C::Async, F, Self::Item, Fut>;
+	type Async = crate::pipe::Filter<C::Async, F>;
+
 	fn into_async(self) -> Self::Async {
-		FilterStreamTaskAsync {
-			task: self.task.into_async(),
-			f: self.f,
-			state: SinkFilterState::None,
-		}
+		self.task.into_async().filter(self.f)
 	}
 }
-impl<C: PipeTask<Source>, F, Fut, Source> PipeTask<Source> for FilterTask<C, F>
+impl<C: PipeTask<Source>, F, Source> PipeTask<Source> for FilterTask<C, F>
 where
-	F: FnMut(&C::Item) -> Fut + Clone,
-	Fut: Future<Output = bool>,
+	F: FnMut(&C::Item) -> bool,
 {
 	type Item = C::Item;
-	type Async = FilterStreamTaskAsync<C::Async, F, Self::Item, Fut>;
+	type Async = crate::pipe::Filter<C::Async, F>;
+
 	fn into_async(self) -> Self::Async {
-		FilterStreamTaskAsync {
-			task: self.task.into_async(),
-			f: self.f,
-			state: SinkFilterState::None,
-		}
-	}
-}
-
-#[pin_project]
-pub struct FilterStreamTaskAsync<C, F, T, Fut> {
-	#[pin]
-	task: C,
-	f: F,
-	#[pin]
-	state: SinkFilterState<T, Fut>,
-}
-
-impl<C: StreamTaskAsync, F, Fut> StreamTaskAsync for FilterStreamTaskAsync<C, F, C::Item, Fut>
-where
-	F: FnMut(&C::Item) -> Fut + Clone,
-	Fut: Future<Output = bool>,
-{
-	type Item = C::Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		let mut self_ = self.project();
-		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkFilter::new(self_.state, sink, |item: &_| f(item));
-		pin_mut!(sink);
-		task.poll_run(cx, sink)
-	}
-}
-
-impl<C: PipeTaskAsync<Source>, F, Fut, Source> PipeTaskAsync<Source>
-	for FilterStreamTaskAsync<C, F, C::Item, Fut>
-where
-	F: FnMut(&<C as PipeTaskAsync<Source>>::Item) -> Fut + Clone,
-	Fut: Future<Output = bool>,
-{
-	type Item = C::Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		let mut self_ = self.project();
-		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkFilter::new(self_.state, sink, |item: &_| f(item));
-		pin_mut!(sink);
-		task.poll_run(cx, stream, sink)
+		self.task.into_async().filter(self.f)
 	}
 }

@@ -1,13 +1,13 @@
 use derive_new::new;
-use futures::{pin_mut, Stream};
+use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{ParallelPipe, ParallelStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync};
-use crate::sink::{Sink, SinkMap};
+use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
+use crate::pipe::Pipe;
 
 #[derive(new)]
 #[must_use]
@@ -37,7 +37,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, R, Source> ParallelPipe<Source> for Map<I, F>
 	where
-		F: FnMut(<I as ParallelPipe<Source>>::Item) -> R + Clone + Send + 'static,
+		F: FnMut(I::Item) -> R + Clone + Send + 'static,
 	{
 		type Item = R;
 		type Task = MapTask<I::Task, F>;
@@ -85,37 +85,30 @@ where
 	}
 }
 
-impl<C: StreamTaskAsync, F, R> StreamTaskAsync for MapTask<C, F>
+impl<C: Stream, F, R> Stream for MapTask<C, F>
 where
 	F: FnMut(C::Item) -> R + Clone,
 {
 	type Item = R;
 
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkMap::new(sink, |item| f(item));
-		pin_mut!(sink);
-		task.poll_run(cx, sink)
+		task.poll_next(cx).map(|t| t.map(f))
 	}
 }
 
-impl<C: PipeTaskAsync<Source>, F, R, Source> PipeTaskAsync<Source> for MapTask<C, F>
+impl<C: Pipe<Source>, F, R, Source> Pipe<Source> for MapTask<C, F>
 where
-	F: FnMut(<C as PipeTaskAsync<Source>>::Item) -> R + Clone,
+	F: FnMut(C::Item) -> R + Clone,
 {
 	type Item = R;
 
-	fn poll_run(
+	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
+	) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkMap::new(sink, |item| f(item));
-		pin_mut!(sink);
-		task.poll_run(cx, stream, sink)
+		task.poll_next(cx, stream).map(|t| t.map(f))
 	}
 }

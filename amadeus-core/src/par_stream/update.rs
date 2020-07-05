@@ -1,13 +1,13 @@
 use derive_new::new;
-use futures::{pin_mut, Stream};
+use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{ParallelPipe, ParallelStream, PipeTask, PipeTaskAsync, StreamTask, StreamTaskAsync};
-use crate::sink::{Sink, SinkMap};
+use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
+use crate::pipe::Pipe;
 
 #[derive(new)]
 #[must_use]
@@ -37,7 +37,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, Source> ParallelPipe<Source> for Update<I, F>
 	where
-		F: FnMut(&mut <I as ParallelPipe<Source>>::Item) + Clone + Send + 'static,
+		F: FnMut(&mut I::Item) + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = UpdateTask<I::Task, F>;
@@ -85,43 +85,40 @@ where
 	}
 }
 
-impl<C: StreamTaskAsync, F> StreamTaskAsync for UpdateTask<C, F>
+impl<C: Stream, F> Stream for UpdateTask<C, F>
 where
 	F: FnMut(&mut C::Item) + Clone,
 {
 	type Item = C::Item;
 
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkMap::new(sink, |mut item| {
-			f(&mut item);
-			item
-		});
-		pin_mut!(sink);
-		task.poll_run(cx, sink)
+		task.poll_next(cx).map(|item| {
+			item.map(|mut item| {
+				f(&mut item);
+				item
+			})
+		})
 	}
 }
 
-impl<C: PipeTaskAsync<Source>, F, Source> PipeTaskAsync<Source> for UpdateTask<C, F>
+impl<C: Pipe<Source>, F, Source> Pipe<Source> for UpdateTask<C, F>
 where
-	F: FnMut(&mut <C as PipeTaskAsync<Source>>::Item) + Clone,
+	F: FnMut(&mut C::Item) + Clone,
 {
 	type Item = C::Item;
 
-	fn poll_run(
+	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
+	) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
-		let sink = SinkMap::new(sink, |mut item| {
-			f(&mut item);
-			item
-		});
-		pin_mut!(sink);
-		task.poll_run(cx, stream, sink)
+		task.poll_next(cx, stream).map(|item| {
+			item.map(|mut item| {
+				f(&mut item);
+				item
+			})
+		})
 	}
 }

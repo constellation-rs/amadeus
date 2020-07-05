@@ -11,7 +11,6 @@
 //! cargo run --example cloudfront_logs --release
 //! ```
 
-#![type_length_limit = "13470730"]
 use amadeus::prelude::*;
 
 #[allow(unreachable_code)]

@@ -1,5 +1,3 @@
-#![type_length_limit = "13470730"]
-
 use amadeus::dist::prelude::*;
 #[cfg(feature = "constellation")]
 use constellation::*;

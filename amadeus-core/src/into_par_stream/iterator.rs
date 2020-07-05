@@ -1,14 +1,14 @@
-use futures::{pin_mut, stream};
+use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
-	iter, ops::{Range, RangeFrom, RangeInclusive}, pin::Pin, task::{Context, Poll}
+	ops::{Range, RangeFrom, RangeInclusive}, pin::Pin, task::{Context, Poll}
 };
 
 use super::{
-	DistributedStream, IntoDistributedStream, IntoParallelStream, ParallelStream, StreamTask, StreamTaskAsync
+	DistributedStream, IntoDistributedStream, IntoParallelStream, ParallelStream, StreamTask
 };
-use crate::{pool::ProcessSend, sink::Sink};
+use crate::pool::ProcessSend;
 
 pub trait IteratorExt: Iterator + Sized {
 	fn par(self) -> IterParStream<Self> {
@@ -56,15 +56,11 @@ impl<T> StreamTask for IterStreamTask<T> {
 		self
 	}
 }
-impl<T> StreamTaskAsync for IterStreamTask<T> {
+impl<T> Stream for IterStreamTask<T> {
 	type Item = T;
 
-	fn poll_run(
-		mut self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		let stream = stream::iter(iter::from_fn(|| self.0.take()));
-		pin_mut!(stream);
-		sink.poll_forward(cx, stream)
+	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
+		Poll::Ready(self.project().0.take())
 	}
 }
 

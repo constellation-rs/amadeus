@@ -4,13 +4,13 @@ use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
-	marker::PhantomData, pin::Pin, task::{Context, Poll}
+	future::Future, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
 use super::{
 	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, PushReducer, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
 };
-use crate::pool::ProcessSend;
+use crate::{pipe::Sink, pool::ProcessSend};
 
 #[derive(new)]
 #[must_use]
@@ -65,11 +65,10 @@ where
 )]
 pub struct ForEachReducer<A, F>(F, PhantomData<fn() -> A>);
 
-impl<A, F> Reducer for ForEachReducer<A, F>
+impl<A, F> Reducer<A> for ForEachReducer<A, F>
 where
 	F: FnMut(A) + Clone,
 {
-	type Item = A;
 	type Output = ();
 	type Async = Self;
 
@@ -77,30 +76,26 @@ where
 		self
 	}
 }
-impl<A, F> ReducerProcessSend for ForEachReducer<A, F>
+impl<A, F> ReducerProcessSend<A> for ForEachReducer<A, F>
 where
 	F: FnMut(A) + Clone,
 {
 	type Output = ();
 }
-impl<A, F> ReducerSend for ForEachReducer<A, F>
+impl<A, F> ReducerSend<A> for ForEachReducer<A, F>
 where
 	F: FnMut(A) + Clone,
 {
 	type Output = ();
 }
 
-impl<A, F> ReducerAsync for ForEachReducer<A, F>
+impl<A, F> Sink<A> for ForEachReducer<A, F>
 where
 	F: FnMut(A) + Clone,
 {
-	type Item = A;
-	type Output = ();
-
 	#[inline(always)]
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context,
-		mut stream: Pin<&mut impl Stream<Item = Self::Item>>,
+	fn poll_pipe(
+		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = A>>,
 	) -> Poll<()> {
 		let self_ = self.project();
 		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
@@ -108,7 +103,14 @@ where
 		}
 		Poll::Ready(())
 	}
-	fn poll_output(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
-		Poll::Ready(())
+}
+impl<A, F> ReducerAsync<A> for ForEachReducer<A, F>
+where
+	F: FnMut(A) + Clone,
+{
+	type Output = ();
+
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move {})
 	}
 }

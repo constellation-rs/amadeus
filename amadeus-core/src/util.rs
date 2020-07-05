@@ -3,12 +3,10 @@ use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{
-	any::type_name, error, fmt, hash::{Hash, Hasher}, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
+	error, fmt, hash::{Hash, Hasher}, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
-use crate::{
-	par_stream::{DistributedStream, ParallelStream, StreamTask, StreamTaskAsync}, sink::Sink
-};
+use crate::par_stream::{DistributedStream, ParallelStream, StreamTask};
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
 impl<T, E> IntoIterator for ResultExpand<T, E>
@@ -155,12 +153,10 @@ where
 		self
 	}
 }
-impl<T: 'static> StreamTaskAsync for ImplTask<T> {
+impl<T: 'static> Stream for ImplTask<T> {
 	type Item = T;
 
-	fn poll_run(
-		self: Pin<&mut Self>, _cx: &mut Context, _sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
+	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
 		unreachable!()
 	}
 }
@@ -222,51 +218,18 @@ where
 	}
 }
 
-pub fn type_coerce<A, B>(a: A) -> B {
-	try_type_coerce(a)
-		.unwrap_or_else(|| panic!("can't coerce {} to {}", type_name::<A>(), type_name::<B>()))
-}
-pub fn try_type_coerce<A, B>(a: A) -> Option<B> {
-	trait Eq<B> {
-		fn eq(self) -> Option<B>;
-	}
-
-	struct Foo<A, B>(A, PhantomData<fn() -> B>);
-
-	impl<A, B> Eq<B> for Foo<A, B> {
-		default fn eq(self) -> Option<B> {
-			None
-		}
-	}
-	impl<A> Eq<A> for Foo<A, A> {
-		fn eq(self) -> Option<A> {
-			Some(self.0)
-		}
-	}
-
-	Foo::<A, B>(a, PhantomData).eq()
-}
-
-#[repr(transparent)]
-pub struct Debug<T: ?Sized>(pub T);
-trait DebugDuck {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error>;
-}
-impl<T: ?Sized> DebugDuck for T {
-	default fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-		write!(f, "{}", std::any::type_name::<Self>())
-	}
-}
-impl<T: ?Sized> DebugDuck for T
-where
-	T: std::fmt::Debug,
-{
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-		<T as std::fmt::Debug>::fmt(self, f)
-	}
-}
-impl<T: ?Sized> std::fmt::Debug for Debug<T> {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-		<T as DebugDuck>::fmt(&self.0, f)
-	}
+/// As unsafe as regular `core::mem::transmute`, but asserts size at runtime.
+///
+/// # Safety
+///
+/// Not.
+pub unsafe fn transmute<A, B>(a: A) -> B {
+	use std::mem;
+	assert_eq!(
+		(mem::size_of::<A>(), mem::align_of::<A>()),
+		(mem::size_of::<B>(), mem::align_of::<B>())
+	);
+	let ret = mem::transmute_copy(&a);
+	mem::forget(a);
+	ret
 }
