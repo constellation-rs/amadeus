@@ -4,9 +4,9 @@
 //! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
 //! </strong></p>
 //!
-//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::data`](https://docs.rs/amadeus/0.2/amadeus/data/index.html).
+//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::data`](https://docs.rs/amadeus/0.3/amadeus/data/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.5")]
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.3.0")]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,

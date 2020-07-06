@@ -50,7 +50,7 @@ We aim to create a community that is welcoming and helpful to anyone that is int
 
 Amadeus has deep, pluggable, integration with various file formats, databases and interfaces:
 
-| Data format | [`Source`](https://docs.rs/amadeus/0.2/amadeus/trait.Source.html) | [`Destination`](https://docs.rs/amadeus/0.2/amadeus/trait.Destination.html) |
+| Data format | [`Source`](https://docs.rs/amadeus/0.3/amadeus/trait.Source.html) | [`Destination`](https://docs.rs/amadeus/0.3/amadeus/trait.Destination.html) |
 |---|---|---|
 | CSV | ✔ | ✔ |
 | JSON | ✔ | ✔ |
