@@ -1,6 +1,8 @@
 // TODO: P: Pool -> impl Pool: async_trait triggers https://github.com/rust-lang/rust/issues/71869
 // TODO: how to dedup??
 
+#![allow(clippy::too_many_lines)]
+
 mod chain;
 mod cloned;
 mod filter;

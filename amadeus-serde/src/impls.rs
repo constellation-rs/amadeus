@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use linked_hash_map::LinkedHashMap;
 use serde::{
 	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeSeq, SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer
@@ -479,6 +481,7 @@ macro_rules! array {
 				S: Serializer,
 			{
 				let self_: *const Self = self;
+				#[allow(unsafe_code)]
 				let self_: &[SerdeSerialize<T>; $i] = unsafe{ &*(self_ as *const _)};
 				serde::Serialize::serialize(self_, serializer)
 			}
@@ -530,6 +533,7 @@ macro_rules! array {
 				D: Deserializer<'de>,
 			{
 				let self_: Box<[SerdeDeserialize<T>; $i]> = serde::Deserialize::deserialize(deserializer)?;
+				#[allow(unsafe_code)]
 				Ok(unsafe { Box::from_raw(Box::into_raw(self_) as *mut [T; $i]) })
 			}
 		}

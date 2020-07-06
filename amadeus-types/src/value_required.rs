@@ -83,115 +83,115 @@ impl Hash for ValueRequired {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		match self {
 			Self::Bool(value) => {
-				0u8.hash(state);
+				0_u8.hash(state);
 				value.hash(state);
 			}
 			Self::U8(value) => {
-				1u8.hash(state);
+				1_u8.hash(state);
 				value.hash(state);
 			}
 			Self::I8(value) => {
-				2u8.hash(state);
+				2_u8.hash(state);
 				value.hash(state);
 			}
 			Self::U16(value) => {
-				3u8.hash(state);
+				3_u8.hash(state);
 				value.hash(state);
 			}
 			Self::I16(value) => {
-				4u8.hash(state);
+				4_u8.hash(state);
 				value.hash(state);
 			}
 			Self::U32(value) => {
-				5u8.hash(state);
+				5_u8.hash(state);
 				value.hash(state);
 			}
 			Self::I32(value) => {
-				6u8.hash(state);
+				6_u8.hash(state);
 				value.hash(state);
 			}
 			Self::U64(value) => {
-				7u8.hash(state);
+				7_u8.hash(state);
 				value.hash(state);
 			}
 			Self::I64(value) => {
-				8u8.hash(state);
+				8_u8.hash(state);
 				value.hash(state);
 			}
 			Self::F32(_value) => {
-				9u8.hash(state);
+				9_u8.hash(state);
 			}
 			Self::F64(_value) => {
-				10u8.hash(state);
+				10_u8.hash(state);
 			}
 			Self::Date(value) => {
-				11u8.hash(state);
+				11_u8.hash(state);
 				value.hash(state);
 			}
 			Self::DateWithoutTimezone(value) => {
-				11u8.hash(state);
+				11_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Time(value) => {
-				12u8.hash(state);
+				12_u8.hash(state);
 				value.hash(state);
 			}
 			Self::TimeWithoutTimezone(value) => {
-				12u8.hash(state);
+				12_u8.hash(state);
 				value.hash(state);
 			}
 			Self::DateTime(value) => {
-				13u8.hash(state);
+				13_u8.hash(state);
 				value.hash(state);
 			}
 			Self::DateTimeWithoutTimezone(value) => {
-				13u8.hash(state);
+				13_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Timezone(value) => {
-				13u8.hash(state);
+				13_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Decimal(_value) => {
-				14u8.hash(state);
+				14_u8.hash(state);
 			}
 			Self::Bson(value) => {
-				15u8.hash(state);
+				15_u8.hash(state);
 				value.hash(state);
 			}
 			Self::String(value) => {
-				16u8.hash(state);
+				16_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Json(value) => {
-				17u8.hash(state);
+				17_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Enum(value) => {
-				18u8.hash(state);
+				18_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Url(value) => {
-				19u8.hash(state);
+				19_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Webpage(value) => {
-				20u8.hash(state);
+				20_u8.hash(state);
 				value.hash(state);
 			}
 			Self::IpAddr(value) => {
-				21u8.hash(state);
+				21_u8.hash(state);
 				value.hash(state);
 			}
 			Self::List(value) => {
-				22u8.hash(state);
+				22_u8.hash(state);
 				value.hash(state);
 			}
 			Self::Map(_value) => {
-				23u8.hash(state);
+				23_u8.hash(state);
 			}
 			Self::Group(_value) => {
-				24u8.hash(state);
+				24_u8.hash(state);
 			}
 		}
 	}

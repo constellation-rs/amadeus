@@ -227,7 +227,9 @@ impl<T: Data> UnwindSafe for List<T> where T: UnwindSafe {}
 impl<T: Data> RefUnwindSafe for List<T> where T: RefUnwindSafe {}
 impl<T: Data> Unpin for List<T> where T: Unpin {}
 // Implementers of ListVec must be Send/Sync if T is Send/Sync!
+#[allow(unsafe_code)]
 unsafe impl<T: Data> Send for List<T> where T: Send {}
+#[allow(unsafe_code)]
 unsafe impl<T: Data> Sync for List<T> where T: Sync {}
 
 impl Deref for List<u8> {
@@ -413,8 +415,8 @@ mod test {
 	#[test]
 	fn test() {
 		let mut list: List<u8> = List::new();
-		list.push(0u8);
-		list.push(1u8);
+		list.push(0_u8);
+		list.push(1_u8);
 		println!("{:#?}", list);
 		let mut list: List<Value> = List::new();
 		list.push(Value::U8(0));

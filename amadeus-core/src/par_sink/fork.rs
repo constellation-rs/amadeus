@@ -1,3 +1,6 @@
+// TODO: document why this is sound
+#![allow(unsafe_code)]
+
 use derive_new::new;
 use futures::{pin_mut, stream, Stream, StreamExt as _};
 use pin_project::pin_project;
@@ -177,8 +180,8 @@ pub struct JoinStreamTaskAsync<A, B, C, RefAItem, T> {
 impl<A, B, C, RefAItem> Stream for JoinStreamTaskAsync<A, B, C, RefAItem, A::Item>
 where
 	A: Stream,
-	B: crate::pipe::Pipe<A::Item>,
-	C: crate::pipe::Pipe<RefAItem>,
+	B: Pipe<A::Item>,
+	C: Pipe<RefAItem>,
 {
 	type Item = Sum2<B::Item, C::Item>;
 
@@ -239,8 +242,8 @@ where
 impl<A, B, C, Source, RefAItem> Pipe<Source> for JoinStreamTaskAsync<A, B, C, RefAItem, A::Item>
 where
 	A: Pipe<Source>,
-	B: crate::pipe::Pipe<A::Item>,
-	C: crate::pipe::Pipe<RefAItem>,
+	B: Pipe<A::Item>,
+	C: Pipe<RefAItem>,
 {
 	type Item = Sum2<B::Item, C::Item>;
 

@@ -1,10 +1,12 @@
+#![allow(unused_qualifications)]
+
 use async_compression::futures::bufread::GzipDecoder;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use futures::{future, io::BufReader, AsyncBufReadExt, FutureExt, StreamExt, TryStreamExt};
 use http::{Method, StatusCode};
 use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
-use serde_closure::*;
+use serde_closure::FnMut;
 use std::{
 	convert::identity, io::{self}, time::Duration
 };
@@ -276,7 +278,7 @@ mod http_serde {
 	use http::{Method, StatusCode};
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-	pub struct Serde<T>(T);
+	pub(crate) struct Serde<T>(T);
 
 	impl Serialize for Serde<&Method> {
 		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -324,14 +326,14 @@ mod http_serde {
 		}
 	}
 
-	pub fn serialize<T, S>(t: &T, serializer: S) -> Result<S::Ok, S::Error>
+	pub(crate) fn serialize<T, S>(t: &T, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		for<'a> Serde<&'a T>: Serialize,
 		S: Serializer,
 	{
 		Serde(t).serialize(serializer)
 	}
-	pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+	pub(crate) fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 	where
 		Serde<T>: Deserialize<'de>,
 		D: Deserializer<'de>,

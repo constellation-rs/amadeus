@@ -1,4 +1,4 @@
-#![allow(clippy::type_complexity)]
+#![allow(unused_imports,clippy::single_component_path_imports)]
 
 use derive_new::new;
 use educe::Educe;
@@ -53,11 +53,11 @@ mod macros {
 			}
 		};
 	}
-	pub use folder_dist_sink;
-	pub use folder_par_sink;
+	pub(crate) use folder_dist_sink;
+	pub(crate) use folder_par_sink;
 }
 
-pub use macros::{folder_dist_sink, folder_par_sink};
+pub(crate) use macros::{folder_dist_sink, folder_par_sink};
 
 pub trait FolderSync<A> {
 	type Output;

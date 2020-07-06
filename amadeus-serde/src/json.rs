@@ -1,7 +1,7 @@
 use educe::Educe;
 use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use serde_closure::*;
+use serde_closure::FnMut;
 use serde_json::Error as InternalJsonError;
 use std::{
 	error, fmt::{self, Debug, Display}, io::{self, Cursor}, marker::PhantomData
@@ -106,13 +106,13 @@ where
 mod jsonerror {
 	use serde::{Deserializer, Serializer};
 
-	pub fn serialize<T, S>(_t: &T, _serializer: S) -> Result<S::Ok, S::Error>
+	pub(crate) fn serialize<T, S>(_t: &T, _serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
 		unimplemented!()
 	}
-	pub fn deserialize<'de, T, D>(_deserializer: D) -> Result<T, D::Error>
+	pub(crate) fn deserialize<'de, T, D>(_deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
 	{

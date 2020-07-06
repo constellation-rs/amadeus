@@ -149,7 +149,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let row = row.ok()?.into_group().ok()?;
             row.get("uri")?.clone().into_url().ok()
         })
-        .filter(|row| futures::future::ready(row.is_some()))
+        .filter(|row| row.is_some())
         .map(Option::unwrap)
         .most_frequent(&pool, 100, 0.99, 0.002)
         .await;

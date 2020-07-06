@@ -1,7 +1,7 @@
 use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-	iter, pin::Pin, slice, task::{Context, Poll}
+	convert::Infallible, iter, pin::Pin, slice, task::{Context, Poll}
 };
 
 use super::{
@@ -53,9 +53,7 @@ impl_par_dist_rename! {
 	}
 }
 
-enum NeverInner {}
-
-pub struct Never(NeverInner);
+pub struct Never(Infallible);
 
 impl StreamTask for Never {
 	type Item = Self;

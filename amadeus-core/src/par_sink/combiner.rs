@@ -1,3 +1,5 @@
+#![allow(unused_imports,clippy::single_component_path_imports)]
+
 use super::FolderSync;
 
 mod macros {
@@ -39,11 +41,11 @@ mod macros {
 			}
 		};
 	}
-	pub use combiner_dist_sink;
-	pub use combiner_par_sink;
+	pub(crate) use combiner_dist_sink;
+	pub(crate) use combiner_par_sink;
 }
 
-pub use macros::{combiner_dist_sink, combiner_par_sink};
+pub(crate) use macros::{combiner_dist_sink, combiner_par_sink};
 
 pub trait CombinerSync {
 	type Output;

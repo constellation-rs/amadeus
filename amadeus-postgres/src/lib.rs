@@ -1,12 +1,39 @@
-// TODO:
-// Check types? These might work??
-// select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
-// select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;
+//! Harmonious distributed data processing & analysis in Rust.
+//!
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
+//!
+//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.2/amadeus/source/index.html).
 
 #![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.2.5")]
 #![feature(specialization)]
 #![feature(type_alias_impl_trait)]
-#![allow(incomplete_features)]
+#![warn(
+	// missing_copy_implementations,
+	// missing_debug_implementations,
+	// missing_docs,
+	trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	unreachable_pub,
+	clippy::pedantic,
+)]
+#![allow(
+	clippy::module_name_repetitions,
+	clippy::similar_names,
+	clippy::if_not_else,
+	clippy::must_use_candidate,
+	clippy::missing_errors_doc,
+	incomplete_features
+)]
+#![deny(unsafe_code)]
+
+// TODO:
+// Check types? These might work??
+// select column_name, is_nullable, data_type, character_maximum_length, * from information_schema.columns where table_name = 'weather' order by ordinal_position;
+// select attname, atttypid, atttypmod, attnotnull, attndims from pg_attribute where attrelid = 'public.weather'::regclass and attnum > 0 and not attisdropped;
 
 mod impls;
 
@@ -19,7 +46,7 @@ use futures::{ready, stream, FutureExt, Stream, StreamExt, TryStreamExt};
 use pin_project::pin_project;
 use postgres::{CopyOutStream, Error as InternalPostgresError};
 use serde::{Deserialize, Serialize};
-use serde_closure::*;
+use serde_closure::FnMut;
 use std::{
 	convert::TryFrom, error, fmt::{self, Debug, Display}, io, io::Cursor, marker::PhantomData, ops::Fn, path::PathBuf, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration
 };
@@ -219,7 +246,7 @@ where
 					.connect(postgres::tls::NoTls)
 					.await
 					.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
-				tokio::spawn(async move {
+				let _ = tokio::spawn(async move {
 					let _ = connection.await;
 				});
 				let client = Arc::new(client);
@@ -241,7 +268,7 @@ where
 							.map_ok(|row| {
 								Row::decode(
 									&postgres::types::Type::RECORD,
-									row.as_ref().map(|bytes| bytes.as_ref()),
+									row.as_ref().map(AsRef::as_ref),
 								)
 								.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 							})
@@ -317,22 +344,24 @@ impl Stream for BinaryCopyOutStream {
 		}
 
 		check_remaining(&chunk, 2)?;
-		let len = chunk.get_i16();
-		if len == -1 {
+		let row_len = chunk.get_i16();
+		if row_len == -1 {
 			return Poll::Ready(None);
 		}
 
-		assert_eq!(len, 1);
+		assert_eq!(row_len, 1);
 
 		check_remaining(&chunk, 4)?;
-		let len = chunk.get_i32();
-		if len == -1 {
+		let field_len = chunk.get_i32();
+		if field_len == -1 {
 			Poll::Ready(Some(Ok(None)))
 		} else {
-			let len = len as usize;
-			check_remaining(&chunk, len)?;
-			let start = chunk.position() as usize;
-			Poll::Ready(Some(Ok(Some(chunk.into_inner().slice(start..start + len)))))
+			let field_len = usize::try_from(field_len).unwrap();
+			check_remaining(&chunk, field_len)?;
+			let start = usize::try_from(chunk.position()).unwrap();
+			Poll::Ready(Some(Ok(Some(
+				chunk.into_inner().slice(start..start + field_len),
+			))))
 		}
 	}
 }
@@ -444,7 +473,7 @@ impl<F> DisplayFmt<F>
 where
 	F: Fn(&mut fmt::Formatter) -> fmt::Result,
 {
-	pub fn new(f: F) -> Self {
+	fn new(f: F) -> Self {
 		Self(f)
 	}
 }

@@ -18,7 +18,7 @@ where
 	}
 	default fn decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
-	) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		T::decode(type_, buf).map(Box::new)
 	}
 }

@@ -94,6 +94,6 @@ where
 		self.project()
 			.task
 			.poll_next(cx, stream)
-			.map(|item| item.cloned())
+			.map(Option::<&_>::cloned)
 	}
 }

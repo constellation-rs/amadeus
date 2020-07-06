@@ -1,7 +1,36 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.5")]
+//! Harmonious distributed data processing & analysis in Rust.
+//!
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
+//!
+//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::data`](https://docs.rs/amadeus/0.2/amadeus/data/index.html).
 
-//! Implementations of Rust types that correspond to Parquet logical types.
-//! [`Record`](super::Record) is implemented for each of them.
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.2.5")]
+#![warn(
+	// missing_copy_implementations,
+	// missing_debug_implementations,
+	// missing_docs,
+	trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	// unreachable_pub,
+	clippy::pedantic,
+)]
+#![allow(
+	clippy::module_name_repetitions,
+	clippy::similar_names,
+	clippy::if_not_else,
+	clippy::must_use_candidate,
+	clippy::missing_errors_doc,
+	clippy::doc_markdown,
+	clippy::wildcard_imports,
+	clippy::default_trait_access,
+	clippy::inline_always,
+	clippy::too_many_lines
+)]
+#![deny(unsafe_code)]
 
 #[macro_export]
 macro_rules! array {

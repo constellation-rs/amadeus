@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::{
 	future::Future, pin::Pin, task::{Context, Poll}
 };
-use sum::*;
+use sum::{Sum0, Sum1, Sum2, Sum3, Sum4, Sum5, Sum6, Sum7, Sum8};
 
 use super::{
 	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, PipeTask, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
@@ -153,7 +153,7 @@ macro_rules! impl_tuple {
 						*self_.pending = match stream.as_mut().poll_next(cx) { Poll::Ready(x) => Some(x), Poll::Pending => None};
 					}
 					$({
-						let pending = &mut self_.pending;
+						let pending = &mut *self_.pending;
 						let given = &mut self_.given.$num;
 						let stream_ = stream::poll_fn(|cx| {
 							if !*given && pending.is_some() {

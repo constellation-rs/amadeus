@@ -89,13 +89,13 @@ impl_par_dist_rename! {
 			assert_parallel_sink(super::par_sink::Pipe::new(self, sink))
 		}
 
-		fn fork<A, B, RefAItem>(self, sink: A, sink_ref: B) -> super::par_sink::Fork<Self, A, B, &'static Self::Item>
+		fn fork<A, B, RefAItem>(self, sink: A, sink_ref: B) -> Fork<Self, A, B, &'static Self::Item>
 		where
 			A: ParallelSink<Self::Item>,
 			B: for<'a> ParallelSink<&'a Self::Item>,
 			Self: Sized,
 		{
-			assert_parallel_sink(super::par_sink::Fork::new(self, sink, sink_ref))
+			assert_parallel_sink(Fork::new(self, sink, sink_ref))
 		}
 
 		fn for_each<F>(self, f: F) -> ForEach<Self, F>
