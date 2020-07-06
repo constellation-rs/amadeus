@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use linked_hash_map::LinkedHashMap;
 use serde::{
 	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeSeq, SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer
@@ -5,6 +7,7 @@ use serde::{
 use std::{
 	collections::HashMap, fmt, hash::{BuildHasher, Hash}, str, sync::Arc
 };
+use vec_utils::VecExt;
 
 use amadeus_types::{
 	Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
@@ -171,7 +174,7 @@ where
 		S: Serializer,
 	{
 		let mut serializer = serializer.serialize_seq(Some(self.len()))?;
-		for item in self.clone().into_iter() {
+		for item in self.clone() {
 			serializer.serialize_element(&SerdeSerialize(&item))?;
 		}
 		serializer.end()
@@ -478,6 +481,7 @@ macro_rules! array {
 				S: Serializer,
 			{
 				let self_: *const Self = self;
+				#[allow(unsafe_code)]
 				let self_: &[SerdeSerialize<T>; $i] = unsafe{ &*(self_ as *const _)};
 				serde::Serialize::serialize(self_, serializer)
 			}
@@ -488,7 +492,7 @@ macro_rules! array {
 				D: Deserializer<'de>,
 			{
 				let self_: [SerdeDeserialize<T>; $i] = serde::Deserialize::deserialize(deserializer)?;
-				let self_: Box<Self> = std::array::IntoIter::new(self_).map(|a|a.0).collect::<Vec<T>>().into_boxed_slice().try_into().unwrap();
+				let self_: Box<Self> = <Vec<SerdeDeserialize<T>>>::from(self_).map(|a|a.0).into_boxed_slice().try_into().unwrap();
 				Ok(*self_)
 			}
 		}
@@ -529,6 +533,7 @@ macro_rules! array {
 				D: Deserializer<'de>,
 			{
 				let self_: Box<[SerdeDeserialize<T>; $i]> = serde::Deserialize::deserialize(deserializer)?;
+				#[allow(unsafe_code)]
 				Ok(unsafe { Box::from_raw(Box::into_raw(self_) as *mut [T; $i]) })
 			}
 		}

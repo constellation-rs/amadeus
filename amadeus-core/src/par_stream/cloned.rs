@@ -1,13 +1,13 @@
 use derive_new::new;
-use futures::{pin_mut, Stream};
+use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
 	marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
 
-use super::{ParallelPipe, PipeTask, PipeTaskAsync};
-use crate::sink::{Sink, SinkMap};
+use super::{ParallelPipe, PipeTask};
+use crate::pipe::Pipe;
 
 #[derive(new)]
 #[must_use]
@@ -64,6 +64,7 @@ where
 {
 	type Item = T;
 	type Async = ClonedTask<C::Async>;
+
 	fn into_async(self) -> Self::Async {
 		ClonedTask {
 			task: self.task.into_async(),
@@ -80,19 +81,19 @@ where
 // 		self.task.run(&mut |item| i(item.clone()))
 // 	}
 // }
-impl<'a, C, Source: 'a, T: 'a> PipeTaskAsync<&'a Source> for ClonedTask<C>
+impl<'a, C, Source: 'a, T: 'a> Pipe<&'a Source> for ClonedTask<C>
 where
-	C: PipeTaskAsync<&'a Source, Item = &'a T>,
+	C: Pipe<&'a Source, Item = &'a T>,
 	T: Clone,
 {
 	type Item = T;
 
-	fn poll_run(
+	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = &'a Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		let sink = SinkMap::new(sink, |item: &T| item.clone());
-		pin_mut!(sink);
-		self.project().task.poll_run(cx, stream, sink)
+	) -> Poll<Option<Self::Item>> {
+		self.project()
+			.task
+			.poll_next(cx, stream)
+			.map(Option::<&_>::cloned)
 	}
 }

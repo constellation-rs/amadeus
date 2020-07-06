@@ -5,12 +5,12 @@ use std::{
 };
 
 use super::{
-	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, GroupBy, Histogram, Inspect, Map, Max, MaxBy, MaxByKey, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, Pipe, PipeTask, PipeTaskAsync, SampleUnstable, Sum, Update
+	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, Fork, GroupBy, Histogram, Inspect, Map, Max, MaxBy, MaxByKey, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, Pipe, PipeTask, SampleUnstable, Sum, Update
 };
-use crate::sink::Sink;
 
 // TODO: add type parameter to Identity when type the type system includes HRTB in the ParallelPipe impl https://github.com/dtolnay/ghost/
 
+#[derive(Clone, Copy, Debug)]
 pub struct Identity;
 
 impl_par_dist! {
@@ -32,6 +32,10 @@ mod workaround {
 	impl Identity {
 		pub fn pipe<S>(self, sink: S) -> Pipe<Self, S> {
 			Pipe::new(self, sink)
+		}
+
+		pub fn fork<A, B, RefAItem>(self, sink: A, sink_ref: B) -> Fork<Self, A, B, RefAItem> {
+			Fork::new(self, sink, sink_ref)
 		}
 
 		pub fn inspect<F>(self, f: F) -> Inspect<Self, F>
@@ -93,12 +97,8 @@ mod workaround {
 			Fold::new(self, identity, op)
 		}
 
-		pub fn group_by<ID, F, C>(self, identity: ID, op: F) -> GroupBy<Self, ID, F, C>
-		where
-			ID: FnMut() -> C + Clone + Send + 'static,
-			C: Send + 'static,
-		{
-			GroupBy::new(self, identity, op)
+		pub fn group_by<S>(self, sink: S) -> GroupBy<Self, S> {
+			GroupBy::new(self, sink)
 		}
 
 		pub fn histogram(self) -> Histogram<Self> {
@@ -195,22 +195,22 @@ mod workaround {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct IdentityTask;
 impl<Item> PipeTask<Item> for IdentityTask {
 	type Item = Item;
 	type Async = IdentityTask;
+
 	fn into_async(self) -> Self::Async {
 		IdentityTask
 	}
 }
-impl<Item> PipeTaskAsync<Item> for IdentityTask {
+impl<Item> crate::pipe::Pipe<Item> for IdentityTask {
 	type Item = Item;
 
-	fn poll_run(
+	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		sink.poll_forward(cx, stream)
+	) -> Poll<Option<Item>> {
+		stream.poll_next(cx)
 	}
 }

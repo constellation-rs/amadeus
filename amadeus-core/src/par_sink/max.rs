@@ -3,9 +3,7 @@ use educe::Educe;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, marker::PhantomData};
 
-use super::{
-	combiner_par_sink, CombinerSync, FolderSyncReducer, FolderSyncReducerFactory, ParallelPipe, ParallelSink
-};
+use super::{combiner_par_sink, CombinerSync, FolderSyncReducer, ParallelPipe, ParallelSink};
 
 #[derive(new)]
 #[must_use]

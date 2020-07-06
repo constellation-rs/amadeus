@@ -1,11 +1,11 @@
 //! Web ARChive format parser
 //!
 //! Takes data and separates records in headers and content.
-use nom::{space, Err, IResult, Needed, *};
+use nom::{complete, do_parse, many1, map_res, named, opt, space, tag, Err, IResult, Needed};
 use std::{fmt, str};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum RecordType {
+pub(crate) enum RecordType {
 	WARCInfo,
 	Response,
 	Resource,
@@ -16,7 +16,7 @@ pub enum RecordType {
 	Continuation,
 }
 impl RecordType {
-	pub fn parse(x: &str) -> RecordType {
+	pub(crate) fn parse(x: &str) -> RecordType {
 		match x {
 			"warcinfo" => RecordType::WARCInfo,
 			"response" => RecordType::Response,
@@ -33,14 +33,14 @@ impl RecordType {
 
 /// The WArc `Record` struct
 // #[derive(Clone)]
-pub struct Record<'a> {
-	// lazy design should not use pub
+pub(crate) struct Record<'a> {
+	// lazy design should not use pub(crate)
 	/// WArc headers
-	pub type_: RecordType,
-	pub target_uri: Option<&'a str>,
-	pub ip_address: Option<&'a str>,
+	pub(crate) type_: RecordType,
+	pub(crate) target_uri: Option<&'a str>,
+	pub(crate) ip_address: Option<&'a str>,
 	/// Content for call in a raw format
-	pub content: &'a [u8],
+	pub(crate) content: &'a [u8],
 }
 
 impl<'a> fmt::Debug for Record<'a> {
@@ -154,7 +154,7 @@ named!(warc_header<&[u8], ((&str, &str), Vec<(&str,&str)>) >,
 ///  }
 /// ```
 #[inline(always)]
-pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
+pub(crate) fn record(input: &[u8]) -> IResult<&[u8], Record> {
 	// TODO if the stream parser does not get all the header it fails .
 	// like a default size of 10 doesnt for for a producer
 	warc_header(input).and_then(|(mut i, tuple_vec)| {
@@ -165,13 +165,13 @@ pub fn record(input: &[u8]) -> IResult<&[u8], Record> {
 		let mut type_ = None;
 		let mut target_uri = None;
 		let mut ip_address = None;
-		for &(k, v) in headers.iter() {
+		for &(k, v) in &headers {
 			match k {
 				"Content-Length" => {
 					let length_number = v.parse::<usize>().unwrap();
 					if length_number <= i.len() {
-						content = Some(&i[0..length_number as usize]);
-						i = &i[length_number as usize..];
+						content = Some(&i[0..length_number]);
+						i = &i[length_number..];
 						bytes_needed = 0;
 					} else {
 						bytes_needed = length_number - i.len();
@@ -232,4 +232,4 @@ named!(record_complete <&[u8], Record >,
 //      }
 //  }
 // ```
-named!(pub records<&[u8], Vec<Record> >, many1!(record_complete));
+named!(pub(crate) records<&[u8], Vec<Record> >, many1!(record_complete));

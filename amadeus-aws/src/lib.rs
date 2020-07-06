@@ -1,5 +1,34 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.2.5")]
+//! Harmonious distributed data processing & analysis in Rust.
+//!
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
+//!
+//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
+
+#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.3.0")]
 #![feature(type_alias_impl_trait)]
+#![warn(
+	// missing_copy_implementations,
+	// missing_debug_implementations,
+	// missing_docs,
+	trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	unreachable_pub,
+	clippy::pedantic,
+)]
+#![allow(
+	clippy::module_name_repetitions,
+	clippy::if_not_else,
+	clippy::too_many_lines,
+	clippy::must_use_candidate,
+	clippy::type_repetition_in_bounds,
+	clippy::filter_map,
+	clippy::missing_errors_doc
+)]
+#![deny(unsafe_code)]
 
 mod cloudfront;
 mod file;
@@ -144,7 +173,7 @@ pub enum AwsError {
 	NoSuchBucket(String),
 	NoSuchKey(String),
 	HttpDispatch(rusoto_core::request::HttpDispatchError),
-	Credentials(rusoto_credential::CredentialsError),
+	Credentials(CredentialsError),
 	Validation(String),
 	ParseError(String),
 	Unknown(rusoto_core::request::BufferedHttpResponse),
@@ -156,8 +185,8 @@ impl Clone for AwsError {
 			Self::NoSuchBucket(err) => Self::NoSuchBucket(err.clone()),
 			Self::NoSuchKey(err) => Self::NoSuchKey(err.clone()),
 			Self::HttpDispatch(err) => Self::HttpDispatch(err.clone()),
-			Self::Credentials(rusoto_credential::CredentialsError { message }) => {
-				Self::Credentials(rusoto_credential::CredentialsError {
+			Self::Credentials(CredentialsError { message }) => {
+				Self::Credentials(CredentialsError {
 					message: message.clone(),
 				})
 			}
@@ -179,12 +208,12 @@ impl Clone for AwsError {
 impl PartialEq for AwsError {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Self::NoSuchBucket(a), Self::NoSuchBucket(b)) => a == b,
-			(Self::NoSuchKey(a), Self::NoSuchKey(b)) => a == b,
+			(Self::NoSuchBucket(a), Self::NoSuchBucket(b))
+			| (Self::NoSuchKey(a), Self::NoSuchKey(b))
+			| (Self::Validation(a), Self::Validation(b))
+			| (Self::ParseError(a), Self::ParseError(b)) => a == b,
 			(Self::HttpDispatch(a), Self::HttpDispatch(b)) => a == b,
 			(Self::Credentials(a), Self::Credentials(b)) => a == b,
-			(Self::Validation(a), Self::Validation(b)) => a == b,
-			(Self::ParseError(a), Self::ParseError(b)) => a == b,
 			(Self::Unknown(a), Self::Unknown(b)) => a == b,
 			(Self::Io(a), Self::Io(b)) => a == b,
 			_ => false,
@@ -195,12 +224,12 @@ impl error::Error for AwsError {}
 impl Display for AwsError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Self::NoSuchBucket(err) => err.fmt(f),
-			Self::NoSuchKey(err) => err.fmt(f),
+			Self::NoSuchBucket(err)
+			| Self::NoSuchKey(err)
+			| Self::Validation(err)
+			| Self::ParseError(err) => err.fmt(f),
 			Self::HttpDispatch(err) => err.fmt(f),
 			Self::Credentials(err) => err.fmt(f),
-			Self::Validation(err) => err.fmt(f),
-			Self::ParseError(err) => err.fmt(f),
 			Self::Unknown(err) => fmt::Debug::fmt(err, f),
 			Self::Io(err) => err.fmt(f),
 		}

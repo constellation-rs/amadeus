@@ -1,25 +1,30 @@
-// Licensed to the Apache Software Foundation (ASF) under one
-// or more contributor license agreements.  See the NOTICE file
-// distributed with this work for additional information
-// regarding copyright ownership.  The ASF licenses this file
-// to you under the Apache License, Version 2.0 (the
-// "License"); you may not use this file except in compliance
-// with the License.  You may obtain a copy of the License at
-//
-//   http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing,
-// software distributed under the License is distributed on an
-// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied.  See the License for the
-// specific language governing permissions and limitations
-// under the License.
+//! Harmonious distributed data processing & analysis in Rust.
+//!
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
+//!
+//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. This macro is re-exposed as [`amadeus::data::Data`](https://docs.rs/amadeus/0.3/amadeus/data/derive.Data.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.2.5")]
+#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.3.0")]
 #![recursion_limit = "400"]
-#![allow(clippy::useless_let_if_seq)]
-
-extern crate proc_macro;
+#![warn(
+	missing_copy_implementations,
+	missing_debug_implementations,
+	missing_docs,
+	trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	unreachable_pub,
+	clippy::pedantic
+)]
+#![allow(
+	clippy::doc_markdown,
+	clippy::too_many_lines,
+	clippy::useless_let_if_seq
+)]
+#![deny(unsafe_code)]
 
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
@@ -138,12 +143,13 @@ fn impl_struct(
 
 	let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
-	let where_clause = where_clause
-		.map(Clone::clone)
-		.unwrap_or_else(|| WhereClause {
+	let where_clause = where_clause.map_or_else(
+		|| WhereClause {
 			where_token: <Token![where]>::default(),
 			predicates: Punctuated::new(),
-		});
+		},
+		Clone::clone,
+	);
 	let mut where_clause_with_data = where_clause.clone();
 	for TypeParam { ident, .. } in ast.generics.type_params() {
 		where_clause_with_data
@@ -656,9 +662,9 @@ fn impl_struct(
 fn impl_tuple_struct(
 	ast: &DeriveInput, fields: &Punctuated<Field, Token![,]>,
 ) -> Result<TokenStream, Error> {
-	let _name = &ast.ident;
-	let _schema_name = Ident::new(&format!("{}Schema", _name), Span::call_site());
-	let _reader_name = Ident::new(&format!("{}Reader", _name), Span::call_site());
+	let name = &ast.ident;
+	let _schema_name = Ident::new(&format!("{}Schema", name), Span::call_site());
+	let _reader_name = Ident::new(&format!("{}Reader", name), Span::call_site());
 
 	let (_impl_generics, _ty_generics, _where_clause) = ast.generics.split_for_impl();
 

@@ -1,56 +1,17 @@
 use either::Either;
 use futures::Stream;
-use std::{
-	cmp::Ordering, future::Future, hash::Hash, iter, ops::{DerefMut, FnMut}, pin::Pin, task::{Context, Poll}
-};
+use std::{cmp::Ordering, hash::Hash, iter, ops::FnMut};
 
-use crate::{pool::ProcessSend, sink::Sink};
+use crate::{pipe::Pipe, pool::ProcessSend};
 
 use super::{par_sink::*, par_stream::*};
 
 #[must_use]
 pub trait PipeTask<Source> {
 	type Item;
-	type Async: PipeTaskAsync<Source, Item = Self::Item>;
+	type Async: Pipe<Source, Item = Self::Item>;
 
 	fn into_async(self) -> Self::Async;
-}
-#[must_use]
-pub trait PipeTaskAsync<Source> {
-	type Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()>;
-}
-
-impl<P, Source> PipeTaskAsync<Source> for Pin<P>
-where
-	P: DerefMut + Unpin,
-	P::Target: PipeTaskAsync<Source>,
-{
-	type Item = <P::Target as PipeTaskAsync<Source>>::Item;
-
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		self.get_mut().as_mut().poll_run(cx, stream, sink)
-	}
-}
-impl<T: ?Sized, Source> PipeTaskAsync<Source> for &mut T
-where
-	T: PipeTaskAsync<Source> + Unpin,
-{
-	type Item = T::Item;
-
-	fn poll_run(
-		mut self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-		sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
-		Pin::new(&mut **self).poll_run(cx, stream, sink)
-	}
 }
 
 impl_par_dist_rename! {
@@ -94,10 +55,9 @@ impl_par_dist_rename! {
 			assert_parallel_pipe(FlatMap::new(self, f))
 		}
 
-		fn filter<F, Fut>(self, f: F) -> Filter<Self, F>
+		fn filter<F>(self, f: F) -> Filter<Self, F>
 		where
-			F: FnMut(&Self::Item) -> Fut + Clone + Send + 'static,
-			Fut: Future<Output = bool>,
+			F: FnMut(&Self::Item) -> bool + Clone + Send + 'static,
 			Self: Sized,
 		{
 			assert_parallel_pipe(Filter::new(self, f))
@@ -121,12 +81,21 @@ impl_par_dist_rename! {
 		// 	assert_parallel_pipe(Chain::new(self, chain.into_par_stream()))
 		// }
 
-		fn pipe<S>(self, sink: S) -> Pipe<Self, S>
+		fn pipe<S>(self, sink: S) -> super::par_sink::Pipe<Self, S>
 		where
 			S: ParallelSink<Self::Item>,
 			Self: Sized,
 		{
-			assert_parallel_sink(Pipe::new(self, sink))
+			assert_parallel_sink(super::par_sink::Pipe::new(self, sink))
+		}
+
+		fn fork<A, B, RefAItem>(self, sink: A, sink_ref: B) -> Fork<Self, A, B, &'static Self::Item>
+		where
+			A: ParallelSink<Self::Item>,
+			B: for<'a> ParallelSink<&'a Self::Item>,
+			Self: Sized,
+		{
+			assert_parallel_sink(Fork::new(self, sink, sink_ref))
 		}
 
 		fn for_each<F>(self, f: F) -> ForEach<Self, F>
@@ -147,15 +116,17 @@ impl_par_dist_rename! {
 			assert_parallel_sink(Fold::new(self, identity, op))
 		}
 
-		fn group_by<A, B, ID, F, C>(self, identity: ID, op: F) -> GroupBy<Self, ID, F, C>
+		fn group_by<S, A, B>(self, sink: S) -> GroupBy<Self, S>
 		where
 			A: Eq + Hash + Send + 'static,
-			ID: FnMut() -> C + Clone + Send + 'static,
-			F: FnMut(C, Either<B, C>) -> C + Clone + Send + 'static,
-			C: Send + 'static,
+			S: ParallelSink<B>,
+			<S::Pipe as ParallelPipe<B>>::Task: Clone + Send + 'static,
+			S::ReduceA: 'static,
+			S::ReduceC: Clone,
+			S::Output: Send + 'static,
 			Self: ParallelPipe<Source, Item = (A, B)> + Sized,
 		{
-			assert_parallel_sink(GroupBy::new(self, identity, op))
+			assert_parallel_sink(GroupBy::new(self, sink))
 		}
 
 		fn histogram(self) -> Histogram<Self>

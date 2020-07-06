@@ -1,5 +1,30 @@
-#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.2.5")]
+//! Harmonious distributed data processing & analysis in Rust.
+//!
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
+//!
+//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
+
+#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.3.0")]
 #![feature(type_alias_impl_trait)]
+#![warn(
+	// missing_copy_implementations,
+	// missing_debug_implementations,
+	// missing_docs,
+	trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	unreachable_pub,
+	clippy::pedantic,
+)]
+#![allow(
+	clippy::doc_markdown,
+	clippy::inline_always,
+	clippy::missing_errors_doc
+)]
+#![deny(unsafe_code)]
 
 mod commoncrawl;
 mod parser;
@@ -7,7 +32,7 @@ mod parser;
 use async_compression::futures::bufread::GzipDecoder; // TODO: use stream or https://github.com/alexcrichton/flate2-rs/pull/214
 use futures::{io::BufReader, AsyncBufReadExt, FutureExt, StreamExt, TryStreamExt};
 use reqwest_resume::ClientExt;
-use serde_closure::*;
+use serde_closure::FnMut;
 use std::{io, time};
 
 use amadeus_core::{

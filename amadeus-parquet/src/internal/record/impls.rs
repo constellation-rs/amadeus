@@ -1,10 +1,9 @@
 use linked_hash_map::LinkedHashMap;
 use std::{
-	collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::{BuildHasher, Hash}, marker::PhantomData, string::FromUtf8Error, sync::Arc
+	any::type_name, collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::{BuildHasher, Hash}, marker::PhantomData, string::FromUtf8Error, sync::Arc
 };
 use sum::{Sum2, Sum3};
 
-use amadeus_core::util::type_coerce;
 use amadeus_types::{
 	Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
@@ -2095,4 +2094,31 @@ impl From<amadeus_types::ParseWebpageError> for ParquetError {
 	fn from(err: amadeus_types::ParseWebpageError) -> Self {
 		ParquetError::General(err.to_string())
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+fn type_coerce<A, B>(a: A) -> B {
+	try_type_coerce(a)
+		.unwrap_or_else(|| panic!("can't coerce {} to {}", type_name::<A>(), type_name::<B>()))
+}
+fn try_type_coerce<A, B>(a: A) -> Option<B> {
+	trait Eq<B> {
+		fn eq(self) -> Option<B>;
+	}
+
+	struct Foo<A, B>(A, PhantomData<fn() -> B>);
+
+	impl<A, B> Eq<B> for Foo<A, B> {
+		default fn eq(self) -> Option<B> {
+			None
+		}
+	}
+	impl<A> Eq<A> for Foo<A, A> {
+		fn eq(self) -> Option<A> {
+			Some(self.0)
+		}
+	}
+
+	Foo::<A, B>(a, PhantomData).eq()
 }

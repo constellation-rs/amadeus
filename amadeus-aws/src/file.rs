@@ -84,7 +84,7 @@ impl Directory for S3Directory {
 					|| (current_path.depth() > 0
 						&& current_path.last().unwrap() != path[current_path.depth() - 1])
 				{
-					current_path.pop().unwrap();
+					let _ = current_path.pop().unwrap();
 				}
 				while path.len() > current_path.depth() {
 					current_path.push(path[current_path.depth()]);
@@ -241,7 +241,7 @@ impl Page for S3Page {
 			let mut buf_ = vec![0; len].into_boxed_slice();
 			let mut buf = &mut *buf_;
 			let len: u64 = len.try_into().unwrap();
-			let mut pos = 0u64;
+			let mut pos = 0_u64;
 			let mut errors: usize = 0;
 			let end = offset + len - 1;
 			while !buf.is_empty() {

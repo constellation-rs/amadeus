@@ -5,11 +5,9 @@ use std::{
 	cmp::Ordering, fmt::{self, Debug}, hash::{Hash, Hasher}, iter::FromIterator, mem::ManuallyDrop, ops::{Deref, DerefMut}, panic::{RefUnwindSafe, UnwindSafe}
 };
 
-use super::{AmadeusOrd, Data};
+use super::{util::IteratorExt, AmadeusOrd, Data};
 use amadeus_core::{
-	par_sink::{
-		DefaultReducerFactory, ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer
-	}, pool::ProcessSend, util::type_coerce
+	par_sink::{ExtendReducer, FromDistributedStream, FromParallelStream, PushReducer}, pool::ProcessSend
 };
 
 pub struct List<T: Data> {
@@ -51,6 +49,22 @@ impl<T: Data> List<T> {
 	// pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
 	// 	self.into_iter()
 	// }
+	#[inline(always)]
+	pub fn map<F, U: Data>(self, f: F) -> List<U>
+	where
+		F: FnMut(T) -> U,
+	{
+		// TODO
+		self.into_iter().map(f).collect()
+	}
+	#[inline(always)]
+	pub fn try_map<F, U: Data, E>(self, f: F) -> Result<List<U>, E>
+	where
+		F: FnMut(T) -> Result<U, E>,
+	{
+		// TODO
+		self.into_iter().map(f).collect()
+	}
 }
 impl<T: Data> Default for List<T> {
 	#[inline(always)]
@@ -128,7 +142,7 @@ where
 	fn eq(&self, other: &List<U>) -> bool {
 		self.clone()
 			.into_iter()
-			.eq_by(other.clone().into_iter(), |a, b| a.eq(&b))
+			.eq_by_(other.clone().into_iter(), |a, b| a.eq(&b))
 	}
 }
 impl<T: Data> Eq for List<T> where T: Eq {}
@@ -140,7 +154,7 @@ where
 	fn partial_cmp(&self, other: &List<U>) -> Option<Ordering> {
 		self.clone()
 			.into_iter()
-			.partial_cmp_by(other.clone().into_iter(), |a, b| a.partial_cmp(&b))
+			.partial_cmp_by_(other.clone().into_iter(), |a, b| a.partial_cmp(&b))
 	}
 }
 impl<T: Data> Ord for List<T>
@@ -151,7 +165,7 @@ where
 	fn cmp(&self, other: &Self) -> Ordering {
 		self.clone()
 			.into_iter()
-			.cmp_by(other.clone().into_iter(), |a, b| a.cmp(&b))
+			.cmp_by_(other.clone().into_iter(), |a, b| a.cmp(&b))
 	}
 }
 impl<T: Data> AmadeusOrd for List<T>
@@ -162,7 +176,7 @@ where
 	fn amadeus_cmp(&self, other: &Self) -> Ordering {
 		self.clone()
 			.into_iter()
-			.cmp_by(other.clone().into_iter(), |a, b| a.amadeus_cmp(&b))
+			.cmp_by_(other.clone().into_iter(), |a, b| a.amadeus_cmp(&b))
 	}
 }
 impl<T: Data> Hash for List<T>
@@ -213,7 +227,9 @@ impl<T: Data> UnwindSafe for List<T> where T: UnwindSafe {}
 impl<T: Data> RefUnwindSafe for List<T> where T: RefUnwindSafe {}
 impl<T: Data> Unpin for List<T> where T: Unpin {}
 // Implementers of ListVec must be Send/Sync if T is Send/Sync!
+#[allow(unsafe_code)]
 unsafe impl<T: Data> Send for List<T> where T: Send {}
+#[allow(unsafe_code)]
 unsafe impl<T: Data> Sync for List<T> where T: Sync {}
 
 impl Deref for List<u8> {
@@ -221,13 +237,13 @@ impl Deref for List<u8> {
 
 	#[inline(always)]
 	fn deref(&self) -> &Self::Target {
-		&*type_coerce::<_, &Vec<u8>>(&self.vec)
+		&*self.vec
 	}
 }
 impl DerefMut for List<u8> {
 	#[inline(always)]
 	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut *type_coerce::<_, &mut Vec<u8>>(&mut self.vec)
+		&mut *self.vec
 	}
 }
 
@@ -370,11 +386,10 @@ impl<T: Data> FromParallelStream<T> for List<T>
 where
 	T: Send + 'static,
 {
-	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceC) {
+	fn reducers() -> (Self::ReduceA, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -383,13 +398,11 @@ impl<T: Data> FromDistributedStream<T> for List<T>
 where
 	T: ProcessSend + 'static,
 {
-	type ReduceAFactory = DefaultReducerFactory<Self::ReduceA>;
-	type ReduceBFactory = DefaultReducerFactory<Self::ReduceB>;
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;
 	type ReduceC = ExtendReducer<Self>;
 
-	fn reducers() -> (Self::ReduceAFactory, Self::ReduceBFactory, Self::ReduceC) {
+	fn reducers() -> (Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 		Default::default()
 	}
 }
@@ -402,8 +415,8 @@ mod test {
 	#[test]
 	fn test() {
 		let mut list: List<u8> = List::new();
-		list.push(0u8);
-		list.push(1u8);
+		list.push(0_u8);
+		list.push(1_u8);
 		println!("{:#?}", list);
 		let mut list: List<Value> = List::new();
 		list.push(Value::U8(0));

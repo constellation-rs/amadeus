@@ -7,9 +7,7 @@ use replace_with::replace_with_or_default;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 
-use super::{
-	folder_par_sink, FolderSync, FolderSyncReducer, FolderSyncReducerFactory, ParallelPipe, ParallelSink
-};
+use super::{folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink};
 
 #[derive(new)]
 #[must_use]

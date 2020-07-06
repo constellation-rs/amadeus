@@ -1,12 +1,12 @@
 use derive_new::new;
+use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
 
-use super::{ParallelStream, StreamTask, StreamTaskAsync};
-use crate::sink::Sink;
+use super::{ParallelStream, StreamTask};
 
 #[derive(new)]
 #[must_use]
@@ -57,15 +57,13 @@ impl<A: StreamTask, B: StreamTask<Item = A::Item>> StreamTask for ChainTask<A, B
 		}
 	}
 }
-impl<A: StreamTaskAsync, B: StreamTaskAsync<Item = A::Item>> StreamTaskAsync for ChainTask<A, B> {
+impl<A: Stream, B: Stream<Item = A::Item>> Stream for ChainTask<A, B> {
 	type Item = A::Item;
 
-	fn poll_run(
-		self: Pin<&mut Self>, cx: &mut Context, sink: Pin<&mut impl Sink<Item = Self::Item>>,
-	) -> Poll<()> {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		match self.project() {
-			ChainTaskProj::A(a) => a.poll_run(cx, sink),
-			ChainTaskProj::B(b) => b.poll_run(cx, sink),
+			ChainTaskProj::A(a) => a.poll_next(cx),
+			ChainTaskProj::B(b) => b.poll_next(cx),
 		}
 	}
 }

@@ -7,7 +7,7 @@ use std::{
 	cmp::Ordering, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc
 };
 
-use super::{AmadeusOrd, Downcast, DowncastError, DowncastFrom, Value};
+use super::{util::IteratorExt, AmadeusOrd, Downcast, DowncastError, DowncastFrom, Value};
 
 /// Corresponds to Parquet groups of named fields.
 ///
@@ -74,7 +74,7 @@ impl<'de> Deserialize<'de> for Group {
 // impl From<Group> for internal::record::types::Group {
 // 	fn from(group: Group) -> Self {
 // 		let field_names = group.field_names();
-// 		Self::new(group.into_fields().into_iter().map(Into::into).collect(), field_names)
+// 		Self::new(group.into_fields().map(Into::into), field_names)
 // 	}
 // }
 impl<I> Index<I> for Group
@@ -106,14 +106,14 @@ impl AmadeusOrd for Group {
 				.iter()
 				.map(|(name, _index)| name)
 				.zip(&self.fields)
-				.cmp_by(
+				.cmp_by_(
 					b.iter().map(|(name, _index)| name).zip(&other.fields),
 					|a, b| a.amadeus_cmp(&b),
 				),
 			(None, None) => self
 				.fields
 				.iter()
-				.cmp_by(&other.fields, AmadeusOrd::amadeus_cmp),
+				.cmp_by_(&other.fields, AmadeusOrd::amadeus_cmp),
 			(Some(_), None) => Ordering::Less,
 			(None, Some(_)) => Ordering::Greater,
 		}

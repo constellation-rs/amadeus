@@ -14,7 +14,7 @@ const CHOMP: usize = 2 << 13; // 8 KiB
 
 #[pin_project]
 #[derive(Clone, Debug)]
-pub struct WarcParser<I> {
+pub(crate) struct WarcParser<I> {
 	#[pin]
 	input: I,
 	state: WarcParserState,
@@ -30,7 +30,7 @@ enum WarcParserState {
 	Done,
 }
 impl<I> WarcParser<I> {
-	pub fn new(input: I) -> WarcParser<I> {
+	pub(crate) fn new(input: I) -> WarcParser<I> {
 		WarcParser {
 			input,
 			state: WarcParserState::Info,
@@ -43,7 +43,7 @@ impl<I> WarcParser<I>
 where
 	I: Read,
 {
-	pub fn next_borrowed(&mut self) -> Result<Option<Webpage<'_>>, io::Error> {
+	pub(crate) fn next_borrowed(&mut self) -> Result<Option<Webpage<'_>>, io::Error> {
 		if let WarcParserState::Done = self.state {
 			return Ok(None);
 		}
@@ -68,7 +68,7 @@ where
 			}
 
 			loop {
-				self.res.splice(..self.offset, iter::empty());
+				let _ = self.res.splice(..self.offset, iter::empty());
 				self.offset = 0;
 				if self.offset == self.res.len() {
 					continue 'chomp;
@@ -124,7 +124,7 @@ impl<I> WarcParser<I>
 where
 	I: AsyncRead,
 {
-	pub fn poll_next_borrowed(
+	pub(crate) fn poll_next_borrowed(
 		self: Pin<&mut Self>, cx: &mut Context,
 	) -> Poll<Result<Option<Webpage<'_>>, io::Error>> {
 		let mut self_ = self.project();
@@ -149,7 +149,7 @@ where
 			}
 
 			loop {
-				self_.res.splice(..*self_.offset, iter::empty());
+				let _ = self_.res.splice(..*self_.offset, iter::empty());
 				*self_.offset = 0;
 				if *self_.offset == self_.res.len() {
 					continue 'chomp;

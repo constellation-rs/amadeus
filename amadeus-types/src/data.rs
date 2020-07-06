@@ -8,7 +8,7 @@ use super::*;
 
 // + AmadeusOrd + DowncastFrom<Value> + Into<Value>
 pub trait Data: Clone + Debug + Send + Sized + 'static {
-	type Vec: list::ListVec<Self>;
+	type Vec: ListVec<Self>;
 	type DynamicType;
 	fn new_vec(_type: Self::DynamicType) -> Self::Vec;
 }

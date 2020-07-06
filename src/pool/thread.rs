@@ -1,8 +1,11 @@
-use futures::{future, FutureExt, TryFutureExt};
+use async_std::sync::{channel, RecvError, Sender};
+use futures::{FutureExt, TryFutureExt};
 use std::{
-	future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, sync::Arc
+	any::Any, future::Future, io, panic::{AssertUnwindSafe, RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc
 };
-use tokio::task::spawn;
+use tokio::{
+	runtime::Handle, task::{JoinError, LocalSet}
+};
 
 use super::util::{assert_sync_and_send, Panicked};
 
@@ -12,6 +15,7 @@ const DEFAULT_TASKS_PER_CORE: usize = 100;
 struct ThreadPoolInner {
 	logical_cores: usize,
 	tasks_per_core: usize,
+	pool: Pool,
 }
 
 #[derive(Debug)]
@@ -20,9 +24,11 @@ impl ThreadPool {
 	pub fn new(tasks_per_core: Option<usize>) -> io::Result<Self> {
 		let logical_cores = num_cpus::get();
 		let tasks_per_core = tasks_per_core.unwrap_or(DEFAULT_TASKS_PER_CORE);
+		let pool = Pool::new(logical_cores);
 		Ok(ThreadPool(Arc::new(ThreadPoolInner {
 			logical_cores,
 			tasks_per_core,
+			pool,
 		})))
 	}
 	pub fn threads(&self) -> usize {
@@ -34,9 +40,10 @@ impl ThreadPool {
 		Fut: Future<Output = T> + 'static,
 		T: Send + 'static,
 	{
-		let _self = self;
-		spawn(DuckSend(future::lazy(|_| work()).flatten()))
-			.map_err(tokio::task::JoinError::into_panic)
+		self.0
+			.pool
+			.spawn_pinned(|| work())
+			.map_err(JoinError::into_panic)
 			.map_err(Panicked::from)
 	}
 }
@@ -58,42 +65,91 @@ fn _assert() {
 	let _ = assert_sync_and_send::<ThreadPool>;
 }
 
-// TODO remove when spawn_pinned exists https://github.com/tokio-rs/tokio/issues/2545
+#[derive(Debug)]
+struct Pool {
+	sender: Sender<(Request, Sender<Response>)>,
+}
 
-use pin_project::pin_project;
-use std::{
-	pin::Pin, task::{Context, Poll}
-};
-#[pin_project]
-struct DuckSend<F>(#[pin] F);
-impl<F> Future for DuckSend<F>
-where
-	F: Future,
-{
-	type Output = F::Output;
+type Request = Box<dyn FnOnce() -> Box<dyn Future<Output = Response>> + Send>;
+type Response = Result<Box<dyn Any + Send>, Box<dyn Any + Send + 'static>>;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		// TODO!
-		// assert!(<F as IsSend>::is_send(), "{}", std::any::type_name::<F>());
-		self.project().0.poll(cx)
+impl Pool {
+	fn new(threads: usize) -> Self {
+		let handle = Handle::current();
+		let handle1 = handle.clone();
+		let (sender, receiver) = channel::<(Request, Sender<Response>)>(1);
+		for _ in 0..threads {
+			let receiver = receiver.clone();
+			let handle = handle.clone();
+			let _ = handle1.spawn_blocking(move || {
+				let local = LocalSet::new();
+				handle.block_on(local.run_until(async {
+					while let Ok((task, sender)) = receiver.recv().await {
+						let _ = local.spawn_local(async move {
+							let res = Pin::from(task()).await;
+							sender.send(res).await;
+						});
+					}
+				}))
+			});
+		}
+		Self { sender }
+	}
+	fn spawn_pinned<F, Fut, T>(&self, task: F) -> impl Future<Output = Result<T, JoinError>> + Send
+	where
+		F: FnOnce() -> Fut + Send + 'static,
+		Fut: Future<Output = T> + 'static,
+		T: Send + 'static,
+	{
+		let sender = self.sender.clone();
+		async move {
+			let task: Request = Box::new(|| {
+				Box::new(
+					AssertUnwindSafe(task().map(|t| Box::new(t) as Box<dyn Any + Send>))
+						.catch_unwind(),
+				)
+			});
+			let (sender_, receiver) = channel::<Response>(1);
+			sender.send((task, sender_)).await;
+			let res = receiver.recv().await;
+			#[allow(deprecated)]
+			res.map_err(|RecvError| unreachable!()).and_then(|x| {
+				x.map(|x| *Box::<dyn Any + Send>::downcast(x).unwrap())
+					.map_err(JoinError::panic)
+			})
+		}
 	}
 }
-#[allow(unsafe_code)]
-unsafe impl<F> Send for DuckSend<F> {}
 
-trait IsSend {
-	fn is_send() -> bool;
-}
-impl<T: ?Sized> IsSend for T {
-	default fn is_send() -> bool {
-		false
-	}
-}
-impl<T: ?Sized> IsSend for T
-where
-	T: Send,
-{
-	fn is_send() -> bool {
-		true
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use futures::future::join_all;
+	use std::sync::{
+		atomic::{AtomicUsize, Ordering}, Arc
+	};
+
+	#[tokio::test]
+	async fn spawn_pinned_() {
+		const TASKS: usize = 1000;
+		const ITERS: usize = 1000;
+		const THREADS: usize = 4;
+		let pool = Pool::new(THREADS);
+		let count = Arc::new(AtomicUsize::new((1..TASKS).sum()));
+		for _ in 0..ITERS {
+			join_all((0..TASKS).map(|i| {
+				let count = count.clone();
+				pool.spawn_pinned(move || async move {
+					let _ = count.fetch_sub(i, Ordering::Relaxed);
+				})
+			}))
+			.await
+			.into_iter()
+			.collect::<Result<(), _>>()
+			.unwrap();
+			assert_eq!(count.load(Ordering::Relaxed), 0);
+			count.store((1..TASKS).sum(), Ordering::Relaxed);
+		}
 	}
 }

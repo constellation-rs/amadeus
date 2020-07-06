@@ -11,7 +11,6 @@
 //! cargo run --example cloudfront_logs --release
 //! ```
 
-#![type_length_limit = "13470730"]
 use amadeus::prelude::*;
 
 #[allow(unreachable_code)]
@@ -28,28 +27,19 @@ async fn main() {
 	.await
 	.unwrap();
 
-	let (sample, (histogram, count)) = rows
+	let histogram = rows
 		.par_stream()
 		.map(Result::unwrap)
-		.fork(
+		.pipe(
 			pool,
-			Identity.sample_unstable(10),
-			(
-				Identity
-					.map(|row: &CloudfrontRow| (row.time.truncate_minutes(60), ()))
-					.group_by(
-						|| 0,
-						|count, fold| count + fold.map_left(|()| 1).into_inner(),
-					),
-				Identity.count(),
-			),
+			Identity
+				.map(|row: CloudfrontRow| (row.time.truncate_minutes(60), ()))
+				.group_by(Identity.count()),
 		)
 		.await;
 	let mut histogram = histogram.into_iter().collect::<Vec<_>>();
 	histogram.sort();
 
-	println!("{} log lines analysed.", count);
-	println!("sample: {:#?}", sample);
 	println!(
 		"histogram:\n    {}",
 		histogram

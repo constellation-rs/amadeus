@@ -305,7 +305,7 @@ where
 		let mut self_ = self.project();
 		if self_.pending.is_none() {
 			let start = *self_.offset;
-			let len = (self_.page.len() - start).min(buf.len() as u64) as usize;
+			let len = usize::try_from((self_.page.len() - start).min(buf.len() as u64)).unwrap();
 			let len = len.min(PAGE_SIZE);
 			let pending = self_.page.read(start, len);
 			*self_.pending = Some(pending);

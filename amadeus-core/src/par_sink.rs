@@ -7,6 +7,7 @@ mod count;
 mod fold;
 mod folder;
 mod for_each;
+mod fork;
 mod group_by;
 mod histogram;
 mod max;
@@ -15,122 +16,103 @@ mod sample;
 mod sum;
 mod tuple;
 
-use futures::Stream;
-use std::{
-	ops::DerefMut, pin::Pin, task::{Context, Poll}
-};
+use std::{future::Future, ops::DerefMut, pin::Pin};
 
-use crate::pool::ProcessSend;
+use crate::{pipe::Sink, pool::ProcessSend};
 
 use super::par_pipe::*;
 
 pub use self::{
-	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, group_by::*, histogram::*, max::*, pipe::*, sample::*, sum::*, tuple::*
+	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, fork::*, group_by::*, histogram::*, max::*, pipe::*, sample::*, sum::*, tuple::*
 };
 
 #[must_use]
-pub trait Reducer {
-	type Item;
+pub trait Reducer<Source> {
 	type Output;
-	type Async: ReducerAsync<Item = Self::Item, Output = Self::Output>;
+	type Async: ReducerAsync<Source, Output = Self::Output>;
 
 	fn into_async(self) -> Self::Async;
 }
-#[must_use]
-pub trait ReducerAsync {
-	type Item;
-	type Output;
-
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Self::Item>>,
-	) -> Poll<()>;
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output>;
-}
-pub trait ReducerSend: Reducer<Output = <Self as ReducerSend>::Output> {
+pub trait ReducerSend<Source>:
+	Reducer<Source, Output = <Self as ReducerSend<Source>>::Output>
+{
 	type Output: Send + 'static;
 }
-pub trait ReducerProcessSend: ReducerSend<Output = <Self as ReducerProcessSend>::Output> {
+pub trait ReducerProcessSend<Source>:
+	ReducerSend<Source, Output = <Self as ReducerProcessSend<Source>>::Output>
+{
 	type Output: ProcessSend + 'static;
 }
+#[must_use]
+pub trait ReducerAsync<Source>: Sink<Source> {
+	type Output;
 
-impl<P> ReducerAsync for Pin<P>
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>>;
+}
+
+impl<P, Source> ReducerAsync<Source> for Pin<P>
 where
 	P: DerefMut + Unpin,
-	P::Target: ReducerAsync,
+	P::Target: ReducerAsync<Source>,
 {
-	type Item = <P::Target as ReducerAsync>::Item;
-	type Output = <P::Target as ReducerAsync>::Output;
+	type Output = <P::Target as ReducerAsync<Source>>::Output;
 
-	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Self::Item>>,
-	) -> Poll<()> {
-		self.get_mut().as_mut().poll_forward(cx, stream)
-	}
-	fn poll_output(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.get_mut().as_mut().poll_output(cx)
+	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		self.get_mut().as_mut().output()
 	}
 }
-impl<T: ?Sized> ReducerAsync for &mut T
+impl<T: ?Sized, Source> ReducerAsync<Source> for &mut T
 where
-	T: ReducerAsync + Unpin,
+	T: ReducerAsync<Source> + Unpin,
 {
-	type Item = T::Item;
 	type Output = T::Output;
 
-	fn poll_forward(
-		mut self: Pin<&mut Self>, cx: &mut Context,
-		stream: Pin<&mut impl Stream<Item = Self::Item>>,
-	) -> Poll<()> {
-		Pin::new(&mut **self).poll_forward(cx, stream)
+	fn output<'a>(mut self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
+		Box::pin(async move { Pin::new(&mut **self).output().await })
 	}
-	fn poll_output(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		Pin::new(&mut **self).poll_output(cx)
-	}
-}
-
-pub trait Factory {
-	type Item;
-
-	fn make(&self) -> Self::Item;
-}
-
-#[must_use]
-pub trait DistributedSink<Source> {
-	type Output;
-	type Pipe: DistributedPipe<Source>;
-	type ReduceAFactory: Factory<Item = Self::ReduceA> + Clone + ProcessSend;
-	type ReduceBFactory: Factory<Item = Self::ReduceB>;
-	type ReduceA: ReducerSend<Item = <Self::Pipe as DistributedPipe<Source>>::Item> + Send;
-	type ReduceB: ReducerProcessSend<Item = <Self::ReduceA as Reducer>::Output> + ProcessSend;
-	type ReduceC: Reducer<Item = <Self::ReduceB as Reducer>::Output, Output = Self::Output>;
-
-	fn reducers(
-		self,
-	) -> (
-		Self::Pipe,
-		Self::ReduceAFactory,
-		Self::ReduceBFactory,
-		Self::ReduceC,
-	);
-}
-
-#[inline(always)]
-pub(crate) fn assert_distributed_sink<R: DistributedSink<Source>, Source>(r: R) -> R {
-	r
 }
 
 #[must_use]
 pub trait ParallelSink<Source> {
 	type Output;
 	type Pipe: ParallelPipe<Source>;
-	type ReduceAFactory: Factory<Item = Self::ReduceA>;
-	type ReduceA: ReducerSend<Item = <Self::Pipe as ParallelPipe<Source>>::Item> + Send;
-	type ReduceC: Reducer<Item = <Self::ReduceA as Reducer>::Output, Output = Self::Output>;
+	type ReduceA: ReducerSend<<Self::Pipe as ParallelPipe<Source>>::Item> + Clone + Send;
+	type ReduceC: Reducer<
+		<Self::ReduceA as ReducerSend<<Self::Pipe as ParallelPipe<Source>>::Item>>::Output,
+		Output = Self::Output,
+	>;
 
-	fn reducers(self) -> (Self::Pipe, Self::ReduceAFactory, Self::ReduceC);
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC);
 }
 
 #[inline(always)]
 pub(crate) fn assert_parallel_sink<R: ParallelSink<Source>, Source>(r: R) -> R {
+	r
+}
+
+#[must_use]
+pub trait DistributedSink<Source> {
+	type Output;
+	type Pipe: DistributedPipe<Source>;
+	type ReduceA: ReducerSend<<Self::Pipe as DistributedPipe<Source>>::Item>
+		+ Clone
+		+ ProcessSend
+		+ Send;
+	type ReduceB: ReducerProcessSend<
+			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Source>>::Item>>::Output,
+		> + Clone
+		+ ProcessSend;
+	type ReduceC: Reducer<
+		<Self::ReduceB as ReducerProcessSend<
+			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Source>>::Item>>::Output,
+		>>::Output,
+		Output = Self::Output,
+	>;
+
+	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC);
+}
+
+#[inline(always)]
+pub(crate) fn assert_distributed_sink<R: DistributedSink<Source>, Source>(r: R) -> R {
 	r
 }
