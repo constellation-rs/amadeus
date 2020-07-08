@@ -35,7 +35,7 @@ num-bigint = "0.3"
 quick-error = "1.2.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.2"
-snap = "0.2"
+snap = "1.0"
 sum = "0.1"
 thrift = "0.13"
 zstd = "0.4"
