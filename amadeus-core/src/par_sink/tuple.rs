@@ -182,7 +182,7 @@ macro_rules! impl_tuple {
 						pin_mut!(stream_);
 						match self_.$t.as_mut().as_pin_mut().map(|pipe|pipe.poll_next(cx, stream_)) {
 							Some(Poll::Ready(Some(item))) => break Poll::Ready(Some($enum::$t(item))),
-							Some(Poll::Ready(None)) | None => *given = true,
+							Some(Poll::Ready(None)) | None => { self_.$t.set(None); *given = true },
 							Some(Poll::Pending) => (),
 						}
 					})*
