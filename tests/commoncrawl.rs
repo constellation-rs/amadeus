@@ -17,8 +17,6 @@ use amadeus::{data::Webpage, prelude::*};
 
 #[tokio::test]
 async fn commoncrawl() {
-	return; // TODO: runs for a long time
-
 	let start = SystemTime::now();
 
 	let pool = &ThreadPool::new(None).unwrap();
@@ -32,6 +30,8 @@ async fn commoncrawl() {
 			start.elapsed().unwrap() < Duration::new(10, 0)
 		})
 		.await;
+
+	return; // TODO: runs for a long time
 
 	let webpages = CommonCrawl::new("CC-MAIN-2020-24").await.unwrap();
 

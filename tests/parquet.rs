@@ -1,4 +1,4 @@
-#![type_length_limit = "1207654"]
+#![type_length_limit = "1572864"]
 #![allow(
 	clippy::cognitive_complexity,
 	clippy::type_complexity,

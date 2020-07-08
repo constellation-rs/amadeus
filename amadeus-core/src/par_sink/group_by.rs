@@ -154,20 +154,25 @@ where
 		let mut self_ = self.project();
 		loop {
 			if !self_.pending.is_some() {
-				*self_.pending = Some(ready!(stream.as_mut().poll_next(cx)).map(|(t, u)| {
-					let r = if !self_.map.contains_key(&t) {
+				*self_.pending = Some(ready!(stream.as_mut().poll_next(cx)).map(|(k, u)| {
+					let r = if !self_.map.contains_key(&k) {
 						Some(Box::pin(self_.factory.clone().into_async()))
 					} else {
 						None
 					};
-					(t, Some(u), r)
+					(k, Some(u), r)
 				}));
 			}
-			if let Some((t, u, r)) = self_.pending.as_mut().unwrap() {
-				let stream = stream::poll_fn(|_cx| {
+			if let Some((k, u, r)) = self_.pending.as_mut().unwrap() {
+				let waker = cx.waker();
+				let stream = stream::poll_fn(|cx| {
 					if let Some(u) = u.take() {
 						Poll::Ready(Some(u))
 					} else {
+						let waker_ = cx.waker();
+						if !waker.will_wake(waker_) {
+							waker_.wake_by_ref();
+						}
 						Poll::Pending
 					}
 				})
@@ -175,14 +180,16 @@ where
 				.pipe(self_.pipe.as_mut());
 				pin_mut!(stream);
 				let map = &mut *self_.map;
-				let r_ = r.as_mut().unwrap_or_else(|| map.get_mut(&t).unwrap());
-				let _ = r_.as_mut().poll_pipe(cx, stream);
+				let r_ = r.as_mut().unwrap_or_else(|| map.get_mut(&k).unwrap());
+				if r_.as_mut().poll_pipe(cx, stream).is_ready() {
+					let _ = u.take();
+				}
 				if u.is_some() {
 					return Poll::Pending;
 				}
-				let (t, _u, r) = self_.pending.take().unwrap().unwrap();
+				let (k, _u, r) = self_.pending.take().unwrap().unwrap();
 				if let Some(r) = r {
-					let _ = self_.map.insert(t, r);
+					let _ = self_.map.insert(k, r);
 				}
 			} else {
 				for r in self_.map.values_mut() {
@@ -292,21 +299,28 @@ where
 						.collect()
 				}));
 			}
-			let pending = self_.pending.as_mut().unwrap();
-			if let Some(pending) = pending {
+			if let Some(pending) = self_.pending.as_mut().unwrap() {
 				while let Some((k, (v, mut r))) = pop(pending) {
 					let mut v = Some(v);
-					let stream = stream::poll_fn(|_cx| {
+					let waker = cx.waker();
+					let stream = stream::poll_fn(|cx| {
 						if let Some(v) = v.take() {
 							Poll::Ready(Some(v))
 						} else {
+							let waker_ = cx.waker();
+							if !waker.will_wake(waker_) {
+								waker_.wake_by_ref();
+							}
 							Poll::Pending
 						}
-					});
+					})
+					.fuse();
 					pin_mut!(stream);
 					let map = &mut *self_.map;
 					let r_ = r.as_mut().unwrap_or_else(|| map.get_mut(&k).unwrap());
-					let _ = r_.as_mut().poll_pipe(cx, stream);
+					if r_.as_mut().poll_pipe(cx, stream).is_ready() {
+						let _ = v.take();
+					}
 					if let Some(v) = v {
 						let _ = pending.insert(k, (v, r));
 						return Poll::Pending;

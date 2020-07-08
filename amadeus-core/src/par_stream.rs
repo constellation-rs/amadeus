@@ -15,7 +15,7 @@ mod update;
 
 use async_trait::async_trait;
 use either::Either;
-use futures::{pin_mut, stream::StreamExt as _, Stream};
+use futures::{pin_mut, stream, stream::StreamExt as _, Stream};
 use serde_closure::*;
 use std::{cmp::Ordering, collections::HashMap, hash::Hash, iter, ops::FnMut, vec};
 
@@ -207,17 +207,14 @@ pub trait DistributedStream {
 						.filter(|tasks| !tasks.is_empty())
 						.map(|tasks| {
 							let reduce_a = reduce_a_factory.clone();
-							pool.spawn(move || {
-								async move {
-									let sink = reduce_a.into_async();
-									pin_mut!(sink);
-									// TODO: short circuit
-									for task in tasks {
-										let task = task.into_async();
-										task.sink(sink.as_mut()).await;
-									}
-									sink.output().await
-								}
+							pool.spawn(move || async move {
+								let sink = reduce_a.into_async();
+								pin_mut!(sink);
+								let tasks =
+									stream::iter(tasks.into_iter().map(StreamTask::into_async))
+										.flatten();
+								tasks.sink(sink.as_mut()).await;
+								sink.output().await
 							})
 						})
 						.collect::<futures::stream::FuturesUnordered<_>>();
@@ -675,11 +672,9 @@ pub trait ParallelStream {
 					async move {
 						let sink = reduce_a.into_async();
 						pin_mut!(sink);
-						// TODO: short circuit
-						for task in tasks {
-							let task = task.into_async();
-							task.sink(sink.as_mut()).await;
-						}
+						let tasks =
+							stream::iter(tasks.into_iter().map(StreamTask::into_async)).flatten();
+						tasks.sink(sink.as_mut()).await;
 						sink.output().await
 					}
 				}))

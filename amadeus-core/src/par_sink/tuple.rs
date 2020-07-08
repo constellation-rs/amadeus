@@ -20,8 +20,8 @@ use crate::{
 	pipe::{Pipe, Sink}, pool::ProcessSend
 };
 
-fn substream<'a, 'b, S, F1, F2, O>(
-	mut stream: Pin<&'a mut Peekable<'b, S>>, mut is: F1, mut unwrap: F2,
+fn substream<'a, 'b, 'c, 'd, 'e, S, F1, F2, O>(
+	cx: &'d Context<'c>, mut stream: Pin<&'a mut Peekable<'b, S>>, mut is: F1, mut unwrap: F2,
 ) -> impl Stream<Item = F2::Output> + 'a
 where
 	S: Stream,
@@ -29,6 +29,7 @@ where
 	F2: FnMut(S::Item) -> O + 'a,
 	'a: 'b,
 {
+	let waker = cx.waker().clone();
 	stream::poll_fn(move |cx| match ready!(stream.as_mut().poll_peek(cx)) {
 		Some(enum_) if is(enum_) => Poll::Ready(Some(
 			if let Poll::Ready(Some(enum_)) = stream.as_mut().poll_next(cx) {
@@ -37,7 +38,13 @@ where
 				unreachable!()
 			},
 		)),
-		Some(_) => Poll::Pending,
+		Some(_) => {
+			let waker_ = cx.waker();
+			if !waker.will_wake(waker_) {
+				waker_.wake_by_ref();
+			}
+			Poll::Pending
+		}
 		None => Poll::Ready(None),
 	})
 	.fuse()
@@ -121,7 +128,7 @@ macro_rules! impl_tuple {
 			type Async = $async<Source, $($c::Async,)*>;
 			fn into_async(self) -> Self::Async {
 				$async{
-					$($t: self.$num.into_async(),)*
+					$($t: Some(self.$num.into_async()),)*
 					pending: None,
 					given: ($(false $comma)*),
 				}
@@ -130,7 +137,7 @@ macro_rules! impl_tuple {
 
 		#[pin_project]
 		pub struct $async<Source, $($c,)*> {
-			$(#[pin] $t: $c,)*
+			$(#[pin] $t: Option<$c>,)*
 			pending: Option<Option<Source>>,
 			given: ($(bool $comma)*),
 		}
@@ -150,32 +157,43 @@ macro_rules! impl_tuple {
 				// buffer, copy to each
 				loop {
 					if self_.pending.is_none() {
-						*self_.pending = match stream.as_mut().poll_next(cx) { Poll::Ready(x) => Some(x), Poll::Pending => None};
+						*self_.pending = Some(ready!(stream.as_mut().poll_next(cx)));
 					}
 					$({
-						let pending = &mut *self_.pending;
+						let pending: &mut Option<Source> = self_.pending.as_mut().unwrap();
 						let given = &mut self_.given.$num;
+						let waker = cx.waker();
 						let stream_ = stream::poll_fn(|cx| {
-							if !*given && pending.is_some() {
+							if !*given {
 								*given = true;
 								$(
-									return Poll::Ready(*pending.as_ref().unwrap());
+									return Poll::Ready(*pending);
 									let $copyb = ();
 								)?
-								Poll::Ready(pending.take().unwrap().take())
+								Poll::Ready(pending.take())
 							} else {
+								let waker_ = cx.waker();
+								if !waker.will_wake(waker_) {
+									waker_.wake_by_ref();
+								}
 								Poll::Pending
 							}
 						}).fuse();
 						pin_mut!(stream_);
-						if let Poll::Ready(item) = self_.$t.as_mut().poll_next(cx, stream_) {
-							return Poll::Ready(item.map($enum::$t));
+						match self_.$t.as_mut().as_pin_mut().map(|pipe|pipe.poll_next(cx, stream_)) {
+							Some(Poll::Ready(Some(item))) => break Poll::Ready(Some($enum::$t(item))),
+							Some(Poll::Ready(None)) | None => *given = true,
+							Some(Poll::Pending) => (),
 						}
 					})*
+					if $(self_.$t.is_none() &&)* true {
+						break Poll::Ready(None);
+					}
 					if $(self_.given.$num &&)* true {
 						$(self_.given.$num = false;)*
 						*self_.pending = None;
 					} else {
+						assert!(self_.pending.as_ref().unwrap().is_some());
 						break Poll::Pending;
 					}
 				}
@@ -194,7 +212,7 @@ macro_rules! impl_tuple {
 				$reduceaasync{
 					$($t: self.$t.into_async(),)*
 					peeked: None,
-					output: ($(None::<$t::Output>,)*),
+					ready: ($(false $comma)*),
 				}
 			}
 		}
@@ -208,23 +226,25 @@ macro_rules! impl_tuple {
 		pub struct $reduceaasync<$($t,)* $($s,)*> where $($t: ReducerAsync<$s>,)* {
 			$(#[pin] $t: $t,)*
 			peeked: Option<$enum<$($s,)*>>,
-			output: ($(Option<$t::Output>,)*),
+			ready: ($(bool $comma)*),
 		}
 		#[allow(unused_variables)]
 		impl<$($t: ReducerAsync<$s>,)* $($s,)*> Sink<$enum<$($s,)*>> for $reduceaasync<$($t,)* $($s,)*> {
 			fn poll_pipe(self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = $enum<$($s,)*>>>) -> Poll<()> {
 				let mut self_ = self.project();
-				let mut ready = ($(false $comma)*);
 				loop {
 					let mut progress = false;
-					$(if !ready.$num {
+					$({
 						let stream = Peekable{stream:stream.as_mut(),peeked:&mut *self_.peeked};
 						pin_mut!(stream);
-						let stream_ = substream(stream, |item| if let $enum::$t(_) = item { true } else { false }, |item| { progress = true; if let $enum::$t(item) = item { item } else { unreachable!() } });
+						let stream_ = substream(cx, stream, |item| if let $enum::$t(_) = item { true } else { false }, |item| { progress = true; if let $enum::$t(item) = item { item } else { unreachable!() } });
 						pin_mut!(stream_);
-						ready.$num = self_.$t.as_mut().poll_pipe(cx, stream_).is_ready();
+						match if !self_.ready.$num { Some(self_.$t.as_mut().poll_pipe(cx, stream_)) } else { None } {
+							Some(Poll::Ready(())) | None => self_.ready.$num = true,
+							Some(Poll::Pending) => ()
+						}
 					})*
-					if $(ready.$num &&)* true {
+					if $(self_.ready.$num &&)* true {
 						break Poll::Ready(())
 					}
 					if !progress {
@@ -257,7 +277,7 @@ macro_rules! impl_tuple {
 				$reducebasync{
 					$($t: self.$t.into_async(),)*
 					peeked: None,
-					output: ($(None::<$t::Output>,)*),
+					ready: ($(false $comma)*),
 				}
 			}
 		}
@@ -271,20 +291,20 @@ macro_rules! impl_tuple {
 		pub struct $reducebasync<$($t,)* $($s,)*> where $($t: ReducerAsync<$s>,)* {
 			$(#[pin] $t: $t,)*
 			peeked: Option<($(Option<$s>,)*)>,
-			output: ($(Option<$t::Output>,)*),
+			ready: ($(bool $comma)*),
 		}
 		#[allow(unused_variables)]
 		impl<$($t: ReducerAsync<$s>,)* $($s,)*> Sink<($($s,)*)> for $reducebasync<$($t,)* $($s,)*> {
 			fn poll_pipe(self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = ($($s,)*)>>) -> Poll<()> {
 				let mut self_ = self.project();
-				let mut ready = ($(false $comma)*);
 				let stream = stream.map(|item| ($(Some(item.$num),)*));
 				pin_mut!(stream);
 				loop {
 					let mut progress = false;
-					$(if !ready.$num {
+					$({
 						let stream = Peekable{stream:stream.as_mut(),peeked:&mut *self_.peeked};
 						pin_mut!(stream);
+						let waker = cx.waker();
 						let stream = stream::poll_fn(|cx| match ready!(stream.as_mut().poll_peek(cx)) {
 							Some(enum_) if enum_.$num.is_some() => {
 								let ret = enum_.$num.take().unwrap();
@@ -292,21 +312,28 @@ macro_rules! impl_tuple {
 								Poll::Ready(Some(ret))
 							}
 							Some(_) => {
+								let waker_ = cx.waker();
+								if !waker.will_wake(waker_) {
+									waker_.wake_by_ref();
+								}
 								Poll::Pending
 							},
 							None => Poll::Ready(None),
 						}).fuse();
 						pin_mut!(stream);
-						ready.$num = self_.$t.as_mut().poll_pipe(cx, stream).is_ready();
+						match if !self_.ready.$num { Some(self_.$t.as_mut().poll_pipe(cx, stream)) } else{ None } {
+							Some(Poll::Ready(())) | None => self_.ready.$num = true,
+							Some(Poll::Pending) => ()
+						}
 					})*
+					if $(self_.ready.$num &&)* true {
+						break Poll::Ready(());
+					}
 					if let Some(peeked) = self_.peeked {
 						if $(peeked.$num.is_none() &&)* true {
 							*self_.peeked = None;
 							progress = true;
 						}
-					}
-					if $(ready.$num &&)* true {
-						break Poll::Ready(());
 					}
 					if !progress {
 						break Poll::Pending;
