@@ -27,19 +27,24 @@ async fn main() {
 	.await
 	.unwrap();
 
-	let histogram = rows
+	let (sample, histogram) = rows
 		.par_stream()
 		.map(Result::unwrap)
-		.pipe(
+		.fork(
 			pool,
+			Identity.sample_unstable(10),
 			Identity
-				.map(|row: CloudfrontRow| (row.time.truncate_minutes(60), ()))
+				.map(|row: &CloudfrontRow| (row.time.truncate_minutes(60), ()))
 				.group_by(Identity.count()),
 		)
 		.await;
+
 	let mut histogram = histogram.into_iter().collect::<Vec<_>>();
 	histogram.sort();
 
+	assert_eq!(histogram.iter().map(|(_, c)| c).sum::<usize>(), 207_928);
+
+	println!("sample: {:#?}", sample);
 	println!(
 		"histogram:\n    {}",
 		histogram

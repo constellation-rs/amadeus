@@ -14,6 +14,7 @@ pub use self::{filter::*, flat_map::*};
 // https://github.com/rust-lang/rust/issues/49601
 
 pub trait StreamExt: Stream {
+	#[inline(always)]
 	fn pipe<P>(self, pipe: P) -> StreamPipe<Self, P>
 	where
 		P: Pipe<Self::Item>,
@@ -22,6 +23,7 @@ pub trait StreamExt: Stream {
 		assert_stream(StreamPipe { stream: self, pipe })
 	}
 
+	#[inline(always)]
 	fn sink<S>(self, sink: S) -> StreamSink<Self, S>
 	where
 		S: Sink<Self::Item>,
@@ -30,6 +32,7 @@ pub trait StreamExt: Stream {
 		assert_future(StreamSink { stream: self, sink })
 	}
 
+	#[inline(always)]
 	fn flat_map<F, R>(self, f: F) -> FlatMap<Self, F, R>
 	where
 		F: FnMut(Self::Item) -> R,
@@ -39,6 +42,7 @@ pub trait StreamExt: Stream {
 		assert_stream(FlatMap::new(self, f))
 	}
 
+	#[inline(always)]
 	fn filter<F>(self, f: F) -> Filter<Self, F>
 	where
 		F: FnMut(&Self::Item) -> bool,
@@ -56,6 +60,7 @@ pub trait Pipe<Source> {
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<Option<Self::Item>>;
 
+	#[inline(always)]
 	fn pipe<P>(self, pipe: P) -> PipePipe<Self, P>
 	where
 		P: Pipe<Self::Item>,
@@ -64,6 +69,7 @@ pub trait Pipe<Source> {
 		assert_pipe(PipePipe { a: self, b: pipe })
 	}
 
+	#[inline(always)]
 	fn sink<S>(self, sink: S) -> PipeSink<Self, S>
 	where
 		S: Sink<Self::Item>,
@@ -72,6 +78,7 @@ pub trait Pipe<Source> {
 		assert_sink(PipeSink { pipe: self, sink })
 	}
 
+	#[inline(always)]
 	fn flat_map<F, R>(self, f: F) -> FlatMap<Self, F, R>
 	where
 		F: FnMut(Self::Item) -> R,
@@ -81,6 +88,7 @@ pub trait Pipe<Source> {
 		assert_pipe(FlatMap::new(self, f))
 	}
 
+	#[inline(always)]
 	fn filter<F>(self, f: F) -> Filter<Self, F>
 	where
 		F: FnMut(&Self::Item) -> bool,
@@ -91,29 +99,36 @@ pub trait Pipe<Source> {
 }
 
 pub trait Sink<Source> {
+	/// Returns `Poll::Ready` when a) it can't accept any more elements from `stream` and b) all
+	/// accepted elements have been fully processed. By convention, `stream` yielding `None`
+	/// typically triggers (a).
 	fn poll_pipe(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<()>;
 }
 
+#[inline(always)]
 fn assert_stream<S>(s: S) -> S
 where
 	S: Stream,
 {
 	s
 }
+#[inline(always)]
 fn assert_pipe<P, Source>(p: P) -> P
 where
 	P: Pipe<Source>,
 {
 	p
 }
+#[inline(always)]
 fn assert_sink<S, Source>(s: S) -> S
 where
 	S: Sink<Source>,
 {
 	s
 }
+#[inline(always)]
 fn assert_future<F>(f: F) -> F
 where
 	F: Future,
@@ -136,6 +151,7 @@ where
 {
 	type Item = P::Item;
 
+	#[inline(always)]
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let self_ = self.project();
 		self_.pipe.poll_next(cx, self_.stream)
@@ -157,6 +173,7 @@ where
 {
 	type Item = B::Item;
 
+	#[inline(always)]
 	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<Option<Self::Item>> {
@@ -180,6 +197,7 @@ where
 	P: Pipe<Source>,
 	S: Sink<P::Item>,
 {
+	#[inline(always)]
 	fn poll_pipe(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<()> {
@@ -205,6 +223,7 @@ where
 {
 	type Output = ();
 
+	#[inline(always)]
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
 		let self_ = self.project();
 		self_.sink.poll_pipe(cx, self_.stream)
@@ -218,6 +237,7 @@ where
 {
 	type Item = <P::Target as Pipe<Source>>::Item;
 
+	#[inline(always)]
 	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<Option<Self::Item>> {
@@ -231,6 +251,7 @@ where
 {
 	type Item = T::Item;
 
+	#[inline(always)]
 	fn poll_next(
 		mut self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<Option<Self::Item>> {
@@ -243,6 +264,7 @@ where
 	P: DerefMut + Unpin,
 	P::Target: Sink<Source>,
 {
+	#[inline(always)]
 	fn poll_pipe(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<()> {
@@ -254,6 +276,7 @@ impl<T: ?Sized, Source> Sink<Source> for &mut T
 where
 	T: Sink<Source> + Unpin,
 {
+	#[inline(always)]
 	fn poll_pipe(
 		mut self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
 	) -> Poll<()> {

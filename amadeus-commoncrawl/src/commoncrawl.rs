@@ -9,8 +9,8 @@ use amadeus_types::Webpage;
 
 use super::parser;
 
-const BUF: usize = 2 << 26; // 64 MiB
-const CHOMP: usize = 2 << 13; // 8 KiB
+const BUF: usize = 1 << 22; // 4 MiB
+const CHOMP: usize = 1 << 13; // 8 KiB
 
 #[pin_project]
 #[derive(Clone, Debug)]

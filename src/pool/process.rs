@@ -116,7 +116,7 @@ impl ProcessPoolInner {
 	fn new(
 		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
 	) -> Result<Self, SpawnError> {
-		let processes = processes.unwrap_or(10); // TODO!
+		let processes = processes.unwrap_or(3); // TODO!
 		let mut processes_vec = Vec::with_capacity(processes);
 		for _ in 0..processes {
 			let child = spawn(

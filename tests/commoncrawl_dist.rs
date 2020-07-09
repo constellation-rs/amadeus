@@ -27,8 +27,6 @@ fn main() {
 		.build()
 		.unwrap()
 		.block_on(async {
-			return; // TODO: runs for a long time
-
 			let thread_pool_time = {
 				let thread_pool = ThreadPool::new(None).unwrap();
 				run(&thread_pool).await
@@ -60,6 +58,8 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 			}),
 		)
 		.await;
+
+	return start.elapsed().unwrap(); // TODO: runs for a long time
 
 	let webpages = CommonCrawl::new("CC-MAIN-2020-24").await.unwrap();
 

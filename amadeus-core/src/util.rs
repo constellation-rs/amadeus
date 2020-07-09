@@ -19,7 +19,7 @@ where
 		ResultExpandIter::new(self.0.map(IntoIterator::into_iter))
 	}
 }
-#[pin_project(project=ResultExpandIterProj)]
+#[pin_project(project = ResultExpandIterProj)]
 pub enum ResultExpandIter<T, E> {
 	Ok(#[pin] T),
 	Err(Option<E>),

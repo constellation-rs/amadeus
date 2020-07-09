@@ -1,5 +1,5 @@
-use async_std::sync::{channel, RecvError, Sender};
-use futures::{FutureExt, TryFutureExt};
+use async_channel::{bounded, Sender};
+use futures::{future::RemoteHandle, FutureExt, TryFutureExt};
 use std::{
 	any::Any, future::Future, io, panic::{AssertUnwindSafe, RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc
 };
@@ -67,7 +67,7 @@ fn _assert() {
 
 #[derive(Debug)]
 struct Pool {
-	sender: Sender<(Request, Sender<Response>)>,
+	sender: Sender<(Request, Sender<RemoteHandle<Response>>)>,
 }
 
 type Request = Box<dyn FnOnce() -> Box<dyn Future<Output = Response>> + Send>;
@@ -77,7 +77,7 @@ impl Pool {
 	fn new(threads: usize) -> Self {
 		let handle = Handle::current();
 		let handle1 = handle.clone();
-		let (sender, receiver) = channel::<(Request, Sender<Response>)>(1);
+		let (sender, receiver) = bounded::<(Request, Sender<RemoteHandle<Response>>)>(1);
 		for _ in 0..threads {
 			let receiver = receiver.clone();
 			let handle = handle.clone();
@@ -86,8 +86,9 @@ impl Pool {
 				handle.block_on(local.run_until(async {
 					while let Ok((task, sender)) = receiver.recv().await {
 						let _ = local.spawn_local(async move {
-							let res = Pin::from(task()).await;
-							sender.send(res).await;
+							let (remote, remote_handle) = Pin::from(task()).remote_handle();
+							let _ = sender.send(remote_handle).await;
+							remote.await;
 						});
 					}
 				}))
@@ -109,14 +110,13 @@ impl Pool {
 						.catch_unwind(),
 				)
 			});
-			let (sender_, receiver) = channel::<Response>(1);
-			sender.send((task, sender_)).await;
+			let (sender_, receiver) = bounded::<RemoteHandle<Response>>(1);
+			sender.send((task, sender_)).await.unwrap();
 			let res = receiver.recv().await;
+			let res = res.unwrap().await;
 			#[allow(deprecated)]
-			res.map_err(|RecvError| unreachable!()).and_then(|x| {
-				x.map(|x| *Box::<dyn Any + Send>::downcast(x).unwrap())
-					.map_err(JoinError::panic)
-			})
+			res.map(|x| *Box::<dyn Any + Send>::downcast(x).unwrap())
+				.map_err(JoinError::panic)
 		}
 	}
 }
