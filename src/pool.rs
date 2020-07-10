@@ -4,6 +4,7 @@ mod thread;
 pub(crate) mod util;
 
 use futures::future::{BoxFuture, TryFutureExt};
+use serde_closure::traits;
 use std::{error::Error, future::Future};
 
 #[cfg(feature = "constellation")]
@@ -17,6 +18,7 @@ use amadeus_core::pool::{
 type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
 #[cfg(feature = "constellation")]
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl ProcessPoolTrait for ProcessPool {
 	type ThreadPool = ThreadPool;
 
@@ -33,6 +35,7 @@ impl ProcessPoolTrait for ProcessPool {
 	}
 }
 
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl ProcessPoolTrait for ThreadPool {
 	type ThreadPool = Self;
 
@@ -46,10 +49,14 @@ impl ProcessPoolTrait for ThreadPool {
 		T: ProcessSend + 'static,
 	{
 		let self_ = self.clone();
-		Box::pin(ThreadPool::spawn(self, move || work(&self_)).map_err(|e| Box::new(e) as _))
+		Box::pin(
+			ThreadPool::spawn(self, move || traits::FnOnce::call_once(work, (&self_,)))
+				.map_err(|e| Box::new(e) as _),
+		)
 	}
 }
 
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl ThreadPoolTrait for ThreadPool {
 	fn threads(&self) -> usize {
 		ThreadPool::threads(self)

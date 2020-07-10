@@ -1,13 +1,9 @@
 use derive_new::new;
-use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
-use std::{
-	pin::Pin, task::{Context, Poll}
-};
+use serde_closure::traits::FnMut;
 
 use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
-use crate::pipe::Pipe;
 
 #[derive(new)]
 #[must_use]
@@ -19,7 +15,7 @@ pub struct Map<I, F> {
 impl_par_dist! {
 	impl<I: ParallelStream, F, R> ParallelStream for Map<I, F>
 	where
-		F: FnMut(I::Item) -> R + Clone + Send + 'static,
+		F: FnMut<(I::Item,), Output = R> + Clone + Send + 'static,
 	{
 		type Item = R;
 		type Task = MapTask<I::Task, F>;
@@ -37,7 +33,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, R, Source> ParallelPipe<Source> for Map<I, F>
 	where
-		F: FnMut(I::Item) -> R + Clone + Send + 'static,
+		F: FnMut<(I::Item,), Output = R> + Clone + Send + 'static,
 	{
 		type Item = R;
 		type Task = MapTask<I::Task, F>;
@@ -60,55 +56,23 @@ pub struct MapTask<C, F> {
 
 impl<C: StreamTask, F, R> StreamTask for MapTask<C, F>
 where
-	F: FnMut(C::Item) -> R + Clone,
+	F: FnMut<(C::Item,), Output = R> + Clone,
 {
 	type Item = R;
-	type Async = MapTask<C::Async, F>;
+	type Async = crate::pipe::Map<C::Async, F, R>;
+
 	fn into_async(self) -> Self::Async {
-		MapTask {
-			task: self.task.into_async(),
-			f: self.f,
-		}
+		crate::pipe::Map::new(self.task.into_async(), self.f)
 	}
 }
 impl<C: PipeTask<Source>, F, R, Source> PipeTask<Source> for MapTask<C, F>
 where
-	F: FnMut(C::Item) -> R + Clone,
+	F: FnMut<(C::Item,), Output = R> + Clone,
 {
 	type Item = R;
-	type Async = MapTask<C::Async, F>;
+	type Async = crate::pipe::Map<C::Async, F, R>;
+
 	fn into_async(self) -> Self::Async {
-		MapTask {
-			task: self.task.into_async(),
-			f: self.f,
-		}
-	}
-}
-
-impl<C: Stream, F, R> Stream for MapTask<C, F>
-where
-	F: FnMut(C::Item) -> R + Clone,
-{
-	type Item = R;
-
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		let mut self_ = self.project();
-		let (task, f) = (self_.task, &mut self_.f);
-		task.poll_next(cx).map(|t| t.map(f))
-	}
-}
-
-impl<C: Pipe<Source>, F, R, Source> Pipe<Source> for MapTask<C, F>
-where
-	F: FnMut(C::Item) -> R + Clone,
-{
-	type Item = R;
-
-	fn poll_next(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-	) -> Poll<Option<Self::Item>> {
-		let mut self_ = self.project();
-		let (task, f) = (self_.task, &mut self_.f);
-		task.poll_next(cx, stream).map(|t| t.map(f))
+		crate::pipe::Map::new(self.task.into_async(), self.f)
 	}
 }

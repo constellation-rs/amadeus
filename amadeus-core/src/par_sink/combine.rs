@@ -1,6 +1,7 @@
 use derive_new::new;
 use educe::Educe;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 use std::marker::PhantomData;
 
 use super::{combiner_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink};
@@ -14,7 +15,7 @@ use super::{combiner_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, Para
 pub struct ReduceFn<F, A>(F, PhantomData<fn() -> A>);
 impl<F, A, T> FolderSync<T> for ReduceFn<F, A>
 where
-	F: FnMut(A, A) -> A,
+	F: FnMut<(A, A), Output = A>,
 	T: Into<Option<A>>,
 {
 	type Output = Option<A>;
@@ -25,7 +26,7 @@ where
 	fn push(&mut self, state: &mut Self::Output, item: T) {
 		if let Some(item) = item.into() {
 			*state = Some(if let Some(state) = state.take() {
-				self.0(state, item)
+				self.0.call_mut((state, item))
 			} else {
 				item
 			});
@@ -44,7 +45,7 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source>
 		for Combine<I, F>
 	where
-		F: FnMut(I::Item, I::Item) -> I::Item + Clone + Send + 'static,
+		F: FnMut<(I::Item, I::Item,), Output = I::Item> + Clone + Send + 'static,
 		I::Item: Send + 'static,
 	{
 		combiner_par_sink!(ReduceFn<F, I::Item>, self, ReduceFn::new(self.f));

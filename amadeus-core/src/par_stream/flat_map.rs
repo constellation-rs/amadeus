@@ -1,9 +1,9 @@
 use derive_new::new;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 
 use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
-use crate::pipe::{Pipe, StreamExt};
 
 #[derive(new)]
 #[must_use]
@@ -15,7 +15,7 @@ pub struct FlatMap<I, F> {
 impl_par_dist! {
 	impl<I: ParallelStream, F, R: Stream> ParallelStream for FlatMap<I, F>
 	where
-		F: FnMut(I::Item) -> R + Clone + Send + 'static,
+		F: FnMut<(I::Item,), Output = R> + Clone + Send + 'static,
 	{
 		type Item = R::Item;
 		type Task = FlatMapTask<I::Task, F>;
@@ -33,7 +33,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, R: Stream, Source> ParallelPipe<Source> for FlatMap<I, F>
 	where
-		F: FnMut(I::Item) -> R + Clone + Send + 'static,
+		F: FnMut<(I::Item,), Output = R> + Clone + Send + 'static,
 	{
 		type Item = R::Item;
 		type Task = FlatMapTask<I::Task, F>;
@@ -51,21 +51,23 @@ pub struct FlatMapTask<C, F> {
 	task: C,
 	f: F,
 }
-impl<C: StreamTask, F: FnMut(C::Item) -> R + Clone, R: Stream> StreamTask for FlatMapTask<C, F> {
-	type Item = R::Item;
-	type Async = crate::pipe::FlatMap<C::Async, F, R>;
-
-	fn into_async(self) -> Self::Async {
-		self.task.into_async().flat_map(self.f)
-	}
-}
-impl<C: PipeTask<Source>, F: FnMut(C::Item) -> R + Clone, R: Stream, Source> PipeTask<Source>
+impl<C: StreamTask, F: FnMut<(C::Item,), Output = R> + Clone, R: Stream> StreamTask
 	for FlatMapTask<C, F>
 {
 	type Item = R::Item;
 	type Async = crate::pipe::FlatMap<C::Async, F, R>;
 
 	fn into_async(self) -> Self::Async {
-		self.task.into_async().flat_map(self.f)
+		crate::pipe::FlatMap::new(self.task.into_async(), self.f)
+	}
+}
+impl<C: PipeTask<Source>, F: FnMut<(C::Item,), Output = R> + Clone, R: Stream, Source>
+	PipeTask<Source> for FlatMapTask<C, F>
+{
+	type Item = R::Item;
+	type Async = crate::pipe::FlatMap<C::Async, F, R>;
+
+	fn into_async(self) -> Self::Async {
+		crate::pipe::FlatMap::new(self.task.into_async(), self.f)
 	}
 }

@@ -16,7 +16,7 @@ where
 	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
 		T::query(f, name)
 	}
-	default fn decode(
+	fn decode(
 		type_: &::postgres::types::Type, buf: Option<&[u8]>,
 	) -> Result<Self, Box<dyn Error + Sync + Send>> {
 		T::decode(type_, buf).map(Box::new)
@@ -148,21 +148,11 @@ impl<T: Data> PostgresData for List<T>
 where
 	T: PostgresData,
 {
-	default fn query(_f: &mut fmt::Formatter, _name: Option<&Names<'_>>) -> fmt::Result {
-		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
-	}
-	default fn decode(
-		_type_: &Type, _buf: Option<&[u8]>,
-	) -> Result<Self, Box<dyn Error + Sync + Send>> {
-		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
-	}
-}
-/// BYTEA
-impl PostgresData for List<u8> {
 	fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
 		name.unwrap().fmt(f)
 	}
 	fn decode(_type_: &Type, _buf: Option<&[u8]>) -> Result<Self, Box<dyn Error + Sync + Send>> {
+		// List<u8> is BYTEA
 		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
 	}
 }
@@ -275,6 +265,7 @@ impl PostgresData for Value {
 // Implement PostgresData for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
+		// TODO: Specialize Box<[T; $i]> to avoid passing a potentially large array around on the stack.
 		impl<T> PostgresData for [T; $i]
 		where
 			T: PostgresData
@@ -282,19 +273,6 @@ macro_rules! array {
 			fn query(f: &mut fmt::Formatter, name: Option<&Names<'_>>) -> fmt::Result {
 				name.unwrap().fmt(f)
 			}
-			fn decode(
-				_type_: &Type, _buf: Option<&[u8]>,
-			) -> Result<Self, Box<dyn Error + Sync + Send>> {
-				todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/63")
-			}
-		}
-
-		// Specialize the implementation to avoid passing a potentially large array around
-		// on the stack.
-		impl<T> PostgresData for Box<[T; $i]>
-		where
-			T: PostgresData
-		{
 			fn decode(
 				_type_: &Type, _buf: Option<&[u8]>,
 			) -> Result<Self, Box<dyn Error + Sync + Send>> {

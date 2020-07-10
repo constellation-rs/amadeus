@@ -1,5 +1,6 @@
 use async_channel::{bounded, Sender};
 use futures::{future::RemoteHandle, FutureExt, TryFutureExt};
+use serde_closure::traits;
 use std::{
 	any::Any, future::Future, io, panic::{AssertUnwindSafe, RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc
 };
@@ -20,6 +21,7 @@ struct ThreadPoolInner {
 
 #[derive(Debug)]
 pub struct ThreadPool(Arc<ThreadPoolInner>);
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl ThreadPool {
 	pub fn new(tasks_per_core: Option<usize>) -> io::Result<Self> {
 		let logical_cores = num_cpus::get();
@@ -42,7 +44,7 @@ impl ThreadPool {
 	{
 		self.0
 			.pool
-			.spawn_pinned(|| work())
+			.spawn_pinned(|| traits::FnOnce::call_once(work, ()))
 			.map_err(JoinError::into_panic)
 			.map_err(Panicked::from)
 	}

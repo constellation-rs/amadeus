@@ -9,6 +9,7 @@ impl<T: ?Sized> ProcessSend for T where T: Send + Serialize + for<'de> Deseriali
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 	type ThreadPool: ThreadPool + 'static;
 
@@ -20,6 +21,7 @@ pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin 
 		T: ProcessSend + 'static;
 }
 
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 pub trait ThreadPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 	fn threads(&self) -> usize;
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
@@ -29,6 +31,7 @@ pub trait ThreadPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 		T: Send + 'static;
 }
 
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl<P: ?Sized> ProcessPool for &P
 where
 	P: ProcessPool,
@@ -48,6 +51,7 @@ where
 	}
 }
 
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl<P: ?Sized> ThreadPool for &P
 where
 	P: ThreadPool,

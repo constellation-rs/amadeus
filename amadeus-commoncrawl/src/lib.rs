@@ -71,9 +71,9 @@ impl CommonCrawl {
 
 		let urls = BufReader::new(body)
 			.lines()
-			.map(FnMut!(|url: Result<String, io::Error>| -> String {
+			.map(|url: Result<String, io::Error>| -> String {
 				format!("http://commoncrawl.s3.amazonaws.com/{}", url.unwrap())
-			}))
+			})
 			.collect()
 			.await;
 		Ok(Self { urls })

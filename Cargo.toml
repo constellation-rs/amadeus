@@ -30,9 +30,11 @@ parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
 postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
+doc = ["amadeus-core/doc"]
+nightly = ["amadeus-core/nightly"]
 
 [package.metadata.docs.rs]
-features = ["constellation", "aws", "commoncrawl", "parquet", "postgres", "csv", "json"]
+features = ["doc", "constellation", "aws", "commoncrawl", "parquet", "postgres", "csv", "json"]
 
 [dependencies]
 amadeus-core = { version = "=0.3.1", path = "amadeus-core" }
@@ -51,7 +53,7 @@ futures = "0.3"
 num_cpus = "1.13"
 pin-project = "0.4"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.2"
+serde_closure = { version = "0.2", default-features = false }
 serde_traitobject = { version = "0.2", optional = true }
 tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "blocking"] }
 
@@ -61,6 +63,10 @@ rand = "0.7"
 serde_json = "1.0"
 streaming_algorithms = "0.2"
 tokio = { version = "0.2", features = ["macros", "time"] }
+
+[patch.crates-io]
+vec-utils = { version = "*", git = "https://github.com/alecmocatta/vec-utils", branch = "stable" }
+streaming_algorithms = { version = "*", git = "https://github.com/alecmocatta/streaming_algorithms", branch = "stable" }
 
 [[example]]
 name = "cloudfront_logs"

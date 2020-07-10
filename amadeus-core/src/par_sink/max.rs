@@ -1,6 +1,7 @@
 use derive_new::new;
 use educe::Educe;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 use std::{cmp::Ordering, marker::PhantomData};
 
 use super::{combiner_par_sink, CombinerSync, FolderSyncReducer, ParallelPipe, ParallelSink};
@@ -29,7 +30,7 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source>
 		for MaxBy<I, F>
 	where
-		F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + Send + 'static,
+		F: for<'a,'b> FnMut<(&'a I::Item, &'b I::Item,), Output = Ordering> + Clone + Send + 'static,
 		I::Item: Send + 'static,
 	{
 		combiner_par_sink!(combine::MaxBy<I::Item,F>, self, combine::MaxBy::new(self.f));
@@ -46,7 +47,7 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, F, B> ParallelSink<Source>
 		for MaxByKey<I, F>
 	where
-		F: FnMut(&I::Item) -> B + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a I::Item,), Output = B> + Clone + Send + 'static,
 		B: Ord + 'static,
 		I::Item: Send + 'static,
 	{
@@ -78,7 +79,7 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source>
 		for MinBy<I, F>
 	where
-		F: FnMut(&I::Item, &I::Item) -> Ordering + Clone + Send + 'static,
+		F: for<'a,'b> FnMut<(&'a I::Item, &'b I::Item,), Output = Ordering> + Clone + Send + 'static,
 		I::Item: Send + 'static,
 	{
 		combiner_par_sink!(combine::MinBy<I::Item,F>, self, combine::MinBy::new(self.f));
@@ -95,7 +96,7 @@ impl_par_dist! {
 	impl<I: ParallelPipe<Source>, Source, F, B> ParallelSink<Source>
 		for MinByKey<I, F>
 	where
-		F: FnMut(&I::Item) -> B + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a I::Item,), Output = B> + Clone + Send + 'static,
 		B: Ord + 'static,
 		I::Item: Send + 'static,
 	{
@@ -130,11 +131,11 @@ mod combine {
 		bound(deserialize = "F: Deserialize<'de>")
 	)]
 	pub struct MaxBy<A, F>(pub F, PhantomData<fn() -> A>);
-	impl<A, F: FnMut(&A, &A) -> Ordering> CombinerSync for MaxBy<A, F> {
+	impl<A, F: for<'a, 'b> FnMut<(&'a A, &'b A), Output = Ordering>> CombinerSync for MaxBy<A, F> {
 		type Output = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
-			if self.0(&a, &b) != Ordering::Greater {
+			if self.0.call_mut((&a, &b)) != Ordering::Greater {
 				b
 			} else {
 				a
@@ -149,11 +150,11 @@ mod combine {
 		bound(deserialize = "F: Deserialize<'de>")
 	)]
 	pub struct MaxByKey<A, F, B>(pub F, pub PhantomData<fn(A, B)>);
-	impl<A, F: FnMut(&A) -> B, B: Ord> CombinerSync for MaxByKey<A, F, B> {
+	impl<A, F: for<'a> FnMut<(&'a A,), Output = B>, B: Ord> CombinerSync for MaxByKey<A, F, B> {
 		type Output = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
-			if self.0(&a).cmp(&self.0(&b)) != Ordering::Greater {
+			if self.0.call_mut((&a,)).cmp(&self.0.call_mut((&b,))) != Ordering::Greater {
 				b
 			} else {
 				a
@@ -185,11 +186,11 @@ mod combine {
 		bound(deserialize = "F: Deserialize<'de>")
 	)]
 	pub struct MinBy<A, F>(pub F, PhantomData<fn() -> A>);
-	impl<A, F: FnMut(&A, &A) -> Ordering> CombinerSync for MinBy<A, F> {
+	impl<A, F: for<'a, 'b> FnMut<(&'a A, &'b A), Output = Ordering>> CombinerSync for MinBy<A, F> {
 		type Output = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
-			if self.0(&a, &b) == Ordering::Greater {
+			if self.0.call_mut((&a, &b)) == Ordering::Greater {
 				b
 			} else {
 				a
@@ -204,11 +205,11 @@ mod combine {
 		bound(deserialize = "F: Deserialize<'de>")
 	)]
 	pub struct MinByKey<A, F, B>(pub F, pub PhantomData<fn(A, B)>);
-	impl<A, F: FnMut(&A) -> B, B: Ord> CombinerSync for MinByKey<A, F, B> {
+	impl<A, F: for<'a> FnMut<(&'a A,), Output = B>, B: Ord> CombinerSync for MinByKey<A, F, B> {
 		type Output = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
-			if self.0(&a).cmp(&self.0(&b)) == Ordering::Greater {
+			if self.0.call_mut((&a,)).cmp(&self.0.call_mut((&b,))) == Ordering::Greater {
 				b
 			} else {
 				a

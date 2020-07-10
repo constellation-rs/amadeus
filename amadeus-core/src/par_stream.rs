@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use either::Either;
 use futures::{pin_mut, stream, stream::StreamExt as _, Stream};
 use serde_closure::*;
-use std::{cmp::Ordering, collections::HashMap, hash::Hash, iter, ops::FnMut, vec};
+use std::{cmp::Ordering, collections::HashMap, hash::Hash, iter, vec};
 
 use crate::{
 	into_par_stream::IntoDistributedStream, pipe::StreamExt, pool::{ProcessPool, ProcessSend, ThreadPool}
@@ -38,6 +38,7 @@ pub trait StreamTask {
 }
 
 #[async_trait(?Send)]
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 #[must_use]
 pub trait DistributedStream {
 	type Item;
@@ -557,6 +558,7 @@ pub(crate) fn assert_distributed_stream<T, I: DistributedStream<Item = T>>(i: I)
 }
 
 #[async_trait(?Send)]
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 #[must_use]
 pub trait ParallelStream {
 	type Item;
@@ -668,16 +670,14 @@ pub trait ParallelStream {
 			.filter(|tasks| !tasks.is_empty())
 			.map(|tasks| {
 				let reduce_a = reduce_a_factory.clone();
-				pool.spawn(FnOnce!(move || {
-					async move {
-						let sink = reduce_a.into_async();
-						pin_mut!(sink);
-						let tasks =
-							stream::iter(tasks.into_iter().map(StreamTask::into_async)).flatten();
-						tasks.sink(sink.as_mut()).await;
-						sink.output().await
-					}
-				}))
+				pool.spawn(move || async move {
+					let sink = reduce_a.into_async();
+					pin_mut!(sink);
+					let tasks =
+						stream::iter(tasks.into_iter().map(StreamTask::into_async)).flatten();
+					tasks.sink(sink.as_mut()).await;
+					sink.output().await
+				})
 			})
 			.collect::<futures::stream::FuturesUnordered<_>>();
 		let stream = handles.map(|item| {

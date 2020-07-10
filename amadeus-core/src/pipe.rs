@@ -1,5 +1,6 @@
 mod filter;
 mod flat_map;
+mod map;
 
 use futures::{pin_mut, Future, Stream};
 use pin_project::pin_project;
@@ -7,7 +8,7 @@ use std::{
 	ops::DerefMut, pin::Pin, task::{Context, Poll}
 };
 
-pub use self::{filter::*, flat_map::*};
+pub use self::{filter::*, flat_map::*, map::*};
 
 // Sink takes Source as an input parameter rather than associated type to accept
 // for<'a> &'a T, but this might not be necessary in future?

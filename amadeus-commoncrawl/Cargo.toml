@@ -28,7 +28,7 @@ pin-project = "0.4"
 reqwest = "0.10"
 reqwest_resume = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.2"
+serde_closure = { version = "0.2", default-features = false }
 url = { version = "2.1", features = ["serde"] }
 
 # dependency of reqwest/native-tls; ensure it's vendored to simplify cross-compilation

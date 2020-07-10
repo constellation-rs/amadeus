@@ -28,6 +28,7 @@ impl_par_dist! {
 mod workaround {
 	use super::*;
 
+	#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 	#[doc(hidden)]
 	impl Identity {
 		pub fn pipe<S>(self, sink: S) -> Pipe<Self, S> {

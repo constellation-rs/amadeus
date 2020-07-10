@@ -1,6 +1,6 @@
 use constellation::{spawn, Receiver, Resources, Sender, SpawnError};
 use futures::{future::LocalBoxFuture, FutureExt};
-use serde_closure::FnOnce;
+use serde_closure::{traits, FnOnce};
 use serde_traitobject as st;
 use std::{
 	any, collections::VecDeque, fmt, future::Future, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}
@@ -184,7 +184,7 @@ impl ProcessPoolInner {
 	}
 	async fn spawn<F, Fut, T>(&self, work: F) -> Result<T, Panicked>
 	where
-		F: FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
+		F: for<'a> traits::FnOnce<(&'a ThreadPool,), Output = Fut> + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{
@@ -194,7 +194,7 @@ impl ProcessPoolInner {
 			.sender
 			.send(Some(st::Box::new(FnOnce!(move |thread_pool: &_| {
 				let work: F = work;
-				work(thread_pool)
+				work.call_once((thread_pool,))
 					.map(|res| Box::new(res) as Response)
 					.boxed_local()
 			})) as Request));
@@ -257,6 +257,7 @@ impl Drop for ProcessPoolInner {
 
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);
+#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl ProcessPool {
 	pub fn new(
 		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
