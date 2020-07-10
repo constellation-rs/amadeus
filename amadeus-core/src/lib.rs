@@ -85,7 +85,6 @@ macro_rules! rename {
 			(@munch [$d ($d done:tt)*] { $d ($d head:tt)* } $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* { __rename!{$d ($d head)*} }] $d ($d body)*});
 			(@munch [$d ($d done:tt)*] $d head:tt $d ($d body:tt)*) => (__rename!{@munch [$d ($d done)* $d head] $d ($d body)*});
 			(@munch [$d ($d done:tt)*]) => ($d ($d done)*);
-			(@__rename $d i:ident) => ($d i);
 			($d ($d body:tt)*) => (__rename!{@munch [] $d ($d body)*});
 		}
 		__rename!($($body)*);
