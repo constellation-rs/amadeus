@@ -1,6 +1,7 @@
-use crate::linked_list::{LinkedList, LinkedListIndex};
 use serde::{Deserialize, Serialize};
 use std::{ops, ptr};
+
+use crate::linked_list::{LinkedList, LinkedListIndex};
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct OrderedLinkedListIndex<'a>(LinkedListIndex<'a>);

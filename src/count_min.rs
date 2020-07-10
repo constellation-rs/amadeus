@@ -20,13 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::f64_to_usize;
-use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 use serde::{Deserialize, Serialize};
 use std::{
 	borrow::Borrow, cmp::max, convert::TryFrom, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops
 };
 use twox_hash::XxHash;
+
+use super::f64_to_usize;
+use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 
 /// An implementation of a [count-min sketch](https://en.wikipedia.org/wiki/Count–min_sketch) data structure with *conservative updating* for increased accuracy.
 ///
@@ -75,7 +76,7 @@ where
 	where
 		Q: Hash,
 		K: Borrow<Q>,
-		C: for<'a> ops::AddAssign<&'a V>,
+		C: for<'a> ops::AddAssign<&'a V> + IntersectPlusUnionIsPlus,
 	{
 		if !<C as IntersectPlusUnionIsPlus>::VAL {
 			let offsets = self.offsets(key);

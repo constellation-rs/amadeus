@@ -120,11 +120,18 @@ impl New for usize {
 	}
 }
 
-/// An optimisation for cases like putting a HyperLogLog inside a Count–min sketch, where intersecting, adding a val, and then unioning that with counters is the same as simple adding the val to the counters.
+/// An optimisation for cases like putting a HyperLogLog inside a Count–min sketch, where intersecting, adding a val, and then unioning that with counters is the same as simply adding the val to the counters.
 pub trait IntersectPlusUnionIsPlus {
 	/// Apply optimisation or not
 	const VAL: bool;
 }
-impl<T: ?Sized> IntersectPlusUnionIsPlus for T {
-	default const VAL: bool = false;
+
+macro_rules! impl_ipuip {
+	($($t:ty)*) => ($(
+		impl IntersectPlusUnionIsPlus for $t {
+			const VAL: bool = false;
+		}
+	)*)
 }
+
+impl_ipuip!(u8 i8 u16 i16 u32 i32 u64 i64 u128 i128 usize isize);

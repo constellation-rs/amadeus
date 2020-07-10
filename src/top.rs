@@ -1,11 +1,12 @@
-use crate::{
-	count_min::CountMinSketch, ordered_linked_list::{OrderedLinkedList, OrderedLinkedListIndex, OrderedLinkedListIter}, traits::{Intersect, New, UnionAssign}
-};
 use serde::{Deserialize, Serialize};
 use std::{
 	cmp, collections::{hash_map::Entry, HashMap}, fmt::{self, Debug}, hash::Hash, iter, ops
 };
 use twox_hash::RandomXxHashBuilder;
+
+use crate::{
+	count_min::CountMinSketch, ordered_linked_list::{OrderedLinkedList, OrderedLinkedListIndex, OrderedLinkedListIter}, traits::{Intersect, New, UnionAssign}, IntersectPlusUnionIsPlus
+};
 
 /// This probabilistic data structure tracks the `n` top keys given a stream of `(key,value)` tuples, ordered by the sum of the values for each key (the "aggregated value"). It uses only `O(n)` space.
 ///
@@ -72,7 +73,7 @@ impl<A: Hash + Eq + Clone, C: Ord + New + for<'a> UnionAssign<&'a C> + Intersect
 	/// "Visit" an element.
 	pub fn push<V: ?Sized>(&mut self, item: A, value: &V)
 	where
-		C: for<'a> ops::AddAssign<&'a V>,
+		C: for<'a> ops::AddAssign<&'a V> + IntersectPlusUnionIsPlus,
 	{
 		match self.map.entry(item.clone()) {
 			Entry::Occupied(entry) => {
@@ -154,7 +155,13 @@ impl<'a, A: Hash + Eq + Clone + Debug, C: Ord + Debug + 'a> Debug for TopIter<'a
 
 impl<
 		A: Hash + Eq + Clone,
-		C: Ord + New + Clone + for<'a> ops::AddAssign<&'a C> + for<'a> UnionAssign<&'a C> + Intersect,
+		C: Ord
+			+ New
+			+ Clone
+			+ for<'a> ops::AddAssign<&'a C>
+			+ for<'a> UnionAssign<&'a C>
+			+ Intersect
+			+ IntersectPlusUnionIsPlus,
 	> iter::Sum<Top<A, C>> for Option<Top<A, C>>
 {
 	fn sum<I>(mut iter: I) -> Self
@@ -170,7 +177,13 @@ impl<
 }
 impl<
 		A: Hash + Eq + Clone,
-		C: Ord + New + Clone + for<'a> ops::AddAssign<&'a C> + for<'a> UnionAssign<&'a C> + Intersect,
+		C: Ord
+			+ New
+			+ Clone
+			+ for<'a> ops::AddAssign<&'a C>
+			+ for<'a> UnionAssign<&'a C>
+			+ Intersect
+			+ IntersectPlusUnionIsPlus,
 	> ops::Add for Top<A, C>
 {
 	type Output = Self;
@@ -181,7 +194,13 @@ impl<
 }
 impl<
 		A: Hash + Eq + Clone,
-		C: Ord + New + Clone + for<'a> ops::AddAssign<&'a C> + for<'a> UnionAssign<&'a C> + Intersect,
+		C: Ord
+			+ New
+			+ Clone
+			+ for<'a> ops::AddAssign<&'a C>
+			+ for<'a> UnionAssign<&'a C>
+			+ Intersect
+			+ IntersectPlusUnionIsPlus,
 	> ops::AddAssign for Top<A, C>
 {
 	fn add_assign(&mut self, other: Self) {

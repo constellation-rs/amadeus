@@ -44,14 +44,14 @@
 // https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.rdd.RDD countApproxDistinct
 // is_x86_feature_detected ?
 
-use super::{f64_to_u8, u64_to_f64, usize_to_f64};
-use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
-use packed_simd::{self, Cast, FromBits, IntoBits};
 use serde::{Deserialize, Serialize};
 use std::{
 	cmp::{self, Ordering}, convert::{identity, TryFrom}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
 use twox_hash::XxHash;
+
+use super::{f64_to_u8, u64_to_f64, usize_to_f64};
+use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 
 mod consts;
 use self::consts::{BIAS_DATA, RAW_ESTIMATE_DATA, TRESHOLD_DATA};
@@ -214,35 +214,50 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		assert_eq!(self.m.len() % u8s::lanes(), 0); // TODO: high error rate can trigger this
-		assert_eq!(u8s::lanes(), f32s::lanes() * 4);
-		assert_eq!(f32s::lanes(), u32s::lanes());
-		assert_eq!(u8sq::lanes(), u32s::lanes());
-		let mut zero = u8s_sad_out::splat(0);
-		let mut sum = f32s::splat(0.0);
-		for i in (0..self.m.len()).step_by(u8s::lanes()) {
-			unsafe {
-				let self_m = u8s::from_slice_unaligned_unchecked(self.m.get_unchecked(i..));
-				let src_m = u8s::from_slice_unaligned_unchecked(src.m.get_unchecked(i..));
-				let res = self_m.max(src_m);
-				res.write_to_slice_unaligned_unchecked(self.m.get_unchecked_mut(i..));
-				let count: u8s = u8s::splat(0) - u8s::from_bits(res.eq(u8s::splat(0)));
-				let count2 = Sad::<u8s>::sad(count, u8s::splat(0));
-				zero += count2;
-				for j in 0..4 {
-					let x = u8sq::from_slice_unaligned_unchecked(
-						self.m.get_unchecked(i + j * u8sq::lanes()..),
-					);
-					let x: u32s = x.cast();
-					let x: f32s = ((u32s::splat(u32::max_value()) - x) << 25 >> 2).into_bits();
-					sum += x;
+		#[cfg(feature = "packed_simd")]
+		{
+			assert_eq!(self.m.len() % u8s::lanes(), 0); // TODO: high error rate can trigger this
+			assert_eq!(u8s::lanes(), f32s::lanes() * 4);
+			assert_eq!(f32s::lanes(), u32s::lanes());
+			assert_eq!(u8sq::lanes(), u32s::lanes());
+			let mut zero = u8s_sad_out::splat(0);
+			let mut sum = f32s::splat(0.0);
+			for i in (0..self.m.len()).step_by(u8s::lanes()) {
+				unsafe {
+					let self_m = u8s::from_slice_unaligned_unchecked(self.m.get_unchecked(i..));
+					let src_m = u8s::from_slice_unaligned_unchecked(src.m.get_unchecked(i..));
+					let res = self_m.max(src_m);
+					res.write_to_slice_unaligned_unchecked(self.m.get_unchecked_mut(i..));
+					let count: u8s = u8s::splat(0) - u8s::from_bits(res.eq(u8s::splat(0)));
+					let count2 = Sad::<u8s>::sad(count, u8s::splat(0));
+					zero += count2;
+					for j in 0..4 {
+						let x = u8sq::from_slice_unaligned_unchecked(
+							self.m.get_unchecked(i + j * u8sq::lanes()..),
+						);
+						let x: u32s = x.cast();
+						let x: f32s = ((u32s::splat(u32::max_value()) - x) << 25 >> 2).into_bits();
+						sum += x;
+					}
 				}
 			}
+			self.zero = usize::try_from(zero.wrapping_sum()).unwrap();
+			self.sum = f64::from(sum.sum());
+			// https://github.com/AdamNiederer/faster/issues/37
+			// (src.m.simd_iter(faster::u8s(0)),self.m.simd_iter_mut(faster::u8s(0))).zip()
 		}
-		self.zero = usize::try_from(zero.wrapping_sum()).unwrap();
-		self.sum = f64::from(sum.sum());
-		// https://github.com/AdamNiederer/faster/issues/37
-		// (src.m.simd_iter(faster::u8s(0)),self.m.simd_iter_mut(faster::u8s(0))).zip()
+		#[cfg(not(feature = "packed_simd"))]
+		{
+			let mut zero = 0;
+			let mut sum = 0.0;
+			for (to, from) in self.m.iter_mut().zip(src.m.iter()) {
+				*to = (*to).max(*from);
+				zero += if *to == 0 { 1 } else { 0 };
+				sum += f64::from_bits(u64::max_value().wrapping_sub(u64::from(*to)) << 54 >> 2);
+			}
+			self.zero = zero;
+			self.sum = sum;
+		}
 	}
 
 	/// Intersect another HyperLogLog data structure into `self`.
@@ -252,33 +267,48 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		assert_eq!(self.m.len() % u8s::lanes(), 0);
-		assert_eq!(u8s::lanes(), f32s::lanes() * 4);
-		assert_eq!(f32s::lanes(), u32s::lanes());
-		assert_eq!(u8sq::lanes(), u32s::lanes());
-		let mut zero = u8s_sad_out::splat(0);
-		let mut sum = f32s::splat(0.0);
-		for i in (0..self.m.len()).step_by(u8s::lanes()) {
-			unsafe {
-				let self_m = u8s::from_slice_unaligned_unchecked(self.m.get_unchecked(i..));
-				let src_m = u8s::from_slice_unaligned_unchecked(src.m.get_unchecked(i..));
-				let res = self_m.min(src_m);
-				res.write_to_slice_unaligned_unchecked(self.m.get_unchecked_mut(i..));
-				let count: u8s = u8s::splat(0) - u8s::from_bits(res.eq(u8s::splat(0)));
-				let count2 = Sad::<u8s>::sad(count, u8s::splat(0));
-				zero += count2;
-				for j in 0..4 {
-					let x = u8sq::from_slice_unaligned_unchecked(
-						self.m.get_unchecked(i + j * u8sq::lanes()..),
-					);
-					let x: u32s = x.cast();
-					let x: f32s = ((u32s::splat(u32::max_value()) - x) << 25 >> 2).into_bits();
-					sum += x;
+		#[cfg(feature = "packed_simd")]
+		{
+			assert_eq!(self.m.len() % u8s::lanes(), 0);
+			assert_eq!(u8s::lanes(), f32s::lanes() * 4);
+			assert_eq!(f32s::lanes(), u32s::lanes());
+			assert_eq!(u8sq::lanes(), u32s::lanes());
+			let mut zero = u8s_sad_out::splat(0);
+			let mut sum = f32s::splat(0.0);
+			for i in (0..self.m.len()).step_by(u8s::lanes()) {
+				unsafe {
+					let self_m = u8s::from_slice_unaligned_unchecked(self.m.get_unchecked(i..));
+					let src_m = u8s::from_slice_unaligned_unchecked(src.m.get_unchecked(i..));
+					let res = self_m.min(src_m);
+					res.write_to_slice_unaligned_unchecked(self.m.get_unchecked_mut(i..));
+					let count: u8s = u8s::splat(0) - u8s::from_bits(res.eq(u8s::splat(0)));
+					let count2 = Sad::<u8s>::sad(count, u8s::splat(0));
+					zero += count2;
+					for j in 0..4 {
+						let x = u8sq::from_slice_unaligned_unchecked(
+							self.m.get_unchecked(i + j * u8sq::lanes()..),
+						);
+						let x: u32s = x.cast();
+						let x: f32s = ((u32s::splat(u32::max_value()) - x) << 25 >> 2).into_bits();
+						sum += x;
+					}
 				}
 			}
+			self.zero = usize::try_from(zero.wrapping_sum()).unwrap();
+			self.sum = f64::from(sum.sum());
 		}
-		self.zero = usize::try_from(zero.wrapping_sum()).unwrap();
-		self.sum = f64::from(sum.sum());
+		#[cfg(not(feature = "packed_simd"))]
+		{
+			let mut zero = 0;
+			let mut sum = 0.0;
+			for (to, from) in self.m.iter_mut().zip(src.m.iter()) {
+				*to = (*to).min(*from);
+				zero += if *to == 0 { 1 } else { 0 };
+				sum += f64::from_bits(u64::max_value().wrapping_sub(u64::from(*to)) << 54 >> 2);
+			}
+			self.zero = zero;
+			self.sum = sum;
+		}
 	}
 
 	/// Clears the `HyperLogLog` data structure, as if it was new.
@@ -427,103 +457,111 @@ impl<V: ?Sized> IntersectPlusUnionIsPlus for HyperLogLog<V> {
 	const VAL: bool = true;
 }
 
-#[cfg(target_feature = "avx512bw")] // TODO
-mod simd_types {
-	use super::packed_simd;
-	pub type u8s = packed_simd::u8x64;
-	pub type u8s_sad_out = packed_simd::u64x8;
-	pub type f32s = packed_simd::f32x16;
-	pub type u32s = packed_simd::u32x16;
-	pub type u8sq = packed_simd::u8x16;
-}
-#[cfg(target_feature = "avx2")]
-mod simd_types {
-	#![allow(non_camel_case_types)]
-	use super::packed_simd;
-	pub type u8s = packed_simd::u8x32;
-	pub type u8s_sad_out = packed_simd::u64x4;
-	pub type f32s = packed_simd::f32x8;
-	pub type u32s = packed_simd::u32x8;
-	pub type u8sq = packed_simd::u8x8;
-}
-#[cfg(all(not(target_feature = "avx2"), target_feature = "sse2"))]
-mod simd_types {
-	#![allow(non_camel_case_types)]
-	use super::packed_simd;
-	pub type u8s = packed_simd::u8x16;
-	pub type u8s_sad_out = packed_simd::u64x2;
-	pub type f32s = packed_simd::f32x4;
-	pub type u32s = packed_simd::u32x4;
-	pub type u8sq = packed_simd::u8x4;
-}
-#[cfg(all(not(target_feature = "avx2"), not(target_feature = "sse2")))]
-mod simd_types {
-	#![allow(non_camel_case_types)]
-	use super::packed_simd;
-	pub type u8s = packed_simd::u8x8;
-	pub type u8s_sad_out = u64;
-	pub type f32s = packed_simd::f32x2;
-	pub type u32s = packed_simd::u32x2;
-	pub type u8sq = packed_simd::u8x2;
-}
-use self::simd_types::{f32s, u32s, u8s, u8s_sad_out, u8sq};
+#[cfg(feature = "packed_simd")]
+mod simd {
+	pub use packed_simd::{self, Cast, FromBits, IntoBits};
+	use std::marker::PhantomData;
 
-struct Sad<X>(PhantomData<fn(X)>);
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86 {
-	#[cfg(target_arch = "x86")]
-	pub use std::arch::x86::*;
-	#[cfg(target_arch = "x86_64")]
-	pub use std::arch::x86_64::*;
-}
-// TODO
-// #[cfg(target_feature = "avx512bw")]
-// impl Sad<packed_simd::u8x64> {
-// 	#[inline]
-// 	#[target_feature(enable = "avx512bw")]
-// 	unsafe fn sad(a: packed_simd::u8x64, b: packed_simd::u8x64) -> packed_simd::u64x8 {
-// 		use std::mem::transmute;
-// 		packed_simd::Simd(transmute(x86::_mm512_sad_epu8(transmute(a.0), transmute(b.0))))
-// 	}
-// }
-#[cfg(target_feature = "avx2")]
-impl Sad<packed_simd::u8x32> {
-	#[inline]
-	#[target_feature(enable = "avx2")]
-	unsafe fn sad(a: packed_simd::u8x32, b: packed_simd::u8x32) -> packed_simd::u64x4 {
-		use std::mem::transmute;
-		packed_simd::Simd(transmute(x86::_mm256_sad_epu8(
-			transmute(a.0),
-			transmute(b.0),
-		)))
+	#[cfg(target_feature = "avx512bw")] // TODO
+	mod simd_types {
+		use super::packed_simd;
+		pub type u8s = packed_simd::u8x64;
+		pub type u8s_sad_out = packed_simd::u64x8;
+		pub type f32s = packed_simd::f32x16;
+		pub type u32s = packed_simd::u32x16;
+		pub type u8sq = packed_simd::u8x16;
+	}
+	#[cfg(target_feature = "avx2")]
+	mod simd_types {
+		#![allow(non_camel_case_types)]
+		use super::packed_simd;
+		pub type u8s = packed_simd::u8x32;
+		pub type u8s_sad_out = packed_simd::u64x4;
+		pub type f32s = packed_simd::f32x8;
+		pub type u32s = packed_simd::u32x8;
+		pub type u8sq = packed_simd::u8x8;
+	}
+	#[cfg(all(not(target_feature = "avx2"), target_feature = "sse2"))]
+	mod simd_types {
+		#![allow(non_camel_case_types)]
+		use super::packed_simd;
+		pub type u8s = packed_simd::u8x16;
+		pub type u8s_sad_out = packed_simd::u64x2;
+		pub type f32s = packed_simd::f32x4;
+		pub type u32s = packed_simd::u32x4;
+		pub type u8sq = packed_simd::u8x4;
+	}
+	#[cfg(all(not(target_feature = "avx2"), not(target_feature = "sse2")))]
+	mod simd_types {
+		#![allow(non_camel_case_types)]
+		use super::packed_simd;
+		pub type u8s = packed_simd::u8x8;
+		pub type u8s_sad_out = u64;
+		pub type f32s = packed_simd::f32x2;
+		pub type u32s = packed_simd::u32x2;
+		pub type u8sq = packed_simd::u8x2;
+	}
+	pub use self::simd_types::{f32s, u32s, u8s, u8s_sad_out, u8sq};
+
+	pub struct Sad<X>(PhantomData<fn(X)>);
+	#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+	mod x86 {
+		#[cfg(target_arch = "x86")]
+		pub use std::arch::x86::*;
+		#[cfg(target_arch = "x86_64")]
+		pub use std::arch::x86_64::*;
+	}
+	// TODO
+	// #[cfg(target_feature = "avx512bw")]
+	// impl Sad<packed_simd::u8x64> {
+	// 	#[inline]
+	// 	#[target_feature(enable = "avx512bw")]
+	// 	pub unsafe fn sad(a: packed_simd::u8x64, b: packed_simd::u8x64) -> packed_simd::u64x8 {
+	// 		use std::mem::transmute;
+	// 		packed_simd::Simd(transmute(x86::_mm512_sad_epu8(transmute(a.0), transmute(b.0))))
+	// 	}
+	// }
+	#[cfg(target_feature = "avx2")]
+	impl Sad<packed_simd::u8x32> {
+		#[inline]
+		#[target_feature(enable = "avx2")]
+		pub unsafe fn sad(a: packed_simd::u8x32, b: packed_simd::u8x32) -> packed_simd::u64x4 {
+			use std::mem::transmute;
+			packed_simd::Simd(transmute(x86::_mm256_sad_epu8(
+				transmute(a.0),
+				transmute(b.0),
+			)))
+		}
+	}
+	#[cfg(target_feature = "sse2")]
+	impl Sad<packed_simd::u8x16> {
+		#[inline]
+		#[target_feature(enable = "sse2")]
+		pub unsafe fn sad(a: packed_simd::u8x16, b: packed_simd::u8x16) -> packed_simd::u64x2 {
+			use std::mem::transmute;
+			packed_simd::Simd(transmute(x86::_mm_sad_epu8(transmute(a.0), transmute(b.0))))
+		}
+	}
+	#[cfg(target_feature = "sse,mmx")]
+	impl Sad<packed_simd::u8x8> {
+		#[inline]
+		#[target_feature(enable = "sse,mmx")]
+		pub unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
+			use std::mem::transmute;
+			transmute(x86::_mm_sad_pu8(transmute(a.0), transmute(b.0)))
+		}
+	}
+	#[cfg(not(target_feature = "sse,mmx"))]
+	impl Sad<packed_simd::u8x8> {
+		#[inline(always)]
+		pub unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
+			assert_eq!(b, packed_simd::u8x8::splat(0));
+			(0..8).map(|i| u64::from(a.extract(i))).sum()
+		}
 	}
 }
-#[cfg(target_feature = "sse2")]
-impl Sad<packed_simd::u8x16> {
-	#[inline]
-	#[target_feature(enable = "sse2")]
-	unsafe fn sad(a: packed_simd::u8x16, b: packed_simd::u8x16) -> packed_simd::u64x2 {
-		use std::mem::transmute;
-		packed_simd::Simd(transmute(x86::_mm_sad_epu8(transmute(a.0), transmute(b.0))))
-	}
-}
-#[cfg(target_feature = "sse,mmx")]
-impl Sad<packed_simd::u8x8> {
-	#[inline]
-	#[target_feature(enable = "sse,mmx")]
-	unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
-		use std::mem::transmute;
-		transmute(x86::_mm_sad_pu8(transmute(a.0), transmute(b.0)))
-	}
-}
-#[cfg(not(target_feature = "sse,mmx"))]
-impl Sad<packed_simd::u8x8> {
-	#[inline(always)]
-	unsafe fn sad(a: packed_simd::u8x8, b: packed_simd::u8x8) -> u64 {
-		assert_eq!(b, packed_simd::u8x8::splat(0));
-		(0..8).map(|i| u64::from(a.extract(i))).sum()
-	}
-}
+#[cfg(feature = "packed_simd")]
+use simd::{f32s, u32s, u8s, u8s_sad_out, u8sq, Cast, FromBits, IntoBits, Sad};
 
 #[cfg(test)]
 mod test {

@@ -24,7 +24,6 @@
 //! As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 #![doc(html_root_url = "https://docs.rs/streaming_algorithms/0.2.0")]
-#![feature(specialization)]
 #![warn(
 	missing_copy_implementations,
 	missing_debug_implementations,
@@ -43,7 +42,6 @@
 	clippy::inline_always,
 	clippy::module_name_repetitions,
 	clippy::if_not_else,
-	clippy::op_ref,
 	clippy::needless_pass_by_value,
 	clippy::suspicious_op_assign_impl,
 	clippy::float_cmp,
