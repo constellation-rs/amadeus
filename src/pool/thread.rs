@@ -21,7 +21,6 @@ struct ThreadPoolInner {
 
 #[derive(Debug)]
 pub struct ThreadPool(Arc<ThreadPoolInner>);
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl ThreadPool {
 	pub fn new(tasks_per_core: Option<usize>) -> io::Result<Self> {
 		let logical_cores = num_cpus::get();

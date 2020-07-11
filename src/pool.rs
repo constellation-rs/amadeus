@@ -56,7 +56,6 @@ impl ProcessPoolTrait for ThreadPool {
 	}
 }
 
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl ThreadPoolTrait for ThreadPool {
 	fn threads(&self) -> usize {
 		ThreadPool::threads(self)

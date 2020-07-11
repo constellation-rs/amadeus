@@ -15,8 +15,8 @@ pub trait PipeTask<Source> {
 }
 
 macro_rules! pipe {
-	($pipe:ident $sink:ident $from_sink:ident $send:ident $assert_pipe:ident $assert_sink:ident) => {
-		#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
+	($pipe:ident $sink:ident $from_sink:ident $send:ident $assert_pipe:ident $assert_sink:ident $($meta:meta)*) => {
+		$(#[$meta])*
 		#[must_use]
 		pub trait $pipe<Source> {
 			type Item;
@@ -285,4 +285,4 @@ macro_rules! pipe {
 }
 
 pipe!(ParallelPipe ParallelSink FromParallelStream Send assert_parallel_pipe assert_parallel_sink);
-pipe!(DistributedPipe DistributedSink FromDistributedStream ProcessSend assert_distributed_pipe assert_distributed_sink);
+pipe!(DistributedPipe DistributedSink FromDistributedStream ProcessSend assert_distributed_pipe assert_distributed_sink cfg_attr(not(feature = "doc"), serde_closure::generalize));

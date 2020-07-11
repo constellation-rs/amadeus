@@ -21,7 +21,6 @@ pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin 
 		T: ProcessSend + 'static;
 }
 
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 pub trait ThreadPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 	fn threads(&self) -> usize;
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
@@ -51,7 +50,6 @@ where
 	}
 }
 
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 impl<P: ?Sized> ThreadPool for &P
 where
 	P: ThreadPool,

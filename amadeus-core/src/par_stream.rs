@@ -558,7 +558,6 @@ pub(crate) fn assert_distributed_stream<T, I: DistributedStream<Item = T>>(i: I)
 }
 
 #[async_trait(?Send)]
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
 #[must_use]
 pub trait ParallelStream {
 	type Item;
