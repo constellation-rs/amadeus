@@ -12,11 +12,8 @@ use super::{
 	util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize}, ThreadPool
 };
 
-trait FnOnce<Args>: traits::FnOnceBox<Args> + st::Serialize + st::Deserialize {}
-impl<T, Args> FnOnce<Args> for T where T: traits::FnOnce<Args> + st::Serialize + st::Deserialize {}
-
 #[serde_closure::desugar]
-type Request = st::Box<dyn FnOnce(&ThreadPool) -> LocalBoxFuture<'static, Response> + Send>;
+type Request = st::Box<dyn st::sc::FnOnce(&ThreadPool) -> LocalBoxFuture<'static, Response> + Send>;
 type Response = Box<dyn st::Any + Send>;
 
 mod future_ext {
