@@ -7,7 +7,7 @@
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
 #![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.3.1")]
-#![feature(type_alias_impl_trait)]
+#![cfg_attr(feature = "nightly", feature(type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -30,9 +30,9 @@ mod commoncrawl;
 mod parser;
 
 use async_compression::futures::bufread::GzipDecoder; // TODO: use stream or https://github.com/alexcrichton/flate2-rs/pull/214
-use futures::{io::BufReader, AsyncBufReadExt, FutureExt, StreamExt, TryStreamExt};
+use futures::{io::BufReader, AsyncBufReadExt, FutureExt, Stream, StreamExt, TryStreamExt};
 use reqwest_resume::ClientExt;
-use serde_closure::FnMut;
+use serde_closure::FnMutNamed;
 use std::{io, time};
 
 use amadeus_core::{
@@ -80,30 +80,15 @@ impl CommonCrawl {
 	}
 }
 
-impl Source for CommonCrawl {
-	type Item = Webpage<'static>;
-	type Error = io::Error;
+#[cfg(not(feature = "nightly"))]
+type Output = std::pin::Pin<Box<dyn Stream<Item = Result<Webpage<'static>, io::Error>> + Send>>;
+#[cfg(feature = "nightly")]
+type Output = impl Stream<Item = Result<Webpage<'static>, io::Error>> + Send;
 
-	#[cfg(not(doc))]
-	type ParStream =
-		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type ParStream =
-		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
-	#[cfg(not(doc))]
-	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
-
-	fn par_stream(self) -> Self::ParStream {
-		DistParStream::new(self.dist_stream())
-	}
-	#[allow(clippy::let_and_return)]
-	fn dist_stream(self) -> Self::DistStream {
-		let ret = self
-			.urls
-			.into_dist_stream()
-			.flat_map(FnMut!(|url: String| async move {
+FnMutNamed! {
+	pub type Closure<> = |self|url=> String| -> Output where {
+		#[allow(clippy::let_and_return)]
+		let ret = async move {
 				let body = reqwest_resume::get(url.parse().unwrap()).await.unwrap();
 				let body = body
 					.bytes_stream()
@@ -113,9 +98,32 @@ impl Source for CommonCrawl {
 				body.multiple_members(true);
 				WarcParser::new(body)
 			}
-			.flatten_stream()));
-		#[cfg(doc)]
-		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
+			.flatten_stream();
+		#[cfg(not(feature = "nightly"))]
+		let ret = ret.boxed();
 		ret
+	}
+}
+
+impl Source for CommonCrawl {
+	type Item = Webpage<'static>;
+	type Error = io::Error;
+
+	type ParStream = DistParStream<Self::DistStream>;
+	#[cfg(not(feature = "nightly"))]
+	#[allow(clippy::type_complexity)]
+	type DistStream = amadeus_core::par_stream::FlatMap<
+		amadeus_core::into_par_stream::IterDistStream<std::vec::IntoIter<String>>,
+		Closure,
+	>;
+	#[cfg(feature = "nightly")]
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
+
+	fn par_stream(self) -> Self::ParStream {
+		DistParStream::new(self.dist_stream())
+	}
+	#[allow(clippy::let_and_return)]
+	fn dist_stream(self) -> Self::DistStream {
+		self.urls.into_dist_stream().flat_map(Closure::new())
 	}
 }

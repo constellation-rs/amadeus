@@ -12,9 +12,14 @@ use super::{
 	util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize}, ThreadPool
 };
 
-type Request = st::Box<
-	dyn for<'a> st::FnOnce<(&'a ThreadPool,), Output = LocalBoxFuture<'static, Response>> + Send,
->; // TODO: update once #![feature(unboxed_closures)] is stable
+trait FnOnce<Args>: traits::FnOnceBox<Args> + st::Serialize + st::Deserialize {}
+impl<T, Args> FnOnce<Args> for T where
+	T: traits::FnOnce<Args> + st::Serialize + st::Deserialize
+{
+}
+
+#[serde_closure::desugar]
+type Request = st::Box<dyn FnOnce(&ThreadPool) -> LocalBoxFuture<'static, Response> + Send>;
 type Response = Box<dyn st::Any + Send>;
 
 mod future_ext {
@@ -135,7 +140,7 @@ impl ProcessPoolInner {
 
 							while let Some(work) = receiver.recv().await.unwrap() {
 								let ret = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-									work(&thread_pool)
+									work.into_box().call_once_box((&thread_pool,))
 								}));
 								let ret = match ret {
 									Ok(t) => panic::AssertUnwindSafe(t).catch_unwind().await,
@@ -257,7 +262,7 @@ impl Drop for ProcessPoolInner {
 
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
+#[cfg_attr(not(feature = "nightly"), serde_closure::desugar)]
 impl ProcessPool {
 	pub fn new(
 		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
@@ -273,7 +278,7 @@ impl ProcessPool {
 	}
 	pub fn spawn<F, Fut, T>(&self, work: F) -> impl Future<Output = Result<T, Panicked>> + Send
 	where
-		F: FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
+		F: traits::FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{

@@ -18,7 +18,7 @@ use amadeus_core::pool::{
 type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
 #[cfg(feature = "constellation")]
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
+#[cfg_attr(not(feature = "nightly"), serde_closure::desugar)]
 impl ProcessPoolTrait for ProcessPool {
 	type ThreadPool = ThreadPool;
 
@@ -27,7 +27,7 @@ impl ProcessPoolTrait for ProcessPool {
 	}
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
+		F: traits::FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{
@@ -35,7 +35,7 @@ impl ProcessPoolTrait for ProcessPool {
 	}
 }
 
-#[cfg_attr(not(feature = "doc"), serde_closure::generalize)]
+#[cfg_attr(not(feature = "nightly"), serde_closure::desugar)]
 impl ProcessPoolTrait for ThreadPool {
 	type ThreadPool = Self;
 
@@ -44,7 +44,7 @@ impl ProcessPoolTrait for ThreadPool {
 	}
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
+		F: traits::FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{

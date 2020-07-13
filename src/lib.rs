@@ -8,6 +8,7 @@
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/constellation-rs/amadeus/master/logo.svg?sanitize=true"
 )]
+#![cfg_attr(feature = "nightly", feature(unboxed_closures))]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,

@@ -19,7 +19,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [features]
-doc = ["serde_closure/nightly"] # this cleans up Fn*() in docs
+# uses Fn*() sugar (better docs), and SIMD for streaming_algorithms
 nightly = ["streaming_algorithms/nightly"]
 
 [dependencies]
@@ -34,7 +34,7 @@ pin-project = "0.4"
 rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = { version = "0.2", default-features = false }
+serde_closure = "0.3"
 streaming_algorithms = "0.2"
 sum = { version = "0.1", features = ["futures", "serde"] }
 walkdir = "2.2"

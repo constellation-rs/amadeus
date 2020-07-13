@@ -169,7 +169,7 @@ impl<T: Data> SerdeData for List<T>
 where
 	T: SerdeData,
 {
-	default fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
@@ -179,7 +179,7 @@ where
 		}
 		serializer.end()
 	}
-	default fn deserialize<'de, D>(
+	fn deserialize<'de, D>(
 		_deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
@@ -189,22 +189,22 @@ where
 		unimplemented!()
 	}
 }
-impl SerdeData for List<u8> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serde_bytes::Serialize::serialize(&**self, serializer)
-	}
-	fn deserialize<'de, D>(
-		deserializer: D, _schema: Option<SchemaIncomplete>,
-	) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		serde_bytes::Deserialize::deserialize(deserializer).map(<Vec<u8>>::into)
-	}
-}
+// impl SerdeData for List<u8> {
+// 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+// 	where
+// 		S: Serializer,
+// 	{
+// 		serde_bytes::Serialize::serialize(&**self, serializer)
+// 	}
+// 	fn deserialize<'de, D>(
+// 		deserializer: D, _schema: Option<SchemaIncomplete>,
+// 	) -> Result<Self, D::Error>
+// 	where
+// 		D: Deserializer<'de>,
+// 	{
+// 		serde_bytes::Deserialize::deserialize(deserializer).map(<Vec<u8>>::into)
+// 	}
+// }
 
 impl<K, V, S> SerdeData for HashMap<K, V, S>
 where
@@ -472,11 +472,12 @@ use std::convert::TryInto;
 /// Implement SerdeData for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
+		// TODO: Specialize the implementation to avoid passing a potentially large array around on the stack.
 		impl<T> SerdeData for [T; $i]
 		where
 			T: SerdeData
 		{
-			default fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 			where
 				S: Serializer,
 			{
@@ -485,7 +486,7 @@ macro_rules! array {
 				let self_: &[SerdeSerialize<T>; $i] = unsafe{ &*(self_ as *const _)};
 				serde::Serialize::serialize(self_, serializer)
 			}
-			default fn deserialize<'de, D>(
+			fn deserialize<'de, D>(
 				deserializer: D, _schema: Option<SchemaIncomplete>,
 			) -> Result<Self, D::Error>
 			where
@@ -496,47 +497,28 @@ macro_rules! array {
 				Ok(*self_)
 			}
 		}
-		impl SerdeData for [u8; $i] {
-			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-			where
-				S: Serializer,
-			{
-				serde_bytes::Serialize::serialize(self as &[u8], serializer)
-				// serde::Serialize::serialize(self, serializer)
-			}
-			fn deserialize<'de, D>(
-				deserializer: D, _schema: Option<SchemaIncomplete>,
-			) -> Result<Self, D::Error>
-			where
-				D: Deserializer<'de>,
-			{
-				<serde_bytes::ByteBuf as serde::Deserialize>::deserialize(deserializer).and_then(|buf| {
-					let len = buf.len();
-					let x: Box<Self> = buf.into_boxed_slice().try_into().map_err(|_|de::Error::invalid_length(len, &&*format!("a byte array of length {}", stringify!($i))))?;
-					Ok(*x)
-				})
-				// serde::Deserialize::deserialize(deserializer)
-			}
-		}
-
-		// Specialize the implementation to avoid passing a potentially large array around
-		// on the stack.
-		#[doc(hidden)]
-		impl<T> SerdeData for Box<[T; $i]>
-		where
-			T: SerdeData
-		{
-			fn deserialize<'de, D>(
-				deserializer: D, _schema: Option<SchemaIncomplete>,
-			) -> Result<Self, D::Error>
-			where
-				D: Deserializer<'de>,
-			{
-				let self_: Box<[SerdeDeserialize<T>; $i]> = serde::Deserialize::deserialize(deserializer)?;
-				#[allow(unsafe_code)]
-				Ok(unsafe { Box::from_raw(Box::into_raw(self_) as *mut [T; $i]) })
-			}
-		}
+		// impl SerdeData for [u8; $i] {
+		// 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		// 	where
+		// 		S: Serializer,
+		// 	{
+		// 		serde_bytes::Serialize::serialize(self as &[u8], serializer)
+		// 		// serde::Serialize::serialize(self, serializer)
+		// 	}
+		// 	fn deserialize<'de, D>(
+		// 		deserializer: D, _schema: Option<SchemaIncomplete>,
+		// 	) -> Result<Self, D::Error>
+		// 	where
+		// 		D: Deserializer<'de>,
+		// 	{
+		// 		<serde_bytes::ByteBuf as serde::Deserialize>::deserialize(deserializer).and_then(|buf| {
+		// 			let len = buf.len();
+		// 			let x: Box<Self> = buf.into_boxed_slice().try_into().map_err(|_|de::Error::invalid_length(len, &&*format!("a byte array of length {}", stringify!($i))))?;
+		// 			Ok(*x)
+		// 		})
+		// 		// serde::Deserialize::deserialize(deserializer)
+		// 	}
+		// }
 	)*};
 }
 amadeus_types::array!(array);

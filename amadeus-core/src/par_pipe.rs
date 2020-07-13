@@ -1,6 +1,9 @@
+#![allow(unused_qualifications)]
+
 use either::Either;
 use futures::Stream;
-use std::{cmp::Ordering, hash::Hash, iter};
+use serde_closure::traits;
+use std::{cmp::Ordering, hash::Hash, iter, ops};
 
 use crate::{pipe::Pipe, pool::ProcessSend};
 
@@ -15,7 +18,7 @@ pub trait PipeTask<Source> {
 }
 
 macro_rules! pipe {
-	($pipe:ident $sink:ident $from_sink:ident $send:ident $assert_pipe:ident $assert_sink:ident $($meta:meta)*) => {
+	($pipe:ident $sink:ident $from_sink:ident $send:ident $fns:ident $assert_pipe:ident $assert_sink:ident $($meta:meta)*) => {
 		$(#[$meta])*
 		#[must_use]
 		pub trait $pipe<Source> {
@@ -26,7 +29,7 @@ macro_rules! pipe {
 
 			fn inspect<F>(self, f: F) -> Inspect<Self, F>
 			where
-				F: FnMut(&Self::Item) + Clone + $send + 'static,
+				F: $fns::FnMut(&Self::Item) + Clone + $send + 'static,
 				Self: Sized,
 			{
 				$assert_pipe(Inspect::new(self, f))
@@ -34,7 +37,7 @@ macro_rules! pipe {
 
 			fn update<F>(self, f: F) -> Update<Self, F>
 			where
-				F: FnMut(&mut Self::Item) + Clone + $send + 'static,
+				F: $fns::FnMut(&mut Self::Item) + Clone + $send + 'static,
 				Self: Sized,
 			{
 				$assert_pipe(Update::new(self, f))
@@ -42,7 +45,7 @@ macro_rules! pipe {
 
 			fn map<B, F>(self, f: F) -> Map<Self, F>
 			where
-				F: FnMut(Self::Item) -> B + Clone + $send + 'static,
+				F: $fns::FnMut(Self::Item) -> B + Clone + $send + 'static,
 				Self: Sized,
 			{
 				$assert_pipe(Map::new(self, f))
@@ -50,7 +53,7 @@ macro_rules! pipe {
 
 			fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 			where
-				F: FnMut(Self::Item) -> B + Clone + $send + 'static,
+				F: $fns::FnMut(Self::Item) -> B + Clone + $send + 'static,
 				B: Stream,
 				Self: Sized,
 			{
@@ -59,7 +62,7 @@ macro_rules! pipe {
 
 			fn filter<F>(self, f: F) -> Filter<Self, F>
 			where
-				F: FnMut(&Self::Item) -> bool + Clone + $send + 'static,
+				F: $fns::FnMut(&Self::Item) -> bool + Clone + $send + 'static,
 				Self: Sized,
 			{
 				$assert_pipe(Filter::new(self, f))
@@ -104,7 +107,7 @@ macro_rules! pipe {
 
 			fn for_each<F>(self, f: F) -> ForEach<Self, F>
 			where
-				F: FnMut(Self::Item) + Clone + $send + 'static,
+				F: $fns::FnMut(Self::Item) + Clone + $send + 'static,
 				Self: Sized,
 			{
 				$assert_sink(ForEach::new(self, f))
@@ -112,8 +115,8 @@ macro_rules! pipe {
 
 			fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
 			where
-				ID: FnMut() -> B + Clone + $send + 'static,
-				F: FnMut(B, Either<Self::Item, B>) -> B + Clone + $send + 'static,
+				ID: $fns::FnMut() -> B + Clone + $send + 'static,
+				F: $fns::FnMut(B, Either<Self::Item, B>) -> B + Clone + $send + 'static,
 				B: $send + 'static,
 				Self: Sized,
 			{
@@ -158,7 +161,7 @@ macro_rules! pipe {
 
 			fn combine<F>(self, f: F) -> Combine<Self, F>
 			where
-				F: FnMut(Self::Item, Self::Item) -> Self::Item + Clone + $send + 'static,
+				F: $fns::FnMut(Self::Item, Self::Item) -> Self::Item + Clone + $send + 'static,
 				Self::Item: $send + 'static,
 				Self: Sized,
 			{
@@ -175,7 +178,7 @@ macro_rules! pipe {
 
 			fn max_by<F>(self, f: F) -> MaxBy<Self, F>
 			where
-				F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + $send + 'static,
+				F: $fns::FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + $send + 'static,
 				Self::Item: $send + 'static,
 				Self: Sized,
 			{
@@ -184,7 +187,7 @@ macro_rules! pipe {
 
 			fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
 			where
-				F: FnMut(&Self::Item) -> B + Clone + $send + 'static,
+				F: $fns::FnMut(&Self::Item) -> B + Clone + $send + 'static,
 				B: Ord + 'static,
 				Self::Item: $send + 'static,
 				Self: Sized,
@@ -202,7 +205,7 @@ macro_rules! pipe {
 
 			fn min_by<F>(self, f: F) -> MinBy<Self, F>
 			where
-				F: FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + $send + 'static,
+				F: $fns::FnMut(&Self::Item, &Self::Item) -> Ordering + Clone + $send + 'static,
 				Self::Item: $send + 'static,
 				Self: Sized,
 			{
@@ -211,7 +214,7 @@ macro_rules! pipe {
 
 			fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
 			where
-				F: FnMut(&Self::Item) -> B + Clone + $send + 'static,
+				F: $fns::FnMut(&Self::Item) -> B + Clone + $send + 'static,
 				B: Ord + 'static,
 				Self::Item: $send + 'static,
 				Self: Sized,
@@ -254,7 +257,7 @@ macro_rules! pipe {
 
 			fn all<F>(self, f: F) -> All<Self, F>
 			where
-				F: FnMut(Self::Item) -> bool + Clone + $send + 'static,
+				F: $fns::FnMut(Self::Item) -> bool + Clone + $send + 'static,
 				Self: Sized,
 			{
 				$assert_sink(All::new(self, f))
@@ -262,7 +265,7 @@ macro_rules! pipe {
 
 			fn any<F>(self, f: F) -> Any<Self, F>
 			where
-				F: FnMut(Self::Item) -> bool + Clone + $send + 'static,
+				F: $fns::FnMut(Self::Item) -> bool + Clone + $send + 'static,
 				Self: Sized,
 			{
 				$assert_sink(Any::new(self, f))
@@ -284,5 +287,5 @@ macro_rules! pipe {
 	};
 }
 
-pipe!(ParallelPipe ParallelSink FromParallelStream Send assert_parallel_pipe assert_parallel_sink);
-pipe!(DistributedPipe DistributedSink FromDistributedStream ProcessSend assert_distributed_pipe assert_distributed_sink cfg_attr(not(feature = "doc"), serde_closure::generalize));
+pipe!(ParallelPipe ParallelSink FromParallelStream Send ops assert_parallel_pipe assert_parallel_sink);
+pipe!(DistributedPipe DistributedSink FromDistributedStream ProcessSend traits assert_distributed_pipe assert_distributed_sink cfg_attr(not(feature = "nightly"), serde_closure::desugar));
