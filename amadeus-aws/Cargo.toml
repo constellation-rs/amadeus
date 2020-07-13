@@ -13,13 +13,11 @@ homepage = "https://github.com/alecmocatta/amadeus"
 documentation = "https://docs.rs/amadeus"
 readme = "README.md"
 edition = "2018"
+build = "src/build.rs"
 
 [badges]
 azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "26" }
 maintenance = { status = "actively-developed" }
-
-[features]
-nightly = []
 
 [dependencies]
 amadeus-core = { version = "=0.3.1", path = "../amadeus-core" }
@@ -43,3 +41,6 @@ vec-utils = "0.2"
 # dependency of rusoto_core/hyper-tls/native-tls; ensure it's vendored to simplify cross-compilation
 [target.'cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
+
+[build-dependencies]
+rustversion = "1.0"

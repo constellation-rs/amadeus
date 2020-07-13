@@ -10,7 +10,7 @@ impl<T: ?Sized> ProcessSend for T where T: Send + Serialize + for<'de> Deseriali
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
-#[cfg_attr(not(feature = "nightly"), serde_closure::desugar)]
+#[cfg_attr(not(nightly), serde_closure::desugar)]
 pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 	type ThreadPool: ThreadPool + 'static;
 
@@ -31,7 +31,7 @@ pub trait ThreadPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 		T: Send + 'static;
 }
 
-#[cfg_attr(not(feature = "nightly"), serde_closure::desugar)]
+#[cfg_attr(not(nightly), serde_closure::desugar)]
 impl<P: ?Sized> ProcessPool for &P
 where
 	P: ProcessPool,

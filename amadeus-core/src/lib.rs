@@ -7,7 +7,7 @@
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. All functionality is re-exposed in [`amadeus`](https://docs.rs/amadeus/0.3/amadeus/).
 
 #![doc(html_root_url = "https://docs.rs/amadeus-core/0.3.1")]
-#![cfg_attr(feature = "nightly", feature(unboxed_closures))]
+#![cfg_attr(nightly, feature(unboxed_closures))]
 #![recursion_limit = "25600"]
 #![warn(
 	// missing_copy_implementations,

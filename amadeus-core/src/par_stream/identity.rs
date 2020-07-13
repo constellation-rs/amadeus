@@ -29,7 +29,7 @@ impl_par_dist! {
 mod workaround {
 	use super::*;
 
-	#[cfg_attr(not(feature = "nightly"), serde_closure::desugar)]
+	#[cfg_attr(not(nightly), serde_closure::desugar)]
 	#[doc(hidden)]
 	impl Identity {
 		pub fn pipe<S>(self, sink: S) -> Pipe<Self, S> {

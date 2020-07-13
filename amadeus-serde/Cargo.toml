@@ -13,13 +13,11 @@ homepage = "https://github.com/alecmocatta/amadeus"
 documentation = "https://docs.rs/amadeus"
 readme = "README.md"
 edition = "2018"
+build = "src/build.rs"
 
 [badges]
 azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "26" }
 maintenance = { status = "actively-developed" }
-
-[features]
-nightly = []
 
 [dependencies]
 amadeus-core = { version = "=0.3.1", path = "../amadeus-core" }
@@ -35,3 +33,6 @@ serde_closure = "0.3"
 serde_json = "1.0"
 sum = { version = "0.1", features = ["serde"] }
 vec-utils = "0.2"
+
+[build-dependencies]
+rustversion = "1.0"

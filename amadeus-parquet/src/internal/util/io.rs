@@ -16,7 +16,7 @@
 // under the License.
 
 use std::{
-	cell::RefCell, cmp, fs::File, io::{self, BufWriter, Cursor, Initializer, Read, Seek, SeekFrom, Write}, rc::Rc
+	cell::RefCell, cmp, fs::File, io::{self, BufWriter, Cursor, Read, Seek, SeekFrom, Write}, rc::Rc
 };
 
 use crate::internal::file::reader::ParquetReader;
@@ -57,7 +57,8 @@ impl<R: ParquetReader> Read for BufReader<R> {
 		self.offset += read as u64;
 		Ok(read)
 	}
-	unsafe fn initializer(&self) -> Initializer {
+	#[cfg(nightly)]
+	unsafe fn initializer(&self) -> std::io::Initializer {
 		self.inner.initializer()
 	}
 }
@@ -68,6 +69,9 @@ impl<R: ParquetReader> Seek for BufReader<R> {
 			SeekFrom::Current(n) => n,
 			SeekFrom::End(n) => self.len as i64 + n - self.offset as i64,
 		};
+		#[cfg(not(nightly))]
+		let _ = self.inner.seek(SeekFrom::Current(offset))?;
+		#[cfg(nightly)]
 		self.inner.seek_relative(offset)?;
 		self.offset = (self.offset as i64 + offset) as u64;
 		Ok(self.offset)

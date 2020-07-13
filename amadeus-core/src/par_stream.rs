@@ -482,7 +482,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 	}
 });
 
-stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream IntoDistributedStream into_dist_stream DistStream ProcessPool ProcessSend traits assert_distributed_stream cfg_attr(not(feature = "nightly"), serde_closure::desugar) {
+stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream IntoDistributedStream into_dist_stream DistStream ProcessPool ProcessSend traits assert_distributed_stream cfg_attr(not(nightly), serde_closure::desugar) {
 	async fn reduce<P, B, R1, R2, R3>(
 		mut self, pool: &P, reduce_a_factory: R1, reduce_b_factory: R2, reduce_c: R3,
 	) -> B

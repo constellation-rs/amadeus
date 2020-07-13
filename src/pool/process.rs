@@ -259,7 +259,7 @@ impl Drop for ProcessPoolInner {
 
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);
-#[cfg_attr(not(feature = "nightly"), serde_closure::desugar)]
+#[cfg_attr(not(nightly), serde_closure::desugar)]
 impl ProcessPool {
 	pub fn new(
 		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,

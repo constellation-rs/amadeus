@@ -13,13 +13,11 @@ homepage = "https://github.com/alecmocatta/amadeus"
 documentation = "https://docs.rs/amadeus"
 readme = "README.md"
 edition = "2018"
+build = "src/build.rs"
 
 [badges]
 azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "26" }
 maintenance = { status = "actively-developed" }
-
-[features]
-nightly = []
 
 [dependencies]
 amadeus-core = { version = "=0.3.1", path = "../amadeus-core" }
@@ -36,6 +34,7 @@ linked-hash-map = "0.5"
 lz4 = "1.23"
 num-bigint = "0.3"
 quick-error = "1.2.2"
+rustversion = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
 snap = "1.0"
@@ -45,6 +44,9 @@ zstd = "0.4"
 
 [dev-dependencies]
 rand = "0.7"
+
+[build-dependencies]
+rustversion = "1.0"
 
 [[test]]
 name = "derive"
