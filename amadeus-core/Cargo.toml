@@ -30,7 +30,7 @@ pin-project = "0.4"
 rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.2"
+serde_closure = "0.3"
 streaming_algorithms = "0.2"
 sum = { version = "0.1", features = ["futures", "serde"] }
 walkdir = "2.2"
