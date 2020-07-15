@@ -214,7 +214,10 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		#[cfg(all(feature = "packed_simd", any(target_arch = "x86", target_arch = "x86_64")))]
+		#[cfg(all(
+			feature = "packed_simd",
+			any(target_arch = "x86", target_arch = "x86_64")
+		))]
 		{
 			assert_eq!(self.m.len() % u8s::lanes(), 0); // TODO: high error rate can trigger this
 			assert_eq!(u8s::lanes(), f32s::lanes() * 4);
@@ -246,7 +249,10 @@ where
 			// https://github.com/AdamNiederer/faster/issues/37
 			// (src.m.simd_iter(faster::u8s(0)),self.m.simd_iter_mut(faster::u8s(0))).zip()
 		}
-		#[cfg(not(all(feature = "packed_simd", any(target_arch = "x86", target_arch = "x86_64"))))]
+		#[cfg(not(all(
+			feature = "packed_simd",
+			any(target_arch = "x86", target_arch = "x86_64")
+		)))]
 		{
 			let mut zero = 0;
 			let mut sum = 0.0;
@@ -267,7 +273,10 @@ where
 		assert_eq!(src.alpha, self.alpha);
 		assert_eq!(src.p, self.p);
 		assert_eq!(src.m.len(), self.m.len());
-		#[cfg(all(feature = "packed_simd", any(target_arch = "x86", target_arch = "x86_64")))]
+		#[cfg(all(
+			feature = "packed_simd",
+			any(target_arch = "x86", target_arch = "x86_64")
+		))]
 		{
 			assert_eq!(self.m.len() % u8s::lanes(), 0);
 			assert_eq!(u8s::lanes(), f32s::lanes() * 4);
@@ -297,7 +306,10 @@ where
 			self.zero = usize::try_from(zero.wrapping_sum()).unwrap();
 			self.sum = f64::from(sum.sum());
 		}
-		#[cfg(not(all(feature = "packed_simd", any(target_arch = "x86", target_arch = "x86_64"))))]
+		#[cfg(not(all(
+			feature = "packed_simd",
+			any(target_arch = "x86", target_arch = "x86_64")
+		)))]
 		{
 			let mut zero = 0;
 			let mut sum = 0.0;
@@ -457,7 +469,10 @@ impl<V: ?Sized> IntersectPlusUnionIsPlus for HyperLogLog<V> {
 	const VAL: bool = true;
 }
 
-#[cfg(all(feature = "packed_simd", any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(all(
+	feature = "packed_simd",
+	any(target_arch = "x86", target_arch = "x86_64")
+))]
 mod simd {
 	pub use packed_simd::{self, Cast, FromBits, IntoBits};
 	use std::marker::PhantomData;
@@ -560,7 +575,10 @@ mod simd {
 		}
 	}
 }
-#[cfg(all(feature = "packed_simd", any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(all(
+	feature = "packed_simd",
+	any(target_arch = "x86", target_arch = "x86_64")
+))]
 use simd::{f32s, u32s, u8s, u8s_sad_out, u8sq, Cast, FromBits, IntoBits, Sad};
 
 #[cfg(test)]
