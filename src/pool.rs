@@ -50,7 +50,7 @@ impl ProcessPoolTrait for ThreadPool {
 	{
 		let self_ = self.clone();
 		Box::pin(
-			ThreadPool::spawn(self, move || traits::FnOnce::call_once(work, (&self_,)))
+			ThreadPool::spawn(self, move || work.call_once((&self_,)))
 				.map_err(|e| Box::new(e) as _),
 		)
 	}

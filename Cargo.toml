@@ -59,16 +59,11 @@ tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "blocking"] }
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
 serde_json = "1.0"
-streaming_algorithms = "0.2"
+streaming_algorithms = "0.3"
 tokio = { version = "0.2", features = ["macros", "time"] }
 
 [build-dependencies]
 rustversion = "1.0"
-
-[patch.crates-io]
-vec-utils = { version = "*", git = "https://github.com/alecmocatta/vec-utils", branch = "stable" }
-streaming_algorithms = { version = "*", git = "https://github.com/alecmocatta/streaming_algorithms", branch = "stable" }
-constellation-rs = { version = "0.2.0-alpha.2", git = "https://github.com/constellation-rs/constellation", branch = "dependabot/cargo/serde_closure-0.3" }
 
 [[example]]
 name = "cloudfront_logs"

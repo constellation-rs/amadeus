@@ -1,6 +1,5 @@
 use async_channel::{bounded, Sender};
 use futures::{future::RemoteHandle, FutureExt, TryFutureExt};
-use serde_closure::traits;
 use std::{
 	any::Any, future::Future, io, panic::{AssertUnwindSafe, RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc
 };
@@ -43,7 +42,7 @@ impl ThreadPool {
 	{
 		self.0
 			.pool
-			.spawn_pinned(|| traits::FnOnce::call_once(work, ()))
+			.spawn_pinned(|| work())
 			.map_err(JoinError::into_panic)
 			.map_err(Panicked::from)
 	}
