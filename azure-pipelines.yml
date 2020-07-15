@@ -13,8 +13,8 @@ jobs:
   parameters:
     endpoint: alecmocatta
     default:
-      rust_toolchain: nightly-2020-06-10
-      rust_lint_toolchain: nightly-2020-06-10
+      rust_toolchain: stable nightly
+      rust_lint_toolchain: nightly-2020-07-12
       rust_flags: ''
       rust_features: ''
       rust_target_check: ''
@@ -29,4 +29,4 @@ jobs:
         rust_target_run: 'x86_64-apple-darwin'
       linux:
         imageName: 'ubuntu-latest'
-        rust_target_run: 'x86_64-unknown-linux-gnu i686-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-musl'
+        rust_target_run: 'x86_64-unknown-linux-gnu i686-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-musl aarch64-unknown-linux-gnu aarch64-unknown-linux-musl'
