@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-types"
-version = "0.3.1"
+version = "0.3.2"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "date-and-time", "data-structures"]
@@ -19,7 +19,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.1", path = "../amadeus-core" }
+amadeus-core = { version = "=0.3.2", path = "../amadeus-core" }
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
 chrono-tz = { version = "0.5", features = ["serde"] }
 fxhash = "0.2"
