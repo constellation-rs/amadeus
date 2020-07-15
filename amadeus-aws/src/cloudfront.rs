@@ -53,9 +53,9 @@ impl Cloudfront {
 	}
 }
 
-#[cfg(not(nightly))]
+#[cfg(not(all(nightly, not(doc))))]
 type Output = std::pin::Pin<Box<dyn Stream<Item = Result<CloudfrontRow, AwsError>> + Send>>;
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 type Output = impl Stream<Item = Result<CloudfrontRow, AwsError>> + Send;
 
 FnMutNamed! {
@@ -103,7 +103,7 @@ FnMutNamed! {
 		}
 		.flatten_stream()
 		.map(|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(identity));
-		#[cfg(not(nightly))]
+		#[cfg(not(all(nightly, not(doc))))]
 		let ret = ret.boxed();
 		ret
 	}
@@ -114,13 +114,13 @@ impl Source for Cloudfront {
 	type Error = AwsError;
 
 	type ParStream = DistParStream<Self::DistStream>;
-	#[cfg(not(nightly))]
+	#[cfg(not(all(nightly, not(doc))))]
 	#[allow(clippy::type_complexity)]
 	type DistStream = amadeus_core::par_stream::FlatMap<
 		amadeus_core::into_par_stream::IterDistStream<std::vec::IntoIter<String>>,
 		Closure,
 	>;
-	#[cfg(nightly)]
+	#[cfg(all(nightly, not(doc)))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {

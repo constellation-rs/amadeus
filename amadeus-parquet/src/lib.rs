@@ -38,10 +38,10 @@
 #[cfg(nightly)]
 extern crate test;
 
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 mod internal;
 
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 mod wrap {
 	use super::internal;
 	use async_trait::async_trait;
@@ -371,5 +371,5 @@ mod wrap {
 		}
 	}
 }
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 pub use wrap::*;

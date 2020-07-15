@@ -80,9 +80,9 @@ impl CommonCrawl {
 	}
 }
 
-#[cfg(not(nightly))]
+#[cfg(not(all(nightly, not(doc))))]
 type Output = std::pin::Pin<Box<dyn Stream<Item = Result<Webpage<'static>, io::Error>> + Send>>;
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 type Output = impl Stream<Item = Result<Webpage<'static>, io::Error>> + Send;
 
 FnMutNamed! {
@@ -99,7 +99,7 @@ FnMutNamed! {
 				WarcParser::new(body)
 			}
 			.flatten_stream();
-		#[cfg(not(nightly))]
+		#[cfg(not(all(nightly, not(doc))))]
 		let ret = ret.boxed();
 		ret
 	}
@@ -110,13 +110,13 @@ impl Source for CommonCrawl {
 	type Error = io::Error;
 
 	type ParStream = DistParStream<Self::DistStream>;
-	#[cfg(not(nightly))]
+	#[cfg(not(all(nightly, not(doc))))]
 	#[allow(clippy::type_complexity)]
 	type DistStream = amadeus_core::par_stream::FlatMap<
 		amadeus_core::into_par_stream::IterDistStream<std::vec::IntoIter<String>>,
 		Closure,
 	>;
-	#[cfg(nightly)]
+	#[cfg(all(nightly, not(doc)))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {
