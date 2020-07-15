@@ -1,5 +1,11 @@
 trigger: ["master"]
 pr: ["master"]
+schedules:
+  - cron: "0 1 * * 0"
+    displayName: "Sunday build"
+    branches:
+      include: ["master"]
+    always: true
 
 resources:
   repositories:
