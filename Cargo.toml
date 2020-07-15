@@ -1,6 +1,6 @@
 [package]
 name = "streaming_algorithms"
-version = "0.2.0"
+version = "0.3.0"
 license = "MIT OR Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["data-structures","algorithms","science"]
@@ -10,7 +10,7 @@ SIMD-accelerated implementations of various streaming algorithms, including Coun
 """
 repository = "https://github.com/alecmocatta/streaming_algorithms"
 homepage = "https://github.com/alecmocatta/streaming_algorithms"
-documentation = "https://docs.rs/streaming_algorithms/0.2.0"
+documentation = "https://docs.rs/streaming_algorithms"
 readme = "README.md"
 edition = "2018"
 
@@ -18,8 +18,11 @@ edition = "2018"
 azure-devops = { project = "alecmocatta/streaming_algorithms", pipeline = "tests", build = "16" }
 maintenance = { status = "actively-developed" }
 
+[features]
+nightly = ["packed_simd"]
+
 [dependencies]
 twox-hash = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 rand = { version = "0.7", features = ["small_rng"] }
-packed_simd = { version = "0.3", features = ["into_bits"] }
+packed_simd = { version = "0.3", features = ["into_bits"], optional = true }
