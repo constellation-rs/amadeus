@@ -26,8 +26,7 @@
 	clippy::must_use_candidate,
 	clippy::missing_errors_doc,
 	clippy::needless_pass_by_value,
-	clippy::default_trait_access,
-	incomplete_features
+	clippy::default_trait_access
 )]
 #![deny(unsafe_code)]
 

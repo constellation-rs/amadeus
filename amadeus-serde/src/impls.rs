@@ -9,6 +9,7 @@ use std::{
 };
 use vec_utils::VecExt;
 
+use amadeus_core::util::{type_coerce, type_coerce_ref, type_eq};
 use amadeus_types::{
 	Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, SchemaIncomplete, Time, TimeWithoutTimezone, Timezone, Url, Value, ValueRequired, Webpage
 };
@@ -173,6 +174,9 @@ where
 	where
 		S: Serializer,
 	{
+		if let Some(self_) = type_coerce_ref::<_, List<u8>>(self) {
+			return serde_bytes::Serialize::serialize(&**self_, serializer);
+		}
 		let mut serializer = serializer.serialize_seq(Some(self.len()))?;
 		for item in self.clone() {
 			serializer.serialize_element(&SerdeSerialize(&item))?;
@@ -180,31 +184,19 @@ where
 		serializer.end()
 	}
 	fn deserialize<'de, D>(
-		_deserializer: D, _schema: Option<SchemaIncomplete>,
+		deserializer: D, _schema: Option<SchemaIncomplete>,
 	) -> Result<Self, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
+		if type_eq::<List<u8>, Self>() {
+			return serde_bytes::Deserialize::deserialize(deserializer)
+				.map(|res: Vec<u8>| type_coerce::<List<u8>, _>(res.into()).unwrap());
+		}
 		// Self::deserialize(deserializer)
 		unimplemented!()
 	}
 }
-// impl SerdeData for List<u8> {
-// 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-// 	where
-// 		S: Serializer,
-// 	{
-// 		serde_bytes::Serialize::serialize(&**self, serializer)
-// 	}
-// 	fn deserialize<'de, D>(
-// 		deserializer: D, _schema: Option<SchemaIncomplete>,
-// 	) -> Result<Self, D::Error>
-// 	where
-// 		D: Deserializer<'de>,
-// 	{
-// 		serde_bytes::Deserialize::deserialize(deserializer).map(<Vec<u8>>::into)
-// 	}
-// }
 
 impl<K, V, S> SerdeData for HashMap<K, V, S>
 where
@@ -472,7 +464,7 @@ use std::convert::TryInto;
 /// Implement SerdeData for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
-		// TODO: Specialize the implementation to avoid passing a potentially large array around on the stack.
+		// TODO: Specialize Box<[T; N]> to avoid passing a potentially large array around on the stack.
 		impl<T> SerdeData for [T; $i]
 		where
 			T: SerdeData
@@ -481,6 +473,9 @@ macro_rules! array {
 			where
 				S: Serializer,
 			{
+				if let Some(self_) = type_coerce_ref::<_, [u8; $i]>(self) {
+					return serde_bytes::Serialize::serialize(self_ as &[u8], serializer);
+				}
 				let self_: *const Self = self;
 				#[allow(unsafe_code)]
 				let self_: &[SerdeSerialize<T>; $i] = unsafe{ &*(self_ as *const _)};
@@ -492,33 +487,17 @@ macro_rules! array {
 			where
 				D: Deserializer<'de>,
 			{
-				let self_: [SerdeDeserialize<T>; $i] = serde::Deserialize::deserialize(deserializer)?;
-				let self_: Box<Self> = <Vec<SerdeDeserialize<T>>>::from(self_).map(|a|a.0).into_boxed_slice().try_into().unwrap();
-				Ok(*self_)
+				Ok(*if type_eq::<[u8; $i], Self>() {
+					let self_: Vec<u8> = serde_bytes::Deserialize::deserialize(deserializer)?;
+					let self_: Box<[u8; $i]> = self_.into_boxed_slice().try_into().unwrap();
+					type_coerce(self_).unwrap()
+				} else {
+					let self_: [SerdeDeserialize<T>; $i] = serde::Deserialize::deserialize(deserializer)?;
+					let self_: Box<Self> = <Vec<SerdeDeserialize<T>>>::from(self_).map(|a|a.0).into_boxed_slice().try_into().unwrap();
+					self_
+				})
 			}
 		}
-		// impl SerdeData for [u8; $i] {
-		// 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		// 	where
-		// 		S: Serializer,
-		// 	{
-		// 		serde_bytes::Serialize::serialize(self as &[u8], serializer)
-		// 		// serde::Serialize::serialize(self, serializer)
-		// 	}
-		// 	fn deserialize<'de, D>(
-		// 		deserializer: D, _schema: Option<SchemaIncomplete>,
-		// 	) -> Result<Self, D::Error>
-		// 	where
-		// 		D: Deserializer<'de>,
-		// 	{
-		// 		<serde_bytes::ByteBuf as serde::Deserialize>::deserialize(deserializer).and_then(|buf| {
-		// 			let len = buf.len();
-		// 			let x: Box<Self> = buf.into_boxed_slice().try_into().map_err(|_|de::Error::invalid_length(len, &&*format!("a byte array of length {}", stringify!($i))))?;
-		// 			Ok(*x)
-		// 		})
-		// 		// serde::Deserialize::deserialize(deserializer)
-		// 	}
-		// }
 	)*};
 }
 amadeus_types::array!(array);

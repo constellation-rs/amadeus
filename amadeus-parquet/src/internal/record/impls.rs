@@ -15,7 +15,7 @@ use crate::internal::{
 		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
 	}, errors::{ParquetError, Result}, record::{
 		display::{DisplayFmt, DisplaySchemaGroup}, predicates::{GroupPredicate, MapPredicate, ValuePredicate}, reader::{
-			BoolReader, BoxReader, ByteArrayReader, F32Reader, F64Reader, FixedLenByteArrayReader, GroupReader, I32Reader, I64Reader, I96Reader, KeyValueReader, MapReader, OptionReader, RepeatedReader, RootReader, TryIntoReader, TupleReader, ValueReader, VecU8Reader
+			BoolReader, BoxFixedLenByteArrayReader, BoxReader, ByteArrayReader, F32Reader, F64Reader, FixedLenByteArrayReader, GroupReader, I32Reader, I64Reader, I96Reader, KeyValueReader, MapReader, OptionReader, RepeatedReader, RootReader, TryIntoReader, TupleReader, ValueReader, VecU8Reader
 		}, schemas::{
 			BoolSchema, BoxSchema, BsonSchema, ByteArraySchema, DateSchema, DateTimeSchema, DecimalSchema, EnumSchema, F32Schema, F64Schema, FixedByteArraySchema, GroupSchema, I16Schema, I32Schema, I64Schema, I8Schema, JsonSchema, ListSchema, ListSchemaType, MapSchema, OptionSchema, RootSchema, StringSchema, TimeSchema, TupleSchema, U16Schema, U32Schema, U64Schema, U8Schema, ValueSchema, VecU8Schema
 		}, triplet::TypedTripletIter, types::{downcast, Downcast, Root}, ParquetData, Predicate, Reader, Schema
@@ -181,32 +181,32 @@ macro_rules! array {
 			}
 		}
 
-		// TODO: Specialize the implementation to avoid passing a potentially large array around
-		// on the stack.
-		// impl ParquetData for Box<[u8; $i]> {
-		// 	type Schema = FixedByteArraySchema<[u8; $i]>;
-		// 	type Reader = BoxFixedLenByteArrayReader<[u8; $i]>;
+		// Specialize Box<[T; N]> to avoid passing a potentially large array around on the stack.
+		#[cfg(nightly)]
+		impl ParquetData for Box<[u8; $i]> {
+			type Schema = FixedByteArraySchema<[u8; $i]>;
+			type Reader = BoxFixedLenByteArrayReader<[u8; $i]>;
 
-		// 	fn parse(
-		// 		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
-		// 	) -> Result<(String, Self::Schema)> {
-		// 		<[u8; $i]>::parse(schema, predicate, repetition)
-		// 	}
+			fn parse(
+				schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
+			) -> Result<(String, Self::Schema)> {
+				<[u8; $i]>::parse(schema, predicate, repetition)
+			}
 
-		// 	fn reader(
-		// 		_schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
-		// 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
-		// 	) -> Self::Reader {
-		// 		let col_path = ColumnPath::new(path.to_vec());
-		// 		let col_reader = paths.remove(&col_path).unwrap();
-		// 		BoxFixedLenByteArrayReader::<[u8; $i]> {
-		// 			column: TypedTripletIter::<FixedLenByteArrayType>::new(
-		// 				def_level, rep_level, col_reader, batch_size,
-		// 			),
-		// 			marker: PhantomData,
-		// 		}
-		// 	}
-		// }
+			fn reader(
+				_schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
+				paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
+			) -> Self::Reader {
+				let col_path = ColumnPath::new(path.to_vec());
+				let col_reader = paths.remove(&col_path).unwrap();
+				BoxFixedLenByteArrayReader::<[u8; $i]> {
+					column: TypedTripletIter::<FixedLenByteArrayType>::new(
+						def_level, rep_level, col_reader, batch_size,
+					),
+					marker: PhantomData,
+				}
+			}
+		}
 	)*};
 }
 amadeus_types::array!(array);
@@ -219,18 +219,18 @@ impl<T> ParquetData for Box<T>
 where
 	T: ParquetData,
 {
-	type Schema = BoxSchema<T::Schema>;
-	type Reader = BoxReader<T::Reader>;
+	default type Schema = BoxSchema<T::Schema>;
+	default type Reader = BoxReader<T::Reader>;
 	type Predicate = T::Predicate;
 
-	fn parse(
+	default fn parse(
 		schema: &Type, predicate: Option<&Self::Predicate>, repetition: Option<Repetition>,
 	) -> Result<(String, Self::Schema)> {
 		T::parse(schema, predicate, repetition)
 			.map(|(name, schema)| (name, type_coerce(BoxSchema(schema))))
 	}
 
-	fn reader(
+	default fn reader(
 		schema: &Self::Schema, path: &mut Vec<String>, def_level: i16, rep_level: i16,
 		paths: &mut HashMap<ColumnPath, ColumnReader>, batch_size: usize,
 	) -> Self::Reader {
