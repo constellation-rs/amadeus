@@ -6,9 +6,8 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.3.1")]
-#![feature(specialization)]
-#![feature(type_alias_impl_trait)]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.3.2")]
+#![cfg_attr(nightly, feature(type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -25,8 +24,7 @@
 	clippy::similar_names,
 	clippy::if_not_else,
 	clippy::must_use_candidate,
-	clippy::missing_errors_doc,
-	incomplete_features
+	clippy::missing_errors_doc
 )]
 #![deny(unsafe_code)]
 
@@ -46,7 +44,7 @@ use futures::{ready, stream, FutureExt, Stream, StreamExt, TryStreamExt};
 use pin_project::pin_project;
 use postgres::{CopyOutStream, Error as InternalPostgresError};
 use serde::{Deserialize, Serialize};
-use serde_closure::FnMut;
+use serde_closure::FnMutNamed;
 use std::{
 	convert::TryFrom, error, fmt::{self, Debug, Display}, io, io::Cursor, marker::PhantomData, ops::Fn, path::PathBuf, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration
 };
@@ -214,6 +212,61 @@ where
 	}
 }
 
+#[cfg(not(nightly))]
+type Output<Row> = Pin<Box<dyn Stream<Item = Result<Row, PostgresError>> + Send>>;
+#[cfg(nightly)]
+type Output<Row> = impl Stream<Item = Result<Row, PostgresError>> + Send;
+
+FnMutNamed! {
+	pub type Closure<Row> = |self|(config, tables)=> (ConnectParams, Vec<PostgresSelect>)| -> Output<Row>
+	where
+		Row: PostgresData
+	{
+		#[allow(clippy::let_and_return)]
+		let ret = async move {
+			let (config, tables): (ConnectParams, Vec<PostgresSelect>) = (config, tables);
+			let (client, connection) = postgres::config::Config::from(config)
+				.connect(postgres::tls::NoTls)
+				.await
+				.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
+			let _ = tokio::spawn(async move {
+				let _ = connection.await;
+			});
+			let client = Arc::new(client);
+			stream::iter(tables.into_iter()).flat_map(move |table: PostgresSelect| {
+				let client = client.clone();
+				async move {
+					let table = match table {
+						PostgresSelect::Table(table) => table.to_string(),
+						PostgresSelect::Query(query) => format!("({}) _", query),
+					};
+					let query = format!(
+						"COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)",
+						DisplayFmt::new(|f| Row::query(f, None)),
+						table
+					);
+					let stmt = client.prepare(&query).await.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
+					let stream = client.copy_out(&stmt).await.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
+					BinaryCopyOutStream::new(stream)
+						.map_ok(|row| {
+							Row::decode(
+								&postgres::types::Type::RECORD,
+								row.as_ref().map(AsRef::as_ref),
+							)
+							.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63")
+						})
+						.map_err(Into::into)
+				}
+				.flatten_stream()
+			})
+		}
+		.flatten_stream();
+		#[cfg(not(nightly))]
+		let ret = ret.boxed();
+		ret
+	}
+}
+
 impl<Row> Source for Postgres<Row>
 where
 	Row: PostgresData,
@@ -221,66 +274,23 @@ where
 	type Item = Row;
 	type Error = PostgresError;
 
-	#[cfg(not(doc))]
-	type ParStream =
-		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type ParStream =
-		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
-	#[cfg(not(doc))]
+	type ParStream = DistParStream<Self::DistStream>;
+	#[cfg(not(nightly))]
+	#[allow(clippy::type_complexity)]
+	type DistStream = amadeus_core::par_stream::FlatMap<
+		amadeus_core::into_par_stream::IterDistStream<
+			std::vec::IntoIter<(ConnectParams, Vec<PostgresSelect>)>,
+		>,
+		Closure<Row>,
+	>;
+	#[cfg(nightly)]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {
 		DistParStream::new(self.dist_stream())
 	}
-	#[allow(clippy::let_and_return)]
 	fn dist_stream(self) -> Self::DistStream {
-		let ret = self
-			.files
-			.into_dist_stream()
-			.flat_map(FnMut!(|(config, tables)| async move {
-				let (config, tables): (ConnectParams, Vec<PostgresSelect>) = (config, tables);
-				let (client, connection) = postgres::config::Config::from(config)
-					.connect(postgres::tls::NoTls)
-					.await
-					.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
-				let _ = tokio::spawn(async move {
-					let _ = connection.await;
-				});
-				let client = Arc::new(client);
-				stream::iter(tables.into_iter()).flat_map(move |table: PostgresSelect| {
-					let client = client.clone();
-					async move {
-						let table = match table {
-							PostgresSelect::Table(table) => table.to_string(),
-							PostgresSelect::Query(query) => format!("({}) _", query),
-						};
-						let query = format!(
-							"COPY (SELECT {} FROM {}) TO STDOUT (FORMAT BINARY)",
-							DisplayFmt::new(|f| Row::query(f, None)),
-							table
-						);
-						let stmt = client.prepare(&query).await.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
-						let stream = client.copy_out(&stmt).await.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63");
-						BinaryCopyOutStream::new(stream)
-							.map_ok(|row| {
-								Row::decode(
-									&postgres::types::Type::RECORD,
-									row.as_ref().map(AsRef::as_ref),
-								)
-								.expect("Error handling not yet implemented. Tracking at https://github.com/constellation-rs/amadeus/issues/63")
-							})
-							.map_err(Into::into)
-					}
-					.flatten_stream()
-				})
-			}
-			.flatten_stream()));
-		#[cfg(doc)]
-		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
-		ret
+		self.files.into_dist_stream().flat_map(Closure::new())
 	}
 }
 

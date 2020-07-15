@@ -1,5 +1,6 @@
 use futures::Stream;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits;
 use std::{
 	iter, pin::Pin, task::{Context, Poll}
 };
@@ -28,6 +29,7 @@ impl_par_dist! {
 mod workaround {
 	use super::*;
 
+	#[cfg_attr(not(nightly), serde_closure::desugar)]
 	#[doc(hidden)]
 	impl Identity {
 		pub fn pipe<S>(self, sink: S) -> Pipe<Self, S> {
@@ -90,7 +92,7 @@ mod workaround {
 
 		pub fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
 		where
-			ID: FnMut() -> B + Clone + Send + 'static,
+			ID: traits::FnMut() -> B + Clone + Send + 'static,
 			F: Clone + Send + 'static,
 			B: Send + 'static,
 		{

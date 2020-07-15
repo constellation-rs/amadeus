@@ -3,7 +3,7 @@ use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{
-	error, fmt, hash::{Hash, Hasher}, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
+	any::{Any, TypeId}, error, fmt, hash::{Hash, Hasher}, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
 use crate::par_stream::{DistributedStream, ParallelStream, StreamTask};
@@ -233,4 +233,43 @@ pub unsafe fn transmute<A, B>(a: A) -> B {
 	let ret = mem::transmute_copy(&a);
 	mem::forget(a);
 	ret
+}
+
+#[allow(unsafe_code)]
+#[inline(always)]
+pub fn type_coerce<A, B>(a: A) -> Option<B>
+where
+	A: 'static,
+	B: 'static,
+{
+	if type_eq::<A, B>() {
+		Some(unsafe { transmute(a) })
+	} else {
+		None
+	}
+}
+#[inline(always)]
+pub fn type_coerce_ref<A, B>(a: &A) -> Option<&B>
+where
+	A: 'static,
+	B: 'static,
+{
+	<dyn Any>::downcast_ref(a)
+}
+#[inline(always)]
+pub fn type_coerce_mut<A, B>(a: &mut A) -> Option<&mut B>
+where
+	A: 'static,
+	B: 'static,
+{
+	<dyn Any>::downcast_mut(a)
+}
+
+#[inline(always)]
+pub fn type_eq<A: ?Sized, B: ?Sized>() -> bool
+where
+	A: 'static,
+	B: 'static,
+{
+	TypeId::of::<A>() == TypeId::of::<B>()
 }

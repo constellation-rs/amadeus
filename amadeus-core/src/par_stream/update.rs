@@ -2,6 +2,7 @@ use derive_new::new;
 use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
@@ -19,7 +20,7 @@ pub struct Update<I, F> {
 impl_par_dist! {
 	impl<I: ParallelStream, F> ParallelStream for Update<I, F>
 	where
-		F: FnMut(&mut I::Item) + Clone + Send + 'static,
+		F: for<'a>FnMut<(&'a mut I::Item,), Output = ()> + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = UpdateTask<I::Task, F>;
@@ -37,7 +38,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, Source> ParallelPipe<Source> for Update<I, F>
 	where
-		F: FnMut(&mut I::Item) + Clone + Send + 'static,
+		F: for<'a>FnMut<(&'a mut I::Item,), Output = ()> + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = UpdateTask<I::Task, F>;
@@ -60,7 +61,7 @@ pub struct UpdateTask<T, F> {
 
 impl<C: StreamTask, F> StreamTask for UpdateTask<C, F>
 where
-	F: FnMut(&mut C::Item) + Clone,
+	F: for<'a> FnMut<(&'a mut C::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 	type Async = UpdateTask<C::Async, F>;
@@ -73,7 +74,7 @@ where
 }
 impl<C: PipeTask<Source>, F, Source> PipeTask<Source> for UpdateTask<C, F>
 where
-	F: FnMut(&mut <C as PipeTask<Source>>::Item) + Clone,
+	F: for<'a> FnMut<(&'a mut <C as PipeTask<Source>>::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 	type Async = UpdateTask<C::Async, F>;
@@ -87,7 +88,7 @@ where
 
 impl<C: Stream, F> Stream for UpdateTask<C, F>
 where
-	F: FnMut(&mut C::Item) + Clone,
+	F: for<'a> FnMut<(&'a mut C::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 
@@ -96,7 +97,7 @@ where
 		let (task, f) = (self_.task, &mut self_.f);
 		task.poll_next(cx).map(|item| {
 			item.map(|mut item| {
-				f(&mut item);
+				f.call_mut((&mut item,));
 				item
 			})
 		})
@@ -105,7 +106,7 @@ where
 
 impl<C: Pipe<Source>, F, Source> Pipe<Source> for UpdateTask<C, F>
 where
-	F: FnMut(&mut C::Item) + Clone,
+	F: for<'a> FnMut<(&'a mut C::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 
@@ -116,7 +117,7 @@ where
 		let (task, f) = (self_.task, &mut self_.f);
 		task.poll_next(cx, stream).map(|item| {
 			item.map(|mut item| {
-				f(&mut item);
+				f.call_mut((&mut item,));
 				item
 			})
 		})

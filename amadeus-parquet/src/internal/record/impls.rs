@@ -181,8 +181,8 @@ macro_rules! array {
 			}
 		}
 
-		// Specialize the implementation to avoid passing a potentially large array around
-		// on the stack.
+		// Specialize Box<[T; N]> to avoid passing a potentially large array around on the stack.
+		#[cfg(nightly)]
 		impl ParquetData for Box<[u8; $i]> {
 			type Schema = FixedByteArraySchema<[u8; $i]>;
 			type Reader = BoxFixedLenByteArrayReader<[u8; $i]>;

@@ -3,6 +3,7 @@ use educe::Educe;
 use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 use std::{
 	future::Future, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
@@ -21,7 +22,7 @@ pub struct ForEach<I, F> {
 
 impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source> for ForEach<I, F>
 where
-	F: FnMut(I::Item) + Clone + Send + 'static,
+	F: FnMut<(I::Item,), Output = ()> + Clone + Send + 'static,
 {
 	type Output = ();
 	type Pipe = I;
@@ -38,7 +39,7 @@ where
 }
 impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for ForEach<I, F>
 where
-	F: FnMut(I::Item) + Clone + ProcessSend + 'static,
+	F: FnMut<(I::Item,), Output = ()> + Clone + ProcessSend + 'static,
 {
 	type Output = ();
 	type Pipe = I;
@@ -67,7 +68,7 @@ pub struct ForEachReducer<A, F>(F, PhantomData<fn() -> A>);
 
 impl<A, F> Reducer<A> for ForEachReducer<A, F>
 where
-	F: FnMut(A) + Clone,
+	F: FnMut<(A,), Output = ()> + Clone,
 {
 	type Output = ();
 	type Async = Self;
@@ -78,20 +79,20 @@ where
 }
 impl<A, F> ReducerProcessSend<A> for ForEachReducer<A, F>
 where
-	F: FnMut(A) + Clone,
+	F: FnMut<(A,), Output = ()> + Clone,
 {
 	type Output = ();
 }
 impl<A, F> ReducerSend<A> for ForEachReducer<A, F>
 where
-	F: FnMut(A) + Clone,
+	F: FnMut<(A,), Output = ()> + Clone,
 {
 	type Output = ();
 }
 
 impl<A, F> Sink<A> for ForEachReducer<A, F>
 where
-	F: FnMut(A) + Clone,
+	F: FnMut<(A,), Output = ()> + Clone,
 {
 	#[inline(always)]
 	fn poll_pipe(
@@ -99,14 +100,14 @@ where
 	) -> Poll<()> {
 		let self_ = self.project();
 		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
-			self_.0(item);
+			self_.0.call_mut((item,));
 		}
 		Poll::Ready(())
 	}
 }
 impl<A, F> ReducerAsync<A> for ForEachReducer<A, F>
 where
-	F: FnMut(A) + Clone,
+	F: FnMut<(A,), Output = ()> + Clone,
 {
 	type Output = ();
 

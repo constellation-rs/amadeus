@@ -2,11 +2,11 @@
 
 use async_compression::futures::bufread::GzipDecoder;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
-use futures::{future, io::BufReader, AsyncBufReadExt, FutureExt, StreamExt, TryStreamExt};
+use futures::{future, io::BufReader, AsyncBufReadExt, FutureExt, Stream, StreamExt, TryStreamExt};
 use http::{Method, StatusCode};
 use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
-use serde_closure::FnMut;
+use serde_closure::FnMutNamed;
 use std::{
 	convert::identity, io::{self}, time::Duration
 };
@@ -52,20 +52,76 @@ impl Cloudfront {
 		})
 	}
 }
+
+#[cfg(not(nightly))]
+type Output = std::pin::Pin<Box<dyn Stream<Item = Result<CloudfrontRow, AwsError>> + Send>>;
+#[cfg(nightly)]
+type Output = impl Stream<Item = Result<CloudfrontRow, AwsError>> + Send;
+
+FnMutNamed! {
+	pub type Closure<> = |self, credentials: AwsCredentials, region: AwsRegion, bucket: String|key=> String| -> Output where {
+		let (credentials, region, bucket) =
+			(self.credentials.clone(), self.region.clone(), self.bucket.clone());
+		#[allow(clippy::let_and_return)]
+		let ret = async move {
+			let client = S3Client::new_with(
+				Ref(once_cell::sync::Lazy::force(&RUSOTO_DISPATCHER)),
+				credentials,
+				region,
+			);
+			let rows = retry(|| {
+				client.get_object(GetObjectRequest {
+					bucket: bucket.clone(),
+					key: key.clone(),
+					..GetObjectRequest::default()
+				})
+			})
+			.await
+			.map_err(AwsError::from)
+			.map(|res| {
+				let body = BufReader::new(TryStreamExt::into_async_read(res.body.unwrap()));
+				let mut body = GzipDecoder::new(body); // Content-Encoding isn't set, so decode manually
+				body.multiple_members(true);
+				BufReader::new(body)
+					.lines()
+					.filter(|x: &Result<String, io::Error>| {
+						future::ready(if let Ok(x) = x {
+							x.chars().find(|x| !x.is_whitespace()) != Some('#')
+						} else {
+							true
+						})
+					})
+					.then(|x: Result<String, io::Error>| async {
+						if let Ok(x) = x {
+							Ok(CloudfrontRow::from_line(&x))
+						} else {
+							Err(AwsError::from(x.err().unwrap()))
+						}
+					})
+			});
+			ResultExpandIter::new(rows)
+		}
+		.flatten_stream()
+		.map(|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(identity));
+		#[cfg(not(nightly))]
+		let ret = ret.boxed();
+		ret
+	}
+}
+
 impl Source for Cloudfront {
 	type Item = CloudfrontRow;
 	type Error = AwsError;
 
-	#[cfg(not(doc))]
-	type ParStream =
-		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type ParStream =
-		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
-	#[cfg(not(doc))]
+	type ParStream = DistParStream<Self::DistStream>;
+	#[cfg(not(nightly))]
+	#[allow(clippy::type_complexity)]
+	type DistStream = amadeus_core::par_stream::FlatMap<
+		amadeus_core::into_par_stream::IterDistStream<std::vec::IntoIter<String>>,
+		Closure,
+	>;
+	#[cfg(nightly)]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {
 		DistParStream::new(self.dist_stream())
@@ -78,57 +134,9 @@ impl Source for Cloudfront {
 			objects,
 			credentials,
 		} = self;
-		let ret = objects
+		objects
 			.into_dist_stream()
-			.flat_map(FnMut!(move |key: String| {
-				let (credentials, region, bucket) =
-					(credentials.clone(), region.clone(), bucket.clone());
-				async move {
-					let client = S3Client::new_with(
-						Ref(once_cell::sync::Lazy::force(&RUSOTO_DISPATCHER)),
-						credentials,
-						region,
-					);
-					let rows = retry(|| {
-						client.get_object(GetObjectRequest {
-							bucket: bucket.clone(),
-							key: key.clone(),
-							..GetObjectRequest::default()
-						})
-					})
-					.await
-					.map_err(AwsError::from)
-					.map(|res| {
-						let body = BufReader::new(TryStreamExt::into_async_read(res.body.unwrap()));
-						let mut body = GzipDecoder::new(body); // Content-Encoding isn't set, so decode manually
-						body.multiple_members(true);
-						BufReader::new(body)
-							.lines()
-							.filter(|x: &Result<String, io::Error>| {
-								future::ready(if let Ok(x) = x {
-									x.chars().find(|x| !x.is_whitespace()) != Some('#')
-								} else {
-									true
-								})
-							})
-							.then(|x: Result<String, io::Error>| async {
-								if let Ok(x) = x {
-									Ok(CloudfrontRow::from_line(&x))
-								} else {
-									Err(AwsError::from(x.err().unwrap()))
-								}
-							})
-					});
-					ResultExpandIter::new(rows)
-				}
-				.flatten_stream()
-			}))
-			.map(FnMut!(
-				|x: Result<Result<CloudfrontRow, _>, _>| x.and_then(self::identity)
-			));
-		#[cfg(doc)]
-		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
-		ret
+			.flat_map(Closure::new(credentials, region, bucket))
 	}
 }
 

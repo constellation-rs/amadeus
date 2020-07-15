@@ -1,6 +1,6 @@
 use constellation::{spawn, Receiver, Resources, Sender, SpawnError};
 use futures::{future::LocalBoxFuture, FutureExt};
-use serde_closure::FnOnce;
+use serde_closure::{traits, FnOnce};
 use serde_traitobject as st;
 use std::{
 	any, collections::VecDeque, fmt, future::Future, mem, panic::{self, RefUnwindSafe, UnwindSafe}, sync::{Arc, Mutex}
@@ -12,9 +12,8 @@ use super::{
 	util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize}, ThreadPool
 };
 
-type Request = st::Box<
-	dyn for<'a> st::FnOnce<(&'a ThreadPool,), Output = LocalBoxFuture<'static, Response>> + Send,
->; // TODO: update once #![feature(unboxed_closures)] is stable
+#[serde_closure::desugar]
+type Request = st::Box<dyn st::sc::FnOnce(&ThreadPool) -> LocalBoxFuture<'static, Response> + Send>;
 type Response = Box<dyn st::Any + Send>;
 
 mod future_ext {
@@ -135,7 +134,7 @@ impl ProcessPoolInner {
 
 							while let Some(work) = receiver.recv().await.unwrap() {
 								let ret = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-									work(&thread_pool)
+									work.into_box().call_once_box((&thread_pool,))
 								}));
 								let ret = match ret {
 									Ok(t) => panic::AssertUnwindSafe(t).catch_unwind().await,
@@ -184,7 +183,7 @@ impl ProcessPoolInner {
 	}
 	async fn spawn<F, Fut, T>(&self, work: F) -> Result<T, Panicked>
 	where
-		F: FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
+		F: for<'a> traits::FnOnce<(&'a ThreadPool,), Output = Fut> + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{
@@ -194,7 +193,7 @@ impl ProcessPoolInner {
 			.sender
 			.send(Some(st::Box::new(FnOnce!(move |thread_pool: &_| {
 				let work: F = work;
-				work(thread_pool)
+				work.call_once((thread_pool,))
 					.map(|res| Box::new(res) as Response)
 					.boxed_local()
 			})) as Request));
@@ -257,6 +256,7 @@ impl Drop for ProcessPoolInner {
 
 #[derive(Debug)]
 pub struct ProcessPool(Arc<ProcessPoolInner>);
+#[cfg_attr(not(nightly), serde_closure::desugar)]
 impl ProcessPool {
 	pub fn new(
 		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
@@ -272,7 +272,7 @@ impl ProcessPool {
 	}
 	pub fn spawn<F, Fut, T>(&self, work: F) -> impl Future<Output = Result<T, Panicked>> + Send
 	where
-		F: FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
+		F: traits::FnOnce(&ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{

@@ -6,8 +6,8 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.3.1")]
-#![feature(type_alias_impl_trait)]
+#![doc(html_root_url = "https://docs.rs/amadeus-aws/0.3.2")]
+#![cfg_attr(nightly, feature(type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,

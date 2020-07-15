@@ -2,6 +2,7 @@ use derive_new::new;
 use futures::Stream;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
@@ -19,7 +20,7 @@ pub struct Inspect<I, F> {
 impl_par_dist! {
 	impl<I: ParallelStream, F> ParallelStream for Inspect<I, F>
 	where
-		F: FnMut(&I::Item) + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a I::Item,), Output = ()> + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = InspectTask<I::Task, F>;
@@ -37,7 +38,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, Source> ParallelPipe<Source> for Inspect<I, F>
 	where
-		F: FnMut(&I::Item) + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a I::Item,), Output = ()> + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = InspectTask<I::Task, F>;
@@ -60,7 +61,7 @@ pub struct InspectTask<T, F> {
 
 impl<C: StreamTask, F> StreamTask for InspectTask<C, F>
 where
-	F: FnMut(&C::Item) + Clone,
+	F: for<'a> FnMut<(&'a C::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 	type Async = InspectTask<C::Async, F>;
@@ -73,7 +74,7 @@ where
 }
 impl<C: PipeTask<Source>, F, Source> PipeTask<Source> for InspectTask<C, F>
 where
-	F: FnMut(&C::Item) + Clone,
+	F: for<'a> FnMut<(&'a C::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 	type Async = InspectTask<C::Async, F>;
@@ -87,7 +88,7 @@ where
 
 impl<C: Stream, F> Stream for InspectTask<C, F>
 where
-	F: FnMut(&C::Item) + Clone,
+	F: for<'a> FnMut<(&'a C::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 
@@ -96,7 +97,7 @@ where
 		let (task, f) = (self_.task, &mut self_.f);
 		task.poll_next(cx).map(|item| {
 			item.map(|item| {
-				f(&item);
+				f.call_mut((&item,));
 				item
 			})
 		})
@@ -105,7 +106,7 @@ where
 
 impl<C: Pipe<Source>, F, Source> Pipe<Source> for InspectTask<C, F>
 where
-	F: FnMut(&C::Item) + Clone,
+	F: for<'a> FnMut<(&'a C::Item,), Output = ()> + Clone,
 {
 	type Item = C::Item;
 
@@ -116,7 +117,7 @@ where
 		let (task, f) = (self_.task, &mut self_.f);
 		task.poll_next(cx, stream).map(|item| {
 			item.map(|item| {
-				f(&item);
+				f.call_mut((&item,));
 				item
 			})
 		})

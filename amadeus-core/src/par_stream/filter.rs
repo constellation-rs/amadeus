@@ -1,8 +1,8 @@
 use derive_new::new;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 
 use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
-use crate::pipe::{Pipe, StreamExt};
 
 #[derive(new)]
 #[must_use]
@@ -14,7 +14,7 @@ pub struct Filter<I, F> {
 impl_par_dist! {
 	impl<I: ParallelStream, F> ParallelStream for Filter<I, F>
 	where
-		F: FnMut(&I::Item) -> bool + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a I::Item,), Output = bool> + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = FilterTask<I::Task, F>;
@@ -32,7 +32,7 @@ impl_par_dist! {
 
 	impl<I: ParallelPipe<Source>, F, Source> ParallelPipe<Source> for Filter<I, F>
 	where
-		F: FnMut(&I::Item) -> bool + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a I::Item,), Output = bool> + Clone + Send + 'static,
 	{
 		type Item = I::Item;
 		type Task = FilterTask<I::Task, F>;
@@ -53,23 +53,23 @@ pub struct FilterTask<C, F> {
 
 impl<C: StreamTask, F> StreamTask for FilterTask<C, F>
 where
-	F: FnMut(&C::Item) -> bool,
+	F: for<'a> FnMut<(&'a C::Item,), Output = bool>,
 {
 	type Item = C::Item;
 	type Async = crate::pipe::Filter<C::Async, F>;
 
 	fn into_async(self) -> Self::Async {
-		self.task.into_async().filter(self.f)
+		crate::pipe::Filter::new(self.task.into_async(), self.f)
 	}
 }
 impl<C: PipeTask<Source>, F, Source> PipeTask<Source> for FilterTask<C, F>
 where
-	F: FnMut(&C::Item) -> bool,
+	F: for<'a> FnMut<(&'a C::Item,), Output = bool>,
 {
 	type Item = C::Item;
 	type Async = crate::pipe::Filter<C::Async, F>;
 
 	fn into_async(self) -> Self::Async {
-		self.task.into_async().filter(self.f)
+		crate::pipe::Filter::new(self.task.into_async(), self.f)
 	}
 }

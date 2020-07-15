@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-core"
-version = "0.3.1"
+version = "0.3.2"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -30,8 +30,11 @@ pin-project = "0.4"
 rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.2"
-streaming_algorithms = "0.2"
+serde_closure = "0.3"
+streaming_algorithms = "0.3"
 sum = { version = "0.1", features = ["futures", "serde"] }
 walkdir = "2.2"
 widestring = "0.4"
+
+[build-dependencies]
+rustversion = "1.0"

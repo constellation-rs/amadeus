@@ -3,6 +3,7 @@ use educe::Educe;
 use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
+use serde_closure::traits::FnMut;
 use std::{
 	future::Future, marker::PhantomData, pin::Pin, task::{Context, Poll}
 };
@@ -21,7 +22,7 @@ pub struct Any<I, F> {
 
 impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source> for Any<I, F>
 where
-	F: FnMut(I::Item) -> bool + Clone + Send + 'static,
+	F: FnMut<(I::Item,), Output = bool> + Clone + Send + 'static,
 {
 	type Output = bool;
 	type Pipe = I;
@@ -34,7 +35,7 @@ where
 }
 impl<I: DistributedPipe<Source>, Source, F> DistributedSink<Source> for Any<I, F>
 where
-	F: FnMut(I::Item) -> bool + Clone + ProcessSend + 'static,
+	F: FnMut<(I::Item,), Output = bool> + Clone + ProcessSend + 'static,
 {
 	type Output = bool;
 	type Pipe = I;
@@ -62,7 +63,7 @@ pub struct AnyReducer<A, F>(F, PhantomData<fn() -> A>);
 
 impl<A, F> Reducer<A> for AnyReducer<A, F>
 where
-	F: FnMut(A) -> bool,
+	F: FnMut<(A,), Output = bool>,
 {
 	type Output = bool;
 	type Async = AnyReducerAsync<A, F>;
@@ -73,13 +74,13 @@ where
 }
 impl<A, F> ReducerProcessSend<A> for AnyReducer<A, F>
 where
-	F: FnMut(A) -> bool,
+	F: FnMut<(A,), Output = bool>,
 {
 	type Output = bool;
 }
 impl<A, F> ReducerSend<A> for AnyReducer<A, F>
 where
-	F: FnMut(A) -> bool,
+	F: FnMut<(A,), Output = bool>,
 {
 	type Output = bool;
 }
@@ -94,7 +95,7 @@ pub struct AnyReducerAsync<A, F>(F, bool, PhantomData<fn() -> A>);
 
 impl<A, F> Sink<A> for AnyReducerAsync<A, F>
 where
-	F: FnMut(A) -> bool,
+	F: FnMut<(A,), Output = bool>,
 {
 	#[inline(always)]
 	fn poll_pipe(
@@ -103,7 +104,7 @@ where
 		let self_ = self.project();
 		while *self_.1 {
 			if let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
-				*self_.1 = *self_.1 && !self_.0(item);
+				*self_.1 = *self_.1 && !self_.0.call_mut((item,));
 			} else {
 				break;
 			}
@@ -113,7 +114,7 @@ where
 }
 impl<A, F> ReducerAsync<A> for AnyReducerAsync<A, F>
 where
-	F: FnMut(A) -> bool,
+	F: FnMut<(A,), Output = bool>,
 {
 	type Output = bool;
 

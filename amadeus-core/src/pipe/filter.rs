@@ -1,6 +1,7 @@
 use derive_new::new;
 use futures::{ready, Stream};
 use pin_project::pin_project;
+use serde_closure::traits::FnMut;
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
@@ -17,7 +18,7 @@ pub struct Filter<C, F> {
 
 impl<C: Stream, F> Stream for Filter<C, F>
 where
-	F: FnMut(&C::Item) -> bool,
+	F: for<'a> FnMut<(&'a C::Item,), Output = bool>,
 {
 	type Item = C::Item;
 
@@ -26,7 +27,7 @@ where
 		let (mut task, f) = (self_.task, &mut self_.f);
 		Poll::Ready(loop {
 			match ready!(task.as_mut().poll_next(cx)) {
-				Some(t) if f(&t) => break Some(t),
+				Some(t) if f.call_mut((&t,)) => break Some(t),
 				Some(_) => (),
 				None => break None,
 			}
@@ -36,7 +37,7 @@ where
 
 impl<C: Pipe<Source>, F, Source> Pipe<Source> for Filter<C, F>
 where
-	F: FnMut(&C::Item) -> bool,
+	F: for<'a> FnMut<(&'a C::Item,), Output = bool>,
 {
 	type Item = C::Item;
 
@@ -47,7 +48,7 @@ where
 		let (mut task, f) = (self_.task, &mut self_.f);
 		Poll::Ready(loop {
 			match ready!(task.as_mut().poll_next(cx, stream.as_mut())) {
-				Some(t) if f(&t) => break Some(t),
+				Some(t) if f.call_mut((&t,)) => break Some(t),
 				Some(_) => (),
 				None => break None,
 			}

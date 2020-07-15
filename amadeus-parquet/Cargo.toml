@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-parquet"
-version = "0.3.1"
+version = "0.3.2"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>", "Apache Arrow <dev@arrow.apache.org>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.1", path = "../amadeus-core" }
-amadeus-types = { version = "=0.3.1", path = "../amadeus-types" }
+amadeus-core = { version = "=0.3.2", path = "../amadeus-core" }
+amadeus-types = { version = "=0.3.2", path = "../amadeus-types" }
 async-trait = "0.1"
 brotli = "3.3"
 byteorder = "1.2"
@@ -33,8 +33,9 @@ linked-hash-map = "0.5"
 lz4 = "1.23"
 num-bigint = "0.3"
 quick-error = "1.2.2"
+rustversion = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.2"
+serde_closure = "0.3"
 snap = "1.0"
 sum = "0.1"
 thrift = "0.13"
@@ -42,6 +43,9 @@ zstd = "0.4"
 
 [dev-dependencies]
 rand = "0.7"
+
+[build-dependencies]
+rustversion = "1.0"
 
 [[test]]
 name = "derive"

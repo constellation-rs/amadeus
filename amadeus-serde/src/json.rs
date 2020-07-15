@@ -1,7 +1,9 @@
+#![allow(clippy::unsafe_derive_deserialize)] // https://github.com/rust-lang/rust-clippy/issues/5789
+
 use educe::Educe;
-use futures::{pin_mut, stream, AsyncReadExt, FutureExt, StreamExt};
+use futures::{pin_mut, stream, AsyncReadExt, FutureExt, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use serde_closure::FnMut;
+use serde_closure::FnMutNamed;
 use serde_json::Error as InternalJsonError;
 use std::{
 	error, fmt::{self, Debug, Display}, io::{self, Cursor}, marker::PhantomData
@@ -35,39 +37,22 @@ where
 		})
 	}
 }
-impl<F, Row> Source for Json<F, Row>
-where
-	F: File,
-	Row: SerdeData,
-{
-	type Item = Row;
-	#[allow(clippy::type_complexity)]
-	type Error = JsonError<
-		<F as File>::Error,
-		<<F as File>::Partition as Partition>::Error,
-		<<<F as File>::Partition as Partition>::Page as Page>::Error,
-	>;
 
-	#[cfg(not(doc))]
-	type ParStream =
-		impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type ParStream =
-		DistParStream<amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>>;
-	#[cfg(not(doc))]
-	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-	#[cfg(doc)]
-	type DistStream = amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
+type Error<P, E> = JsonError<E, <P as Partition>::Error, <<P as Partition>::Page as Page>::Error>;
+#[cfg(not(nightly))]
+type Output<P, Row, E> = std::pin::Pin<Box<dyn Stream<Item = Result<Row, Error<P, E>>>>>;
+#[cfg(nightly)]
+type Output<P: Partition, Row, E> = impl Stream<Item = Result<Row, Error<P, E>>>;
 
-	fn par_stream(self) -> Self::ParStream {
-		DistParStream::new(self.dist_stream())
-	}
-	#[allow(clippy::let_and_return)]
-	fn dist_stream(self) -> Self::DistStream {
-		let ret = self
-			.partitions
-			.into_dist_stream()
-			.flat_map(FnMut!(|partition: F::Partition| async move {
+FnMutNamed! {
+	pub type Closure<P, Row, E> = |self|partition=> P| -> Output<P, Row, E>
+	where
+		P: Partition,
+		Row: SerdeData,
+		E: 'static
+	{
+		#[allow(clippy::let_and_return)]
+		let ret = async move {
 				Ok(stream::iter(
 					partition
 						.pages()
@@ -92,14 +77,46 @@ where
 					.map(ResultExpandIter::new)
 					.flatten_stream()
 				})
-				.map(|row: Result<Result<Row, InternalJsonError>, Self::Error>| Ok(row??)))
+				.map(|row: Result<Result<Row, InternalJsonError>, Error<P, E>>| Ok(row??)))
 			}
 			.map(ResultExpandIter::new)
 			.flatten_stream()
-			.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))));
-		#[cfg(doc)]
-		let ret = amadeus_core::util::ImplDistributedStream::new(ret);
+			.map(|row: Result<Result<Row, Error<P, E>>, Error<P, E>>| Ok(row??));
+		#[cfg(not(nightly))]
+		let ret = ret.boxed_local();
 		ret
+	}
+}
+
+impl<F, Row> Source for Json<F, Row>
+where
+	F: File,
+	Row: SerdeData,
+{
+	type Item = Row;
+	#[allow(clippy::type_complexity)]
+	type Error = JsonError<
+		F::Error,
+		<F::Partition as Partition>::Error,
+		<<F::Partition as Partition>::Page as Page>::Error,
+	>;
+
+	type ParStream = DistParStream<Self::DistStream>;
+	#[cfg(not(nightly))]
+	#[allow(clippy::type_complexity)]
+	type DistStream = amadeus_core::par_stream::FlatMap<
+		amadeus_core::into_par_stream::IterDistStream<std::vec::IntoIter<F::Partition>>,
+		Closure<F::Partition, Row, F::Error>,
+	>;
+	#[cfg(nightly)]
+	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
+
+	fn par_stream(self) -> Self::ParStream {
+		DistParStream::new(self.dist_stream())
+	}
+	#[allow(clippy::let_and_return)]
+	fn dist_stream(self) -> Self::DistStream {
+		self.partitions.into_dist_stream().flat_map(Closure::new())
 	}
 }
 

@@ -209,7 +209,7 @@ pub trait Partition: Clone + fmt::Debug + ProcessSend + 'static {
 }
 #[allow(clippy::len_without_is_empty)]
 #[async_trait]
-pub trait Page {
+pub trait Page: Send {
 	type Error: Error + Clone + PartialEq + Into<io::Error> + ProcessSend + 'static;
 
 	fn len(&self) -> u64;
@@ -228,7 +228,7 @@ pub trait Page {
 #[async_trait]
 impl<T: ?Sized> Page for &T
 where
-	T: Page,
+	T: Page + Sync,
 {
 	type Error = T::Error;
 
@@ -248,7 +248,7 @@ where
 #[async_trait]
 impl<T: ?Sized> Page for Arc<T>
 where
-	T: Page,
+	T: Page + Sync,
 {
 	type Error = T::Error;
 

@@ -16,11 +16,11 @@ async fn threads() {
 
 	join_all((0..parallel).map(|i| async move {
 		let ret = pool
-			.spawn(FnOnce!(move || async move {
+			.spawn(move || async move {
 				let mut rng = SmallRng::seed_from_u64(i.try_into().unwrap());
 				sleep(rng.gen_range(Duration::new(0, 0), Duration::new(2, 0))).await;
 				format!("warm greetings from job {}", i)
-			}))
+			})
 			.await;
 		println!("{}", ret.unwrap());
 	}))

@@ -4,6 +4,7 @@ mod thread;
 pub(crate) mod util;
 
 use futures::future::{BoxFuture, TryFutureExt};
+use serde_closure::traits;
 use std::{error::Error, future::Future};
 
 #[cfg(feature = "constellation")]
@@ -17,6 +18,7 @@ use amadeus_core::pool::{
 type Result<T> = std::result::Result<T, Box<dyn Error + Send>>;
 
 #[cfg(feature = "constellation")]
+#[cfg_attr(not(nightly), serde_closure::desugar)]
 impl ProcessPoolTrait for ProcessPool {
 	type ThreadPool = ThreadPool;
 
@@ -25,7 +27,7 @@ impl ProcessPoolTrait for ProcessPool {
 	}
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
+		F: traits::FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{
@@ -33,6 +35,7 @@ impl ProcessPoolTrait for ProcessPool {
 	}
 }
 
+#[cfg_attr(not(nightly), serde_closure::desugar)]
 impl ProcessPoolTrait for ThreadPool {
 	type ThreadPool = Self;
 
@@ -41,12 +44,15 @@ impl ProcessPoolTrait for ThreadPool {
 	}
 	fn spawn<F, Fut, T>(&self, work: F) -> BoxFuture<'static, Result<T>>
 	where
-		F: FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
+		F: traits::FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
 		T: ProcessSend + 'static,
 	{
 		let self_ = self.clone();
-		Box::pin(ThreadPool::spawn(self, move || work(&self_)).map_err(|e| Box::new(e) as _))
+		Box::pin(
+			ThreadPool::spawn(self, move || work.call_once((&self_,)))
+				.map_err(|e| Box::new(e) as _),
+		)
 	}
 }
 

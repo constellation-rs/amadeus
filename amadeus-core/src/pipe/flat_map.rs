@@ -1,6 +1,7 @@
 use derive_new::new;
 use futures::{ready, Stream};
 use pin_project::pin_project;
+use serde_closure::traits::FnMut;
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
@@ -20,7 +21,7 @@ pub struct FlatMap<C, F, R> {
 
 impl<C: Stream, F, R> Stream for FlatMap<C, F, R>
 where
-	F: FnMut(C::Item) -> R,
+	F: FnMut<(C::Item,), Output = R>,
 	R: Stream,
 {
 	type Item = R::Item;
@@ -35,7 +36,7 @@ where
 					self_.next.set(None);
 				}
 			} else if let Some(s) = ready!(self_.pipe.as_mut().poll_next(cx)) {
-				self_.next.set(Some((self_.f)(s)));
+				self_.next.set(Some(self_.f.call_mut((s,))));
 			} else {
 				break None;
 			}
@@ -45,7 +46,7 @@ where
 
 impl<C: Pipe<Source>, F, R, Source> Pipe<Source> for FlatMap<C, F, R>
 where
-	F: FnMut(C::Item) -> R,
+	F: FnMut<(C::Item,), Output = R>,
 	R: Stream,
 {
 	type Item = R::Item;
@@ -62,7 +63,7 @@ where
 					self_.next.set(None);
 				}
 			} else if let Some(s) = ready!(self_.pipe.as_mut().poll_next(cx, stream.as_mut())) {
-				self_.next.set(Some((self_.f)(s)));
+				self_.next.set(Some(self_.f.call_mut((s,))));
 			} else {
 				break None;
 			}

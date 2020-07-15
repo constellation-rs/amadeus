@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-commoncrawl"
-version = "0.3.1"
+version = "0.3.2"
 license = "MIT OR Apache-2.0"
 authors = ["Stephen Becker IV <github@deathbyescalator.com>", "Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.1", path = "../amadeus-core" }
-amadeus-types = { version = "=0.3.1", path = "../amadeus-types" }
+amadeus-core = { version = "=0.3.2", path = "../amadeus-core" }
+amadeus-types = { version = "=0.3.2", path = "../amadeus-types" }
 async-compression = { version = "0.3.3", features = ["gzip", "futures-bufread"] }
 futures = "0.3"
 nom = "4.2.3"
@@ -28,9 +28,12 @@ pin-project = "0.4"
 reqwest = "0.10"
 reqwest_resume = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-serde_closure = "0.2"
+serde_closure = "0.3"
 url = { version = "2.1", features = ["serde"] }
 
 # dependency of reqwest/native-tls; ensure it's vendored to simplify cross-compilation
 [target.'cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
+
+[build-dependencies]
+rustversion = "1.0"
