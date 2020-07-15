@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.3.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.3.3")]
 #![cfg_attr(nightly, feature(type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
@@ -80,9 +80,9 @@ impl CommonCrawl {
 	}
 }
 
-#[cfg(not(nightly))]
+#[cfg(not(all(nightly, not(doc))))]
 type Output = std::pin::Pin<Box<dyn Stream<Item = Result<Webpage<'static>, io::Error>> + Send>>;
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 type Output = impl Stream<Item = Result<Webpage<'static>, io::Error>> + Send;
 
 FnMutNamed! {
@@ -99,7 +99,7 @@ FnMutNamed! {
 				WarcParser::new(body)
 			}
 			.flatten_stream();
-		#[cfg(not(nightly))]
+		#[cfg(not(all(nightly, not(doc))))]
 		let ret = ret.boxed();
 		ret
 	}
@@ -110,13 +110,13 @@ impl Source for CommonCrawl {
 	type Error = io::Error;
 
 	type ParStream = DistParStream<Self::DistStream>;
-	#[cfg(not(nightly))]
+	#[cfg(not(all(nightly, not(doc))))]
 	#[allow(clippy::type_complexity)]
 	type DistStream = amadeus_core::par_stream::FlatMap<
 		amadeus_core::into_par_stream::IterDistStream<std::vec::IntoIter<String>>,
 		Closure,
 	>;
-	#[cfg(nightly)]
+	#[cfg(all(nightly, not(doc)))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {

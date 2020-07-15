@@ -39,9 +39,9 @@ where
 }
 
 type Error<P, E> = JsonError<E, <P as Partition>::Error, <<P as Partition>::Page as Page>::Error>;
-#[cfg(not(nightly))]
+#[cfg(not(all(nightly, not(doc))))]
 type Output<P, Row, E> = std::pin::Pin<Box<dyn Stream<Item = Result<Row, Error<P, E>>>>>;
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 type Output<P: Partition, Row, E> = impl Stream<Item = Result<Row, Error<P, E>>>;
 
 FnMutNamed! {
@@ -82,7 +82,7 @@ FnMutNamed! {
 			.map(ResultExpandIter::new)
 			.flatten_stream()
 			.map(|row: Result<Result<Row, Error<P, E>>, Error<P, E>>| Ok(row??));
-		#[cfg(not(nightly))]
+		#[cfg(not(all(nightly, not(doc))))]
 		let ret = ret.boxed_local();
 		ret
 	}
@@ -102,13 +102,13 @@ where
 	>;
 
 	type ParStream = DistParStream<Self::DistStream>;
-	#[cfg(not(nightly))]
+	#[cfg(not(all(nightly, not(doc))))]
 	#[allow(clippy::type_complexity)]
 	type DistStream = amadeus_core::par_stream::FlatMap<
 		amadeus_core::into_par_stream::IterDistStream<std::vec::IntoIter<F::Partition>>,
 		Closure<F::Partition, Row, F::Error>,
 	>;
-	#[cfg(nightly)]
+	#[cfg(all(nightly, not(doc)))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {

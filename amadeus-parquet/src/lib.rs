@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.3.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.3.3")]
 #![cfg_attr(nightly, feature(bufreader_seek_relative))]
 #![cfg_attr(nightly, feature(read_initializer))]
 #![cfg_attr(nightly, feature(specialization))]
@@ -38,10 +38,10 @@
 #[cfg(nightly)]
 extern crate test;
 
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 mod internal;
 
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 mod wrap {
 	use super::internal;
 	use async_trait::async_trait;
@@ -371,5 +371,5 @@ mod wrap {
 		}
 	}
 }
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 pub use wrap::*;

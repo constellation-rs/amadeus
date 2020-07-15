@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.3.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.3.3")]
 #![cfg_attr(nightly, feature(type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
@@ -212,9 +212,9 @@ where
 	}
 }
 
-#[cfg(not(nightly))]
+#[cfg(not(all(nightly, not(doc))))]
 type Output<Row> = Pin<Box<dyn Stream<Item = Result<Row, PostgresError>> + Send>>;
-#[cfg(nightly)]
+#[cfg(all(nightly, not(doc)))]
 type Output<Row> = impl Stream<Item = Result<Row, PostgresError>> + Send;
 
 FnMutNamed! {
@@ -261,7 +261,7 @@ FnMutNamed! {
 			})
 		}
 		.flatten_stream();
-		#[cfg(not(nightly))]
+		#[cfg(not(all(nightly, not(doc))))]
 		let ret = ret.boxed();
 		ret
 	}
@@ -275,7 +275,7 @@ where
 	type Error = PostgresError;
 
 	type ParStream = DistParStream<Self::DistStream>;
-	#[cfg(not(nightly))]
+	#[cfg(not(all(nightly, not(doc))))]
 	#[allow(clippy::type_complexity)]
 	type DistStream = amadeus_core::par_stream::FlatMap<
 		amadeus_core::into_par_stream::IterDistStream<
@@ -283,7 +283,7 @@ where
 		>,
 		Closure<Row>,
 	>;
-	#[cfg(nightly)]
+	#[cfg(all(nightly, not(doc)))]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {
