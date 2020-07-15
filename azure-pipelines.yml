@@ -24,8 +24,13 @@ jobs:
       windows:
         imageName: 'windows-latest'
         rust_target_run: 'x86_64-pc-windows-msvc i686-pc-windows-msvc x86_64-pc-windows-gnu'
-      mac:
+      mac0:
         imageName: 'macos-latest'
+        rust_target_run: 'x86_64-apple-darwin'
+      mac1:
+        imageName: 'macos-latest'
+        rust_toolchain: nightly
+        rust_features: ';nightly'
         rust_target_run: 'x86_64-apple-darwin'
       linux:
         imageName: 'ubuntu-latest'
