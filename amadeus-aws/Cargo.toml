@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-aws"
-version = "0.3.3"
+version = "0.3.4"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.3", path = "../amadeus-core" }
-amadeus-types = { version = "=0.3.3", path = "../amadeus-types" }
+amadeus-core = { version = "=0.3.4", path = "../amadeus-core" }
+amadeus-types = { version = "=0.3.4", path = "../amadeus-types" }
 async-compression = { version = "0.3.3", features = ["gzip", "futures-bufread"] }
 async-trait = "0.1"
 chrono = { version = "0.4", default-features = false }
@@ -35,7 +35,7 @@ serde_closure = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 tokio = "0.2"
 url = { version = "2.1", features = ["serde"] }
-vec-utils = "0.2"
+recycle = "0.1"
 
 # dependency of rusoto_core/hyper-tls/native-tls; ensure it's vendored to simplify cross-compilation
 [target.'cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))'.dependencies]

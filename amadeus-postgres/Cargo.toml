@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-postgres"
-version = "0.3.3"
+version = "0.3.4"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.3", path = "../amadeus-core" }
-amadeus-types = { version = "=0.3.3", path = "../amadeus-types" }
+amadeus-core = { version = "=0.3.4", path = "../amadeus-core" }
+amadeus-types = { version = "=0.3.4", path = "../amadeus-types" }
 bytes = "0.5"
 chrono = { version = "0.4", default-features = false }
 educe = "0.4"

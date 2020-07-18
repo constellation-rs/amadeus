@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-commoncrawl"
-version = "0.3.3"
+version = "0.3.4"
 license = "MIT OR Apache-2.0"
 authors = ["Stephen Becker IV <github@deathbyescalator.com>", "Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.3", path = "../amadeus-core" }
-amadeus-types = { version = "=0.3.3", path = "../amadeus-types" }
+amadeus-core = { version = "=0.3.4", path = "../amadeus-core" }
+amadeus-types = { version = "=0.3.4", path = "../amadeus-types" }
 async-compression = { version = "0.3.3", features = ["gzip", "futures-bufread"] }
 futures = "0.3"
 nom = "4.2.3"

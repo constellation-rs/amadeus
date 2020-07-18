@@ -1,13 +1,13 @@
 #![allow(clippy::too_many_lines)]
 
 use linked_hash_map::LinkedHashMap;
+use recycle::VecExt;
 use serde::{
 	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeSeq, SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer
 };
 use std::{
 	collections::HashMap, fmt, hash::{BuildHasher, Hash}, str, sync::Arc
 };
-use vec_utils::VecExt;
 
 use amadeus_core::util::{type_coerce, type_coerce_ref, type_eq};
 use amadeus_types::{
