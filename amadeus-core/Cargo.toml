@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-core"
-version = "0.3.3"
+version = "0.3.4"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
