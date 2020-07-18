@@ -4,13 +4,13 @@ use async_compression::futures::bufread::GzipDecoder;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use futures::{future, io::BufReader, AsyncBufReadExt, FutureExt, Stream, StreamExt, TryStreamExt};
 use http::{Method, StatusCode};
+use recycle::VecExt;
 use rusoto_s3::{GetObjectRequest, Object, S3Client, S3};
 use serde::{Deserialize, Serialize};
 use serde_closure::FnMutNamed;
 use std::{
 	convert::identity, io::{self}, time::Duration
 };
-use vec_utils::VecExt;
 
 use amadeus_core::{
 	into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, ResultExpandIter}, Source

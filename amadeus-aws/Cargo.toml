@@ -35,7 +35,7 @@ serde_closure = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 tokio = "0.2"
 url = { version = "2.1", features = ["serde"] }
-vec-utils = "0.2"
+recycle = "0.1"
 
 # dependency of rusoto_core/hyper-tls/native-tls; ensure it's vendored to simplify cross-compilation
 [target.'cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))'.dependencies]

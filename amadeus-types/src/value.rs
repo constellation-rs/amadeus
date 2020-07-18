@@ -4,11 +4,11 @@
 
 use fxhash::FxBuildHasher;
 use linked_hash_map::LinkedHashMap;
+use recycle::VecExt;
 use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{
 	cmp::Ordering, collections::HashMap, convert::TryInto, fmt, fmt::Debug, hash::{BuildHasher, Hash, Hasher}, iter::FromIterator, sync::Arc
 };
-use vec_utils::VecExt;
 
 use crate::list::ListVec;
 

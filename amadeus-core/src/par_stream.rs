@@ -334,7 +334,7 @@ macro_rules! stream {
 }
 
 stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallelStream into_par_stream ParStream ThreadPool Send ops assert_parallel_stream {
-	async fn reduce<P, B, R1, R3>(mut self, pool: &P, reduce_a_factory: R1, reduce_c: R3) -> B
+	async fn reduce<P, B, R1, R3>(mut self, pool: &P, reduce_a: R1, reduce_c: R3) -> B
 	where
 		P: ThreadPool,
 		R1: ReducerSend<Self::Item> + Clone + Send + 'static,
@@ -388,7 +388,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 			.into_iter()
 			.filter(|tasks| !tasks.is_empty())
 			.map(|tasks| {
-				let reduce_a = reduce_a_factory.clone();
+				let reduce_a = reduce_a.clone();
 				pool.spawn(move || async move {
 					let sink = reduce_a.into_async();
 					pin_mut!(sink);
@@ -484,7 +484,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 
 stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream IntoDistributedStream into_dist_stream DistStream ProcessPool ProcessSend traits assert_distributed_stream cfg_attr(not(nightly), serde_closure::desugar) {
 	async fn reduce<P, B, R1, R2, R3>(
-		mut self, pool: &P, reduce_a_factory: R1, reduce_b_factory: R2, reduce_c: R3,
+		mut self, pool: &P, reduce_a: R1, reduce_b: R2, reduce_c: R3,
 	) -> B
 	where
 		P: ProcessPool,
@@ -546,8 +546,8 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 			.into_iter()
 			.filter(|tasks| !tasks.is_empty())
 			.map(|tasks| {
-				let reduce_b = reduce_b_factory.clone();
-				let reduce_a_factory = reduce_a_factory.clone();
+				let reduce_b = reduce_b.clone();
+				let reduce_a = reduce_a.clone();
 				pool.spawn(FnOnce!(move |pool: &P::ThreadPool| {
 					let mut process_tasks = tasks.into_iter();
 
@@ -595,7 +595,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 						.into_iter()
 						.filter(|tasks| !tasks.is_empty())
 						.map(|tasks| {
-							let reduce_a = reduce_a_factory.clone();
+							let reduce_a = reduce_a.clone();
 							pool.spawn(move || async move {
 								let sink = reduce_a.into_async();
 								pin_mut!(sink);
