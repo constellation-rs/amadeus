@@ -1,11 +1,9 @@
 #![allow(clippy::needless_lifetimes)]
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, stream, FutureExt, StreamExt, TryStreamExt};
+use futures::{future, future::LocalBoxFuture, stream, FutureExt, StreamExt, TryStreamExt};
 use std::{
-	convert::TryFrom, ffi::{OsStr, OsString}, fs, io::{self, Seek, SeekFrom}, path::{Path, PathBuf}, sync::{
-		atomic::{AtomicU64, Ordering}, Arc
-	}
+	ffi::{OsStr, OsString}, fs, future::Future, io, path::{Path, PathBuf}, sync::Arc
 };
 use walkdir::WalkDir;
 
@@ -13,6 +11,14 @@ use walkdir::WalkDir;
 use std::os::unix::fs::FileExt;
 #[cfg(windows)]
 use std::os::windows::fs::FileExt;
+#[cfg(target_arch = "wasm32")]
+use {
+	futures::lock::Mutex, js_sys::{ArrayBuffer, Uint8Array}, std::convert::TryFrom, wasm_bindgen::{JsCast, JsValue}, wasm_bindgen_futures::JsFuture, web_sys::{Blob, Response}
+};
+#[cfg(not(target_arch = "wasm32"))]
+use {
+	std::io::{Seek, SeekFrom}, tokio::task::spawn_blocking
+};
 
 use super::{Directory, File, Page, Partition};
 use crate::util::{IoError, ResultExpand};
@@ -189,9 +195,29 @@ impl File for &OsStr {
 // To support converting back to fs::File:
 // https://github.com/vasi/positioned-io/blob/a03c792f5b6f99cb4f72e146befdfc8b1f6e1d28/src/raf.rs
 
+#[cfg(target_arch = "wasm32")]
+enum FutureOrOutput<Fut: Future> {
+	Future(Fut),
+	Output(Fut::Output),
+}
+#[cfg(target_arch = "wasm32")]
+impl<Fut: Future> FutureOrOutput<Fut> {
+	fn output(&mut self) -> Option<&mut Fut::Output> {
+		if let FutureOrOutput::Output(output) = self {
+			Some(output)
+		} else {
+			None
+		}
+	}
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 struct LocalFileInner {
 	file: fs::File,
-	len: AtomicU64,
+}
+#[cfg(target_arch = "wasm32")]
+struct LocalFileInner {
+	file: Mutex<FutureOrOutput<LocalBoxFuture<'static, Blob>>>,
 }
 pub struct LocalFile {
 	inner: Arc<LocalFileInner>,
@@ -200,14 +226,64 @@ impl LocalFile {
 	/// [Opens](https://doc.rust-lang.org/std/fs/struct.File.html#method.open)
 	/// a file for random access.
 	pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-		Self::from_file(fs::File::open(path)?)
+		#[cfg(not(target_arch = "wasm32"))]
+		{
+			Self::from_file(fs::File::open(path)?)
+		}
+		#[cfg(target_arch = "wasm32")]
+		{
+			let path = path.as_ref().to_string_lossy().into_owned();
+			let file = Mutex::new(FutureOrOutput::Future(
+				async move {
+					let window = web_sys::window().unwrap();
+					let resp_value = JsFuture::from(window.fetch_with_str(&path)).await.unwrap();
+					let resp: Response = resp_value.dyn_into().unwrap();
+					let blob: JsValue = JsFuture::from(resp.blob().unwrap()).await.unwrap();
+					let blob: Blob = blob.dyn_into().unwrap();
+					blob
+				}
+				.boxed_local(),
+			));
+			let inner = Arc::new(LocalFileInner { file });
+			Ok(Self { inner })
+		}
 	}
 
-	fn from_file(mut file: fs::File) -> io::Result<Self> {
-		let len = file.seek(SeekFrom::End(0))?;
-		let len = AtomicU64::new(len);
-		let inner = Arc::new(LocalFileInner { file, len });
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+		}
+	}
+
+	#[cfg(not(target_arch = "wasm32"))]
+	fn len(&self) -> LocalBoxFuture<'static, Result<u64, <Self as Page>::Error>> {
+		let self_ = self.inner.clone();
+		future::lazy(move |_| (&self_.file).seek(SeekFrom::End(0)).map_err(Into::into))
+			.boxed_local()
+	}
+	#[cfg(target_arch = "wasm32")]
+	fn len(&self) -> LocalBoxFuture<'static, Result<u64, <Self as Page>::Error>> {
+		let self_ = self.inner.clone();
+		async move {
+			let mut file = self_.file.lock().await;
+			if let FutureOrOutput::Future(fut) = &mut *file {
+				*file = FutureOrOutput::Output(fut.await);
+			}
+			let blob = file.output().unwrap();
+			let size = blob.size();
+			Ok(f64_to_u64(size))
+		}
+		.boxed_local()
+	}
+
+	#[cfg(not(target_arch = "wasm32"))]
+	fn from_file(file: fs::File) -> io::Result<Self> {
+		let inner = Arc::new(LocalFileInner { file });
 		Ok(Self { inner })
+	}
+	#[cfg(target_arch = "wasm32")]
+	fn from_file(_file: fs::File) -> io::Result<Self> {
+		unimplemented!()
 	}
 }
 
@@ -217,53 +293,156 @@ impl From<fs::File> for LocalFile {
 	}
 }
 
+// read_at/write_at for tokio::File https://github.com/tokio-rs/tokio/issues/1529
+
 #[cfg(unix)]
 impl LocalFile {
 	#[inline]
-	fn read_at(&self, pos: u64, buf: &mut [u8]) -> io::Result<usize> {
-		FileExt::read_at(&self.inner.file, buf, pos)
+	fn read_at<'a>(
+		&self, pos: u64, buf: &'a mut [u8],
+	) -> impl Future<Output = io::Result<usize>> + 'a {
+		let self_ = self.inner.clone();
+		let len = buf.len();
+		spawn_blocking(move || {
+			let mut buf = vec![0; len];
+			FileExt::read_at(&self_.file, &mut buf, pos).map(|len| {
+				buf.truncate(len);
+				buf
+			})
+		})
+		.map(move |vec| {
+			vec.unwrap().map(move |vec| {
+				buf[..vec.len()].copy_from_slice(&vec);
+				vec.len()
+			})
+		})
 	}
 	#[inline]
-	fn write_at(&self, pos: u64, buf: &[u8]) -> io::Result<usize> {
-		FileExt::write_at(&self.inner.file, buf, pos)
+	fn write_at<'a>(
+		&self, pos: u64, buf: &'a [u8],
+	) -> impl Future<Output = io::Result<usize>> + 'a {
+		let self_ = self.inner.clone();
+		let buf = buf.to_owned();
+		spawn_blocking(move || FileExt::write_at(&self_.file, &buf, pos)).map(Result::unwrap)
 	}
 }
 
 #[cfg(windows)]
 impl LocalFile {
 	#[inline]
-	fn read_at(&self, pos: u64, buf: &mut [u8]) -> io::Result<usize> {
-		FileExt::seek_read(&self.inner.file, buf, pos)
+	fn read_at<'a>(
+		&self, pos: u64, buf: &'a mut [u8],
+	) -> impl Future<Output = io::Result<usize>> + 'a {
+		let self_ = self.inner.clone();
+		let len = buf.len();
+		spawn_blocking(move || {
+			let mut buf = vec![0; len];
+			FileExt::seek_read(&self_.file, &mut buf, pos).map(|len| {
+				buf.truncate(len);
+				buf
+			})
+		})
+		.map(move |vec| {
+			vec.unwrap().map(move |vec| {
+				buf[..vec.len()].copy_from_slice(&vec);
+				vec.len()
+			})
+		})
 	}
 	#[inline]
-	fn write_at(&self, pos: u64, buf: &[u8]) -> io::Result<usize> {
-		FileExt::seek_write(&self.inner.file, buf, pos)
+	fn write_at<'a>(
+		&self, pos: u64, buf: &'a [u8],
+	) -> impl Future<Output = io::Result<usize>> + 'a {
+		let self_ = self.inner.clone();
+		let buf = buf.to_owned();
+		spawn_blocking(move || FileExt::seek_write(&self_.file, &buf, pos)).map(Result::unwrap)
 	}
 }
 
-#[async_trait]
+#[cfg(target_arch = "wasm32")]
+#[allow(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	clippy::cast_precision_loss
+)]
+fn u64_to_f64(x: u64) -> f64 {
+	assert_eq!(x, x as f64 as u64);
+	x as f64
+}
+#[cfg(target_arch = "wasm32")]
+#[allow(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	clippy::cast_precision_loss,
+	clippy::float_cmp
+)]
+fn f64_to_u64(x: f64) -> u64 {
+	assert_eq!(x, x as u64 as f64);
+	x as u64
+}
+
+#[cfg(target_arch = "wasm32")]
+impl LocalFile {
+	fn read_at<'a>(
+		&self, pos: u64, buf: &'a mut [u8],
+	) -> impl Future<Output = io::Result<usize>> + 'a {
+		let self_ = self.inner.clone();
+		async move {
+			let mut file = self_.file.lock().await;
+			if let FutureOrOutput::Future(fut) = &mut *file {
+				*file = FutureOrOutput::Output(fut.await);
+			}
+			let blob = file.output().unwrap();
+			let end = pos + u64::try_from(buf.len()).unwrap();
+			let slice: Blob = blob
+				.slice_with_f64_and_f64(u64_to_f64(pos), u64_to_f64(end))
+				.unwrap();
+			drop(file);
+			// TODO: only do workaround when necessary
+			let array_buffer = if false {
+				slice.array_buffer()
+			} else {
+				// workaround for lack of Blob::array_buffer
+				Response::new_with_opt_blob(Some(&slice))
+					.unwrap()
+					.array_buffer()
+					.unwrap()
+			};
+			drop(slice);
+			let array_buffer: JsValue = JsFuture::from(array_buffer).await.unwrap();
+			let array_buffer: ArrayBuffer = array_buffer.dyn_into().unwrap();
+			let buf_: Uint8Array = Uint8Array::new(&array_buffer);
+			drop(array_buffer);
+			let len = usize::try_from(buf_.length()).unwrap();
+			buf_.copy_to(&mut buf[..len]);
+			Ok(len)
+		}
+		.boxed_local()
+	}
+	#[inline]
+	fn write_at<'a>(
+		&self, _pos: u64, _buf: &'a [u8],
+	) -> impl Future<Output = io::Result<usize>> + 'a {
+		let _self = self;
+		future::lazy(|_| unimplemented!()).boxed_local()
+	}
+}
+
 impl Page for LocalFile {
 	type Error = IoError;
 
-	fn len(&self) -> u64 {
-		self.inner.len.load(Ordering::Relaxed)
-	}
-	fn set_len(&self, len: u64) -> Result<(), Self::Error> {
-		self.inner.file.set_len(len)?;
-		self.inner.len.store(len, Ordering::Relaxed);
-		Ok(())
+	fn len(&self) -> LocalBoxFuture<'static, Result<u64, Self::Error>> {
+		self.len()
 	}
 	fn read(
 		&self, mut offset: u64, len: usize,
-	) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
-		let self_ = LocalFile {
-			inner: self.inner.clone(),
-		};
+	) -> LocalBoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+		let self_ = self.clone();
 		Box::pin(async move {
-			let mut buf_ = vec![0; len].into_boxed_slice();
+			let mut buf_ = vec![0; len];
 			let mut buf = &mut *buf_;
 			while !buf.is_empty() {
-				match self_.read_at(offset, buf) {
+				match self_.read_at(offset, buf).await {
 					Ok(0) => break,
 					Ok(n) => {
 						let tmp = buf;
@@ -274,26 +453,19 @@ impl Page for LocalFile {
 					Err(e) => return Err(e.into()),
 				}
 			}
-			if !buf.is_empty() {
-				Err(
-					io::Error::new(io::ErrorKind::UnexpectedEof, "failed to fill whole buffer")
-						.into(),
-				)
-			} else {
-				Ok(buf_)
-			}
+			let len = len - buf.len();
+			buf_.truncate(len);
+			Ok(buf_.into_boxed_slice())
 		})
 	}
 	fn write(
 		&self, mut offset: u64, buf: Box<[u8]>,
-	) -> BoxFuture<'static, Result<(), Self::Error>> {
-		let self_ = LocalFile {
-			inner: self.inner.clone(),
-		};
+	) -> LocalBoxFuture<'static, Result<(), Self::Error>> {
+		let self_ = self.clone();
 		Box::pin(async move {
 			let mut buf = &*buf;
 			while !buf.is_empty() {
-				match self_.write_at(offset, buf) {
+				match self_.write_at(offset, buf).await {
 					Ok(0) => {
 						return Err(io::Error::new(
 							io::ErrorKind::WriteZero,
@@ -302,10 +474,6 @@ impl Page for LocalFile {
 						.into())
 					}
 					Ok(n) => {
-						let _ = self_
-							.inner
-							.len
-							.fetch_max(offset + u64::try_from(n).unwrap(), Ordering::Relaxed);
 						buf = &buf[n..];
 						offset += n as u64
 					}

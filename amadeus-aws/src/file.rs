@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+use futures::{future, future::LocalBoxFuture, FutureExt};
 use rusoto_core::RusotoError;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 use serde::{Deserialize, Serialize};
@@ -227,17 +227,17 @@ impl S3Page {
 impl Page for S3Page {
 	type Error = IoError;
 
-	fn len(&self) -> u64 {
-		self.inner.len
+	fn len(&self) -> LocalBoxFuture<'static, Result<u64, Self::Error>> {
+		future::ready(Ok(self.inner.len)).boxed_local()
 	}
-	fn set_len(&self, _len: u64) -> Result<(), Self::Error> {
-		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/61")
-	}
-	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+	fn read(
+		&self, offset: u64, len: usize,
+	) -> LocalBoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
 		let self_ = S3Page {
 			inner: self.inner.clone(),
 		};
 		Box::pin(async move {
+			let len = len.min(usize::try_from(self_.inner.len.saturating_sub(offset)).unwrap());
 			let mut buf_ = vec![0; len].into_boxed_slice();
 			let mut buf = &mut *buf_;
 			let len: u64 = len.try_into().unwrap();
@@ -279,7 +279,9 @@ impl Page for S3Page {
 			Ok(buf_)
 		})
 	}
-	fn write(&self, _offset: u64, _buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>> {
+	fn write(
+		&self, _offset: u64, _buf: Box<[u8]>,
+	) -> LocalBoxFuture<'static, Result<(), Self::Error>> {
 		todo!("Tracking at https://github.com/constellation-rs/amadeus/issues/61")
 	}
 }
