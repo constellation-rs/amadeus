@@ -74,6 +74,33 @@ jobs:
       ordinal: 2
       endpoint: alecmocatta
       default:
+        rust_toolchain: nightly
+        rust_lint_toolchain: nightly-2020-07-12
+        rust_flags: ''
+        rust_packages: '-p amadeus-core -p amadeus-derive -p amadeus-parquet -p amadeus-serde -p amadeus-types -p amadeus'
+        rust_features_clippy: ';parquet;csv;json;parquet csv json'
+        rust_features: 'parquet csv json'
+        rust_doc_features: 'parquet csv json'
+        rust_target_check: ''
+        rust_target_build: ''
+        rust_target_run: ''
+      matrix:
+        mac:
+          imageName: 'macos-latest'
+          rust_target_run: 'wasm32-unknown-unknown'
+        linux:
+          imageName: 'ubuntu-latest'
+          rust_target_run: 'wasm32-unknown-unknown'
+        # TODO: headless browser fails: driver status: exit code: 1
+        # windows:
+        #   imageName: 'windows-latest'
+        #   rust_target_run: 'wasm32-unknown-unknown'
+
+  - template: rust-n.yml@templates
+    parameters:
+      ordinal: 3
+      endpoint: alecmocatta
+      default:
         rust_toolchain: stable nightly
         rust_lint_toolchain: nightly-2020-07-12
         rust_flags: ''
@@ -91,6 +118,7 @@ jobs:
         linux:
           imageName: 'ubuntu-latest'
           rust_target_run: 'wasm32-unknown-unknown'
-        windows:
-          imageName: 'windows-latest'
-          rust_target_run: 'wasm32-unknown-unknown'
+        # TODO: headless browser fails: driver status: exit code: 1
+        # windows:
+        #   imageName: 'windows-latest'
+        #   rust_target_run: 'wasm32-unknown-unknown'

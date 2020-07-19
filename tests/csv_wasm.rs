@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 #![allow(clippy::suspicious_map)]
 
 use std::path::PathBuf;
@@ -26,7 +27,7 @@ async fn csv() {
 	let timer = web_sys::window().unwrap().performance().unwrap();
 	let start = timer.now();
 
-	let pool = ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None).unwrap();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct GameDerived {
@@ -44,7 +45,7 @@ async fn csv() {
 	assert_eq!(
 		rows.par_stream()
 			.map(|row: Result<_, _>| row.unwrap())
-			.count(&pool)
+			.count(pool)
 			.await,
 		100_000
 	);
@@ -70,7 +71,7 @@ async fn csv() {
 				let _: GameDerived2 = value.clone().downcast().unwrap();
 				value
 			})
-			.count(&pool)
+			.count(pool)
 			.await,
 		100_000
 	);

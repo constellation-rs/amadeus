@@ -39,7 +39,7 @@ serde_closure = "0.3"
 snap = "1.0"
 sum = "0.1"
 thrift = "0.13"
-zstd = "0.4"
+zstd = { version = "0.5", features = ["wasm"] }
 
 [dev-dependencies]
 rand = "0.7"
