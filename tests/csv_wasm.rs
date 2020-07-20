@@ -22,6 +22,23 @@ macro_rules! println {
 	($fmt:expr, $($t:tt)*) => (print!(concat!($fmt, "\n"), $($t)*));
 }
 
+#[no_mangle]
+pub extern "C" fn malloc(_size: usize) -> *mut std::ffi::c_void {
+	panic!()
+}
+#[no_mangle]
+pub extern "C" fn free(_ptr: *mut std::ffi::c_void) {
+	panic!()
+}
+#[no_mangle]
+pub extern "C" fn calloc(_nmemb: usize, _size: usize) -> *mut std::ffi::c_void {
+	panic!()
+}
+#[no_mangle]
+pub extern "C" fn realloc(_ptr: *mut std::ffi::c_void, _size: usize) -> *mut std::ffi::c_void {
+	panic!()
+}
+
 #[wasm_bindgen_test]
 async fn csv() {
 	let timer = web_sys::window().unwrap().performance().unwrap();
