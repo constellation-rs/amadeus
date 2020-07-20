@@ -41,8 +41,8 @@ jobs:
           rust_target_run: 'x86_64-apple-darwin'
         linux0:
           imageName: 'ubuntu-latest'
-          rust_target_build: 'x86_64-unknown-linux-musl'
           rust_target_run: 'x86_64-unknown-linux-gnu'
+        # TODO: openssl-sys PIC error
         # linux1:
         #   imageName: 'ubuntu-latest'
         #   rust_target_run: 'x86_64-unknown-linux-musl'

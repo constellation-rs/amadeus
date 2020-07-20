@@ -73,9 +73,6 @@ wasm-bindgen-test = "0.3"
 [build-dependencies]
 rustversion = "1.0"
 
-[patch.crates-io]
-lz4 = { git = "https://github.com/alecmocatta/lz4-rs", branch = "wasm" }
-
 [[example]]
 name = "cloudfront_logs"
 required-features = ["aws"]

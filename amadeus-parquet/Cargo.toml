@@ -30,7 +30,7 @@ flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = fa
 futures = "0.3"
 fxhash = "0.2"
 linked-hash-map = "0.5"
-lz4 = "1.23"
+lz-fear = "0.1"
 num-bigint = "0.3"
 quick-error = "1.2.2"
 rustversion = "1.0"
