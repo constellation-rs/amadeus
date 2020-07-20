@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-core"
-version = "0.3.4"
+version = "0.3.5"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -33,8 +33,15 @@ serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
 streaming_algorithms = "0.3"
 sum = { version = "0.1", features = ["futures", "serde"] }
+tokio = "0.2"
 walkdir = "2.2"
 widestring = "0.4"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Blob", "Response", "Window"] }
 
 [build-dependencies]
 rustversion = "1.0"

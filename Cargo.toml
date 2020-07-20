@@ -2,7 +2,7 @@
 
 [package]
 name = "amadeus"
-version = "0.3.4"
+version = "0.3.5"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -35,14 +35,14 @@ json = ["amadeus-serde", "amadeus-derive/serde"]
 features = ["constellation", "aws", "commoncrawl", "parquet", "postgres", "csv", "json"]
 
 [dependencies]
-amadeus-core = { version = "=0.3.4", path = "amadeus-core" }
-amadeus-derive = { version = "=0.3.4", path = "amadeus-derive" }
-amadeus-types = { version = "=0.3.4", path = "amadeus-types" }
-amadeus-aws = { version = "=0.3.4", path = "amadeus-aws", optional = true }
-amadeus-commoncrawl = { version = "=0.3.4", path = "amadeus-commoncrawl", optional = true }
-amadeus-parquet = { version = "=0.3.4", path = "amadeus-parquet", optional = true }
-amadeus-postgres = { version = "=0.3.4", path = "amadeus-postgres", optional = true }
-amadeus-serde = { version = "=0.3.4", path = "amadeus-serde", optional = true }
+amadeus-core = { version = "=0.3.5", path = "amadeus-core" }
+amadeus-derive = { version = "=0.3.5", path = "amadeus-derive" }
+amadeus-types = { version = "=0.3.5", path = "amadeus-types" }
+amadeus-aws = { version = "=0.3.5", path = "amadeus-aws", optional = true }
+amadeus-commoncrawl = { version = "=0.3.5", path = "amadeus-commoncrawl", optional = true }
+amadeus-parquet = { version = "=0.3.5", path = "amadeus-parquet", optional = true }
+amadeus-postgres = { version = "=0.3.5", path = "amadeus-postgres", optional = true }
+amadeus-serde = { version = "=0.3.5", path = "amadeus-serde", optional = true }
 async-channel = "1.1"
 constellation-rs = { version = "0.2.0-alpha.2", default-features = false, optional = true }
 derive-new = "0.5"
@@ -55,12 +55,20 @@ serde_closure = "0.3"
 serde_traitobject = { version = "0.2", optional = true }
 tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "blocking"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Blob", "Performance", "Response", "Window"] }
+
 [dev-dependencies]
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
 serde_json = "1.0"
 streaming_algorithms = "0.3"
 tokio = { version = "0.2", features = ["macros", "time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
 
 [build-dependencies]
 rustversion = "1.0"
@@ -121,12 +129,20 @@ harness = false
 required-features = ["parquet"]
 
 [[test]]
+name = "parquet_wasm"
+required-features = ["parquet"]
+
+[[test]]
 name = "csv"
 required-features = ["csv"]
 
 [[test]]
 name = "csv_dist"
 harness = false
+required-features = ["csv"]
+
+[[test]]
+name = "csv_wasm"
 required-features = ["csv"]
 
 [[test]]

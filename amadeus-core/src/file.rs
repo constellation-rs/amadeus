@@ -5,7 +5,7 @@
 mod local;
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, ready};
+use futures::{future::LocalBoxFuture, ready};
 use pin_project::pin_project;
 use std::{
 	convert::TryFrom, error::Error, ffi, fmt, future::Future, io, pin::Pin, sync::Arc, task::{Context, Poll}
@@ -208,14 +208,16 @@ pub trait Partition: Clone + fmt::Debug + ProcessSend + 'static {
 	async fn pages(self) -> Result<Vec<Self::Page>, Self::Error>;
 }
 #[allow(clippy::len_without_is_empty)]
-#[async_trait]
-pub trait Page: Send {
+pub trait Page {
 	type Error: Error + Clone + PartialEq + Into<io::Error> + ProcessSend + 'static;
 
-	fn len(&self) -> u64;
-	fn set_len(&self, len: u64) -> Result<(), Self::Error>;
-	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>>;
-	fn write(&self, offset: u64, buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>>;
+	fn len(&self) -> LocalBoxFuture<'static, Result<u64, Self::Error>>;
+	fn read(
+		&self, offset: u64, len: usize,
+	) -> LocalBoxFuture<'static, Result<Box<[u8]>, Self::Error>>;
+	fn write(
+		&self, offset: u64, buf: Box<[u8]>,
+	) -> LocalBoxFuture<'static, Result<(), Self::Error>>;
 
 	fn reader(self) -> Reader<Self>
 	where
@@ -225,43 +227,43 @@ pub trait Page: Send {
 	}
 }
 
-#[async_trait]
 impl<T: ?Sized> Page for &T
 where
-	T: Page + Sync,
+	T: Page,
 {
 	type Error = T::Error;
 
-	fn len(&self) -> u64 {
+	fn len(&self) -> LocalBoxFuture<'static, Result<u64, Self::Error>> {
 		(**self).len()
 	}
-	fn set_len(&self, len: u64) -> Result<(), Self::Error> {
-		(**self).set_len(len)
-	}
-	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+	fn read(
+		&self, offset: u64, len: usize,
+	) -> LocalBoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
 		(**self).read(offset, len)
 	}
-	fn write(&self, offset: u64, buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>> {
+	fn write(
+		&self, offset: u64, buf: Box<[u8]>,
+	) -> LocalBoxFuture<'static, Result<(), Self::Error>> {
 		(**self).write(offset, buf)
 	}
 }
-#[async_trait]
 impl<T: ?Sized> Page for Arc<T>
 where
-	T: Page + Sync,
+	T: Page,
 {
 	type Error = T::Error;
 
-	fn len(&self) -> u64 {
+	fn len(&self) -> LocalBoxFuture<'static, Result<u64, Self::Error>> {
 		(**self).len()
 	}
-	fn set_len(&self, len: u64) -> Result<(), Self::Error> {
-		(**self).set_len(len)
-	}
-	fn read(&self, offset: u64, len: usize) -> BoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
+	fn read(
+		&self, offset: u64, len: usize,
+	) -> LocalBoxFuture<'static, Result<Box<[u8]>, Self::Error>> {
 		(**self).read(offset, len)
 	}
-	fn write(&self, offset: u64, buf: Box<[u8]>) -> BoxFuture<'static, Result<(), Self::Error>> {
+	fn write(
+		&self, offset: u64, buf: Box<[u8]>,
+	) -> LocalBoxFuture<'static, Result<(), Self::Error>> {
 		(**self).write(offset, buf)
 	}
 }
@@ -274,8 +276,7 @@ where
 	#[pin]
 	page: P,
 	#[pin]
-	pending: Option<BoxFuture<'static, Result<Box<[u8]>, P::Error>>>,
-	pending_len: Option<usize>,
+	pending: Option<LocalBoxFuture<'static, Result<Box<[u8]>, P::Error>>>,
 	offset: u64,
 }
 #[allow(clippy::len_without_is_empty)]
@@ -287,12 +288,8 @@ where
 		Self {
 			page,
 			pending: None,
-			pending_len: None,
 			offset: 0,
 		}
-	}
-	pub fn len(&self) -> u64 {
-		self.page.len()
 	}
 }
 impl<P> futures::io::AsyncRead for Reader<P>
@@ -305,22 +302,20 @@ where
 		let mut self_ = self.project();
 		if self_.pending.is_none() {
 			let start = *self_.offset;
-			let len = usize::try_from((self_.page.len() - start).min(buf.len() as u64)).unwrap();
+			let len = buf.len();
 			let len = len.min(PAGE_SIZE);
 			let pending = self_.page.read(start, len);
 			*self_.pending = Some(pending);
-			*self_.pending_len = Some(len);
 		}
 		let ret = ready!(self_.pending.as_mut().as_pin_mut().unwrap().poll(cx));
 		*self_.pending = None;
-		let len = self_.pending_len.take().unwrap();
 		let ret = ret
 			.map(|buf_| {
-				buf[..len].copy_from_slice(&buf_);
-				len
+				buf[..buf_.len()].copy_from_slice(&buf_);
+				buf_.len()
 			})
 			.map_err(Into::into);
-		*self_.offset += u64::try_from(len).unwrap();
+		*self_.offset += u64::try_from(ret.as_ref().ok().cloned().unwrap_or(0)).unwrap();
 		Poll::Ready(ret)
 	}
 }

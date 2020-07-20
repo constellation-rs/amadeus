@@ -25,11 +25,10 @@ pub fn hash<T: AsBytes>(data: &T, seed: u32) -> u32 {
 	#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 	{
 		if is_x86_feature_detected!("sse4.2") {
-			unsafe { crc32_hash(data, seed) }
-		} else {
-			murmur_hash2_64a(data, seed as u64) as u32
+			return unsafe { crc32_hash(data, seed) };
 		}
 	}
+	murmur_hash2_64a(data, seed as u64) as u32
 }
 
 const MURMUR_PRIME: u64 = 0xc6a4a7935bd1e995;
