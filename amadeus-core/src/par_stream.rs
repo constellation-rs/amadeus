@@ -15,10 +15,13 @@ mod update;
 
 use async_trait::async_trait;
 use either::Either;
-use futures::{pin_mut, stream, stream::StreamExt as _, Stream};
+use futures::{future, pin_mut, stream, stream::StreamExt as _, Stream};
 use serde_closure::{traits, FnOnce};
-use std::{cmp::Ordering, collections::HashMap, hash::Hash, iter, ops, vec};
+use std::{
+	cmp::Ordering, collections::HashMap, hash::Hash, iter, ops, pin::Pin, task::{Context, Poll}, vec
+};
 
+use super::{par_pipe::*, par_sink::*};
 use crate::{
 	into_par_stream::{IntoDistributedStream, IntoParallelStream}, pipe::StreamExt, pool::{ProcessPool, ProcessSend, ThreadPool}
 };
@@ -26,8 +29,6 @@ use crate::{
 pub use self::{
 	chain::*, cloned::*, filter::*, flat_map::*, identity::*, inspect::*, map::*, update::*
 };
-
-use super::{par_pipe::*, par_sink::*};
 
 #[must_use]
 pub trait StreamTask {
@@ -45,8 +46,9 @@ macro_rules! stream {
 		pub trait $stream {
 			type Item;
 			type Task: StreamTask<Item = Self::Item> + $send;
+
+			fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>>;
 			fn size_hint(&self) -> (usize, Option<usize>);
-			fn next_task(&mut self) -> Option<Self::Task>;
 
 			$($items)*
 
@@ -338,17 +340,19 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 	where
 		P: ThreadPool,
 		R1: ReducerSend<Self::Item> + Clone + Send + 'static,
-		R3: Reducer<<R1 as ReducerSend<Self::Item>>::Output, Output = B>,
+		R3: Reducer<<R1 as ReducerSend<Self::Item>>::Done, Done = B>,
 		Self::Task: 'static,
 		Self: Sized,
 	{
+		let self_ = self;
+		pin_mut!(self_);
 		// TODO: don't buffer tasks before sending. requires changes to ThreadPool
 		let mut tasks = (0..pool.threads()).map(|_| vec![]).collect::<Vec<_>>();
 		let mut allocated = 0;
 		'a: loop {
 			for i in 0..tasks.len() {
 				loop {
-					let (mut lower, _upper) = self.size_hint();
+					let (mut lower, _upper) = self_.size_hint();
 					if lower == 0 {
 						lower = 1;
 					}
@@ -361,7 +365,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 						break;
 					}
 					for _ in 0..batch {
-						if let Some(task) = self.next_task() {
+						if let Some(task) = future::poll_fn(|cx| self_.as_mut().next_task(cx)).await {
 							tasks[i].push(task);
 							allocated += 1;
 						} else {
@@ -394,8 +398,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 					pin_mut!(sink);
 					let tasks =
 						stream::iter(tasks.into_iter().map(StreamTask::into_async)).flatten();
-					tasks.sink(sink.as_mut()).await;
-					sink.output().await
+					tasks.sink(sink.as_mut()).await
 				})
 			})
 			.collect::<futures::stream::FuturesUnordered<_>>();
@@ -404,14 +407,13 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
-		stream.sink(reduce_c.as_mut()).await;
-		reduce_c.output().await
+		stream.sink(reduce_c.as_mut()).await
 	}
 
 	async fn pipe<P, ParSink, A>(self, pool: &P, sink: ParSink) -> A
 	where
 		P: ThreadPool,
-		ParSink: ParallelSink<Self::Item, Output = A>,
+		ParSink: ParallelSink<Self::Item, Done = A>,
 		<ParSink::Pipe as ParallelPipe<Self::Item>>::Task: 'static,
 		ParSink::ReduceA: 'static,
 		Self::Task: 'static,
@@ -429,8 +431,8 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 	) -> (A, B)
 	where
 		P: ThreadPool,
-		ParSinkA: ParallelSink<Self::Item, Output = A>,
-		ParSinkB: for<'a> ParallelSink<&'a Self::Item, Output = B> + 'static,
+		ParSinkA: ParallelSink<Self::Item, Done = A>,
+		ParSinkB: for<'a> ParallelSink<&'a Self::Item, Done = B> + 'static,
 		<ParSinkA::Pipe as ParallelPipe<Self::Item>>::Task: 'static,
 		ParSinkA::ReduceA: 'static,
 		<ParSinkB as ParallelSink<&'static Self::Item>>::ReduceA: 'static,
@@ -452,7 +454,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 			.await
 	}
 
-	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Output>
+	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Done>
 	where
 		P: ThreadPool,
 		A: Eq + Hash + Send + 'static,
@@ -461,7 +463,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 		<S::Pipe as ParallelPipe<B>>::Task: Clone + Send + 'static,
 		S::ReduceA: 'static,
 		S::ReduceC: Clone,
-		S::Output: Send + 'static,
+		S::Done: Send + 'static,
 		Self::Task: 'static,
 		Self: ParallelStream<Item = (A, B)> + Sized,
 	{
@@ -489,24 +491,26 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 	where
 		P: ProcessPool,
 		R1: ReducerSend<Self::Item> + Clone + ProcessSend + 'static,
-		R2: ReducerProcessSend<<R1 as ReducerSend<Self::Item>>::Output>
+		R2: ReducerProcessSend<<R1 as ReducerSend<Self::Item>>::Done>
 			+ Clone
 			+ ProcessSend
 			+ 'static,
 		R3: Reducer<
-			<R2 as ReducerProcessSend<<R1 as ReducerSend<Self::Item>>::Output>>::Output,
-			Output = B,
+			<R2 as ReducerProcessSend<<R1 as ReducerSend<Self::Item>>::Done>>::Done,
+			Done = B,
 		>,
 		Self::Task: 'static,
 		Self: Sized,
 	{
+		let self_ = self;
+		pin_mut!(self_);
 		// TODO: don't buffer tasks before sending. requires changes to ProcessPool
 		let mut tasks = (0..pool.processes()).map(|_| vec![]).collect::<Vec<_>>();
 		let mut allocated = 0;
 		'a: loop {
 			for i in 0..tasks.len() {
 				loop {
-					let (mut lower, _upper) = self.size_hint();
+					let (mut lower, _upper) = self_.size_hint();
 					if lower == 0 {
 						lower = 1;
 					}
@@ -519,7 +523,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 						break;
 					}
 					for _ in 0..batch {
-						if let Some(task) = self.next_task() {
+						if let Some(task) = future::poll_fn(|cx| self_.as_mut().next_task(cx)).await {
 							tasks[i].push(task);
 							allocated += 1;
 						} else {
@@ -602,8 +606,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 								let tasks =
 									stream::iter(tasks.into_iter().map(StreamTask::into_async))
 										.flatten();
-								tasks.sink(sink.as_mut()).await;
-								sink.output().await
+								tasks.sink(sink.as_mut()).await
 							})
 						})
 						.collect::<futures::stream::FuturesUnordered<_>>();
@@ -616,8 +619,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 					let reduce_b = reduce_b.into_async();
 					async move {
 						pin_mut!(reduce_b);
-						stream.sink(reduce_b.as_mut()).await;
-						reduce_b.output().await
+						stream.sink(reduce_b.as_mut()).await
 					}
 				}))
 			})
@@ -627,14 +629,13 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
-		stream.sink(reduce_c.as_mut()).await;
-		reduce_c.output().await
+		stream.sink(reduce_c.as_mut()).await
 	}
 
 	async fn pipe<P, DistSink, A>(self, pool: &P, sink: DistSink) -> A
 	where
 		P: ProcessPool,
-		DistSink: DistributedSink<Self::Item, Output = A>,
+		DistSink: DistributedSink<Self::Item, Done = A>,
 		<DistSink::Pipe as DistributedPipe<Self::Item>>::Task: 'static,
 		DistSink::ReduceA: 'static,
 		DistSink::ReduceB: 'static,
@@ -653,8 +654,8 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 	) -> (A, B)
 	where
 		P: ProcessPool,
-		DistSinkA: DistributedSink<Self::Item, Output = A>,
-		DistSinkB: for<'a> DistributedSink<&'a Self::Item, Output = B> + 'static,
+		DistSinkA: DistributedSink<Self::Item, Done = A>,
+		DistSinkB: for<'a> DistributedSink<&'a Self::Item, Done = B> + 'static,
 		<DistSinkA::Pipe as DistributedPipe<Self::Item>>::Task: 'static,
 		DistSinkA::ReduceA: 'static,
 		DistSinkA::ReduceB: 'static,
@@ -679,7 +680,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 			.await
 	}
 
-	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Output>
+	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Done>
 	where
 		P: ProcessPool,
 		A: Eq + Hash + ProcessSend + 'static,
@@ -689,7 +690,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 		S::ReduceA: 'static,
 		S::ReduceB: 'static,
 		S::ReduceC: Clone,
-		S::Output: ProcessSend + 'static,
+		S::Done: ProcessSend + 'static,
 		Self::Task: 'static,
 		Self: DistributedStream<Item = (A, B)> + Sized,
 	{

@@ -16,7 +16,7 @@ pub struct Identity;
 
 impl_par_dist! {
 	impl<Item> ParallelPipe<Item> for Identity {
-		type Item = Item;
+		type Output = Item;
 		type Task = IdentityTask;
 
 		fn task(&self) -> Self::Task {
@@ -200,7 +200,7 @@ mod workaround {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct IdentityTask;
 impl<Item> PipeTask<Item> for IdentityTask {
-	type Item = Item;
+	type Output = Item;
 	type Async = IdentityTask;
 
 	fn into_async(self) -> Self::Async {
@@ -208,11 +208,11 @@ impl<Item> PipeTask<Item> for IdentityTask {
 	}
 }
 impl<Item> crate::pipe::Pipe<Item> for IdentityTask {
-	type Item = Item;
+	type Output = Item;
 
 	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
-	) -> Poll<Option<Item>> {
+	) -> Poll<Option<Self::Output>> {
 		stream.poll_next(cx)
 	}
 }

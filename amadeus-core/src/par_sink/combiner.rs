@@ -6,15 +6,15 @@ mod macros {
 	#[macro_export]
 	macro_rules! combiner_par_sink {
 		($combiner:ty, $self:ident, $init:expr) => {
-			type Output = <Self::ReduceC as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<I::Item>>::Output>>::Output;
-			type Pipe = I;
-			type ReduceA = FolderSyncReducer<I::Item, $combiner>;
-			type ReduceC = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<I::Item>>::Output, $combiner>;
+			type Done = <Self::ReduceC as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done>>::Done;
+			type Pipe = P;
+			type ReduceA = FolderSyncReducer<P::Output, $combiner>;
+			type ReduceC = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done, $combiner>;
 
-			fn reducers($self) -> (I, Self::ReduceA, Self::ReduceC) {
+			fn reducers($self) -> (P, Self::ReduceA, Self::ReduceC) {
 				let init = $init;
 				(
-					$self.i,
+					$self.pipe,
 					FolderSyncReducer::new(init.clone()),
 					FolderSyncReducer::new(init),
 				)
@@ -24,16 +24,16 @@ mod macros {
 	#[macro_export]
 	macro_rules! combiner_dist_sink {
 		($combiner:ty, $self:ident, $init:expr) => {
-			type Output = <Self::ReduceC as $crate::par_sink::Reducer<<Self::ReduceB as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<I::Item>>::Output>>::Output>>::Output;
-			type Pipe = I;
-			type ReduceA = FolderSyncReducer<I::Item, $combiner>;
-			type ReduceB = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<I::Item>>::Output, $combiner>;
-			type ReduceC = FolderSyncReducer<<Self::ReduceB as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<I::Item>>::Output>>::Output, $combiner>;
+			type Done = <Self::ReduceC as $crate::par_sink::Reducer<<Self::ReduceB as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done>>::Done>>::Done;
+			type Pipe = P;
+			type ReduceA = FolderSyncReducer<P::Output, $combiner>;
+			type ReduceB = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done, $combiner>;
+			type ReduceC = FolderSyncReducer<<Self::ReduceB as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done>>::Done, $combiner>;
 
-			fn reducers($self) -> (I, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
+			fn reducers($self) -> (P, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 				let init = $init;
 				(
-					$self.i,
+					$self.pipe,
 					FolderSyncReducer::new(init.clone()),
 					FolderSyncReducer::new(init.clone()),
 					FolderSyncReducer::new(init),
@@ -48,21 +48,21 @@ mod macros {
 pub(crate) use macros::{combiner_dist_sink, combiner_par_sink};
 
 pub trait CombinerSync {
-	type Output;
+	type Done;
 
-	fn combine(&mut self, a: Self::Output, b: Self::Output) -> Self::Output;
+	fn combine(&mut self, a: Self::Done, b: Self::Done) -> Self::Done;
 }
-impl<C, A, B> FolderSync<A> for C
+impl<C, Item, B> FolderSync<Item> for C
 where
-	C: CombinerSync<Output = B>,
-	A: Into<Option<B>>,
+	C: CombinerSync<Done = B>,
+	Item: Into<Option<B>>,
 {
-	type Output = Option<B>;
+	type Done = Option<B>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		None
 	}
-	fn push(&mut self, state: &mut Self::Output, item: A) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		if let Some(item) = item.into() {
 			*state = Some(if let Some(state) = state.take() {
 				self.combine(state, item)

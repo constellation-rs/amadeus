@@ -49,8 +49,8 @@ pub trait Destination: Clone + Debug {
 	type Item: crate::data::Data;
 	type Error: Error;
 
-	type ParSink: ParallelSink<Self::Item, Output = Result<(), Self::Error>>;
-	type DistSink: DistributedSink<Self::Item, Output = Result<(), Self::Error>>;
+	type ParSink: ParallelSink<Self::Item, Done = Result<(), Self::Error>>;
+	type DistSink: DistributedSink<Self::Item, Done = Result<(), Self::Error>>;
 
 	fn par_sink(self) -> Self::ParSink;
 	fn dist_sink(self) -> Self::DistSink;
@@ -162,8 +162,9 @@ impl Source for CommonCrawl {
 	}
 }
 
+#[pin_project]
 #[derive(new)]
-pub struct IntoStream<I, U>(I, PhantomData<fn() -> U>);
+pub struct IntoStream<I, U>(#[pin] I, PhantomData<fn() -> U>);
 impl<I, T, E, U> ParallelStream for IntoStream<I, U>
 where
 	I: ParallelStream<Item = Result<T, E>>,
@@ -176,10 +177,12 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.0.size_hint()
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.0.next_task().map(|task| IntoTask {
-			task,
-			marker: PhantomData,
+	fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+		self.project().0.next_task(cx).map(|task| {
+			task.map(|task| IntoTask {
+				task,
+				marker: PhantomData,
+			})
 		})
 	}
 }
@@ -195,10 +198,12 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.0.size_hint()
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.0.next_task().map(|task| IntoTask {
-			task,
-			marker: PhantomData,
+	fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+		self.project().0.next_task(cx).map(|task| {
+			task.map(|task| IntoTask {
+				task,
+				marker: PhantomData,
+			})
 		})
 	}
 }

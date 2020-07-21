@@ -10,18 +10,18 @@ use super::Pipe;
 
 #[pin_project]
 #[derive(new)]
-pub struct FlatMap<C, F, R> {
+pub struct FlatMap<P, F, R> {
 	#[pin]
-	pipe: C,
+	pipe: P,
 	f: F,
 	#[pin]
 	#[new(default)]
 	next: Option<R>,
 }
 
-impl<C: Stream, F, R> Stream for FlatMap<C, F, R>
+impl<P: Stream, F, R> Stream for FlatMap<P, F, R>
 where
-	F: FnMut<(C::Item,), Output = R>,
+	F: FnMut<(P::Item,), Output = R>,
 	R: Stream,
 {
 	type Item = R::Item;
@@ -44,16 +44,16 @@ where
 	}
 }
 
-impl<C: Pipe<Source>, F, R, Source> Pipe<Source> for FlatMap<C, F, R>
+impl<P: Pipe<Input>, F, R, Input> Pipe<Input> for FlatMap<P, F, R>
 where
-	F: FnMut<(C::Item,), Output = R>,
+	F: FnMut<(P::Output,), Output = R>,
 	R: Stream,
 {
-	type Item = R::Item;
+	type Output = R::Item;
 
 	fn poll_next(
-		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Source>>,
-	) -> Poll<Option<Self::Item>> {
+		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Input>>,
+	) -> Poll<Option<Self::Output>> {
 		let mut self_ = self.project();
 		Poll::Ready(loop {
 			if let Some(s) = self_.next.as_mut().as_pin_mut() {

@@ -12,18 +12,23 @@ use super::{
 
 #[derive(new)]
 #[must_use]
-pub struct SampleUnstable<I> {
-	i: I,
+pub struct SampleUnstable<P> {
+	pipe: P,
 	samples: usize,
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source>
-		for SampleUnstable<I>
+	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for SampleUnstable<P>
 	where
-		I::Item: Send + 'static,
+		P::Output: Send + 'static,
 	{
-		folder_par_sink!(SampleUnstableFolder, SumFolder<SASampleUnstable<I::Item>>, self, SampleUnstableFolder::new(self.samples), SumFolder::new());
+		folder_par_sink!(
+			SampleUnstableFolder,
+			SumFolder<SASampleUnstable<P::Output>>,
+			self,
+			SampleUnstableFolder::new(self.samples),
+			SumFolder::new()
+		);
 	}
 }
 
@@ -32,33 +37,38 @@ pub struct SampleUnstableFolder {
 	samples: usize,
 }
 
-impl<A> FolderSync<A> for SampleUnstableFolder {
-	type Output = SASampleUnstable<A>;
+impl<Item> FolderSync<Item> for SampleUnstableFolder {
+	type Done = SASampleUnstable<Item>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		SASampleUnstable::new(self.samples)
 	}
-	fn push(&mut self, state: &mut Self::Output, item: A) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		state.push(item, &mut thread_rng())
 	}
 }
 
 #[derive(new)]
 #[must_use]
-pub struct MostFrequent<I> {
-	i: I,
+pub struct MostFrequent<P> {
+	pipe: P,
 	n: usize,
 	probability: f64,
 	tolerance: f64,
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source>
-		for MostFrequent<I>
+	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for MostFrequent<P>
 	where
-		I::Item: Clone + Hash + Eq + Send + 'static,
+		P::Output: Clone + Hash + Eq + Send + 'static,
 	{
-		folder_par_sink!(MostFrequentFolder, SumZeroFolder<Top<I::Item, usize>>, self, MostFrequentFolder::new(self.n, self.probability, self.tolerance), SumZeroFolder::new(Top::new(self.n, self.probability, self.tolerance, ())));
+		folder_par_sink!(
+			MostFrequentFolder,
+			SumZeroFolder<Top<P::Output, usize>>,
+			self,
+			MostFrequentFolder::new(self.n, self.probability, self.tolerance),
+			SumZeroFolder::new(Top::new(self.n, self.probability, self.tolerance, ()))
+		);
 	}
 }
 
@@ -69,24 +79,24 @@ pub struct MostFrequentFolder {
 	tolerance: f64,
 }
 
-impl<A> FolderSync<A> for MostFrequentFolder
+impl<Item> FolderSync<Item> for MostFrequentFolder
 where
-	A: Clone + Hash + Eq + Send + 'static,
+	Item: Clone + Hash + Eq + Send + 'static,
 {
-	type Output = Top<A, usize>;
+	type Done = Top<Item, usize>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		Top::new(self.n, self.probability, self.tolerance, ())
 	}
-	fn push(&mut self, state: &mut Self::Output, item: A) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		state.push(item, &1)
 	}
 }
 
 #[derive(new)]
 #[must_use]
-pub struct MostDistinct<I> {
-	i: I,
+pub struct MostDistinct<P> {
+	pipe: P,
 	n: usize,
 	probability: f64,
 	tolerance: f64,
@@ -94,12 +104,23 @@ pub struct MostDistinct<I> {
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source, Item = (A, B)>, Source, A, B> ParallelSink<Source> for MostDistinct<I>
+	impl<P: ParallelPipe<Input, Output = (A, B)>, Input, A, B> ParallelSink<Input> for MostDistinct<P>
 	where
 		A: Clone + Hash + Eq + Send + 'static,
 		B: Hash + 'static,
 	{
-		folder_par_sink!(MostDistinctFolder, SumZeroFolder<Top<A, HyperLogLogMagnitude<B>>>, self, MostDistinctFolder::new(self.n, self.probability, self.tolerance, self.error_rate), SumZeroFolder::new(Top::new(self.n, self.probability, self.tolerance, self.error_rate)));
+		folder_par_sink!(
+			MostDistinctFolder,
+			SumZeroFolder<Top<A, HyperLogLogMagnitude<B>>>,
+			self,
+			MostDistinctFolder::new(self.n, self.probability, self.tolerance, self.error_rate),
+			SumZeroFolder::new(Top::new(
+				self.n,
+				self.probability,
+				self.tolerance,
+				self.error_rate
+			))
+		);
 	}
 }
 
@@ -116,12 +137,12 @@ where
 	A: Clone + Hash + Eq + Send + 'static,
 	B: Hash + 'static,
 {
-	type Output = Top<A, HyperLogLogMagnitude<B>>;
+	type Done = Top<A, HyperLogLogMagnitude<B>>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		Top::new(self.n, self.probability, self.tolerance, self.error_rate)
 	}
-	fn push(&mut self, state: &mut Self::Output, item: (A, B)) {
+	fn push(&mut self, state: &mut Self::Done, item: (A, B)) {
 		state.push(item.0, &item.1)
 	}
 }

@@ -18,9 +18,11 @@ use crate::{
 	par_stream::{ParallelStream, StreamTask}, pipe::Pipe, util::transmute
 };
 
+#[pin_project]
 #[derive(new)]
 #[must_use]
 pub struct Fork<A, B, C, RefAItem> {
+	#[pin]
 	a: A,
 	b: B,
 	c: C,
@@ -35,48 +37,58 @@ impl_par_dist! {
 		C: ParallelPipe<RefAItem>,
 		RefAItem: 'static,
 	{
-		type Item = Sum2<B::Item, C::Item>;
+		type Item = Sum2<B::Output, C::Output>;
 		type Task = JoinTask<A::Task, B::Task, C::Task, RefAItem>;
 
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			self.a.size_hint()
 		}
-		fn next_task(&mut self) -> Option<Self::Task> {
-			self.a.next_task().map(|task| JoinTask {
-				stream: task,
-				pipe: self.b.task(),
-				pipe_ref: self.c.task(),
-				marker: PhantomData,
+		fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+			let self_ = self.project();
+			let b = self_.b;
+			let c = self_.c;
+			self_.a.next_task(cx).map(|task| {
+				task.map(|task| JoinTask {
+					stream: task,
+					pipe: b.task(),
+					pipe_ref: c.task(),
+					marker: PhantomData,
+				})
 			})
 		}
 	}
-	impl<A,B,C, Source, RefAItem> ParallelPipe<Source> for Fork<A, B, C, RefAItem>
+	impl<A, B, C, Input, RefAItem> ParallelPipe<Input> for Fork<A, B, C, RefAItem>
 	where
-		A: ParallelPipe<Source>,
-		B: ParallelPipe<A::Item>,
+		A: ParallelPipe<Input>,
+		B: ParallelPipe<A::Output>,
 		C: ParallelPipe<RefAItem>,
 		RefAItem: 'static,
 	{
-		type Item = Sum2<B::Item, C::Item>;
+		type Output = Sum2<B::Output, C::Output>;
 		type Task = JoinTask<A::Task, B::Task, C::Task, RefAItem>;
 
 		fn task(&self) -> Self::Task {
 			let stream = self.a.task();
 			let pipe = self.b.task();
 			let pipe_ref = self.c.task();
-			JoinTask { stream, pipe, pipe_ref, marker: PhantomData }
+			JoinTask {
+				stream,
+				pipe,
+				pipe_ref,
+				marker: PhantomData,
+			}
 		}
 	}
 }
 
-impl<A, B, C, Source, RefAItem> ParallelSink<Source> for Fork<A, B, C, RefAItem>
+impl<A, B, C, Input, RefAItem> ParallelSink<Input> for Fork<A, B, C, RefAItem>
 where
-	A: ParallelPipe<Source>,
-	B: ParallelSink<A::Item>,
+	A: ParallelPipe<Input>,
+	B: ParallelSink<A::Output>,
 	C: ParallelSink<RefAItem>,
 	RefAItem: 'static,
 {
-	type Output = (B::Output, C::Output);
+	type Done = (B::Done, C::Done);
 	type Pipe = Fork<A, B::Pipe, C::Pipe, RefAItem>;
 	type ReduceA = ReduceA2<B::ReduceA, C::ReduceA>;
 	type ReduceC = ReduceC2<B::ReduceC, C::ReduceC>;
@@ -91,14 +103,14 @@ where
 		)
 	}
 }
-impl<A, B, C, Source, RefAItem> DistributedSink<Source> for Fork<A, B, C, RefAItem>
+impl<A, B, C, Input, RefAItem> DistributedSink<Input> for Fork<A, B, C, RefAItem>
 where
-	A: DistributedPipe<Source>,
-	B: DistributedSink<A::Item>,
+	A: DistributedPipe<Input>,
+	B: DistributedSink<A::Output>,
 	C: DistributedSink<RefAItem>,
 	RefAItem: 'static,
 {
-	type Output = (B::Output, C::Output);
+	type Done = (B::Done, C::Done);
 	type Pipe = Fork<A, B::Pipe, C::Pipe, RefAItem>;
 	type ReduceA = ReduceA2<B::ReduceA, C::ReduceA>;
 	type ReduceB = ReduceC2<B::ReduceB, C::ReduceB>;
@@ -133,7 +145,7 @@ where
 	B: PipeTask<A::Item>,
 	C: PipeTask<RefAItem>,
 {
-	type Item = Sum2<B::Item, C::Item>;
+	type Item = Sum2<B::Output, C::Output>;
 	type Async = JoinStreamTaskAsync<A::Async, B::Async, C::Async, RefAItem, A::Item>;
 
 	fn into_async(self) -> Self::Async {
@@ -147,14 +159,14 @@ where
 		}
 	}
 }
-impl<A, B, C, Source, RefAItem> PipeTask<Source> for JoinTask<A, B, C, RefAItem>
+impl<A, B, C, Input, RefAItem> PipeTask<Input> for JoinTask<A, B, C, RefAItem>
 where
-	A: PipeTask<Source>,
-	B: PipeTask<A::Item>,
+	A: PipeTask<Input>,
+	B: PipeTask<A::Output>,
 	C: PipeTask<RefAItem>,
 {
-	type Item = Sum2<B::Item, C::Item>;
-	type Async = JoinStreamTaskAsync<A::Async, B::Async, C::Async, RefAItem, A::Item>;
+	type Output = Sum2<B::Output, C::Output>;
+	type Async = JoinStreamTaskAsync<A::Async, B::Async, C::Async, RefAItem, A::Output>;
 
 	fn into_async(self) -> Self::Async {
 		JoinStreamTaskAsync {
@@ -187,7 +199,7 @@ where
 	C: Pipe<RefAItem>,
 {
 	// TODO: fairness
-	fn poll(&mut self, cx: &mut Context) -> Option<Poll<Option<Sum2<B::Item, C::Item>>>> {
+	fn poll(&mut self, cx: &mut Context) -> Option<Poll<Option<Sum2<B::Output, C::Output>>>> {
 		if let pending @ Some(_) = self.pending.as_mut().unwrap() {
 			let ref_given = &mut *self.ref_given;
 			{
@@ -300,7 +312,7 @@ where
 	B: Pipe<A::Item>,
 	C: Pipe<RefAItem>,
 {
-	type Item = Sum2<B::Item, C::Item>;
+	type Item = Sum2<B::Output, C::Output>;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
@@ -315,17 +327,17 @@ where
 	}
 }
 
-impl<A, B, C, Source, RefAItem> Pipe<Source> for JoinStreamTaskAsync<A, B, C, RefAItem, A::Item>
+impl<A, B, C, Input, RefAItem> Pipe<Input> for JoinStreamTaskAsync<A, B, C, RefAItem, A::Output>
 where
-	A: Pipe<Source>,
-	B: Pipe<A::Item>,
+	A: Pipe<Input>,
+	B: Pipe<A::Output>,
 	C: Pipe<RefAItem>,
 {
-	type Item = Sum2<B::Item, C::Item>;
+	type Output = Sum2<B::Output, C::Output>;
 
 	fn poll_next(
-		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Source>>,
-	) -> Poll<Option<Self::Item>> {
+		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Input>>,
+	) -> Poll<Option<Self::Output>> {
 		let mut self_ = self.project();
 		loop {
 			if self_.pending.is_none() {

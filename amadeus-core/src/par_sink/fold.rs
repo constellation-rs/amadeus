@@ -12,22 +12,21 @@ use super::{folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, Parall
 
 #[derive(new)]
 #[must_use]
-pub struct Fold<I, ID, F, B> {
-	i: I,
+pub struct Fold<P, ID, F, B> {
+	pipe: P,
 	identity: ID,
 	op: F,
 	marker: PhantomData<fn() -> B>,
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source, ID, F, B> ParallelSink<Source>
-		for Fold<I, ID, F, B>
+	impl<P: ParallelPipe<Input>, Input, ID, F, B> ParallelSink<Input> for Fold<P, ID, F, B>
 	where
 		ID: FnMut<(), Output = B> + Clone + Send + 'static,
-		F: FnMut<(B, Either<I::Item, B>,), Output = B> + Clone + Send + 'static,
+		F: FnMut<(B, Either<P::Output, B>), Output = B> + Clone + Send + 'static,
 		B: Send + 'static,
 	{
-		folder_par_sink!(FoldFolder<I::Item, ID, F, B, StepA>, FoldFolder<I::Item, ID, F, B, StepB>, self, FoldFolder::new(self.identity.clone(), self.op.clone()), FoldFolder::new(self.identity, self.op));
+		folder_par_sink!(FoldFolder<P::Output, ID, F, B, StepA>, FoldFolder<P::Output, ID, F, B, StepB>, self, FoldFolder::new(self.identity.clone(), self.op.clone()), FoldFolder::new(self.identity, self.op));
 	}
 }
 
@@ -37,40 +36,40 @@ impl_par_dist! {
 	bound(serialize = "ID: Serialize, F: Serialize"),
 	bound(deserialize = "ID: Deserialize<'de>, F: Deserialize<'de>")
 )]
-pub struct FoldFolder<A, ID, F, B, Step> {
+pub struct FoldFolder<Item, ID, F, B, Step> {
 	identity: ID,
 	op: F,
-	marker: PhantomData<fn() -> (A, B, Step)>,
+	marker: PhantomData<fn() -> (Item, B, Step)>,
 }
 
 pub struct StepA;
 pub struct StepB;
 
-impl<A, ID, F, B> FolderSync<A> for FoldFolder<A, ID, F, B, StepA>
+impl<Item, ID, F, B> FolderSync<Item> for FoldFolder<Item, ID, F, B, StepA>
 where
 	ID: FnMut<(), Output = B>,
-	F: FnMut<(B, Either<A, B>), Output = B>,
+	F: FnMut<(B, Either<Item, B>), Output = B>,
 {
-	type Output = B;
+	type Done = B;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		self.identity.call_mut(())
 	}
-	fn push(&mut self, state: &mut Self::Output, item: A) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		replace_with_or_abort(state, |state| self.op.call_mut((state, Either::Left(item))))
 	}
 }
-impl<A, ID, F, B> FolderSync<B> for FoldFolder<A, ID, F, B, StepB>
+impl<A, ID, F, Item> FolderSync<Item> for FoldFolder<A, ID, F, Item, StepB>
 where
-	ID: FnMut<(), Output = B>,
-	F: FnMut<(B, Either<A, B>), Output = B>,
+	ID: FnMut<(), Output = Item>,
+	F: FnMut<(Item, Either<A, Item>), Output = Item>,
 {
-	type Output = B;
+	type Done = Item;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		self.identity.call_mut(())
 	}
-	fn push(&mut self, state: &mut Self::Output, item: B) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		replace_with_or_abort(state, |state| {
 			self.op.call_mut((state, Either::Right(item)))
 		})

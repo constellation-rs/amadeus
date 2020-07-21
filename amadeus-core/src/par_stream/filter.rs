@@ -1,44 +1,54 @@
 use derive_new::new;
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use serde_closure::traits::FnMut;
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 
 use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
 
+#[pin_project]
 #[derive(new)]
 #[must_use]
-pub struct Filter<I, F> {
-	i: I,
+pub struct Filter<P, F> {
+	#[pin]
+	pipe: P,
 	f: F,
 }
 
 impl_par_dist! {
-	impl<I: ParallelStream, F> ParallelStream for Filter<I, F>
+	impl<P: ParallelStream, F> ParallelStream for Filter<P, F>
 	where
-		F: for<'a> FnMut<(&'a I::Item,), Output = bool> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Item,), Output = bool> + Clone + Send + 'static,
 	{
-		type Item = I::Item;
-		type Task = FilterTask<I::Task, F>;
+		type Item = P::Item;
+		type Task = FilterTask<P::Task, F>;
 
 		fn size_hint(&self) -> (usize, Option<usize>) {
-			(0, self.i.size_hint().1)
+			(0, self.pipe.size_hint().1)
 		}
-		fn next_task(&mut self) -> Option<Self::Task> {
-			self.i.next_task().map(|task| {
-				let f = self.f.clone();
-				FilterTask { task, f }
+		fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+			let self_ = self.project();
+			let f = self_.f;
+			self_.pipe.next_task(cx).map(|task| {
+				task.map(|task| {
+					let f = f.clone();
+					FilterTask { task, f }
+				})
 			})
 		}
 	}
 
-	impl<I: ParallelPipe<Source>, F, Source> ParallelPipe<Source> for Filter<I, F>
+	impl<P: ParallelPipe<Input>, F, Input> ParallelPipe<Input> for Filter<P, F>
 	where
-		F: for<'a> FnMut<(&'a I::Item,), Output = bool> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = bool> + Clone + Send + 'static,
 	{
-		type Item = I::Item;
-		type Task = FilterTask<I::Task, F>;
+		type Output = P::Output;
+		type Task = FilterTask<P::Task, F>;
 
 		fn task(&self) -> Self::Task {
-			let task = self.i.task();
+			let task = self.pipe.task();
 			let f = self.f.clone();
 			FilterTask { task, f }
 		}
@@ -62,11 +72,11 @@ where
 		crate::pipe::Filter::new(self.task.into_async(), self.f)
 	}
 }
-impl<C: PipeTask<Source>, F, Source> PipeTask<Source> for FilterTask<C, F>
+impl<C: PipeTask<Input>, F, Input> PipeTask<Input> for FilterTask<C, F>
 where
-	F: for<'a> FnMut<(&'a C::Item,), Output = bool>,
+	F: for<'a> FnMut<(&'a C::Output,), Output = bool>,
 {
-	type Item = C::Item;
+	type Output = C::Output;
 	type Async = crate::pipe::Filter<C::Async, F>;
 
 	fn into_async(self) -> Self::Async {

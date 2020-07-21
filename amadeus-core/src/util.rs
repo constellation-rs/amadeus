@@ -15,6 +15,7 @@ where
 {
 	type Item = Result<T::Item, E>;
 	type IntoIter = ResultExpandIter<T::IntoIter, E>;
+
 	fn into_iter(self) -> Self::IntoIter {
 		ResultExpandIter::new(self.0.map(IntoIterator::into_iter))
 	}
@@ -37,6 +38,7 @@ where
 	T: Iterator,
 {
 	type Item = Result<T::Item, E>;
+
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::Ok(t) => t.next().map(Ok),
@@ -49,6 +51,7 @@ where
 	T: Stream,
 {
 	type Item = Result<T::Item, E>;
+
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let ret = match self.project() {
 			ResultExpandIterProj::Ok(t) => ready!(t.poll_next(cx)).map(Ok),
@@ -88,9 +91,10 @@ impl From<IoError> for io::Error {
 	}
 }
 
+#[pin_project]
 #[derive(new)]
 #[repr(transparent)]
-pub struct DistParStream<S>(S);
+pub struct DistParStream<S>(#[pin] S);
 impl<S> ParallelStream for DistParStream<S>
 where
 	S: DistributedStream,
@@ -101,8 +105,8 @@ where
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		self.0.size_hint()
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
-		self.0.next_task()
+	fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+		self.project().0.next_task(cx)
 	}
 }
 
@@ -123,7 +127,7 @@ impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		unreachable!()
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
+	fn next_task(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Task>> {
 		unreachable!()
 	}
 }
@@ -134,7 +138,7 @@ impl<T: 'static> ParallelStream for ImplDistributedStream<T> {
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		unreachable!()
 	}
-	fn next_task(&mut self) -> Option<Self::Task> {
+	fn next_task(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Task>> {
 		unreachable!()
 	}
 }

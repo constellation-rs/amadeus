@@ -16,103 +16,70 @@ mod sample;
 mod sum;
 mod tuple;
 
-use std::{future::Future, ops::DerefMut, pin::Pin};
-
-use crate::{pipe::Sink, pool::ProcessSend};
-
 use super::par_pipe::*;
+use crate::{pipe::Sink, pool::ProcessSend};
 
 pub use self::{
 	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, fork::*, group_by::*, histogram::*, max::*, pipe::*, sample::*, sum::*, tuple::*
 };
 
 #[must_use]
-pub trait Reducer<Source> {
-	type Output;
-	type Async: ReducerAsync<Source, Output = Self::Output>;
+pub trait Reducer<Input> {
+	type Done;
+	type Async: Sink<Input, Done = Self::Done>;
 
 	fn into_async(self) -> Self::Async;
 }
-pub trait ReducerSend<Source>:
-	Reducer<Source, Output = <Self as ReducerSend<Source>>::Output>
-{
-	type Output: Send + 'static;
+pub trait ReducerSend<Input>: Reducer<Input, Done = <Self as ReducerSend<Input>>::Done> {
+	type Done: Send + 'static;
 }
-pub trait ReducerProcessSend<Source>:
-	ReducerSend<Source, Output = <Self as ReducerProcessSend<Source>>::Output>
+pub trait ReducerProcessSend<Input>:
+	ReducerSend<Input, Done = <Self as ReducerProcessSend<Input>>::Done>
 {
-	type Output: ProcessSend + 'static;
-}
-#[must_use]
-pub trait ReducerAsync<Source>: Sink<Source> {
-	type Output;
-
-	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>>;
-}
-
-impl<P, Source> ReducerAsync<Source> for Pin<P>
-where
-	P: DerefMut + Unpin,
-	P::Target: ReducerAsync<Source>,
-{
-	type Output = <P::Target as ReducerAsync<Source>>::Output;
-
-	fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
-		self.get_mut().as_mut().output()
-	}
-}
-impl<T: ?Sized, Source> ReducerAsync<Source> for &mut T
-where
-	T: ReducerAsync<Source> + Unpin,
-{
-	type Output = T::Output;
-
-	fn output<'a>(mut self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
-		Box::pin(async move { Pin::new(&mut **self).output().await })
-	}
+	type Done: ProcessSend + 'static;
 }
 
 #[must_use]
-pub trait ParallelSink<Source> {
-	type Output;
-	type Pipe: ParallelPipe<Source>;
-	type ReduceA: ReducerSend<<Self::Pipe as ParallelPipe<Source>>::Item> + Clone + Send;
+pub trait ParallelSink<Input> {
+	type Done;
+	type Pipe: ParallelPipe<Input>;
+	type ReduceA: ReducerSend<<Self::Pipe as ParallelPipe<Input>>::Output> + Clone + Send;
 	type ReduceC: Reducer<
-		<Self::ReduceA as ReducerSend<<Self::Pipe as ParallelPipe<Source>>::Item>>::Output,
-		Output = Self::Output,
+		<Self::ReduceA as ReducerSend<<Self::Pipe as ParallelPipe<Input>>::Output>>::Done,
+		Done = Self::Done,
 	>;
 
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC);
 }
 
 #[inline(always)]
-pub(crate) fn assert_parallel_sink<R: ParallelSink<Source>, Source>(r: R) -> R {
+pub(crate) fn assert_parallel_sink<R: ParallelSink<Input>, Input>(r: R) -> R {
 	r
 }
 
 #[must_use]
-pub trait DistributedSink<Source> {
-	type Output;
-	type Pipe: DistributedPipe<Source>;
-	type ReduceA: ReducerSend<<Self::Pipe as DistributedPipe<Source>>::Item>
+pub trait DistributedSink<Input> {
+	type Done;
+	type Pipe: DistributedPipe<Input>;
+	type ReduceA: ReducerSend<<Self::Pipe as DistributedPipe<Input>>::Output>
 		+ Clone
 		+ ProcessSend
 		+ Send;
 	type ReduceB: ReducerProcessSend<
-			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Source>>::Item>>::Output,
+			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Input>>::Output>>::Done,
 		> + Clone
 		+ ProcessSend;
 	type ReduceC: Reducer<
 		<Self::ReduceB as ReducerProcessSend<
-			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Source>>::Item>>::Output,
-		>>::Output,
-		Output = Self::Output,
+			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Input>>::Output>>::Done,
+		>>::Done,
+		Done = Self::Done,
 	>;
 
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC);
 }
 
 #[inline(always)]
-pub(crate) fn assert_distributed_sink<R: DistributedSink<Source>, Source>(r: R) -> R {
+pub(crate) fn assert_distributed_sink<R: DistributedSink<Input>, Input>(r: R) -> R {
 	r
 }

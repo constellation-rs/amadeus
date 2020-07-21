@@ -8,18 +8,23 @@ use super::{folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, Parall
 
 #[derive(new)]
 #[must_use]
-pub struct Sum<I, B> {
-	i: I,
+pub struct Sum<P, B> {
+	pipe: P,
 	marker: PhantomData<fn() -> B>,
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source, B> ParallelSink<Source>
-		for Sum<I, B>
+	impl<P: ParallelPipe<Input>, Input, B> ParallelSink<Input> for Sum<P, B>
 	where
-		B: iter::Sum<I::Item> + iter::Sum<B> + Send + 'static,
+		B: iter::Sum<P::Output> + iter::Sum<B> + Send + 'static,
 	{
-		folder_par_sink!(SumFolder<B>, SumFolder<B>, self, SumFolder::new(), SumFolder::new());
+		folder_par_sink!(
+			SumFolder<B>,
+			SumFolder<B>,
+			self,
+			SumFolder::new(),
+			SumFolder::new()
+		);
 	}
 }
 
@@ -30,16 +35,16 @@ pub struct SumFolder<B> {
 	marker: PhantomData<fn() -> B>,
 }
 
-impl<A, B> FolderSync<A> for SumFolder<B>
+impl<Item, B> FolderSync<Item> for SumFolder<B>
 where
-	B: iter::Sum<A> + iter::Sum<B>,
+	B: iter::Sum<Item> + iter::Sum<B>,
 {
-	type Output = B;
+	type Done = B;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		iter::empty::<B>().sum()
 	}
-	fn push(&mut self, state: &mut Self::Output, item: A) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		*state = iter::once(mem::replace(state, iter::empty::<B>().sum()))
 			.chain(iter::once(iter::once(item).sum::<B>()))
 			.sum();
@@ -56,20 +61,20 @@ impl<B> SumZeroFolder<B> {
 	}
 }
 
-impl<B> FolderSync<B> for SumZeroFolder<B>
+impl<Item> FolderSync<Item> for SumZeroFolder<Item>
 where
-	Option<B>: iter::Sum<B>,
+	Option<Item>: iter::Sum<Item>,
 {
-	type Output = B;
+	type Done = Item;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		self.zero.take().unwrap()
 	}
-	fn push(&mut self, state: &mut Self::Output, item: B) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		replace_with_or_abort(state, |state| {
 			iter::once(state)
-				.chain(iter::once(iter::once(item).sum::<Option<B>>().unwrap()))
-				.sum::<Option<B>>()
+				.chain(iter::once(iter::once(item).sum::<Option<Item>>().unwrap()))
+				.sum::<Option<Item>>()
 				.unwrap()
 		})
 	}

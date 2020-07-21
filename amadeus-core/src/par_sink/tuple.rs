@@ -1,20 +1,16 @@
 #![allow(non_snake_case, clippy::type_complexity, irrefutable_let_patterns, clippy::new_without_default, unused_mut, unreachable_code, clippy::too_many_arguments)]
 
 use derive_new::new;
-use futures::{
-	future::{
-		join as Join2, join3 as Join3, join4 as Join4, join5 as Join5, maybe_done, FusedFuture, MaybeDone
-	}, pin_mut, ready, stream, Stream, StreamExt
-};
+use futures::{pin_mut, ready, stream, Stream, StreamExt};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use std::{
-	future::Future, pin::Pin, task::{Context, Poll}
+	pin::Pin, task::{Context, Poll}
 };
 use sum::{Sum0, Sum1, Sum2, Sum3, Sum4, Sum5, Sum6, Sum7, Sum8};
 
 use super::{
-	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, PipeTask, Reducer, ReducerAsync, ReducerProcessSend, ReducerSend
+	DistributedPipe, DistributedSink, ParallelPipe, ParallelSink, PipeTask, Reducer, ReducerProcessSend, ReducerSend
 };
 use crate::{
 	pipe::{Pipe, Sink}, pool::ProcessSend
@@ -53,13 +49,13 @@ where
 macro_rules! impl_tuple {
 	($reducea:ident $reduceaasync:ident $reduceb:ident $reducebasync:ident $async:ident $enum:ident $join:ident $($copy:ident)? : $($num:tt $t:ident $s:ident $i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $($copyb:ident)? , $comma:tt)*) => (
 		impl<
-				Source,
-				$($r: ParallelSink<Source, Output = $o>,)*
+				Input,
+				$($r: ParallelSink<Input, Done = $o>,)*
 				$($o,)*
-			> ParallelSink<Source> for ($($r,)*)
-				where Source: $($copy)*,
+			> ParallelSink<Input> for ($($r,)*)
+				where Input: $($copy)*,
 		{
-			type Output = ($($o,)*);
+			type Done = ($($o,)*);
 			type Pipe = ($($r::Pipe,)*);
 			type ReduceA = $reducea<$($r::ReduceA,)*>;
 			type ReduceC = $reduceb<$($r::ReduceC,)*>;
@@ -74,13 +70,13 @@ macro_rules! impl_tuple {
 			}
 		}
 		impl<
-				Source,
-				$($r: DistributedSink<Source, Output = $o>,)*
+				Input,
+				$($r: DistributedSink<Input, Done = $o>,)*
 				$($o,)*
-			> DistributedSink<Source> for ($($r,)*)
-				where Source: $($copy)*,
+			> DistributedSink<Input> for ($($r,)*)
+				where Input: $($copy)*,
 		{
-			type Output = ($($o,)*);
+			type Done = ($($o,)*);
 			type Pipe = ($($r::Pipe,)*);
 			type ReduceA = $reducea<$($r::ReduceA,)*>;
 			type ReduceB = $reduceb<$($r::ReduceB,)*>;
@@ -97,22 +93,22 @@ macro_rules! impl_tuple {
 			}
 		}
 
-		impl<Source, $($i: ParallelPipe<Source>,)*>
-			ParallelPipe<Source> for ($($i,)*)
-				where Source: $($copy)*,
+		impl<Input, $($i: ParallelPipe<Input>,)*>
+			ParallelPipe<Input> for ($($i,)*)
+				where Input: $($copy)*,
 		{
-			type Item = $enum<$($i::Item,)*>;
+			type Output = $enum<$($i::Output,)*>;
 			type Task = ($($i::Task,)*);
 
 			fn task(&self) -> Self::Task {
 				($(self.$num.task(),)*)
 			}
 		}
-		impl<Source, $($i: DistributedPipe<Source>,)*>
-			DistributedPipe<Source> for ($($i,)*)
-				where Source: $($copy)*,
+		impl<Input, $($i: DistributedPipe<Input>,)*>
+			DistributedPipe<Input> for ($($i,)*)
+				where Input: $($copy)*,
 		{
-			type Item = $enum<$($i::Item,)*>;
+			type Output = $enum<$($i::Output,)*>;
 			type Task = ($($i::Task,)*);
 
 			fn task(&self) -> Self::Task {
@@ -120,12 +116,13 @@ macro_rules! impl_tuple {
 			}
 		}
 
-		impl<Source, $($c: PipeTask<Source>,)*> PipeTask<Source> for ($($c,)*)
+		impl<Input, $($c: PipeTask<Input>,)*> PipeTask<Input> for ($($c,)*)
 		where
-			Source: $($copy)*,
+			Input: $($copy)*,
 		{
-			type Item = $enum<$($c::Item,)*>;
-			type Async = $async<Source, $($c::Async,)*>;
+			type Output = $enum<$($c::Output,)*>;
+			type Async = $async<Input, $($c::Async,)*>;
+
 			fn into_async(self) -> Self::Async {
 				$async{
 					$($t: Some(self.$num.into_async()),)*
@@ -136,23 +133,23 @@ macro_rules! impl_tuple {
 		}
 
 		#[pin_project]
-		pub struct $async<Source, $($c,)*> {
+		pub struct $async<Input, $($c,)*> {
 			$(#[pin] $t: Option<$c>,)*
-			pending: Option<Option<Source>>,
+			pending: Option<Option<Input>>,
 			given: ($(bool $comma)*),
 		}
 
 		#[allow(unused_variables)]
-		impl<Source, $($c: Pipe<Source>,)*> Pipe<Source> for $async<Source, $($c,)*>
+		impl<Input, $($c: Pipe<Input>,)*> Pipe<Input> for $async<Input, $($c,)*>
 		where
-			Source: $($copy)*,
+			Input: $($copy)*,
 		{
-			type Item = $enum<$($c::Item,)*>;
+			type Output = $enum<$($c::Output,)*>;
 
 			#[allow(non_snake_case)]
 			fn poll_next(
-				self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Source>>,
-			) -> Poll<Option<Self::Item>> {
+				self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Input>>,
+			) -> Poll<Option<Self::Output>> {
 				let mut self_ = self.project();
 				// buffer, copy to each
 				loop {
@@ -160,7 +157,7 @@ macro_rules! impl_tuple {
 						*self_.pending = Some(ready!(stream.as_mut().poll_next(cx)));
 					}
 					$({
-						let pending: &mut Option<Source> = self_.pending.as_mut().unwrap();
+						let pending: &mut Option<Input> = self_.pending.as_mut().unwrap();
 						let given = &mut self_.given.$num;
 						let waker = cx.waker();
 						let stream_ = stream::poll_fn(|cx| {
@@ -205,32 +202,34 @@ macro_rules! impl_tuple {
 			$($t: $t,)*
 		}
 		impl<$($t: Reducer<$s>,)* $($s,)*> Reducer<$enum<$($s,)*>> for $reducea<$($t,)*> {
-			type Output = ($($t::Output,)*);
+			type Done = ($($t::Done,)*);
 			type Async = $reduceaasync<$($t::Async,)* $($s,)*>;
 
 			fn into_async(self) -> Self::Async {
 				$reduceaasync{
 					$($t: self.$t.into_async(),)*
 					peeked: None,
-					ready: ($(false $comma)*),
+					ready: ($(None::<$t::Done>,)*),
 				}
 			}
 		}
-		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerProcessSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Output: ProcessSend + 'static,)* {
-			type Output = ($($t::Output,)*);
+		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerProcessSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Done: ProcessSend + 'static,)* {
+			type Done = ($($t::Done,)*);
 		}
-		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Output: Send + 'static,)* {
-			type Output = ($($t::Output,)*);
+		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Done: Send + 'static,)* {
+			type Done = ($($t::Done,)*);
 		}
 		#[pin_project]
-		pub struct $reduceaasync<$($t,)* $($s,)*> where $($t: ReducerAsync<$s>,)* {
+		pub struct $reduceaasync<$($t,)* $($s,)*> where $($t: Sink<$s>,)* {
 			$(#[pin] $t: $t,)*
 			peeked: Option<$enum<$($s,)*>>,
-			ready: ($(bool $comma)*),
+			ready: ($(Option<$t::Done>,)*),
 		}
 		#[allow(unused_variables)]
-		impl<$($t: ReducerAsync<$s>,)* $($s,)*> Sink<$enum<$($s,)*>> for $reduceaasync<$($t,)* $($s,)*> {
-			fn poll_pipe(self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = $enum<$($s,)*>>>) -> Poll<()> {
+		impl<$($t: Sink<$s>,)* $($s,)*> Sink<$enum<$($s,)*>> for $reduceaasync<$($t,)* $($s,)*> {
+			type Done = ($($t::Done,)*);
+
+			fn poll_forward(self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = $enum<$($s,)*>>>) -> Poll<Self::Done> {
 				let mut self_ = self.project();
 				loop {
 					let mut progress = false;
@@ -239,29 +238,19 @@ macro_rules! impl_tuple {
 						pin_mut!(stream);
 						let stream_ = substream(cx, stream, |item| if let $enum::$t(_) = item { true } else { false }, |item| { progress = true; if let $enum::$t(item) = item { item } else { unreachable!() } });
 						pin_mut!(stream_);
-						match if !self_.ready.$num { Some(self_.$t.as_mut().poll_pipe(cx, stream_)) } else { None } {
-							Some(Poll::Ready(())) | None => self_.ready.$num = true,
-							Some(Poll::Pending) => ()
+						if self_.ready.$num.is_none() {
+							if let Poll::Ready(done) = self_.$t.as_mut().poll_forward(cx, stream_) {
+								self_.ready.$num = Some(done);
+							}
 						}
 					})*
-					if $(self_.ready.$num &&)* true {
-						break Poll::Ready(())
+					if $(self_.ready.$num.is_some() &&)* true {
+						break Poll::Ready(($(self_.ready.$num.take().unwrap(),)*));
 					}
 					if !progress {
 						break Poll::Pending;
 					}
 				}
-			}
-		}
-		#[allow(unused_variables)]
-		impl<$($t: ReducerAsync<$s>,)* $($s,)*> ReducerAsync<$enum<$($s,)*>> for $reduceaasync<$($t,)* $($s,)*> {
-			type Output = ($($t::Output,)*);
-
-			fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
-				Box::pin(async move {
-					let self_ = self.project();
-					$join($(self_.$t.output(),)*).await
-				})
 			}
 		}
 
@@ -270,32 +259,34 @@ macro_rules! impl_tuple {
 			$($t: $t,)*
 		}
 		impl<$($t: Reducer<$s>,)* $($s,)*> Reducer<($($s,)*)> for $reduceb<$($t,)*> {
-			type Output = ($($t::Output,)*);
+			type Done = ($($t::Done,)*);
 			type Async = $reducebasync<$($t::Async,)* $($s,)*>;
 
 			fn into_async(self) -> Self::Async {
 				$reducebasync{
 					$($t: self.$t.into_async(),)*
 					peeked: None,
-					ready: ($(false $comma)*),
+					ready: ($(None::<$t::Done>,)*),
 				}
 			}
 		}
 		impl<$($t: ReducerProcessSend<$s>,)* $($s,)*> ReducerProcessSend<($($s,)*)> for $reduceb<$($t,)*> {
-			type Output = ($(<$t as ReducerProcessSend<$s>>::Output,)*);
+			type Done = ($(<$t as ReducerProcessSend<$s>>::Done,)*);
 		}
 		impl<$($t: ReducerSend<$s>,)* $($s,)*> ReducerSend<($($s,)*)> for $reduceb<$($t,)*> {
-			type Output = ($(<$t as ReducerSend<$s>>::Output,)*);
+			type Done = ($(<$t as ReducerSend<$s>>::Done,)*);
 		}
 		#[pin_project]
-		pub struct $reducebasync<$($t,)* $($s,)*> where $($t: ReducerAsync<$s>,)* {
+		pub struct $reducebasync<$($t,)* $($s,)*> where $($t: Sink<$s>,)* {
 			$(#[pin] $t: $t,)*
 			peeked: Option<($(Option<$s>,)*)>,
-			ready: ($(bool $comma)*),
+			ready: ($(Option<$t::Done>,)*),
 		}
 		#[allow(unused_variables)]
-		impl<$($t: ReducerAsync<$s>,)* $($s,)*> Sink<($($s,)*)> for $reducebasync<$($t,)* $($s,)*> {
-			fn poll_pipe(self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = ($($s,)*)>>) -> Poll<()> {
+		impl<$($t: Sink<$s>,)* $($s,)*> Sink<($($s,)*)> for $reducebasync<$($t,)* $($s,)*> {
+			type Done = ($($t::Done,)*);
+
+			fn poll_forward(self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = ($($s,)*)>>) -> Poll<Self::Done> {
 				let mut self_ = self.project();
 				let stream = stream.map(|item| ($(Some(item.$num),)*));
 				pin_mut!(stream);
@@ -321,13 +312,14 @@ macro_rules! impl_tuple {
 							None => Poll::Ready(None),
 						}).fuse();
 						pin_mut!(stream);
-						match if !self_.ready.$num { Some(self_.$t.as_mut().poll_pipe(cx, stream)) } else{ None } {
-							Some(Poll::Ready(())) | None => self_.ready.$num = true,
-							Some(Poll::Pending) => ()
+						if self_.ready.$num.is_none() {
+							if let Poll::Ready(done) = self_.$t.as_mut().poll_forward(cx, stream) {
+								self_.ready.$num = Some(done);
+							}
 						}
 					})*
-					if $(self_.ready.$num &&)* true {
-						break Poll::Ready(());
+					if $(self_.ready.$num.is_some() &&)* true {
+						break Poll::Ready(($(self_.ready.$num.take().unwrap(),)*));
 					}
 					if let Some(peeked) = self_.peeked {
 						if $(peeked.$num.is_none() &&)* true {
@@ -339,17 +331,6 @@ macro_rules! impl_tuple {
 						break Poll::Pending;
 					}
 				}
-			}
-		}
-		#[allow(unused_variables)]
-		impl<$($t: ReducerAsync<$s>,)* $($s,)*> ReducerAsync<($($s,)*)> for $reducebasync<$($t,)* $($s,)*> {
-			type Output = ($($t::Output,)*);
-
-			fn output<'a>(self: Pin<&'a mut Self>) -> Pin<Box<dyn Future<Output = Self::Output> + 'a>> {
-				Box::pin(async move {
-					let self_ = self.project();
-					$join($(self_.$t.output(),)*).await
-				})
 			}
 		}
 	);
@@ -410,61 +391,4 @@ impl<'a, S: Stream> Stream for Peekable<'a, S> {
 		};
 		(lower, upper)
 	}
-}
-
-// from https://github.com/rust-lang/futures-rs/blob/19831dbecd13961fbd4243c1114663e24299c33d/futures-util/src/future/join.rs
-macro_rules! generate {
-	($(
-		($Join:ident, <$($Fut:ident),*>),
-	)*) => ($(
-		#[pin_project]
-		struct $Join<$($Fut: Future),*> {
-			$(#[pin] $Fut: MaybeDone<$Fut>,)*
-			dummy: (),
-		}
-
-		fn $Join<$($Fut: Future),*>($($Fut: $Fut),*) -> $Join<$($Fut),*> {
-			$Join {
-				$($Fut: maybe_done($Fut),)*
-				dummy: (),
-			}
-		}
-
-		#[allow(unused_variables)]
-		impl<$($Fut: Future),*> Future for $Join<$($Fut),*> {
-			type Output = ($($Fut::Output,)*);
-
-			fn poll(
-				self: Pin<&mut Self>, cx: &mut Context<'_>
-			) -> Poll<Self::Output> {
-				let mut all_done = true;
-				let mut futures = self.project();
-				$(
-					all_done &= futures.$Fut.as_mut().poll(cx).is_ready();
-				)*
-
-				if all_done {
-					Poll::Ready(($(futures.$Fut.take_output().unwrap(),)*))
-				} else {
-					Poll::Pending
-				}
-			}
-		}
-
-		impl<$($Fut: FusedFuture),*> FusedFuture for $Join<$($Fut),*> {
-			fn is_terminated(&self) -> bool {
-				$(
-					self.$Fut.is_terminated() &&
-				)* true
-			}
-		}
-	)*)
-}
-
-generate! {
-	(Join0, <>),
-	(Join1, <Fut1>),
-	(Join6, <Fut1, Fut2, Fut3, Fut4, Fut5, Fut6>),
-	(Join7, <Fut1, Fut2, Fut3, Fut4, Fut5, Fut6, Fut7>),
-	(Join8, <Fut1, Fut2, Fut3, Fut4, Fut5, Fut6, Fut7, Fut8>),
 }

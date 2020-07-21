@@ -13,6 +13,7 @@ impl<'a, 'b, I: Iterator<Item = (&'a A, &'b B)>, A: Clone + 'a, B: Clone + 'b> I
 	for TupleCloned<I>
 {
 	type Item = (A, B);
+
 	fn next(&mut self) -> Option<Self::Item> {
 		self.0.next().map(|(a, b)| (a.clone(), b.clone()))
 	}
