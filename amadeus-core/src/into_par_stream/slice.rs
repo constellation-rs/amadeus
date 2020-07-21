@@ -47,7 +47,7 @@ impl_par_dist_rename! {
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			unreachable!()
 		}
-		fn next_task(&mut self) -> Option<Self::Task> {
+		fn next_task(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Task>> {
 			unreachable!()
 		}
 	}

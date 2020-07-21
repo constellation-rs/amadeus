@@ -10,41 +10,47 @@ use std::{
 use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
 use crate::pipe::Pipe;
 
+#[pin_project]
 #[derive(new)]
 #[must_use]
-pub struct Inspect<I, F> {
-	i: I,
+pub struct Inspect<P, F> {
+	#[pin]
+	pipe: P,
 	f: F,
 }
 
 impl_par_dist! {
-	impl<I: ParallelStream, F> ParallelStream for Inspect<I, F>
+	impl<P: ParallelStream, F> ParallelStream for Inspect<P, F>
 	where
-		F: for<'a> FnMut<(&'a I::Item,), Output = ()> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Item,), Output = ()> + Clone + Send + 'static,
 	{
-		type Item = I::Item;
-		type Task = InspectTask<I::Task, F>;
+		type Item = P::Item;
+		type Task = InspectTask<P::Task, F>;
 
 		fn size_hint(&self) -> (usize, Option<usize>) {
-			self.i.size_hint()
+			self.pipe.size_hint()
 		}
-		fn next_task(&mut self) -> Option<Self::Task> {
-			self.i.next_task().map(|task| {
-				let f = self.f.clone();
-				InspectTask { task, f }
+		fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+			let self_ = self.project();
+			let f = self_.f;
+			self_.pipe.next_task(cx).map(|task| {
+				task.map(|task| {
+					let f = f.clone();
+					InspectTask { task, f }
+				})
 			})
 		}
 	}
 
-	impl<I: ParallelPipe<Source>, F, Source> ParallelPipe<Source> for Inspect<I, F>
+	impl<P: ParallelPipe<Input>, F, Input> ParallelPipe<Input> for Inspect<P, F>
 	where
-		F: for<'a> FnMut<(&'a I::Item,), Output = ()> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = ()> + Clone + Send + 'static,
 	{
-		type Item = I::Item;
-		type Task = InspectTask<I::Task, F>;
+		type Output = P::Output;
+		type Task = InspectTask<P::Task, F>;
 
 		fn task(&self) -> Self::Task {
-			let task = self.i.task();
+			let task = self.pipe.task();
 			let f = self.f.clone();
 			InspectTask { task, f }
 		}
@@ -65,6 +71,7 @@ where
 {
 	type Item = C::Item;
 	type Async = InspectTask<C::Async, F>;
+
 	fn into_async(self) -> Self::Async {
 		InspectTask {
 			task: self.task.into_async(),
@@ -72,12 +79,13 @@ where
 		}
 	}
 }
-impl<C: PipeTask<Source>, F, Source> PipeTask<Source> for InspectTask<C, F>
+impl<C: PipeTask<Input>, F, Input> PipeTask<Input> for InspectTask<C, F>
 where
-	F: for<'a> FnMut<(&'a C::Item,), Output = ()> + Clone,
+	F: for<'a> FnMut<(&'a C::Output,), Output = ()> + Clone,
 {
-	type Item = C::Item;
+	type Output = C::Output;
 	type Async = InspectTask<C::Async, F>;
+
 	fn into_async(self) -> Self::Async {
 		InspectTask {
 			task: self.task.into_async(),
@@ -104,15 +112,15 @@ where
 	}
 }
 
-impl<C: Pipe<Source>, F, Source> Pipe<Source> for InspectTask<C, F>
+impl<C: Pipe<Input>, F, Input> Pipe<Input> for InspectTask<C, F>
 where
-	F: for<'a> FnMut<(&'a C::Item,), Output = ()> + Clone,
+	F: for<'a> FnMut<(&'a C::Output,), Output = ()> + Clone,
 {
-	type Item = C::Item;
+	type Output = C::Output;
 
 	fn poll_next(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Source>>,
-	) -> Poll<Option<Self::Item>> {
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Input>>,
+	) -> Poll<Option<Self::Output>> {
 		let mut self_ = self.project();
 		let (task, f) = (self_.task, &mut self_.f);
 		task.poll_next(cx, stream).map(|item| {

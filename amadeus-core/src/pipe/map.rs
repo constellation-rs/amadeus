@@ -3,44 +3,43 @@ use futures::{ready, Stream};
 use pin_project::pin_project;
 use serde_closure::traits::FnMut;
 use std::{
-	marker::PhantomData, pin::Pin, task::{Context, Poll}
+	pin::Pin, task::{Context, Poll}
 };
 
 use super::Pipe;
 
 #[pin_project]
 #[derive(new)]
-pub struct Map<C, F, R> {
+pub struct Map<P, F> {
 	#[pin]
-	task: C,
+	pipe: P,
 	f: F,
-	marker: PhantomData<fn() -> R>,
 }
 
-impl<C: Stream, F, R> Stream for Map<C, F, R>
+impl<P: Stream, F> Stream for Map<P, F>
 where
-	F: FnMut<(C::Item,), Output = R>,
+	F: FnMut<(P::Item,)>,
 {
-	type Item = R;
+	type Item = F::Output;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
-		let (mut task, f) = (self_.task, &mut self_.f);
-		Poll::Ready(ready!(task.as_mut().poll_next(cx)).map(|t| f.call_mut((t,))))
+		let (mut pipe, f) = (self_.pipe, &mut self_.f);
+		Poll::Ready(ready!(pipe.as_mut().poll_next(cx)).map(|t| f.call_mut((t,))))
 	}
 }
 
-impl<C: Pipe<Source>, F, R, Source> Pipe<Source> for Map<C, F, R>
+impl<P: Pipe<Input>, F, Input> Pipe<Input> for Map<P, F>
 where
-	F: FnMut<(C::Item,), Output = R>,
+	F: FnMut<(P::Output,)>,
 {
-	type Item = R;
+	type Output = F::Output;
 
 	fn poll_next(
-		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Source>>,
-	) -> Poll<Option<Self::Item>> {
+		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Input>>,
+	) -> Poll<Option<Self::Output>> {
 		let mut self_ = self.project();
-		let (mut task, f) = (self_.task, &mut self_.f);
-		Poll::Ready(ready!(task.as_mut().poll_next(cx, stream.as_mut())).map(|t| f.call_mut((t,))))
+		let (mut pipe, f) = (self_.pipe, &mut self_.f);
+		Poll::Ready(ready!(pipe.as_mut().poll_next(cx, stream.as_mut())).map(|t| f.call_mut((t,))))
 	}
 }

@@ -8,99 +8,101 @@ use super::{combiner_par_sink, CombinerSync, FolderSyncReducer, ParallelPipe, Pa
 
 #[derive(new)]
 #[must_use]
-pub struct Max<I> {
-	i: I,
+pub struct Max<P> {
+	pipe: P,
 }
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source> for Max<I>
+	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Max<P>
 	where
-		I::Item: Ord + Send + 'static,
+		P::Output: Ord + Send + 'static,
 	{
-		combiner_par_sink!(combine::Max<I::Item>, self, combine::Max::new());
+		combiner_par_sink!(combine::Max<P::Output>, self, combine::Max::new());
 	}
 }
 
 #[derive(new)]
 #[must_use]
-pub struct MaxBy<I, F> {
-	i: I,
+pub struct MaxBy<P, F> {
+	pipe: P,
 	f: F,
 }
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source>
-		for MaxBy<I, F>
+	impl<P: ParallelPipe<Input>, Input, F> ParallelSink<Input> for MaxBy<P, F>
 	where
-		F: for<'a,'b> FnMut<(&'a I::Item, &'b I::Item,), Output = Ordering> + Clone + Send + 'static,
-		I::Item: Send + 'static,
+		F: for<'a, 'b> FnMut<(&'a P::Output, &'b P::Output), Output = Ordering>
+			+ Clone
+			+ Send
+			+ 'static,
+		P::Output: Send + 'static,
 	{
-		combiner_par_sink!(combine::MaxBy<I::Item,F>, self, combine::MaxBy::new(self.f));
+		combiner_par_sink!(combine::MaxBy<P::Output,F>, self, combine::MaxBy::new(self.f));
 	}
 }
 
 #[derive(new)]
 #[must_use]
-pub struct MaxByKey<I, F> {
-	i: I,
+pub struct MaxByKey<P, F> {
+	pipe: P,
 	f: F,
 }
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source, F, B> ParallelSink<Source>
-		for MaxByKey<I, F>
+	impl<P: ParallelPipe<Input>, Input, F, B> ParallelSink<Input> for MaxByKey<P, F>
 	where
-		F: for<'a> FnMut<(&'a I::Item,), Output = B> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send + 'static,
 		B: Ord + 'static,
-		I::Item: Send + 'static,
+		P::Output: Send + 'static,
 	{
-		combiner_par_sink!(combine::MaxByKey<I::Item,F, B>, self, combine::MaxByKey::new(self.f));
+		combiner_par_sink!(combine::MaxByKey<P::Output,F, B>, self, combine::MaxByKey::new(self.f));
 	}
 }
 
 #[derive(new)]
 #[must_use]
-pub struct Min<I> {
-	i: I,
+pub struct Min<P> {
+	pipe: P,
 }
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source> for Min<I>
+	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Min<P>
 	where
-		I::Item: Ord + Send + 'static,
+		P::Output: Ord + Send + 'static,
 	{
-		combiner_par_sink!(combine::Min<I::Item>, self, combine::Min::new());
+		combiner_par_sink!(combine::Min<P::Output>, self, combine::Min::new());
 	}
 }
 
 #[derive(new)]
 #[must_use]
-pub struct MinBy<I, F> {
-	i: I,
+pub struct MinBy<P, F> {
+	pipe: P,
 	f: F,
 }
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source>
-		for MinBy<I, F>
+	impl<P: ParallelPipe<Input>, Input, F> ParallelSink<Input> for MinBy<P, F>
 	where
-		F: for<'a,'b> FnMut<(&'a I::Item, &'b I::Item,), Output = Ordering> + Clone + Send + 'static,
-		I::Item: Send + 'static,
+		F: for<'a, 'b> FnMut<(&'a P::Output, &'b P::Output), Output = Ordering>
+			+ Clone
+			+ Send
+			+ 'static,
+		P::Output: Send + 'static,
 	{
-		combiner_par_sink!(combine::MinBy<I::Item,F>, self, combine::MinBy::new(self.f));
+		combiner_par_sink!(combine::MinBy<P::Output,F>, self, combine::MinBy::new(self.f));
 	}
 }
 
 #[derive(new)]
 #[must_use]
-pub struct MinByKey<I, F> {
-	i: I,
+pub struct MinByKey<P, F> {
+	pipe: P,
 	f: F,
 }
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source, F, B> ParallelSink<Source>
-		for MinByKey<I, F>
+	impl<P: ParallelPipe<Input>, Input, F, B> ParallelSink<Input> for MinByKey<P, F>
 	where
-		F: for<'a> FnMut<(&'a I::Item,), Output = B> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send + 'static,
 		B: Ord + 'static,
-		I::Item: Send + 'static,
+		P::Output: Send + 'static,
 	{
-		combiner_par_sink!(combine::MinByKey<I::Item,F, B>, self, combine::MinByKey::new(self.f));
+		combiner_par_sink!(combine::MinByKey<P::Output,F, B>, self, combine::MinByKey::new(self.f));
 	}
 }
 
@@ -112,7 +114,7 @@ mod combine {
 	#[serde(bound = "")]
 	pub struct Max<A>(PhantomData<fn() -> A>);
 	impl<A: Ord> CombinerSync for Max<A> {
-		type Output = A;
+		type Done = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
 			// switch to b even if it is only equal, to preserve stability.
@@ -132,7 +134,7 @@ mod combine {
 	)]
 	pub struct MaxBy<A, F>(pub F, PhantomData<fn() -> A>);
 	impl<A, F: for<'a, 'b> FnMut<(&'a A, &'b A), Output = Ordering>> CombinerSync for MaxBy<A, F> {
-		type Output = A;
+		type Done = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
 			if self.0.call_mut((&a, &b)) != Ordering::Greater {
@@ -151,7 +153,7 @@ mod combine {
 	)]
 	pub struct MaxByKey<A, F, B>(pub F, pub PhantomData<fn(A, B)>);
 	impl<A, F: for<'a> FnMut<(&'a A,), Output = B>, B: Ord> CombinerSync for MaxByKey<A, F, B> {
-		type Output = A;
+		type Done = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
 			if self.0.call_mut((&a,)).cmp(&self.0.call_mut((&b,))) != Ordering::Greater {
@@ -167,7 +169,7 @@ mod combine {
 	#[serde(bound = "")]
 	pub struct Min<A>(PhantomData<fn() -> A>);
 	impl<A: Ord> CombinerSync for Min<A> {
-		type Output = A;
+		type Done = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
 			// switch to b even if it is strictly smaller, to preserve stability.
@@ -187,7 +189,7 @@ mod combine {
 	)]
 	pub struct MinBy<A, F>(pub F, PhantomData<fn() -> A>);
 	impl<A, F: for<'a, 'b> FnMut<(&'a A, &'b A), Output = Ordering>> CombinerSync for MinBy<A, F> {
-		type Output = A;
+		type Done = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
 			if self.0.call_mut((&a, &b)) == Ordering::Greater {
@@ -206,7 +208,7 @@ mod combine {
 	)]
 	pub struct MinByKey<A, F, B>(pub F, pub PhantomData<fn(A, B)>);
 	impl<A, F: for<'a> FnMut<(&'a A,), Output = B>, B: Ord> CombinerSync for MinByKey<A, F, B> {
-		type Output = A;
+		type Done = A;
 
 		fn combine(&mut self, a: A, b: A) -> A {
 			if self.0.call_mut((&a,)).cmp(&self.0.call_mut((&b,))) == Ordering::Greater {

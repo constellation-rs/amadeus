@@ -11,17 +11,16 @@ use super::{folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, Parall
 
 #[derive(new)]
 #[must_use]
-pub struct Histogram<I> {
-	i: I,
+pub struct Histogram<P> {
+	pipe: P,
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source> ParallelSink<Source>
-		for Histogram<I>
+	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Histogram<P>
 	where
-		I::Item: Hash + Ord + Send + 'static,
+		P::Output: Hash + Ord + Send + 'static,
 	{
-		folder_par_sink!(HistogramFolder<I::Item, StepA>, HistogramFolder<I::Item, StepB>, self, HistogramFolder::new(), HistogramFolder::new());
+		folder_par_sink!(HistogramFolder<P::Output, StepA>, HistogramFolder<P::Output, StepB>, self, HistogramFolder::new(), HistogramFolder::new());
 	}
 }
 
@@ -35,16 +34,16 @@ pub struct HistogramFolder<B, Step> {
 pub struct StepA;
 pub struct StepB;
 
-impl<B> FolderSync<B> for HistogramFolder<B, StepA>
+impl<Item> FolderSync<Item> for HistogramFolder<Item, StepA>
 where
-	B: Hash + Ord,
+	Item: Hash + Ord,
 {
-	type Output = HashMap<B, usize>;
+	type Done = HashMap<Item, usize>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		HashMap::new()
 	}
-	fn push(&mut self, state: &mut Self::Output, item: B) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		*state.entry(item).or_insert(0) += 1;
 	}
 }
@@ -52,12 +51,12 @@ impl<B> FolderSync<HashMap<B, usize>> for HistogramFolder<B, StepB>
 where
 	B: Hash + Ord,
 {
-	type Output = Vec<(B, usize)>;
+	type Done = Vec<(B, usize)>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		Vec::new()
 	}
-	fn push(&mut self, state: &mut Self::Output, b: HashMap<B, usize>) {
+	fn push(&mut self, state: &mut Self::Done, b: HashMap<B, usize>) {
 		let mut b = b.into_iter().collect::<Vec<_>>();
 		b.sort_by(|a, b| a.0.cmp(&b.0));
 		replace_with_or_default(state, |state| {
@@ -79,12 +78,12 @@ impl<B> FolderSync<Vec<(B, usize)>> for HistogramFolder<B, StepB>
 where
 	B: Hash + Ord,
 {
-	type Output = Vec<(B, usize)>;
+	type Done = Vec<(B, usize)>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		Vec::new()
 	}
-	fn push(&mut self, state: &mut Self::Output, b: Vec<(B, usize)>) {
+	fn push(&mut self, state: &mut Self::Done, b: Vec<(B, usize)>) {
 		replace_with_or_default(state, |state| {
 			state
 				.into_iter()

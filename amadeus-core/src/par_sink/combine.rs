@@ -13,17 +13,17 @@ use super::{combiner_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, Para
 	bound(deserialize = "F: Deserialize<'de>")
 )]
 pub struct ReduceFn<F, A>(F, PhantomData<fn() -> A>);
-impl<F, A, T> FolderSync<T> for ReduceFn<F, A>
+impl<F, A, Item> FolderSync<Item> for ReduceFn<F, A>
 where
 	F: FnMut<(A, A), Output = A>,
-	T: Into<Option<A>>,
+	Item: Into<Option<A>>,
 {
-	type Output = Option<A>;
+	type Done = Option<A>;
 
-	fn zero(&mut self) -> Self::Output {
+	fn zero(&mut self) -> Self::Done {
 		None
 	}
-	fn push(&mut self, state: &mut Self::Output, item: T) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		if let Some(item) = item.into() {
 			*state = Some(if let Some(state) = state.take() {
 				self.0.call_mut((state, item))
@@ -36,18 +36,17 @@ where
 
 #[derive(new)]
 #[must_use]
-pub struct Combine<I, F> {
-	i: I,
+pub struct Combine<P, F> {
+	pipe: P,
 	f: F,
 }
 
 impl_par_dist! {
-	impl<I: ParallelPipe<Source>, Source, F> ParallelSink<Source>
-		for Combine<I, F>
+	impl<P: ParallelPipe<Input>, Input, F> ParallelSink<Input> for Combine<P, F>
 	where
-		F: FnMut<(I::Item, I::Item,), Output = I::Item> + Clone + Send + 'static,
-		I::Item: Send + 'static,
+		F: FnMut<(P::Output, P::Output), Output = P::Output> + Clone + Send + 'static,
+		P::Output: Send + 'static,
 	{
-		combiner_par_sink!(ReduceFn<F, I::Item>, self, ReduceFn::new(self.f));
+		combiner_par_sink!(ReduceFn<F, P::Output>, self, ReduceFn::new(self.f));
 	}
 }

@@ -1,45 +1,55 @@
 use derive_new::new;
 use futures::Stream;
+use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use serde_closure::traits::FnMut;
+use std::{
+	pin::Pin, task::{Context, Poll}
+};
 
 use super::{ParallelPipe, ParallelStream, PipeTask, StreamTask};
 
+#[pin_project]
 #[derive(new)]
 #[must_use]
-pub struct FlatMap<I, F> {
-	i: I,
+pub struct FlatMap<P, F> {
+	#[pin]
+	pipe: P,
 	f: F,
 }
 
 impl_par_dist! {
-	impl<I: ParallelStream, F, R: Stream> ParallelStream for FlatMap<I, F>
+	impl<P: ParallelStream, F, R: Stream> ParallelStream for FlatMap<P, F>
 	where
-		F: FnMut<(I::Item,), Output = R> + Clone + Send + 'static,
+		F: FnMut<(P::Item,), Output = R> + Clone + Send + 'static,
 	{
 		type Item = R::Item;
-		type Task = FlatMapTask<I::Task, F>;
+		type Task = FlatMapTask<P::Task, F>;
 
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			(0, None)
 		}
-		fn next_task(&mut self) -> Option<Self::Task> {
-			self.i.next_task().map(|task| {
-				let f = self.f.clone();
-				FlatMapTask { task, f }
+		fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+			let self_ = self.project();
+			let f = self_.f;
+			self_.pipe.next_task(cx).map(|task| {
+				task.map(|task| {
+					let f = f.clone();
+					FlatMapTask { task, f }
+				})
 			})
 		}
 	}
 
-	impl<I: ParallelPipe<Source>, F, R: Stream, Source> ParallelPipe<Source> for FlatMap<I, F>
+	impl<P: ParallelPipe<Input>, F, R: Stream, Input> ParallelPipe<Input> for FlatMap<P, F>
 	where
-		F: FnMut<(I::Item,), Output = R> + Clone + Send + 'static,
+		F: FnMut<(P::Output,), Output = R> + Clone + Send + 'static,
 	{
-		type Item = R::Item;
-		type Task = FlatMapTask<I::Task, F>;
+		type Output = R::Item;
+		type Task = FlatMapTask<P::Task, F>;
 
 		fn task(&self) -> Self::Task {
-			let task = self.i.task();
+			let task = self.pipe.task();
 			let f = self.f.clone();
 			FlatMapTask { task, f }
 		}
@@ -61,10 +71,10 @@ impl<C: StreamTask, F: FnMut<(C::Item,), Output = R> + Clone, R: Stream> StreamT
 		crate::pipe::FlatMap::new(self.task.into_async(), self.f)
 	}
 }
-impl<C: PipeTask<Source>, F: FnMut<(C::Item,), Output = R> + Clone, R: Stream, Source>
-	PipeTask<Source> for FlatMapTask<C, F>
+impl<C: PipeTask<Input>, F: FnMut<(C::Output,), Output = R> + Clone, R: Stream, Input>
+	PipeTask<Input> for FlatMapTask<C, F>
 {
-	type Item = R::Item;
+	type Output = R::Item;
 	type Async = crate::pipe::FlatMap<C::Async, F, R>;
 
 	fn into_async(self) -> Self::Async {

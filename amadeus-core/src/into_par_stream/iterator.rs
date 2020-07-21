@@ -21,6 +21,7 @@ pub trait IteratorExt: Iterator + Sized {
 impl<I: Iterator + Sized> IteratorExt for I {}
 
 impl_par_dist_rename! {
+	#[pin_project]
 	pub struct IterParStream<I>(pub(crate) I);
 
 	impl<I: Iterator> ParallelStream for IterParStream<I>
@@ -33,8 +34,8 @@ impl_par_dist_rename! {
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			self.0.size_hint()
 		}
-		fn next_task(&mut self) -> Option<Self::Task> {
-			self.0.next().map(IterStreamTask::new)
+		fn next_task(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Task>> {
+			Poll::Ready(self.0.next().map(IterStreamTask::new))
 		}
 	}
 }

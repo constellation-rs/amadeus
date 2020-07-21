@@ -8,10 +8,13 @@ use std::{
 
 use super::{ParallelStream, StreamTask};
 
+#[pin_project]
 #[derive(new)]
 #[must_use]
 pub struct Chain<A, B> {
+	#[pin]
 	a: A,
+	#[pin]
 	b: B,
 }
 
@@ -32,11 +35,13 @@ impl_par_dist! {
 				},
 			)
 		}
-		fn next_task(&mut self) -> Option<Self::Task> {
-			self.a
-				.next_task()
-				.map(ChainTask::A)
-				.or_else(|| self.b.next_task().map(ChainTask::B))
+		fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
+			let self_ = self.project();
+			match self_.a.next_task(cx) {
+				Poll::Ready(Some(a)) => Poll::Ready(Some(ChainTask::A(a))),
+				Poll::Ready(None) => self_.b.next_task(cx).map(|task| task.map(ChainTask::B)),
+				Poll::Pending => Poll::Pending,
+			}
 		}
 	}
 }
@@ -50,6 +55,7 @@ pub enum ChainTask<A, B> {
 impl<A: StreamTask, B: StreamTask<Item = A::Item>> StreamTask for ChainTask<A, B> {
 	type Item = A::Item;
 	type Async = ChainTask<A::Async, B::Async>;
+
 	fn into_async(self) -> Self::Async {
 		match self {
 			ChainTask::A(a) => ChainTask::A(a.into_async()),
