@@ -262,7 +262,7 @@ fn impl_struct(
 	let mut parquet_derives = None;
 	if cfg!(feature = "parquet") {
 		parquet_includes = Some(quote! {
-			pub use ::amadeus_parquet::derive::{
+			pub use #amadeus_path::amadeus_parquet::derive::{
 				ParquetData, Repetition, ColumnReader, ParquetError, ParquetResult, ParquetSchema, Reader, DisplaySchemaGroup, ColumnPath, Type
 			};
 		});
@@ -384,7 +384,7 @@ fn impl_struct(
 	let mut postgres_derives = None;
 	if cfg!(feature = "postgres") {
 		postgres_includes = Some(quote! {
-			pub use ::amadeus_postgres::{Names,read_be_i32,read_value,_internal as postgres,PostgresData};
+			pub use #amadeus_path::amadeus_postgres::{Names,read_be_i32,read_value,_internal as postgres,PostgresData};
 		});
 		postgres_derives = Some(quote! {
 			#[automatically_derived]
@@ -436,7 +436,7 @@ fn impl_struct(
 	let mut serde_derives = None;
 	if cfg!(feature = "serde") {
 		serde_includes = Some(quote! {
-			pub use ::amadeus_serde::{SerdeData,_internal::{Serialize, Deserialize, Serializer, Deserializer}};
+			pub use #amadeus_path::amadeus_serde::{SerdeData, _internal::{Serialize, Deserialize, Serializer, Deserializer}};
 			pub use #amadeus_path::data::serde_data;
 		});
 		serde_derives = Some(quote! {
@@ -471,8 +471,8 @@ fn impl_struct(
 			#parquet_includes
 			#postgres_includes
 			#serde_includes
-			pub use ::amadeus_core::util::Wrapper;
-			pub use ::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec, __internal::{Serialize as Serialize_, Deserialize as Deserialize_, Serializer as Serializer_, Deserializer as Deserializer_, SerializeTuple, Error as SerdeError, Visitor, SeqAccess}};
+			pub use #amadeus_path::amadeus_core::util::Wrapper;
+			pub use #amadeus_path::amadeus_types::{AmadeusOrd, Data as CoreData, DowncastFrom, Downcast, DowncastError, Value, Group, SchemaIncomplete, ListVec, __internal::{Serialize as Serialize_, Deserialize as Deserialize_, Serializer as Serializer_, Deserializer as Deserializer_, SerializeTuple, Error as SerdeError, Visitor, SeqAccess}};
 			pub use #amadeus_path::data::Data;
 			pub use ::std::{borrow::ToOwned, boxed::Box, clone::Clone, collections::HashMap, convert::{From, Into}, cmp::{Ordering, PartialEq}, default::Default, error::Error, fmt::{self, Debug, Write}, format, hash::{Hash, Hasher}, iter::{ExactSizeIterator, IntoIterator, Iterator}, marker::{PhantomData, Send, Sized, Sync}, result::Result::{self, Ok, Err}, string::String, panic, vec, vec::{IntoIter, Vec}, option::Option::{self, Some, None}};
 		}

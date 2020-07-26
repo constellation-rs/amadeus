@@ -87,3 +87,23 @@ pub mod prelude {
 		}, par_pipe::ParallelPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
 	};
 }
+
+#[cfg(feature = "aws")]
+#[doc(hidden)]
+pub use amadeus_aws;
+#[cfg(feature = "commoncrawl")]
+#[doc(hidden)]
+pub use amadeus_commoncrawl;
+#[doc(hidden)]
+pub use amadeus_core;
+#[cfg(feature = "parquet")]
+#[doc(hidden)]
+pub use amadeus_parquet;
+#[cfg(feature = "postgres")]
+#[doc(hidden)]
+pub use amadeus_postgres;
+#[cfg(feature = "amadeus-serde")]
+#[doc(hidden)]
+pub use amadeus_serde;
+#[doc(hidden)]
+pub use amadeus_types;
