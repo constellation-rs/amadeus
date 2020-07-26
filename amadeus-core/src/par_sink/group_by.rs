@@ -181,15 +181,16 @@ where
 				Sum2::A((k, u, r)) => {
 					let waker = cx.waker();
 					let stream = stream::poll_fn(|cx| {
-						if let Some(u) = u.take() {
-							Poll::Ready(Some(u))
-						} else {
-							let waker_ = cx.waker();
-							if !waker.will_wake(waker_) {
-								waker_.wake_by_ref();
-							}
-							Poll::Pending
-						}
+						u.take().map_or_else(
+							|| {
+								let waker_ = cx.waker();
+								if !waker.will_wake(waker_) {
+									waker_.wake_by_ref();
+								}
+								Poll::Pending
+							},
+							|u| Poll::Ready(Some(u)),
+						)
 					})
 					.fuse()
 					.pipe(self_.pipe.as_mut());
@@ -332,15 +333,16 @@ where
 						let mut v = Some(v);
 						let waker = cx.waker();
 						let stream = stream::poll_fn(|cx| {
-							if let Some(v) = v.take() {
-								Poll::Ready(Some(v))
-							} else {
-								let waker_ = cx.waker();
-								if !waker.will_wake(waker_) {
-									waker_.wake_by_ref();
-								}
-								Poll::Pending
-							}
+							v.take().map_or_else(
+								|| {
+									let waker_ = cx.waker();
+									if !waker.will_wake(waker_) {
+										waker_.wake_by_ref();
+									}
+									Poll::Pending
+								},
+								|v| Poll::Ready(Some(v)),
+							)
 						})
 						.fuse();
 						pin_mut!(stream);

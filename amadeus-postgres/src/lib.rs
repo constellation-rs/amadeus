@@ -212,9 +212,9 @@ where
 	}
 }
 
-#[cfg(not(all(nightly, not(doc))))]
+#[cfg(not(nightly))]
 type Output<Row> = Pin<Box<dyn Stream<Item = Result<Row, PostgresError>> + Send>>;
-#[cfg(all(nightly, not(doc)))]
+#[cfg(nightly)]
 type Output<Row> = impl Stream<Item = Result<Row, PostgresError>> + Send;
 
 FnMutNamed! {
@@ -261,7 +261,7 @@ FnMutNamed! {
 			})
 		}
 		.flatten_stream();
-		#[cfg(not(all(nightly, not(doc))))]
+		#[cfg(not(nightly))]
 		let ret = ret.boxed();
 		ret
 	}
@@ -275,7 +275,7 @@ where
 	type Error = PostgresError;
 
 	type ParStream = DistParStream<Self::DistStream>;
-	#[cfg(not(all(nightly, not(doc))))]
+	#[cfg(not(nightly))]
 	#[allow(clippy::type_complexity)]
 	type DistStream = amadeus_core::par_stream::FlatMap<
 		amadeus_core::into_par_stream::IterDistStream<
@@ -283,7 +283,7 @@ where
 		>,
 		Closure<Row>,
 	>;
-	#[cfg(all(nightly, not(doc)))]
+	#[cfg(nightly)]
 	type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
 
 	fn par_stream(self) -> Self::ParStream {

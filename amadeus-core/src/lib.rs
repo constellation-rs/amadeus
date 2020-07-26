@@ -66,7 +66,6 @@ macro_rules! impl_par_dist_rename {
 			IntoParallelStream IntoDistributedStream
 			ParStream DistStream
 			Send ProcessSend
-			ImplParallelStream ImplDistributedStream
 			IterParStream IterDistStream
 			into_par_stream into_dist_stream
 			par_stream dist_stream

@@ -447,11 +447,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Bool. Returns false otherwise.
 	pub fn is_bool(&self) -> bool {
-		if let Self::Bool(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Bool(_))
 	}
 
 	/// If the `Value` is an Bool, return a reference to it. Returns Err otherwise.
@@ -480,11 +476,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U8. Returns false otherwise.
 	pub fn is_u8(&self) -> bool {
-		if let Self::U8(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::U8(_))
 	}
 
 	/// If the `Value` is an U8, return a reference to it. Returns Err otherwise.
@@ -513,11 +505,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I8. Returns false otherwise.
 	pub fn is_i8(&self) -> bool {
-		if let Self::I8(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::I8(_))
 	}
 
 	/// If the `Value` is an I8, return a reference to it. Returns Err otherwise.
@@ -546,11 +534,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U16. Returns false otherwise.
 	pub fn is_u16(&self) -> bool {
-		if let Self::U16(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::U16(_))
 	}
 
 	/// If the `Value` is an U16, return a reference to it. Returns Err otherwise.
@@ -579,11 +563,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I16. Returns false otherwise.
 	pub fn is_i16(&self) -> bool {
-		if let Self::I16(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::I16(_))
 	}
 
 	/// If the `Value` is an I16, return a reference to it. Returns Err otherwise.
@@ -612,11 +592,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U32. Returns false otherwise.
 	pub fn is_u32(&self) -> bool {
-		if let Self::U32(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::U32(_))
 	}
 
 	/// If the `Value` is an U32, return a reference to it. Returns Err otherwise.
@@ -645,11 +621,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I32. Returns false otherwise.
 	pub fn is_i32(&self) -> bool {
-		if let Self::I32(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::I32(_))
 	}
 
 	/// If the `Value` is an I32, return a reference to it. Returns Err otherwise.
@@ -678,11 +650,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an U64. Returns false otherwise.
 	pub fn is_u64(&self) -> bool {
-		if let Self::U64(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::U64(_))
 	}
 
 	/// If the `Value` is an U64, return a reference to it. Returns Err otherwise.
@@ -711,11 +679,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an I64. Returns false otherwise.
 	pub fn is_i64(&self) -> bool {
-		if let Self::I64(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::I64(_))
 	}
 
 	/// If the `Value` is an I64, return a reference to it. Returns Err otherwise.
@@ -744,11 +708,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an F32. Returns false otherwise.
 	pub fn is_f32(&self) -> bool {
-		if let Self::F32(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::F32(_))
 	}
 
 	/// If the `Value` is an F32, return a reference to it. Returns Err otherwise.
@@ -777,11 +737,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an F64. Returns false otherwise.
 	pub fn is_f64(&self) -> bool {
-		if let Self::F64(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::F64(_))
 	}
 
 	/// If the `Value` is an F64, return a reference to it. Returns Err otherwise.
@@ -810,11 +766,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Date. Returns false otherwise.
 	pub fn is_date(&self) -> bool {
-		if let Self::Date(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Date(_))
 	}
 
 	/// If the `Value` is an Date, return a reference to it. Returns Err otherwise.
@@ -843,11 +795,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an DateWithoutTimezone. Returns false otherwise.
 	pub fn is_date_without_timezone(&self) -> bool {
-		if let Self::DateWithoutTimezone(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::DateWithoutTimezone(_))
 	}
 
 	/// If the `Value` is an DateWithoutTimezone, return a reference to it. Returns Err otherwise.
@@ -876,11 +824,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Time. Returns false otherwise.
 	pub fn is_time(&self) -> bool {
-		if let Self::Time(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Time(_))
 	}
 
 	/// If the `Value` is an Time, return a reference to it. Returns Err otherwise.
@@ -909,11 +853,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an TimeWithoutTimezone. Returns false otherwise.
 	pub fn is_time_without_timezone(&self) -> bool {
-		if let Self::TimeWithoutTimezone(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::TimeWithoutTimezone(_))
 	}
 
 	/// If the `Value` is an TimeWithoutTimezone, return a reference to it. Returns Err otherwise.
@@ -942,11 +882,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an DateTime. Returns false otherwise.
 	pub fn is_date_time(&self) -> bool {
-		if let Self::DateTime(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::DateTime(_))
 	}
 
 	/// If the `Value` is an DateTime, return a reference to it. Returns Err otherwise.
@@ -975,11 +911,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an DateTimeWithoutTimezone. Returns false otherwise.
 	pub fn is_date_time_without_timezone(&self) -> bool {
-		if let Self::DateTimeWithoutTimezone(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::DateTimeWithoutTimezone(_))
 	}
 
 	/// If the `Value` is an DateTimeWithoutTimezone, return a reference to it. Returns Err otherwise.
@@ -1008,11 +940,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Timezone. Returns false otherwise.
 	pub fn is_timezone(&self) -> bool {
-		if let Self::Timezone(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Timezone(_))
 	}
 
 	/// If the `Value` is an Timezone, return a reference to it. Returns Err otherwise.
@@ -1041,11 +969,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Decimal. Returns false otherwise.
 	pub fn is_decimal(&self) -> bool {
-		if let Self::Decimal(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Decimal(_))
 	}
 
 	/// If the `Value` is an Decimal, return a reference to it. Returns Err otherwise.
@@ -1074,11 +998,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Bson. Returns false otherwise.
 	pub fn is_bson(&self) -> bool {
-		if let Self::Bson(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Bson(_))
 	}
 
 	/// If the `Value` is an Bson, return a reference to it. Returns Err otherwise.
@@ -1107,11 +1027,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an String. Returns false otherwise.
 	pub fn is_string(&self) -> bool {
-		if let Self::String(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::String(_))
 	}
 
 	/// If the `Value` is an String, return a reference to it. Returns Err otherwise.
@@ -1140,11 +1056,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Json. Returns false otherwise.
 	pub fn is_json(&self) -> bool {
-		if let Self::Json(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Json(_))
 	}
 
 	/// If the `Value` is an Json, return a reference to it. Returns Err otherwise.
@@ -1173,11 +1085,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Enum. Returns false otherwise.
 	pub fn is_enum(&self) -> bool {
-		if let Self::Enum(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Enum(_))
 	}
 
 	/// If the `Value` is an Enum, return a reference to it. Returns Err otherwise.
@@ -1206,11 +1114,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Url. Returns false otherwise.
 	pub fn is_url(&self) -> bool {
-		if let Self::Url(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Url(_))
 	}
 
 	/// If the `Value` is an Url, return a reference to it. Returns Err otherwise.
@@ -1239,11 +1143,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Webpage. Returns false otherwise.
 	pub fn is_webpage(&self) -> bool {
-		if let Self::Webpage(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Webpage(_))
 	}
 
 	/// If the `Value` is an Webpage, return a reference to it. Returns Err otherwise.
@@ -1272,11 +1172,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an IpAddr. Returns false otherwise.
 	pub fn is_ip_addr(&self) -> bool {
-		if let Self::IpAddr(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::IpAddr(_))
 	}
 
 	/// If the `Value` is an IpAddr, return a reference to it. Returns Err otherwise.
@@ -1305,11 +1201,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an List. Returns false otherwise.
 	pub fn is_list(&self) -> bool {
-		if let Self::List(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::List(_))
 	}
 
 	/// If the `Value` is an List, return a reference to it. Returns Err otherwise.
@@ -1338,11 +1230,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Map. Returns false otherwise.
 	pub fn is_map(&self) -> bool {
-		if let Self::Map(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Map(_))
 	}
 
 	/// If the `Value` is an Map, return a reference to it. Returns Err otherwise.
@@ -1371,11 +1259,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Group. Returns false otherwise.
 	pub fn is_group(&self) -> bool {
-		if let Self::Group(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Group(_))
 	}
 
 	/// If the `Value` is an Group, return a reference to it. Returns Err otherwise.
@@ -1404,11 +1288,7 @@ impl Value {
 
 	/// Returns true if the `Value` is an Option. Returns false otherwise.
 	pub fn is_option(&self) -> bool {
-		if let Self::Option(_) = self {
-			true
-		} else {
-			false
-		}
+		matches!(self, Self::Option(_))
 	}
 
 	/// If the `Value` is an Option, return a reference to it. Returns Err otherwise.

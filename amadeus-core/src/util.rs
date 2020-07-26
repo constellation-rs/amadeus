@@ -6,7 +6,7 @@ use std::{
 	any::{Any, TypeId}, error, fmt, hash::{Hash, Hasher}, io, marker::PhantomData, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
-use crate::par_stream::{DistributedStream, ParallelStream, StreamTask};
+use crate::par_stream::{DistributedStream, ParallelStream};
 
 pub struct ResultExpand<T, E>(pub Result<T, E>);
 impl<T, E> IntoIterator for ResultExpand<T, E>
@@ -107,61 +107,6 @@ where
 	}
 	fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
 		self.project().0.next_task(cx)
-	}
-}
-
-#[doc(hidden)]
-pub struct ImplDistributedStream<T>(PhantomData<fn() -> T>);
-impl<T> ImplDistributedStream<T> {
-	pub fn new<U>(_drop: U) -> Self
-	where
-		U: DistributedStream<Item = T>,
-	{
-		Self(PhantomData)
-	}
-}
-impl<T: 'static> DistributedStream for ImplDistributedStream<T> {
-	type Item = T;
-	type Task = ImplTask<T>;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		unreachable!()
-	}
-	fn next_task(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Task>> {
-		unreachable!()
-	}
-}
-impl<T: 'static> ParallelStream for ImplDistributedStream<T> {
-	type Item = T;
-	type Task = ImplTask<T>;
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		unreachable!()
-	}
-	fn next_task(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Task>> {
-		unreachable!()
-	}
-}
-
-#[doc(hidden)]
-#[derive(Serialize, Deserialize)]
-pub struct ImplTask<T>(PhantomData<fn() -> T>);
-impl<T> StreamTask for ImplTask<T>
-where
-	T: 'static,
-{
-	type Item = T;
-	type Async = ImplTask<T>;
-
-	fn into_async(self) -> Self::Async {
-		self
-	}
-}
-impl<T: 'static> Stream for ImplTask<T> {
-	type Item = T;
-
-	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
-		unreachable!()
 	}
 }
 

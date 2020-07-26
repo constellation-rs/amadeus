@@ -1,3 +1,5 @@
+#![allow(clippy::option_if_let_else)]
+
 use derive_new::new;
 use educe::Educe;
 use serde::{Deserialize, Serialize};
