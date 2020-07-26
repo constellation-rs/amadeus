@@ -20,7 +20,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: nightly
-        rust_lint_toolchain: nightly-2020-07-12
+        rust_lint_toolchain: nightly-2020-07-26
         rust_flags: ''
         rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;constellation aws commoncrawl parquet postgres csv json'
         rust_features: 'constellation aws commoncrawl parquet postgres csv json'
@@ -52,7 +52,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: stable
-        rust_lint_toolchain: nightly-2020-07-12
+        rust_lint_toolchain: nightly-2020-07-26
         rust_flags: ''
         rust_features_clippy: ';aws;commoncrawl;postgres;csv;json;aws commoncrawl postgres csv json'
         rust_features: 'aws commoncrawl postgres csv json'
@@ -78,7 +78,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: nightly
-        rust_lint_toolchain: nightly-2020-07-12
+        rust_lint_toolchain: nightly-2020-07-26
         rust_flags: ''
         rust_packages: '-p amadeus-core -p amadeus-derive -p amadeus-parquet -p amadeus-serde -p amadeus-types -p amadeus'
         rust_features_clippy: ';parquet;csv;json;parquet csv json'
@@ -106,7 +106,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: stable nightly
-        rust_lint_toolchain: nightly-2020-07-12
+        rust_lint_toolchain: nightly-2020-07-26
         rust_flags: ''
         rust_packages: '-p amadeus-core -p amadeus-derive -p amadeus-serde -p amadeus-types -p amadeus'
         rust_features_clippy: ';csv;json;csv json'

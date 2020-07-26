@@ -236,7 +236,7 @@ macro_rules! impl_tuple {
 					$({
 						let stream = Peekable{stream:stream.as_mut(),peeked:&mut *self_.peeked};
 						pin_mut!(stream);
-						let stream_ = substream(cx, stream, |item| if let $enum::$t(_) = item { true } else { false }, |item| { progress = true; if let $enum::$t(item) = item { item } else { unreachable!() } });
+						let stream_ = substream(cx, stream, |item| matches!(item, $enum::$t(_)), |item| { progress = true; if let $enum::$t(item) = item { item } else { unreachable!() } });
 						pin_mut!(stream_);
 						if self_.ready.$num.is_none() {
 							if let Poll::Ready(done) = self_.$t.as_mut().poll_forward(cx, stream_) {

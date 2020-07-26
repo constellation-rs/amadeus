@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.3.5")]
+#![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.3.6")]
 #![cfg_attr(nightly, feature(bufreader_seek_relative))]
 #![cfg_attr(nightly, feature(read_initializer))]
 #![cfg_attr(nightly, feature(specialization))]
@@ -38,10 +38,10 @@
 #[cfg(nightly)]
 extern crate test;
 
-#[cfg(all(nightly, not(doc)))]
+#[cfg(nightly)]
 mod internal;
 
-#[cfg(all(nightly, not(doc)))]
+#[cfg(nightly)]
 mod wrap {
 	use super::internal;
 	use async_trait::async_trait;
@@ -106,58 +106,45 @@ mod wrap {
 			<<<F as File>::Partition as Partition>::Page as Page>::Error,
 		>;
 
-		#[cfg(not(doc))]
 		type ParStream =
 			impl amadeus_core::par_stream::ParallelStream<Item = Result<Self::Item, Self::Error>>;
-		#[cfg(doc)]
-		type ParStream = DistParStream<
-			amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>,
-		>;
-		#[cfg(not(doc))]
 		type DistStream = impl DistributedStream<Item = Result<Self::Item, Self::Error>>;
-		#[cfg(doc)]
-		type DistStream =
-			amadeus_core::util::ImplDistributedStream<Result<Self::Item, Self::Error>>;
 
 		fn par_stream(self) -> Self::ParStream {
 			DistParStream::new(self.dist_stream())
 		}
 		#[allow(clippy::let_and_return)]
 		fn dist_stream(self) -> Self::DistStream {
-			let ret =
-				self.partitions
-					.into_dist_stream()
-					.flat_map(FnMut!(|partition: F::Partition| async move {
-						Ok(stream::iter(
-							partition
-								.pages()
-								.await
-								.map_err(ParquetError::Partition)?
-								.into_iter(),
-						)
-						.flat_map(|page| {
-							async move {
-								let mut buf = Vec::with_capacity(10 * 1024 * 1024);
-								let reader = Page::reader(page);
-								pin_mut!(reader);
-								let buf = PassError::new(
-									reader.read_to_end(&mut buf).await.map(|_| Cursor::new(buf)),
-								);
-								Ok(stream::iter(
-									SerializedFileReader::new(buf)?.get_row_iter::<Row>(None)?,
-								))
-							}
-							.map(ResultExpandIter::new)
-							.flatten_stream()
-						})
-						.map(|row: Result<Result<Row, _>, Self::Error>| Ok(row??)))
-					}
-					.map(ResultExpandIter::new)
-					.flatten_stream()
-					.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))));
-			#[cfg(doc)]
-			let ret = amadeus_core::util::ImplDistributedStream::new(ret);
-			ret
+			self.partitions
+				.into_dist_stream()
+				.flat_map(FnMut!(|partition: F::Partition| async move {
+					Ok(stream::iter(
+						partition
+							.pages()
+							.await
+							.map_err(ParquetError::Partition)?
+							.into_iter(),
+					)
+					.flat_map(|page| {
+						async move {
+							let mut buf = Vec::with_capacity(10 * 1024 * 1024);
+							let reader = Page::reader(page);
+							pin_mut!(reader);
+							let buf = PassError::new(
+								reader.read_to_end(&mut buf).await.map(|_| Cursor::new(buf)),
+							);
+							Ok(stream::iter(
+								SerializedFileReader::new(buf)?.get_row_iter::<Row>(None)?,
+							))
+						}
+						.map(ResultExpandIter::new)
+						.flatten_stream()
+					})
+					.map(|row: Result<Result<Row, _>, Self::Error>| Ok(row??)))
+				}
+				.map(ResultExpandIter::new)
+				.flatten_stream()
+				.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))))
 		}
 	}
 
@@ -371,5 +358,5 @@ mod wrap {
 		}
 	}
 }
-#[cfg(all(nightly, not(doc)))]
+#[cfg(nightly)]
 pub use wrap::*;

@@ -4,7 +4,7 @@
 //! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
 //! </strong></p>
 
-#![doc(html_root_url = "https://docs.rs/amadeus/0.3.5")]
+#![doc(html_root_url = "https://docs.rs/amadeus/0.3.6")]
 #![doc(
 	html_logo_url = "https://raw.githubusercontent.com/constellation-rs/amadeus/master/logo.svg?sanitize=true"
 )]
@@ -87,3 +87,23 @@ pub mod prelude {
 		}, par_pipe::ParallelPipe, par_stream::Identity, pool::ThreadPool, source::*, Data, FromParallelStream, IntoParallelStream, IteratorExt, List, ParallelStream, Value
 	};
 }
+
+#[cfg(feature = "aws")]
+#[doc(hidden)]
+pub use amadeus_aws;
+#[cfg(feature = "commoncrawl")]
+#[doc(hidden)]
+pub use amadeus_commoncrawl;
+#[doc(hidden)]
+pub use amadeus_core;
+#[cfg(feature = "parquet")]
+#[doc(hidden)]
+pub use amadeus_parquet;
+#[cfg(feature = "postgres")]
+#[doc(hidden)]
+pub use amadeus_postgres;
+#[cfg(feature = "amadeus-serde")]
+#[doc(hidden)]
+pub use amadeus_serde;
+#[doc(hidden)]
+pub use amadeus_types;
