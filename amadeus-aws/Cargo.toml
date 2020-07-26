@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-aws"
-version = "0.3.5"
+version = "0.3.6"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.5", path = "../amadeus-core" }
-amadeus-types = { version = "=0.3.5", path = "../amadeus-types" }
+amadeus-core = { version = "=0.3.6", path = "../amadeus-core" }
+amadeus-types = { version = "=0.3.6", path = "../amadeus-types" }
 async-compression = { version = "0.3.3", features = ["gzip", "futures-bufread"] }
 async-trait = "0.1"
 chrono = { version = "0.4", default-features = false }
