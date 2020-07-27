@@ -16,9 +16,10 @@ mod update;
 use async_trait::async_trait;
 use either::Either;
 use futures::{future, pin_mut, stream, stream::StreamExt as _, Stream};
+use indexmap::IndexMap;
 use serde_closure::{traits, FnOnce};
 use std::{
-	cmp::Ordering, collections::HashMap, hash::Hash, iter, ops, pin::Pin, task::{Context, Poll}, vec
+	cmp::Ordering, hash::Hash, iter, ops, pin::Pin, task::{Context, Poll}, vec
 };
 
 use super::{par_pipe::*, par_sink::*};
@@ -454,7 +455,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 			.await
 	}
 
-	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Done>
+	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> IndexMap<A, S::Done>
 	where
 		P: ThreadPool,
 		A: Eq + Hash + Send + 'static,
@@ -680,7 +681,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 			.await
 	}
 
-	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> HashMap<A, S::Done>
+	async fn group_by<P, S, A, B>(self, pool: &P, sink: S) -> IndexMap<A, S::Done>
 	where
 		P: ProcessPool,
 		A: Eq + Hash + ProcessSend + 'static,

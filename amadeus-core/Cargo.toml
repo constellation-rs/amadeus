@@ -24,6 +24,7 @@ derive-new = "0.5"
 educe = "0.4"
 either = { version = "1.5", features = ["serde"] }
 futures = "0.3"
+indexmap = { version = "1.5", features = ["serde-1"] }
 itertools = "0.9"
 owned_chars = "0.3"
 pin-project = "0.4"
