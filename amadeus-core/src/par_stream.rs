@@ -15,7 +15,7 @@ mod update;
 
 use async_trait::async_trait;
 use either::Either;
-use futures::{future, pin_mut, stream, stream::StreamExt as _, Stream};
+use futures::{future, pin_mut, stream::StreamExt as _, Stream};
 use indexmap::IndexMap;
 use serde_closure::{traits, FnOnce};
 use std::{
@@ -24,7 +24,7 @@ use std::{
 
 use super::{par_pipe::*, par_sink::*};
 use crate::{
-	into_par_stream::{IntoDistributedStream, IntoParallelStream}, pipe::StreamExt, pool::{ProcessPool, ProcessSend, ThreadPool}
+	into_par_stream::{IntoDistributedStream, IntoParallelStream}, pipe::{Sink, StreamExt}, pool::{ProcessPool, ProcessSend, ThreadPool}
 };
 
 pub use self::{
@@ -53,6 +53,7 @@ macro_rules! stream {
 
 			$($items)*
 
+			#[inline]
 			fn inspect<F>(self, f: F) -> Inspect<Self, F>
 			where
 				F: $fns::FnMut(&Self::Item) + Clone + $send + 'static,
@@ -61,6 +62,7 @@ macro_rules! stream {
 				$assert_stream(Inspect::new(self, f))
 			}
 
+			#[inline]
 			fn update<F>(self, f: F) -> Update<Self, F>
 			where
 				F: $fns::FnMut(&mut Self::Item) + Clone + $send + 'static,
@@ -69,6 +71,7 @@ macro_rules! stream {
 				$assert_stream(Update::new(self, f))
 			}
 
+			#[inline]
 			fn map<B, F>(self, f: F) -> Map<Self, F>
 			where
 				F: $fns::FnMut(Self::Item) -> B + Clone + $send + 'static,
@@ -77,6 +80,7 @@ macro_rules! stream {
 				$assert_stream(Map::new(self, f))
 			}
 
+			#[inline]
 			fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 			where
 				F: $fns::FnMut(Self::Item) -> B + Clone + $send + 'static,
@@ -86,6 +90,7 @@ macro_rules! stream {
 				$assert_stream(FlatMap::new(self, f))
 			}
 
+			#[inline]
 			fn filter<F>(self, f: F) -> Filter<Self, F>
 			where
 				F: $fns::FnMut(&Self::Item) -> bool + Clone + $send + 'static,
@@ -94,6 +99,7 @@ macro_rules! stream {
 				$assert_stream(Filter::new(self, f))
 			}
 
+			#[inline]
 			fn chain<C>(self, chain: C) -> Chain<Self, C::$xxx>
 			where
 				C: $into_stream<Item = Self::Item>,
@@ -102,6 +108,7 @@ macro_rules! stream {
 				$assert_stream(Chain::new(self, chain.$into_stream_fn()))
 			}
 
+			#[inline]
 			async fn for_each<P, F>(self, pool: &P, f: F)
 			where
 				P: $pool,
@@ -114,6 +121,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn fold<P, ID, F, B>(self, pool: &P, identity: ID, op: F) -> B
 			where
 				P: $pool,
@@ -131,6 +139,7 @@ macro_rules! stream {
 				.await
 			}
 
+			#[inline]
 			async fn histogram<P>(self, pool: &P) -> Vec<(Self::Item, usize)>
 			where
 				P: $pool,
@@ -142,6 +151,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn count<P>(self, pool: &P) -> usize
 			where
 				P: $pool,
@@ -153,6 +163,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn sum<P, S>(self, pool: &P) -> S
 			where
 				P: $pool,
@@ -165,6 +176,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn combine<P, F>(self, pool: &P, f: F) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -177,6 +189,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn max<P>(self, pool: &P) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -188,6 +201,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn max_by<P, F>(self, pool: &P, f: F) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -200,6 +214,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn max_by_key<P, F, B>(self, pool: &P, f: F) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -213,6 +228,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn min<P>(self, pool: &P) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -224,6 +240,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn min_by<P, F>(self, pool: &P, f: F) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -236,6 +253,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn min_by_key<P, F, B>(self, pool: &P, f: F) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -249,6 +267,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn most_frequent<P>(
 				self, pool: &P, n: usize, probability: f64, tolerance: f64,
 			) -> ::streaming_algorithms::Top<Self::Item, usize>
@@ -265,6 +284,7 @@ macro_rules! stream {
 				.await
 			}
 
+			#[inline]
 			async fn most_distinct<P, A, B>(
 				self, pool: &P, n: usize, probability: f64, tolerance: f64, error_rate: f64,
 			) -> ::streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>
@@ -288,6 +308,7 @@ macro_rules! stream {
 				.await
 			}
 
+			#[inline]
 			async fn sample_unstable<P>(
 				self, pool: &P, samples: usize,
 			) -> ::streaming_algorithms::SampleUnstable<Self::Item>
@@ -304,6 +325,7 @@ macro_rules! stream {
 				.await
 			}
 
+			#[inline]
 			async fn all<P, F>(self, pool: &P, f: F) -> bool
 			where
 				P: $pool,
@@ -316,6 +338,7 @@ macro_rules! stream {
 					.await
 			}
 
+			#[inline]
 			async fn any<P, F>(self, pool: &P, f: F) -> bool
 			where
 				P: $pool,
@@ -397,9 +420,14 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 				pool.spawn(move || async move {
 					let sink = reduce_a.into_async();
 					pin_mut!(sink);
-					let tasks =
-						stream::iter(tasks.into_iter().map(StreamTask::into_async)).flatten();
-					tasks.sink(sink.as_mut()).await
+					// this is faster than stream::iter(tasks.into_iter().map(StreamTask::into_async)).flatten().sink(sink).await
+					for task in tasks.into_iter().map(StreamTask::into_async) {
+							pin_mut!(task);
+							if let Some(ret) = sink.send_all(&mut task).await {
+									return ret;
+							}
+					}
+					sink.done().await
 				})
 			})
 			.collect::<futures::stream::FuturesUnordered<_>>();
@@ -604,10 +632,14 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 							pool.spawn(move || async move {
 								let sink = reduce_a.into_async();
 								pin_mut!(sink);
-								let tasks =
-									stream::iter(tasks.into_iter().map(StreamTask::into_async))
-										.flatten();
-								tasks.sink(sink.as_mut()).await
+								// this is faster than stream::iter(tasks.into_iter().map(StreamTask::into_async)).flatten().sink(sink).await
+								for task in tasks.into_iter().map(StreamTask::into_async) {
+										pin_mut!(task);
+										if let Some(ret) = sink.send_all(&mut task).await {
+												return ret;
+										}
+								}
+								sink.done().await
 							})
 						})
 						.collect::<futures::stream::FuturesUnordered<_>>();

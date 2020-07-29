@@ -96,7 +96,7 @@ where
 	bound(serialize = "P: Serialize, R: Serialize"),
 	bound(deserialize = "P: Deserialize<'de>, R: Deserialize<'de>")
 )]
-pub struct GroupByReducerA<P, R, T, U>(P, R, PhantomData<fn() -> (R, T, U)>);
+pub struct GroupByReducerA<P, R, T, U>(P, R, PhantomData<fn() -> (T, U)>);
 
 impl<P, R, T, U> Reducer<(T, U)> for GroupByReducerA<P, R, T, U>
 where

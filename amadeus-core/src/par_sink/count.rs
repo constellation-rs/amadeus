@@ -29,9 +29,11 @@ pub struct CountFolder;
 impl<Item> FolderSync<Item> for CountFolder {
 	type Done = usize;
 
+	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
 		0
 	}
+	#[inline(always)]
 	fn push(&mut self, state: &mut Self::Done, _item: Item) {
 		*state += 1;
 	}

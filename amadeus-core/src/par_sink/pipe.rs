@@ -24,6 +24,7 @@ impl_par_dist! {
 		type Item = B::Output;
 		type Task = JoinTask<A::Task, B::Task>;
 
+		#[inline(always)]
 		fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
 			let self_ = self.project();
 			let b = self_.b;
@@ -34,6 +35,7 @@ impl_par_dist! {
 				})
 			})
 		}
+		#[inline(always)]
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			self.a.size_hint()
 		}
@@ -44,6 +46,7 @@ impl_par_dist! {
 		type Output = B::Output;
 		type Task = JoinTask<A::Task, B::Task>;
 
+		#[inline(always)]
 		fn task(&self) -> Self::Task {
 			let a = self.a.task();
 			let b = self.b.task();
@@ -58,6 +61,7 @@ impl<A: ParallelPipe<Input>, B: ParallelSink<A::Output>, Input> ParallelSink<Inp
 	type ReduceA = B::ReduceA;
 	type ReduceC = B::ReduceC;
 
+	#[inline(always)]
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC) {
 		let (a, b, c) = self.b.reducers();
 		(Pipe::new(self.a, a), b, c)
@@ -72,6 +76,7 @@ impl<A: DistributedPipe<Input>, B: DistributedSink<A::Output>, Input> Distribute
 	type ReduceB = B::ReduceB;
 	type ReduceC = B::ReduceC;
 
+	#[inline(always)]
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 		let (a, b, c, d) = self.b.reducers();
 		(Pipe::new(self.a, a), b, c, d)
@@ -91,6 +96,7 @@ impl<A: StreamTask, B: PipeTask<A::Item>> StreamTask for JoinTask<A, B> {
 	type Item = B::Output;
 	type Async = StreamPipe<A::Async, B::Async>;
 
+	#[inline(always)]
 	fn into_async(self) -> Self::Async {
 		self.a.into_async().pipe(self.b.into_async())
 	}
@@ -100,6 +106,7 @@ impl<A: PipeTask<Input>, B: PipeTask<A::Output>, Input> PipeTask<Input> for Join
 	type Output = B::Output;
 	type Async = PipePipe<A::Async, B::Async>;
 
+	#[inline(always)]
 	fn into_async(self) -> Self::Async {
 		self.a.into_async().pipe(self.b.into_async())
 	}

@@ -41,13 +41,16 @@ where
 {
 	type Done = B;
 
+	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
 		iter::empty::<B>().sum()
 	}
+	#[inline(always)]
 	fn push(&mut self, state: &mut Self::Done, item: Item) {
-		*state = iter::once(mem::replace(state, iter::empty::<B>().sum()))
-			.chain(iter::once(iter::once(item).sum::<B>()))
-			.sum();
+		let zero = iter::empty::<B>().sum();
+		let left = mem::replace(state, zero);
+		let right = iter::once(item).sum::<B>();
+		*state = B::sum(iter::once(left).chain(iter::once(right)));
 	}
 }
 
@@ -56,6 +59,7 @@ pub struct SumZeroFolder<B> {
 	zero: Option<B>,
 }
 impl<B> SumZeroFolder<B> {
+	#[inline(always)]
 	pub(crate) fn new(zero: B) -> Self {
 		Self { zero: Some(zero) }
 	}
@@ -67,14 +71,15 @@ where
 {
 	type Done = Item;
 
+	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
 		self.zero.take().unwrap()
 	}
+	#[inline(always)]
 	fn push(&mut self, state: &mut Self::Done, item: Item) {
-		replace_with_or_abort(state, |state| {
-			iter::once(state)
-				.chain(iter::once(iter::once(item).sum::<Option<Item>>().unwrap()))
-				.sum::<Option<Item>>()
+		replace_with_or_abort(state, |left| {
+			let right = iter::once(item).sum::<Option<Item>>().unwrap();
+			<Option<Item> as iter::Sum<Item>>::sum(iter::once(left).chain(iter::once(right)))
 				.unwrap()
 		})
 	}

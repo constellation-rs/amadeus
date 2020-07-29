@@ -22,6 +22,7 @@ where
 {
 	type Item = P::Item;
 
+	#[inline]
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
 		let (mut pipe, f) = (self_.pipe, &mut self_.f);
@@ -41,6 +42,7 @@ where
 {
 	type Output = P::Output;
 
+	#[inline]
 	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Input>>,
 	) -> Poll<Option<Self::Output>> {

@@ -40,9 +40,11 @@ impl_par_dist! {
 		type Item = Sum2<B::Output, C::Output>;
 		type Task = JoinTask<A::Task, B::Task, C::Task, RefAItem>;
 
+		#[inline(always)]
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			self.a.size_hint()
 		}
+		#[inline(always)]
 		fn next_task(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Task>> {
 			let self_ = self.project();
 			let b = self_.b;
@@ -67,6 +69,7 @@ impl_par_dist! {
 		type Output = Sum2<B::Output, C::Output>;
 		type Task = JoinTask<A::Task, B::Task, C::Task, RefAItem>;
 
+		#[inline(always)]
 		fn task(&self) -> Self::Task {
 			let stream = self.a.task();
 			let pipe = self.b.task();
@@ -93,6 +96,7 @@ where
 	type ReduceA = ReduceA2<B::ReduceA, C::ReduceA>;
 	type ReduceC = ReduceC2<B::ReduceC, C::ReduceC>;
 
+	#[inline(always)]
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceC) {
 		let (iterator_a, reducer_a_a, reducer_a_c) = self.b.reducers();
 		let (iterator_b, reducer_b_a, reducer_b_c) = self.c.reducers();
@@ -116,6 +120,7 @@ where
 	type ReduceB = ReduceC2<B::ReduceB, C::ReduceB>;
 	type ReduceC = ReduceC2<B::ReduceC, C::ReduceC>;
 
+	#[inline(always)]
 	fn reducers(self) -> (Self::Pipe, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 		let (iterator_a, reducer_a_a, reducer_a_b, reducer_a_c) = self.b.reducers();
 		let (iterator_b, reducer_b_a, reducer_b_b, reducer_b_c) = self.c.reducers();

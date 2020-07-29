@@ -25,7 +25,8 @@
 	clippy::similar_names,
 	clippy::if_not_else,
 	clippy::must_use_candidate,
-	clippy::missing_errors_doc
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc
 )]
 #![deny(unsafe_code)]
 

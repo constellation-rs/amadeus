@@ -1,6 +1,7 @@
-use futures::TryFutureExt;
+use futures::{ready, TryFutureExt};
+use pin_project::{pin_project, pinned_drop};
 use std::{
-	future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, sync::Arc
+	future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -68,6 +69,47 @@ impl ThreadPool {
 			remote_handle
 		}
 	}
+	#[allow(unsafe_code)]
+	pub unsafe fn spawn_unchecked<'a, F, Fut, T>(
+		&self, task: F,
+	) -> impl Future<Output = Result<T, Panicked>> + Send + 'a
+	where
+		F: FnOnce() -> Fut + Send + 'a,
+		Fut: Future<Output = T> + 'a,
+		T: Send + 'a,
+	{
+		#[cfg(not(target_arch = "wasm32"))]
+		return Guard::new(
+			self.0
+				.pool
+				.spawn_pinned_unchecked(task)
+				.map_err(JoinError::into_panic)
+				.map_err(Panicked::from),
+		);
+		#[cfg(target_arch = "wasm32")]
+		{
+			let _self = self;
+			let task = std::mem::transmute::<
+				Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = Box<dyn Send>>>> + Send>,
+				Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = Box<dyn Send>>>> + Send>,
+			>(Box::new(|| {
+				let fut = Box::pin(task().map(|t| Box::new(t) as Box<dyn Send>));
+				std::mem::transmute::<
+					Pin<Box<dyn Future<Output = Box<dyn Send>>>>,
+					Pin<Box<dyn Future<Output = Box<dyn Send>>>>,
+				>(fut)
+			}));
+			let (remote, remote_handle) = AssertUnwindSafe(future::lazy(|_| task()).flatten())
+				.catch_unwind()
+				.map_err(Into::into)
+				.remote_handle();
+			wasm_bindgen_futures::spawn_local(remote);
+			Guard::new(remote_handle.map_ok(|t| {
+				let t: *mut dyn Send = Box::into_raw(t);
+				*Box::from_raw(t as *mut T)
+			}))
+		}
+	}
 }
 
 impl Clone for ThreadPool {
@@ -83,6 +125,39 @@ impl Clone for ThreadPool {
 impl UnwindSafe for ThreadPool {}
 impl RefUnwindSafe for ThreadPool {}
 
+#[pin_project(PinnedDrop)]
+struct Guard<F>(#[pin] Option<F>);
+impl<F> Guard<F> {
+	fn new(f: F) -> Self {
+		Self(Some(f))
+	}
+}
+impl<F> Future for Guard<F>
+where
+	F: Future,
+{
+	type Output = F::Output;
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match self.as_mut().project().0.as_pin_mut() {
+			Some(fut) => {
+				let output = ready!(fut.poll(cx));
+				self.project().0.set(None);
+				Poll::Ready(output)
+			}
+			None => Poll::Pending,
+		}
+	}
+}
+#[pinned_drop]
+impl<F> PinnedDrop for Guard<F> {
+	fn drop(self: Pin<&mut Self>) {
+		if self.project().0.is_some() {
+			panic!("dropped before finished polling!");
+		}
+	}
+}
+
 fn _assert() {
 	let _ = assert_sync_and_send::<ThreadPool>;
 }
@@ -92,7 +167,7 @@ fn _assert() {
 mod pool {
 	use async_channel::{bounded, Sender};
 	use futures::{future::RemoteHandle, FutureExt};
-	use std::{any::Any, future::Future, panic::AssertUnwindSafe, pin::Pin};
+	use std::{any::Any, future::Future, mem, panic::AssertUnwindSafe, pin::Pin};
 	use tokio::{
 		runtime::Handle, task::{JoinError, LocalSet}
 	};
@@ -150,6 +225,42 @@ mod pool {
 				#[allow(deprecated)]
 				res.map(|x| *Box::<dyn Any + Send>::downcast(x).unwrap())
 					.map_err(JoinError::panic)
+			}
+		}
+		#[allow(unsafe_code)]
+		pub(super) unsafe fn spawn_pinned_unchecked<'a, F, Fut, T>(
+			&self, task: F,
+		) -> impl Future<Output = Result<T, JoinError>> + Send + 'a
+		where
+			F: FnOnce() -> Fut + Send + 'a,
+			Fut: Future<Output = T> + 'a,
+			T: Send + 'a,
+		{
+			let sender = self.sender.clone();
+			async move {
+				let task: Box<dyn FnOnce() -> Box<dyn Future<Output = Response>> + Send> =
+					Box::new(|| {
+						Box::new(
+							AssertUnwindSafe(task().map(|t| {
+								let t: Box<dyn Send> = Box::new(t);
+								let t: Box<dyn Any + Send> = mem::transmute(t);
+								t
+							}))
+							.catch_unwind(),
+						)
+					});
+				let task: Box<dyn FnOnce() -> Box<dyn Future<Output = Response>> + Send> =
+					mem::transmute(task);
+				let (sender_, receiver) = bounded::<RemoteHandle<Response>>(1);
+				sender.send((task, sender_)).await.unwrap();
+				let res = receiver.recv().await;
+				let res = res.unwrap().await;
+				#[allow(deprecated)]
+				res.map(|t| {
+					let t: *mut dyn Any = Box::into_raw(t);
+					*Box::from_raw(t as *mut T)
+				})
+				.map_err(JoinError::panic)
 			}
 		}
 	}

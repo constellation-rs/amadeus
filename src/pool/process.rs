@@ -244,6 +244,81 @@ impl ProcessPoolInner {
 		drop(process_inner_lock);
 		boxed.map(|boxed| *Box::<dyn any::Any>::downcast::<T>(boxed.into_any_send()).unwrap())
 	}
+	#[allow(unsafe_code)]
+	async unsafe fn spawn_unchecked<'a, F, Fut, T>(&self, work: F) -> Result<T, Panicked>
+	where
+		F: for<'b> traits::FnOnce<(&'b ThreadPool,), Output = Fut> + ProcessSend + 'a,
+		Fut: Future<Output = T> + 'a,
+		T: ProcessSend + 'a,
+	{
+		let process_index = self.i.get();
+		let process = &self.processes[process_index];
+		let request = st::Box::new(FnOnce!(move |thread_pool: &_| {
+			let work: F = work;
+			work.call_once((thread_pool,))
+				.map(|response| {
+					let response = bincode::serialize(&response).unwrap();
+					Box::new(response) as Response
+				})
+				.boxed_local()
+		}));
+		let request = mem::transmute::<
+			st::Box<dyn st::sc::FnOnce(&ThreadPool) -> LocalBoxFuture<'a, Response> + Send>,
+			st::Box<dyn st::sc::FnOnce(&ThreadPool) -> LocalBoxFuture<'static, Response> + Send>,
+		>(request);
+		let x = process.sender.send(Some(request));
+		x.await;
+		let index;
+		{
+			// https://github.com/rust-lang/rust/issues/57478
+			let mut process_inner_lock = process.inner.lock().unwrap();
+			process_inner_lock.queue.push_back(Queued::Awaiting);
+			index = process_inner_lock.tail + process_inner_lock.queue.len() - 1;
+			drop(process_inner_lock);
+		}
+		let on_drop = OnDrop::new(|| {
+			let mut process_inner_lock = process.inner.lock().unwrap();
+			let offset = index - process_inner_lock.tail;
+			process_inner_lock.queue[offset].drop_();
+			while let Some(Queued::Taken) = process_inner_lock.queue.front() {
+				let _ = process_inner_lock.queue.pop_front().unwrap();
+				process_inner_lock.tail += 1;
+			}
+			drop(process_inner_lock);
+		});
+		while process.inner.lock().unwrap().received <= index {
+			process
+				.synchronize
+				.synchronize(async {
+					if process.inner.lock().unwrap().received > index {
+						return;
+					}
+					let z = process.receiver.recv().await;
+					let t = z.unwrap();
+					let mut process_inner_lock = process.inner.lock().unwrap();
+					let offset = process_inner_lock.received - process_inner_lock.tail;
+					process_inner_lock.queue[offset].received(t);
+					process_inner_lock.received += 1;
+					drop(process_inner_lock);
+				})
+				.await;
+		}
+		on_drop.cancel();
+		let mut process_inner_lock = process.inner.lock().unwrap();
+		let offset = index - process_inner_lock.tail;
+		let boxed = process_inner_lock.queue[offset].take();
+		while let Some(Queued::Taken) = process_inner_lock.queue.front() {
+			let _ = process_inner_lock.queue.pop_front().unwrap();
+			process_inner_lock.tail += 1;
+		}
+		drop(process_inner_lock);
+		boxed.map(|boxed| {
+			bincode::deserialize(
+				&Box::<dyn any::Any>::downcast::<Vec<u8>>(boxed.into_any_send()).unwrap(),
+			)
+			.unwrap()
+		})
+	}
 }
 impl Drop for ProcessPoolInner {
 	fn drop(&mut self) {
@@ -278,6 +353,18 @@ impl ProcessPool {
 	{
 		let inner = self.0.clone();
 		async move { inner.spawn(work).await }
+	}
+	#[allow(unsafe_code)]
+	pub unsafe fn spawn_unchecked<'a, F, Fut, T>(
+		&self, work: F,
+	) -> impl Future<Output = Result<T, Panicked>> + Send + 'a
+	where
+		F: traits::FnOnce(&ThreadPool) -> Fut + ProcessSend + 'a,
+		Fut: Future<Output = T> + 'a,
+		T: ProcessSend + 'a,
+	{
+		let inner = self.0.clone();
+		async move { inner.spawn_unchecked(work).await }
 	}
 }
 

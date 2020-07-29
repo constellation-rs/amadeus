@@ -48,4 +48,14 @@ impl ThreadPool for LocalPool {
 	{
 		Box::pin(future::lazy(|_| work().now_or_never().unwrap()).map(Ok))
 	}
+	unsafe fn spawn_unchecked<'a, F, Fut, T>(
+		&self, work: F,
+	) -> BoxFuture<'a, Result<T, Box<dyn Error + Send>>>
+	where
+		F: FnOnce() -> Fut + Send + 'a,
+		Fut: Future<Output = T> + 'a,
+		T: Send + 'a,
+	{
+		Box::pin(future::lazy(|_| work().now_or_never().unwrap()).map(Ok))
+	}
 }

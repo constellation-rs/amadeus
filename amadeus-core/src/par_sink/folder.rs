@@ -125,8 +125,9 @@ where
 	) -> Poll<Self::Done> {
 		let self_ = self.project();
 		let folder = self_.folder;
+		let state = self_.state.as_mut().unwrap();
 		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
-			folder.push(self_.state.as_mut().unwrap(), item);
+			folder.push(state, item);
 		}
 		Poll::Ready(self_.state.take().unwrap())
 	}
