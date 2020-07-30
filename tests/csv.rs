@@ -20,7 +20,7 @@ async fn csv() {
 		f: String,
 	}
 
-	let rows = Csv::<_, GameDerived>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")])
+	let rows = Csv::<_, GameDerived>::new(PathBuf::from("amadeus-testing/csv/game.csv"))
 		.await
 		.unwrap();
 	assert_eq!(
@@ -41,7 +41,7 @@ async fn csv() {
 		f: String,
 	}
 
-	let rows = Csv::<_, Value>::new(vec![PathBuf::from("amadeus-testing/csv/game.csv")])
+	let rows = Csv::<_, Value>::new(PathBuf::from("amadeus-testing/csv/game.csv"))
 		.await
 		.unwrap();
 	assert_eq!(

@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::data`](https://docs.rs/amadeus/0.3/amadeus/data/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-types/0.3.6")]
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.3.7")]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,

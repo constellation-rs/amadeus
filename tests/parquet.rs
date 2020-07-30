@@ -133,9 +133,9 @@ async fn parquet() {
 		valid: Option<f64>,
 		__index_level_0__: Option<i64>,
 	}
-	let rows = Parquet::<_, StockSimulatedDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, StockSimulatedDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -146,9 +146,9 @@ async fn parquet() {
 		42_000
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -169,9 +169,9 @@ async fn parquet() {
 		__index_level_0__: Option<i64>,
 	}
 
-	let rows = Parquet::<_, StockSimulatedDerivedProjection1>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, StockSimulatedDerivedProjection1>::new(PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -182,9 +182,9 @@ async fn parquet() {
 		42_000
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -202,9 +202,9 @@ async fn parquet() {
 	#[derive(Data, Clone, PartialEq, Debug)]
 	struct StockSimulatedDerivedProjection2 {}
 
-	let rows = Parquet::<_, StockSimulatedDerivedProjection2>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, StockSimulatedDerivedProjection2>::new(PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -215,9 +215,9 @@ async fn parquet() {
 		42_000
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/stock_simulated.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -255,9 +255,21 @@ async fn parquet() {
 		int96_field: DateTime,
 	}
 
-	let rows = Parquet::<_, TenKayVeeTwo>::new(vec![PathBuf::from(
+	let rows =
+		Parquet::<_, TenKayVeeTwo>::new(PathBuf::from("amadeus-testing/parquet/10k-v2.parquet"))
+			.await
+			.unwrap();
+	assert_eq!(
+		rows.par_stream()
+			.map(|row: Result<_, _>| row.unwrap())
+			.count(pool)
+			.await,
+		10_000
+	);
+
+	let rows = Parquet::<_, TenKayVeeTwoDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/10k-v2.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -268,24 +280,9 @@ async fn parquet() {
 		10_000
 	);
 
-	let rows = Parquet::<_, TenKayVeeTwoDerived>::new(vec![PathBuf::from(
-		"amadeus-testing/parquet/10k-v2.parquet",
-	)])
-	.await
-	.unwrap();
-	assert_eq!(
-		rows.par_stream()
-			.map(|row: Result<_, _>| row.unwrap())
-			.count(pool)
-			.await,
-		10_000
-	);
-
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
-		"amadeus-testing/parquet/10k-v2.parquet",
-	)])
-	.await
-	.unwrap();
+	let rows = Parquet::<_, Value>::new(PathBuf::from("amadeus-testing/parquet/10k-v2.parquet"))
+		.await
+		.unwrap();
 	assert_eq!(
 		rows.par_stream()
 			.map(|row: Result<Value, _>| -> Value {
@@ -328,9 +325,9 @@ async fn parquet() {
 		timestamp_col: Option<DateTime>,
 	}
 
-	let rows = Parquet::<_, AlltypesDictionary>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, AlltypesDictionary>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_dictionary.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -341,9 +338,9 @@ async fn parquet() {
 		2
 	);
 
-	let rows = Parquet::<_, AlltypesDictionaryDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, AlltypesDictionaryDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_dictionary.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -354,9 +351,9 @@ async fn parquet() {
 		2
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_dictionary.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -401,9 +398,9 @@ async fn parquet() {
 		timestamp_col: Option<DateTime>,
 	}
 
-	let rows = Parquet::<_, AlltypesPlain>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, AlltypesPlain>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -414,9 +411,9 @@ async fn parquet() {
 		8
 	);
 
-	let rows = Parquet::<_, AlltypesPlainDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, AlltypesPlainDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -427,9 +424,9 @@ async fn parquet() {
 		8
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -474,9 +471,9 @@ async fn parquet() {
 		timestamp_col: Option<DateTime>,
 	}
 
-	let rows = Parquet::<_, AlltypesPlainSnappy>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, AlltypesPlainSnappy>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -487,9 +484,9 @@ async fn parquet() {
 		2
 	);
 
-	let rows = Parquet::<_, AlltypesPlainSnappyDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, AlltypesPlainSnappyDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -500,9 +497,9 @@ async fn parquet() {
 		2
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/alltypes_plain.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -555,9 +552,9 @@ async fn parquet() {
 		a: Option<List<Option<List<Option<List<Option<String>>>>>>>,
 		b: i32,
 	}
-	let rows = Parquet::<_, NestedLists>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, NestedLists>::new(PathBuf::from(
 		"amadeus-testing/parquet/nested_lists.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -568,9 +565,9 @@ async fn parquet() {
 		3
 	);
 
-	let rows = Parquet::<_, NestedListsDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, NestedListsDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/nested_lists.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -581,9 +578,9 @@ async fn parquet() {
 		3
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/nested_lists.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -610,9 +607,9 @@ async fn parquet() {
 		b: i32,
 		c: f64,
 	}
-	let rows = Parquet::<_, NestedMaps>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, NestedMaps>::new(PathBuf::from(
 		"amadeus-testing/parquet/nested_maps.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -623,9 +620,9 @@ async fn parquet() {
 		6
 	);
 
-	let rows = Parquet::<_, NestedMapsDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, NestedMapsDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/nested_maps.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -636,9 +633,9 @@ async fn parquet() {
 		6
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/nested_maps.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -704,9 +701,9 @@ async fn parquet() {
 		f: String,
 	}
 
-	let rows = Parquet::<_, Nonnullable>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Nonnullable>::new(PathBuf::from(
 		"amadeus-testing/parquet/nonnullable.impala.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -717,9 +714,9 @@ async fn parquet() {
 		1
 	);
 
-	let rows = Parquet::<_, NonnullableDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, NonnullableDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/nonnullable.impala.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -730,9 +727,9 @@ async fn parquet() {
 		1
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/nonnullable.impala.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -777,9 +774,9 @@ async fn parquet() {
 			Option<HashMap<String, Option<(Option<(Option<List<Option<f64>>>,)>,)>>>,
 		)>,
 	}
-	let rows = Parquet::<_, Nullable>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Nullable>::new(PathBuf::from(
 		"amadeus-testing/parquet/nullable.impala.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -790,9 +787,9 @@ async fn parquet() {
 		7
 	);
 
-	let rows = Parquet::<_, NullableDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, NullableDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/nullable.impala.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -803,9 +800,9 @@ async fn parquet() {
 		7
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/nullable.impala.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -826,9 +823,9 @@ async fn parquet() {
 	struct NullsDerived {
 		b_struct: Option<(Option<i32>,)>,
 	}
-	let rows = Parquet::<_, Nulls>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Nulls>::new(PathBuf::from(
 		"amadeus-testing/parquet/nulls.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -839,9 +836,9 @@ async fn parquet() {
 		8
 	);
 
-	let rows = Parquet::<_, NullsDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, NullsDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/nulls.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -852,9 +849,9 @@ async fn parquet() {
 		8
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/nulls.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -877,9 +874,9 @@ async fn parquet() {
 		#[amadeus(name = "phoneNumbers")]
 		phone_numbers: Option<(List<(i64, Option<String>)>,)>,
 	}
-	let rows = Parquet::<_, Repeated>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Repeated>::new(PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -890,9 +887,9 @@ async fn parquet() {
 		6
 	);
 
-	let rows = Parquet::<_, RepeatedDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, RepeatedDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -903,9 +900,9 @@ async fn parquet() {
 		6
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/repeated_no_annotation.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -930,9 +927,9 @@ async fn parquet() {
 		d: bool,
 		e: Option<List<i32>>,
 	}
-	let rows = Parquet::<_, TestDatapage>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, TestDatapage>::new(PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -943,9 +940,9 @@ async fn parquet() {
 		5
 	);
 
-	let rows = Parquet::<_, TestDatapageDerived>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, TestDatapageDerived>::new(PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -956,9 +953,9 @@ async fn parquet() {
 		5
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
+	let rows = Parquet::<_, Value>::new(PathBuf::from(
 		"amadeus-testing/parquet/datapage_v2.snappy.parquet",
-	)])
+	))
 	.await
 	.unwrap();
 	assert_eq!(
@@ -1001,11 +998,10 @@ async fn parquet() {
 		__index_level_0__: Option<i64>,
 	}
 
-	let rows = Parquet::<_, CommitsDerived>::new(vec![PathBuf::from(
-		"amadeus-testing/parquet/commits.parquet",
-	)])
-	.await
-	.unwrap();
+	let rows =
+		Parquet::<_, CommitsDerived>::new(PathBuf::from("amadeus-testing/parquet/commits.parquet"))
+			.await
+			.unwrap();
 	assert_eq!(
 		rows.par_stream()
 			.map(|row: Result<_, _>| row.unwrap())
@@ -1014,11 +1010,9 @@ async fn parquet() {
 		14_444
 	);
 
-	let rows = Parquet::<_, Value>::new(vec![PathBuf::from(
-		"amadeus-testing/parquet/commits.parquet",
-	)])
-	.await
-	.unwrap();
+	let rows = Parquet::<_, Value>::new(PathBuf::from("amadeus-testing/parquet/commits.parquet"))
+		.await
+		.unwrap();
 	assert_eq!(
 		rows.par_stream()
 			.map(|row: Result<Value, _>| -> Value {

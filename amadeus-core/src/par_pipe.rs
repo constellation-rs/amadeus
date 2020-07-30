@@ -26,6 +26,7 @@ macro_rules! pipe {
 
 			fn task(&self) -> Self::Task;
 
+			#[inline]
 			fn inspect<F>(self, f: F) -> Inspect<Self, F>
 			where
 				F: $fns::FnMut(&Self::Output) + Clone + $send + 'static,
@@ -34,6 +35,7 @@ macro_rules! pipe {
 				$assert_pipe(Inspect::new(self, f))
 			}
 
+			#[inline]
 			fn update<F>(self, f: F) -> Update<Self, F>
 			where
 				F: $fns::FnMut(&mut Self::Output) + Clone + $send + 'static,
@@ -42,6 +44,7 @@ macro_rules! pipe {
 				$assert_pipe(Update::new(self, f))
 			}
 
+			#[inline]
 			fn map<B, F>(self, f: F) -> Map<Self, F>
 			where
 				F: $fns::FnMut(Self::Output) -> B + Clone + $send + 'static,
@@ -50,6 +53,7 @@ macro_rules! pipe {
 				$assert_pipe(Map::new(self, f))
 			}
 
+			#[inline]
 			fn flat_map<B, F>(self, f: F) -> FlatMap<Self, F>
 			where
 				F: $fns::FnMut(Self::Output) -> B + Clone + $send + 'static,
@@ -59,6 +63,7 @@ macro_rules! pipe {
 				$assert_pipe(FlatMap::new(self, f))
 			}
 
+			#[inline]
 			fn filter<F>(self, f: F) -> Filter<Self, F>
 			where
 				F: $fns::FnMut(&Self::Output) -> bool + Clone + $send + 'static,
@@ -67,6 +72,7 @@ macro_rules! pipe {
 				$assert_pipe(Filter::new(self, f))
 			}
 
+			#[inline]
 			fn cloned<'a, T>(self) -> Cloned<Self, T, Input>
 			where
 				T: Clone + 'a,
@@ -85,6 +91,7 @@ macro_rules! pipe {
 			// 	$assert_pipe(Chain::new(self, chain.into_par_stream()))
 			// }
 
+			#[inline]
 			fn pipe<S>(self, sink: S) -> super::par_sink::Pipe<Self, S>
 			where
 				S: $sink<Self::Output>,
@@ -93,6 +100,7 @@ macro_rules! pipe {
 				$assert_sink(super::par_sink::Pipe::new(self, sink))
 			}
 
+			#[inline]
 			fn fork<A, B, RefAItem>(
 				self, sink: A, sink_ref: B,
 			) -> Fork<Self, A, B, &'static Self::Output>
@@ -104,6 +112,7 @@ macro_rules! pipe {
 				$assert_sink(Fork::new(self, sink, sink_ref))
 			}
 
+			#[inline]
 			fn for_each<F>(self, f: F) -> ForEach<Self, F>
 			where
 				F: $fns::FnMut(Self::Output) + Clone + $send + 'static,
@@ -112,6 +121,7 @@ macro_rules! pipe {
 				$assert_sink(ForEach::new(self, f))
 			}
 
+			#[inline]
 			fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
 			where
 				ID: $fns::FnMut() -> B + Clone + $send + 'static,
@@ -122,6 +132,7 @@ macro_rules! pipe {
 				$assert_sink(Fold::new(self, identity, op))
 			}
 
+			#[inline]
 			fn group_by<S, A, B>(self, sink: S) -> GroupBy<Self, S>
 			where
 				A: Eq + Hash + $send + 'static,
@@ -135,6 +146,7 @@ macro_rules! pipe {
 				$assert_sink(GroupBy::new(self, sink))
 			}
 
+			#[inline]
 			fn histogram(self) -> Histogram<Self>
 			where
 				Self::Output: Hash + Ord + $send + 'static,
@@ -143,6 +155,7 @@ macro_rules! pipe {
 				$assert_sink(Histogram::new(self))
 			}
 
+			#[inline]
 			fn count(self) -> Count<Self>
 			where
 				Self: Sized,
@@ -150,6 +163,7 @@ macro_rules! pipe {
 				$assert_sink(Count::new(self))
 			}
 
+			#[inline]
 			fn sum<B>(self) -> Sum<Self, B>
 			where
 				B: iter::Sum<Self::Output> + iter::Sum<B> + $send + 'static,
@@ -158,6 +172,7 @@ macro_rules! pipe {
 				$assert_sink(Sum::new(self))
 			}
 
+			#[inline]
 			fn combine<F>(self, f: F) -> Combine<Self, F>
 			where
 				F: $fns::FnMut(Self::Output, Self::Output) -> Self::Output + Clone + $send + 'static,
@@ -167,6 +182,7 @@ macro_rules! pipe {
 				$assert_sink(Combine::new(self, f))
 			}
 
+			#[inline]
 			fn max(self) -> Max<Self>
 			where
 				Self::Output: Ord + $send + 'static,
@@ -175,6 +191,7 @@ macro_rules! pipe {
 				$assert_sink(Max::new(self))
 			}
 
+			#[inline]
 			fn max_by<F>(self, f: F) -> MaxBy<Self, F>
 			where
 				F: $fns::FnMut(&Self::Output, &Self::Output) -> Ordering + Clone + $send + 'static,
@@ -184,6 +201,7 @@ macro_rules! pipe {
 				$assert_sink(MaxBy::new(self, f))
 			}
 
+			#[inline]
 			fn max_by_key<F, B>(self, f: F) -> MaxByKey<Self, F>
 			where
 				F: $fns::FnMut(&Self::Output) -> B + Clone + $send + 'static,
@@ -194,6 +212,7 @@ macro_rules! pipe {
 				$assert_sink(MaxByKey::new(self, f))
 			}
 
+			#[inline]
 			fn min(self) -> Min<Self>
 			where
 				Self::Output: Ord + $send + 'static,
@@ -202,6 +221,7 @@ macro_rules! pipe {
 				$assert_sink(Min::new(self))
 			}
 
+			#[inline]
 			fn min_by<F>(self, f: F) -> MinBy<Self, F>
 			where
 				F: $fns::FnMut(&Self::Output, &Self::Output) -> Ordering + Clone + $send + 'static,
@@ -211,6 +231,7 @@ macro_rules! pipe {
 				$assert_sink(MinBy::new(self, f))
 			}
 
+			#[inline]
 			fn min_by_key<F, B>(self, f: F) -> MinByKey<Self, F>
 			where
 				F: $fns::FnMut(&Self::Output) -> B + Clone + $send + 'static,
@@ -221,6 +242,7 @@ macro_rules! pipe {
 				$assert_sink(MinByKey::new(self, f))
 			}
 
+			#[inline]
 			fn most_frequent(self, n: usize, probability: f64, tolerance: f64) -> MostFrequent<Self>
 			where
 				Self::Output: Hash + Eq + Clone + $send + 'static,
@@ -229,6 +251,7 @@ macro_rules! pipe {
 				$assert_sink(MostFrequent::new(self, n, probability, tolerance))
 			}
 
+			#[inline]
 			fn most_distinct<A, B>(
 				self, n: usize, probability: f64, tolerance: f64, error_rate: f64,
 			) -> MostDistinct<Self>
@@ -246,6 +269,7 @@ macro_rules! pipe {
 				))
 			}
 
+			#[inline]
 			fn sample_unstable(self, samples: usize) -> SampleUnstable<Self>
 			where
 				Self::Output: $send + 'static,
@@ -254,6 +278,7 @@ macro_rules! pipe {
 				$assert_sink(SampleUnstable::new(self, samples))
 			}
 
+			#[inline]
 			fn all<F>(self, f: F) -> All<Self, F>
 			where
 				F: $fns::FnMut(Self::Output) -> bool + Clone + $send + 'static,
@@ -262,6 +287,7 @@ macro_rules! pipe {
 				$assert_sink(All::new(self, f))
 			}
 
+			#[inline]
 			fn any<F>(self, f: F) -> Any<Self, F>
 			where
 				F: $fns::FnMut(Self::Output) -> bool + Clone + $send + 'static,
@@ -270,6 +296,7 @@ macro_rules! pipe {
 				$assert_sink(Any::new(self, f))
 			}
 
+			#[inline]
 			fn collect<B>(self) -> Collect<Self, B>
 			where
 				B: $from_sink<Self::Output>,

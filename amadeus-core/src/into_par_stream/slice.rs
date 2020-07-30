@@ -32,6 +32,7 @@ impl_par_dist_rename! {
 		type ParStream = IterParStream<iter::Cloned<slice::Iter<'a, T>>>;
 		type Item = T;
 
+		#[inline]
 		fn into_par_stream(self) -> Self::ParStream
 		where
 			Self: Sized,

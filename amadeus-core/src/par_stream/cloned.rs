@@ -13,7 +13,7 @@ use crate::pipe::Pipe;
 #[must_use]
 pub struct Cloned<P, T, Input> {
 	pipe: P,
-	marker: PhantomData<fn(Input, T)>,
+	marker: PhantomData<fn() -> (Input, T)>,
 }
 
 impl_par_dist! {

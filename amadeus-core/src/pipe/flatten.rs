@@ -1,7 +1,6 @@
 use derive_new::new;
 use futures::{ready, Stream};
 use pin_project::pin_project;
-use serde_closure::traits::FnMut;
 use std::{
 	pin::Pin, task::{Context, Poll}
 };
@@ -10,21 +9,19 @@ use super::Pipe;
 
 #[pin_project]
 #[derive(new)]
-pub struct FlatMap<P, F, R> {
+pub struct Flatten<P, U> {
 	#[pin]
 	pipe: P,
-	f: F,
 	#[pin]
 	#[new(default)]
-	next: Option<R>,
+	next: Option<U>,
 }
 
-impl<P: Stream, F, R> Stream for FlatMap<P, F, R>
+impl<P: Stream> Stream for Flatten<P, P::Item>
 where
-	F: FnMut<(P::Item,), Output = R>,
-	R: Stream,
+	P::Item: Stream,
 {
-	type Item = R::Item;
+	type Item = <P::Item as Stream>::Item;
 
 	#[inline]
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -37,7 +34,7 @@ where
 					self_.next.set(None);
 				}
 			} else if let Some(s) = ready!(self_.pipe.as_mut().poll_next(cx)) {
-				self_.next.set(Some(self_.f.call_mut((s,))));
+				self_.next.set(Some(s));
 			} else {
 				break None;
 			}
@@ -45,12 +42,11 @@ where
 	}
 }
 
-impl<P: Pipe<Input>, F, R, Input> Pipe<Input> for FlatMap<P, F, R>
+impl<P: Pipe<Input>, Input> Pipe<Input> for Flatten<P, P::Output>
 where
-	F: FnMut<(P::Output,), Output = R>,
-	R: Stream,
+	P::Output: Stream,
 {
-	type Output = R::Item;
+	type Output = <P::Output as Stream>::Item;
 
 	#[inline]
 	fn poll_next(
@@ -65,7 +61,7 @@ where
 					self_.next.set(None);
 				}
 			} else if let Some(s) = ready!(self_.pipe.as_mut().poll_next(cx, stream.as_mut())) {
-				self_.next.set(Some(self_.f.call_mut((s,))));
+				self_.next.set(Some(s));
 			} else {
 				break None;
 			}

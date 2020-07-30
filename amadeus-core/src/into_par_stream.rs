@@ -13,12 +13,14 @@ impl_par_dist_rename! {
 		fn into_par_stream(self) -> Self::ParStream
 		where
 			Self: Sized;
-		fn dist_stream_mut(&mut self) -> <&mut Self as IntoParallelStream>::ParStream
+		#[inline(always)]
+		fn par_stream_mut(&mut self) -> <&mut Self as IntoParallelStream>::ParStream
 		where
 			for<'a> &'a mut Self: IntoParallelStream,
 		{
 			<&mut Self as IntoParallelStream>::into_par_stream(self)
 		}
+		#[inline(always)]
 		fn par_stream(&self) -> <&Self as IntoParallelStream>::ParStream
 		where
 			for<'a> &'a Self: IntoParallelStream,
@@ -31,6 +33,7 @@ impl_par_dist_rename! {
 		type ParStream = Self;
 		type Item = <Self as ParallelStream>::Item;
 
+		#[inline(always)]
 		fn into_par_stream(self) -> Self::ParStream
 		where
 			Self: Sized,

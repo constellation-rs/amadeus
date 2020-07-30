@@ -1,5 +1,5 @@
 use derive_new::new;
-use futures::{ready, Stream};
+use futures::Stream;
 use pin_project::pin_project;
 use serde_closure::traits::FnMut;
 use std::{
@@ -22,10 +22,13 @@ where
 {
 	type Item = F::Output;
 
+	#[inline]
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let mut self_ = self.project();
 		let (mut pipe, f) = (self_.pipe, &mut self_.f);
-		Poll::Ready(ready!(pipe.as_mut().poll_next(cx)).map(|t| f.call_mut((t,))))
+		pipe.as_mut()
+			.poll_next(cx)
+			.map(|t| t.map(|t| f.call_mut((t,))))
 	}
 }
 
@@ -35,11 +38,14 @@ where
 {
 	type Output = F::Output;
 
+	#[inline]
 	fn poll_next(
 		self: Pin<&mut Self>, cx: &mut Context, mut stream: Pin<&mut impl Stream<Item = Input>>,
 	) -> Poll<Option<Self::Output>> {
 		let mut self_ = self.project();
 		let (mut pipe, f) = (self_.pipe, &mut self_.f);
-		Poll::Ready(ready!(pipe.as_mut().poll_next(cx, stream.as_mut())).map(|t| f.call_mut((t,))))
+		pipe.as_mut()
+			.poll_next(cx, stream.as_mut())
+			.map(|t| t.map(|t| f.call_mut((t,))))
 	}
 }

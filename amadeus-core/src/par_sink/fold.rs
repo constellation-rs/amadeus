@@ -20,7 +20,7 @@ pub struct Fold<P, ID, F, B> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input, ID, F, B> ParallelSink<Input> for Fold<P, ID, F, B>
+	impl<P: ParallelPipe<Item>, Item, ID, F, B> ParallelSink<Item> for Fold<P, ID, F, B>
 	where
 		ID: FnMut<(), Output = B> + Clone + Send + 'static,
 		F: FnMut<(B, Either<P::Output, B>), Output = B> + Clone + Send + 'static,

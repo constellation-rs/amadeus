@@ -20,7 +20,7 @@ pub struct ForEach<P, F> {
 	f: F,
 }
 
-impl<P: ParallelPipe<Input>, Input, F> ParallelSink<Input> for ForEach<P, F>
+impl<P: ParallelPipe<Item>, Item, F> ParallelSink<Item> for ForEach<P, F>
 where
 	F: FnMut<(P::Output,), Output = ()> + Clone + Send + 'static,
 {
@@ -37,7 +37,7 @@ where
 		)
 	}
 }
-impl<P: DistributedPipe<Input>, Input, F> DistributedSink<Input> for ForEach<P, F>
+impl<P: DistributedPipe<Item>, Item, F> DistributedSink<Item> for ForEach<P, F>
 where
 	F: FnMut<(P::Output,), Output = ()> + Clone + ProcessSend + 'static,
 {

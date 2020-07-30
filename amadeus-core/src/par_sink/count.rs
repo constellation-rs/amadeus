@@ -12,7 +12,7 @@ pub struct Count<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Count<P> {
+	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Count<P> {
 		folder_par_sink!(
 			CountFolder,
 			SumFolder<usize>,
@@ -29,9 +29,11 @@ pub struct CountFolder;
 impl<Item> FolderSync<Item> for CountFolder {
 	type Done = usize;
 
+	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
 		0
 	}
+	#[inline(always)]
 	fn push(&mut self, state: &mut Self::Done, _item: Item) {
 		*state += 1;
 	}

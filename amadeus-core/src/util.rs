@@ -173,6 +173,7 @@ where
 ///
 /// Not.
 #[allow(unsafe_code)]
+#[inline(always)]
 pub unsafe fn transmute<A, B>(a: A) -> B {
 	use std::mem;
 	assert_eq!(

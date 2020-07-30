@@ -2,7 +2,7 @@
 
 [package]
 name = "amadeus"
-version = "0.3.6"
+version = "0.3.7"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -23,30 +23,31 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [features]
-constellation = ["constellation-rs", "serde_traitobject"]
+constellation = ["bincode", "constellation-rs", "serde_traitobject"]
 aws = ["amadeus-aws"]
 commoncrawl = ["amadeus-commoncrawl"]
 parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
 postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
+bench = ["serde-csv", "once_cell", "arrow-parquet", "rayon"]
 
 [package.metadata.docs.rs]
 features = ["constellation", "aws", "commoncrawl", "parquet", "postgres", "csv", "json"]
 
 [dependencies]
-amadeus-core = { version = "=0.3.6", path = "amadeus-core" }
-amadeus-derive = { version = "=0.3.6", path = "amadeus-derive" }
-amadeus-types = { version = "=0.3.6", path = "amadeus-types" }
-amadeus-aws = { version = "=0.3.6", path = "amadeus-aws", optional = true }
-amadeus-commoncrawl = { version = "=0.3.6", path = "amadeus-commoncrawl", optional = true }
-amadeus-parquet = { version = "=0.3.6", path = "amadeus-parquet", optional = true }
-amadeus-postgres = { version = "=0.3.6", path = "amadeus-postgres", optional = true }
-amadeus-serde = { version = "=0.3.6", path = "amadeus-serde", optional = true }
+amadeus-core = { version = "=0.3.7", path = "amadeus-core" }
+amadeus-derive = { version = "=0.3.7", path = "amadeus-derive" }
+amadeus-types = { version = "=0.3.7", path = "amadeus-types" }
+amadeus-aws = { version = "=0.3.7", path = "amadeus-aws", optional = true }
+amadeus-commoncrawl = { version = "=0.3.7", path = "amadeus-commoncrawl", optional = true }
+amadeus-parquet = { version = "=0.3.7", path = "amadeus-parquet", optional = true }
+amadeus-postgres = { version = "=0.3.7", path = "amadeus-postgres", optional = true }
+amadeus-serde = { version = "=0.3.7", path = "amadeus-serde", optional = true }
 async-channel = "1.1"
+bincode = { version = "1.3", optional = true }
 constellation-rs = { version = "0.2.0-alpha.2", default-features = false, optional = true }
 derive-new = "0.5"
-doc-comment = "0.3"
 futures = "0.3"
 num_cpus = "1.13"
 pin-project = "0.4"
@@ -55,12 +56,19 @@ serde_closure = "0.3"
 serde_traitobject = { version = "0.2", optional = true }
 tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "blocking"] }
 
+# Move to dev-dependencies once fixed: https://github.com/rust-lang/cargo/issues/1596
+arrow-parquet = { package = "parquet", version = "1.0", default-features = false, features = ["brotli", "flate2", "lz4", "snap"], optional = true }
+once_cell = { version = "1.4", optional = true }
+rayon = { version = "1.3", optional = true }
+serde-csv = { package = "csv", version = "1.0", optional = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["Blob", "Performance", "Response", "Window"] }
 
 [dev-dependencies]
+doc-comment = "0.3"
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
 serde_json = "1.0"
@@ -164,3 +172,15 @@ name = "postgres_dist"
 harness = false
 required-features = ["postgres"]
 test = false # TODO set up postgres on CI
+
+[[bench]]
+name = "csv"
+required-features = ["bench", "csv"]
+
+[[bench]]
+name = "in_memory"
+required-features = ["bench"]
+
+[[bench]]
+name = "parquet"
+required-features = ["bench", "parquet"]

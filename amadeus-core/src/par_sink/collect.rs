@@ -19,7 +19,7 @@ pub struct Collect<P, A> {
 	marker: PhantomData<fn() -> A>,
 }
 
-impl<P: ParallelPipe<Input>, Input, T: FromParallelStream<P::Output>> ParallelSink<Input>
+impl<P: ParallelPipe<Item>, Item, T: FromParallelStream<P::Output>> ParallelSink<Item>
 	for Collect<P, T>
 {
 	type Done = T;
@@ -32,7 +32,7 @@ impl<P: ParallelPipe<Input>, Input, T: FromParallelStream<P::Output>> ParallelSi
 		(self.pipe, a, b)
 	}
 }
-impl<P: DistributedPipe<Input>, Input, T: FromDistributedStream<P::Output>> DistributedSink<Input>
+impl<P: DistributedPipe<Item>, Item, T: FromDistributedStream<P::Output>> DistributedSink<Item>
 	for Collect<P, T>
 {
 	type Done = T;

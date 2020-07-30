@@ -11,9 +11,11 @@ use super::{
 use crate::pool::ProcessSend;
 
 pub trait IteratorExt: Iterator + Sized {
+	#[inline]
 	fn par(self) -> IterParStream<Self> {
 		IterParStream(self)
 	}
+	#[inline]
 	fn dist(self) -> IterDistStream<Self> {
 		IterDistStream(self)
 	}
@@ -31,9 +33,11 @@ impl_par_dist_rename! {
 		type Item = I::Item;
 		type Task = IterStreamTask<I::Item>;
 
+		#[inline]
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			self.0.size_hint()
 		}
+		#[inline]
 		fn next_task(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Task>> {
 			Poll::Ready(self.0.next().map(IterStreamTask::new))
 		}
@@ -44,6 +48,7 @@ impl_par_dist_rename! {
 #[derive(Serialize, Deserialize)]
 pub struct IterStreamTask<T>(Option<T>);
 impl<T> IterStreamTask<T> {
+	#[inline]
 	fn new(t: T) -> Self {
 		Self(Some(t))
 	}
@@ -53,6 +58,7 @@ impl<T> StreamTask for IterStreamTask<T> {
 	type Item = T;
 	type Async = IterStreamTask<T>;
 
+	#[inline]
 	fn into_async(self) -> Self::Async {
 		self
 	}
@@ -60,6 +66,7 @@ impl<T> StreamTask for IterStreamTask<T> {
 impl<T> Stream for IterStreamTask<T> {
 	type Item = T;
 
+	#[inline]
 	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
 		Poll::Ready(self.project().0.take())
 	}
@@ -74,6 +81,7 @@ impl_par_dist_rename! {
 		type ParStream = IterParStream<Self>;
 		type Item = <Self as Iterator>::Item;
 
+		#[inline]
 		fn into_par_stream(self) -> Self::ParStream
 		where
 			Self: Sized,
@@ -90,6 +98,7 @@ impl_par_dist_rename! {
 		type ParStream = IterParStream<Self>;
 		type Item = <Self as Iterator>::Item;
 
+		#[inline]
 		fn into_par_stream(self) -> Self::ParStream
 		where
 			Self: Sized,
@@ -106,6 +115,7 @@ impl_par_dist_rename! {
 		type ParStream = IterParStream<Self>;
 		type Item = <Self as Iterator>::Item;
 
+		#[inline]
 		fn into_par_stream(self) -> Self::ParStream
 		where
 			Self: Sized,

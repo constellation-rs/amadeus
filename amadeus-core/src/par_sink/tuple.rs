@@ -49,11 +49,11 @@ where
 macro_rules! impl_tuple {
 	($reducea:ident $reduceaasync:ident $reduceb:ident $reducebasync:ident $async:ident $enum:ident $join:ident $($copy:ident)? : $($num:tt $t:ident $s:ident $i:ident $r:ident $o:ident $c:ident $iterator:ident $reducera:ident $reducerb:ident $($copyb:ident)? , $comma:tt)*) => (
 		impl<
-				Input,
-				$($r: ParallelSink<Input, Done = $o>,)*
+				Item,
+				$($r: ParallelSink<Item, Done = $o>,)*
 				$($o,)*
-			> ParallelSink<Input> for ($($r,)*)
-				where Input: $($copy)*,
+			> ParallelSink<Item> for ($($r,)*)
+				where Item: $($copy)*,
 		{
 			type Done = ($($o,)*);
 			type Pipe = ($($r::Pipe,)*);
@@ -70,11 +70,11 @@ macro_rules! impl_tuple {
 			}
 		}
 		impl<
-				Input,
-				$($r: DistributedSink<Input, Done = $o>,)*
+				Item,
+				$($r: DistributedSink<Item, Done = $o>,)*
 				$($o,)*
-			> DistributedSink<Input> for ($($r,)*)
-				where Input: $($copy)*,
+			> DistributedSink<Item> for ($($r,)*)
+				where Item: $($copy)*,
 		{
 			type Done = ($($o,)*);
 			type Pipe = ($($r::Pipe,)*);
