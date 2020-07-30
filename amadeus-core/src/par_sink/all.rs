@@ -20,7 +20,7 @@ pub struct All<P, F> {
 	f: F,
 }
 
-impl<P: ParallelPipe<Input>, Input, F> ParallelSink<Input> for All<P, F>
+impl<P: ParallelPipe<Item>, Item, F> ParallelSink<Item> for All<P, F>
 where
 	F: FnMut<(P::Output,), Output = bool> + Clone + Send + 'static,
 {
@@ -33,7 +33,7 @@ where
 		(self.pipe, AllReducer(self.f, PhantomData), BoolAndReducer)
 	}
 }
-impl<P: DistributedPipe<Input>, Input, F> DistributedSink<Input> for All<P, F>
+impl<P: DistributedPipe<Item>, Item, F> DistributedSink<Item> for All<P, F>
 where
 	F: FnMut<(P::Output,), Output = bool> + Clone + ProcessSend + 'static,
 {

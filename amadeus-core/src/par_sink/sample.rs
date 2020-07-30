@@ -18,7 +18,7 @@ pub struct SampleUnstable<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for SampleUnstable<P>
+	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for SampleUnstable<P>
 	where
 		P::Output: Send + 'static,
 	{
@@ -58,7 +58,7 @@ pub struct MostFrequent<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for MostFrequent<P>
+	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for MostFrequent<P>
 	where
 		P::Output: Clone + Hash + Eq + Send + 'static,
 	{
@@ -104,7 +104,7 @@ pub struct MostDistinct<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Input, Output = (A, B)>, Input, A, B> ParallelSink<Input> for MostDistinct<P>
+	impl<P: ParallelPipe<Item, Output = (A, B)>, Item, A, B> ParallelSink<Item> for MostDistinct<P>
 	where
 		A: Clone + Hash + Eq + Send + 'static,
 		B: Hash + 'static,

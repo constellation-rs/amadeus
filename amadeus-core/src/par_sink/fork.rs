@@ -84,9 +84,9 @@ impl_par_dist! {
 	}
 }
 
-impl<A, B, C, Input, RefAItem> ParallelSink<Input> for Fork<A, B, C, RefAItem>
+impl<A, B, C, Item, RefAItem> ParallelSink<Item> for Fork<A, B, C, RefAItem>
 where
-	A: ParallelPipe<Input>,
+	A: ParallelPipe<Item>,
 	B: ParallelSink<A::Output>,
 	C: ParallelSink<RefAItem>,
 	RefAItem: 'static,
@@ -107,9 +107,9 @@ where
 		)
 	}
 }
-impl<A, B, C, Input, RefAItem> DistributedSink<Input> for Fork<A, B, C, RefAItem>
+impl<A, B, C, Item, RefAItem> DistributedSink<Item> for Fork<A, B, C, RefAItem>
 where
-	A: DistributedPipe<Input>,
+	A: DistributedPipe<Item>,
 	B: DistributedSink<A::Output>,
 	C: DistributedSink<RefAItem>,
 	RefAItem: 'static,

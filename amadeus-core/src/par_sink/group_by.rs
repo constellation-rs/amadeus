@@ -25,7 +25,7 @@ pub struct GroupBy<A, B> {
 	b: B,
 }
 
-impl<A: ParallelPipe<Input, Output = (T, U)>, B: ParallelSink<U>, Input, T, U> ParallelSink<Input>
+impl<A: ParallelPipe<Item, Output = (T, U)>, B: ParallelSink<U>, Item, T, U> ParallelSink<Item>
 	for GroupBy<A, B>
 where
 	T: Eq + Hash + Send + 'static,
@@ -53,8 +53,8 @@ where
 	}
 }
 
-impl<A: DistributedPipe<Input, Output = (T, U)>, B: DistributedSink<U>, Input, T, U>
-	DistributedSink<Input> for GroupBy<A, B>
+impl<A: DistributedPipe<Item, Output = (T, U)>, B: DistributedSink<U>, Item, T, U>
+	DistributedSink<Item> for GroupBy<A, B>
 where
 	T: Eq + Hash + ProcessSend + 'static,
 	<B::Pipe as DistributedPipe<U>>::Task: Clone + ProcessSend + 'static,

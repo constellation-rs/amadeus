@@ -24,28 +24,28 @@ pub use self::{
 };
 
 #[must_use]
-pub trait Reducer<Input> {
+pub trait Reducer<Item> {
 	type Done;
-	type Async: Sink<Input, Done = Self::Done>;
+	type Async: Sink<Item, Done = Self::Done>;
 
 	fn into_async(self) -> Self::Async;
 }
-pub trait ReducerSend<Input>: Reducer<Input, Done = <Self as ReducerSend<Input>>::Done> {
+pub trait ReducerSend<Item>: Reducer<Item, Done = <Self as ReducerSend<Item>>::Done> {
 	type Done: Send + 'static;
 }
-pub trait ReducerProcessSend<Input>:
-	ReducerSend<Input, Done = <Self as ReducerProcessSend<Input>>::Done>
+pub trait ReducerProcessSend<Item>:
+	ReducerSend<Item, Done = <Self as ReducerProcessSend<Item>>::Done>
 {
 	type Done: ProcessSend + 'static;
 }
 
 #[must_use]
-pub trait ParallelSink<Input> {
+pub trait ParallelSink<Item> {
 	type Done;
-	type Pipe: ParallelPipe<Input>;
-	type ReduceA: ReducerSend<<Self::Pipe as ParallelPipe<Input>>::Output> + Clone + Send;
+	type Pipe: ParallelPipe<Item>;
+	type ReduceA: ReducerSend<<Self::Pipe as ParallelPipe<Item>>::Output> + Clone + Send;
 	type ReduceC: Reducer<
-		<Self::ReduceA as ReducerSend<<Self::Pipe as ParallelPipe<Input>>::Output>>::Done,
+		<Self::ReduceA as ReducerSend<<Self::Pipe as ParallelPipe<Item>>::Output>>::Done,
 		Done = Self::Done,
 	>;
 
@@ -53,25 +53,25 @@ pub trait ParallelSink<Input> {
 }
 
 #[inline(always)]
-pub(crate) fn assert_parallel_sink<R: ParallelSink<Input>, Input>(r: R) -> R {
+pub(crate) fn assert_parallel_sink<R: ParallelSink<Item>, Item>(r: R) -> R {
 	r
 }
 
 #[must_use]
-pub trait DistributedSink<Input> {
+pub trait DistributedSink<Item> {
 	type Done;
-	type Pipe: DistributedPipe<Input>;
-	type ReduceA: ReducerSend<<Self::Pipe as DistributedPipe<Input>>::Output>
+	type Pipe: DistributedPipe<Item>;
+	type ReduceA: ReducerSend<<Self::Pipe as DistributedPipe<Item>>::Output>
 		+ Clone
 		+ ProcessSend
 		+ Send;
 	type ReduceB: ReducerProcessSend<
-			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Input>>::Output>>::Done,
+			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Item>>::Output>>::Done,
 		> + Clone
 		+ ProcessSend;
 	type ReduceC: Reducer<
 		<Self::ReduceB as ReducerProcessSend<
-			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Input>>::Output>>::Done,
+			<Self::ReduceA as ReducerSend<<Self::Pipe as DistributedPipe<Item>>::Output>>::Done,
 		>>::Done,
 		Done = Self::Done,
 	>;
@@ -80,6 +80,6 @@ pub trait DistributedSink<Input> {
 }
 
 #[inline(always)]
-pub(crate) fn assert_distributed_sink<R: DistributedSink<Input>, Input>(r: R) -> R {
+pub(crate) fn assert_distributed_sink<R: DistributedSink<Item>, Item>(r: R) -> R {
 	r
 }

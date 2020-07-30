@@ -12,7 +12,7 @@ pub struct Max<P> {
 	pipe: P,
 }
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Max<P>
+	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Max<P>
 	where
 		P::Output: Ord + Send + 'static,
 	{
@@ -27,7 +27,7 @@ pub struct MaxBy<P, F> {
 	f: F,
 }
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input, F> ParallelSink<Input> for MaxBy<P, F>
+	impl<P: ParallelPipe<Item>, Item, F> ParallelSink<Item> for MaxBy<P, F>
 	where
 		F: for<'a, 'b> FnMut<(&'a P::Output, &'b P::Output), Output = Ordering>
 			+ Clone
@@ -46,7 +46,7 @@ pub struct MaxByKey<P, F> {
 	f: F,
 }
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input, F, B> ParallelSink<Input> for MaxByKey<P, F>
+	impl<P: ParallelPipe<Item>, Item, F, B> ParallelSink<Item> for MaxByKey<P, F>
 	where
 		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send + 'static,
 		B: Ord + 'static,
@@ -62,7 +62,7 @@ pub struct Min<P> {
 	pipe: P,
 }
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Min<P>
+	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Min<P>
 	where
 		P::Output: Ord + Send + 'static,
 	{
@@ -77,7 +77,7 @@ pub struct MinBy<P, F> {
 	f: F,
 }
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input, F> ParallelSink<Input> for MinBy<P, F>
+	impl<P: ParallelPipe<Item>, Item, F> ParallelSink<Item> for MinBy<P, F>
 	where
 		F: for<'a, 'b> FnMut<(&'a P::Output, &'b P::Output), Output = Ordering>
 			+ Clone
@@ -96,7 +96,7 @@ pub struct MinByKey<P, F> {
 	f: F,
 }
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input, F, B> ParallelSink<Input> for MinByKey<P, F>
+	impl<P: ParallelPipe<Item>, Item, F, B> ParallelSink<Item> for MinByKey<P, F>
 	where
 		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send + 'static,
 		B: Ord + 'static,

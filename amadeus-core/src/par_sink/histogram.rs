@@ -16,7 +16,7 @@ pub struct Histogram<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Histogram<P>
+	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Histogram<P>
 	where
 		P::Output: Hash + Ord + Send + 'static,
 	{

@@ -151,9 +151,9 @@ where
 	p
 }
 #[inline(always)]
-fn assert_sink<S, Input>(s: S) -> S
+fn assert_sink<S, Item>(s: S) -> S
 where
-	S: Sink<Input>,
+	S: Sink<Item>,
 {
 	s
 }
@@ -221,16 +221,16 @@ pub struct PipeSink<P, S> {
 	sink: S,
 }
 
-impl<P, S, Input> Sink<Input> for PipeSink<P, S>
+impl<P, S, Item> Sink<Item> for PipeSink<P, S>
 where
-	P: Pipe<Input>,
+	P: Pipe<Item>,
 	S: Sink<P::Output>,
 {
 	type Done = S::Done;
 
 	#[inline(always)]
 	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Input>>,
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
 	) -> Poll<Self::Done> {
 		let self_ = self.project();
 		let stream = stream.pipe(self_.pipe);
@@ -368,30 +368,30 @@ where
 	}
 }
 
-impl<P, Input> Sink<Input> for Pin<P>
+impl<P, Item> Sink<Item> for Pin<P>
 where
 	P: DerefMut + Unpin,
-	P::Target: Sink<Input>,
+	P::Target: Sink<Item>,
 {
-	type Done = <P::Target as Sink<Input>>::Done;
+	type Done = <P::Target as Sink<Item>>::Done;
 
 	#[inline(always)]
 	fn poll_forward(
-		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Input>>,
+		self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
 	) -> Poll<Self::Done> {
 		self.get_mut().as_mut().poll_forward(cx, stream)
 	}
 }
 
-impl<T: ?Sized, Input> Sink<Input> for &mut T
+impl<T: ?Sized, Item> Sink<Item> for &mut T
 where
-	T: Sink<Input> + Unpin,
+	T: Sink<Item> + Unpin,
 {
 	type Done = T::Done;
 
 	#[inline(always)]
 	fn poll_forward(
-		mut self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Input>>,
+		mut self: Pin<&mut Self>, cx: &mut Context, stream: Pin<&mut impl Stream<Item = Item>>,
 	) -> Poll<Self::Done> {
 		Pin::new(&mut **self).poll_forward(cx, stream)
 	}

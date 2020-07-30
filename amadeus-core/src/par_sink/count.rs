@@ -12,7 +12,7 @@ pub struct Count<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Input>, Input> ParallelSink<Input> for Count<P> {
+	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Count<P> {
 		folder_par_sink!(
 			CountFolder,
 			SumFolder<usize>,

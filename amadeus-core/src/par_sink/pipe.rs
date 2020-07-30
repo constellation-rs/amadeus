@@ -55,7 +55,7 @@ impl_par_dist! {
 	}
 }
 
-impl<A: ParallelPipe<Input>, B: ParallelSink<A::Output>, Input> ParallelSink<Input> for Pipe<A, B> {
+impl<A: ParallelPipe<Item>, B: ParallelSink<A::Output>, Item> ParallelSink<Item> for Pipe<A, B> {
 	type Done = B::Done;
 	type Pipe = Pipe<A, B::Pipe>;
 	type ReduceA = B::ReduceA;
@@ -67,7 +67,7 @@ impl<A: ParallelPipe<Input>, B: ParallelSink<A::Output>, Input> ParallelSink<Inp
 		(Pipe::new(self.a, a), b, c)
 	}
 }
-impl<A: DistributedPipe<Input>, B: DistributedSink<A::Output>, Input> DistributedSink<Input>
+impl<A: DistributedPipe<Item>, B: DistributedSink<A::Output>, Item> DistributedSink<Item>
 	for Pipe<A, B>
 {
 	type Done = B::Done;
