@@ -33,12 +33,12 @@ pub trait Reducer<Item> {
 	fn into_async(self) -> Self::Async;
 }
 pub trait ReducerSend<Item>: Reducer<Item, Done = <Self as ReducerSend<Item>>::Done> {
-	type Done: Send + 'static;
+	type Done: Send;
 }
 pub trait ReducerProcessSend<Item>:
 	ReducerSend<Item, Done = <Self as ReducerProcessSend<Item>>::Done>
 {
-	type Done: ProcessSend + 'static;
+	type Done: ProcessSend;
 }
 
 #[must_use]

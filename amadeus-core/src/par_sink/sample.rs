@@ -23,7 +23,7 @@ pub struct SampleUnstable<P> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for SampleUnstable<P>
 	where
-		P::Output: Send + 'static,
+		P::Output: Send,
 	{
 		folder_par_sink!(
 			SampleUnstableFolder,
@@ -67,8 +67,8 @@ impl_par_dist! {
 	#[cfg_attr(not(nightly), serde_closure::desugar)]
 	impl<P: ParallelPipe<Item>, F, Item> ParallelSink<Item> for Sort<P, F>
 	where
-		F: traits::Fn(&P::Output, &P::Output) -> Ordering + Clone + Send + 'static,
-		P::Output: Clone + Send + 'static,
+		F: traits::Fn(&P::Output, &P::Output) -> Ordering + Clone + Send,
+		P::Output: Clone + Send,
 	{
 		folder_par_sink!(
 			SortFolder<F>,
@@ -117,7 +117,7 @@ pub struct MostFrequent<P> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for MostFrequent<P>
 	where
-		P::Output: Clone + Hash + Eq + Send + 'static,
+		P::Output: Clone + Hash + Eq + Send,
 	{
 		folder_par_sink!(
 			MostFrequentFolder,
@@ -138,7 +138,7 @@ pub struct MostFrequentFolder {
 
 impl<Item> FolderSync<Item> for MostFrequentFolder
 where
-	Item: Clone + Hash + Eq + Send + 'static,
+	Item: Clone + Hash + Eq + Send,
 {
 	type State = Top<Item, usize>;
 	type Done = Self::State;
@@ -167,8 +167,8 @@ pub struct MostDistinct<P> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item, Output = (A, B)>, Item, A, B> ParallelSink<Item> for MostDistinct<P>
 	where
-		A: Clone + Hash + Eq + Send + 'static,
-		B: Hash + 'static,
+		A: Clone + Hash + Eq + Send,
+		B: Hash,
 	{
 		folder_par_sink!(
 			MostDistinctFolder,
@@ -195,8 +195,8 @@ pub struct MostDistinctFolder {
 
 impl<A, B> FolderSync<(A, B)> for MostDistinctFolder
 where
-	A: Clone + Hash + Eq + Send + 'static,
-	B: Hash + 'static,
+	A: Clone + Hash + Eq + Send,
+	B: Hash,
 {
 	type State = Top<A, HyperLogLogMagnitude<B>>;
 	type Done = Self::State;

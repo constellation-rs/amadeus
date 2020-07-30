@@ -20,7 +20,7 @@ pub struct FlatMapSync<P, F> {
 impl_par_dist! {
 	impl<P: ParallelStream, F, R: Iterator> ParallelStream for FlatMapSync<P, F>
 	where
-		F: FnMut<(P::Item,), Output = R> + Clone + Send + 'static,
+		F: FnMut<(P::Item,), Output = R> + Clone + Send,
 	{
 		type Item = R::Item;
 		type Task = FlatMapSyncTask<P::Task, F>;
@@ -42,7 +42,7 @@ impl_par_dist! {
 
 	impl<P: ParallelPipe<Input>, F, R: Iterator, Input> ParallelPipe<Input> for FlatMapSync<P, F>
 	where
-		F: FnMut<(P::Output,), Output = R> + Clone + Send + 'static,
+		F: FnMut<(P::Output,), Output = R> + Clone + Send,
 	{
 		type Output = R::Item;
 		type Task = FlatMapSyncTask<P::Task, F>;

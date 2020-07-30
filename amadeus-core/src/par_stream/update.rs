@@ -22,7 +22,7 @@ pub struct Update<P, F> {
 impl_par_dist! {
 	impl<P: ParallelStream, F> ParallelStream for Update<P, F>
 	where
-		F: for<'a> FnMut<(&'a mut P::Item,), Output = ()> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a mut P::Item,), Output = ()> + Clone + Send,
 	{
 		type Item = P::Item;
 		type Task = UpdateTask<P::Task, F>;
@@ -44,7 +44,7 @@ impl_par_dist! {
 
 	impl<P: ParallelPipe<Input>, F, Input> ParallelPipe<Input> for Update<P, F>
 	where
-		F: for<'a> FnMut<(&'a mut P::Output,), Output = ()> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a mut P::Output,), Output = ()> + Clone + Send,
 	{
 		type Output = P::Output;
 		type Task = UpdateTask<P::Task, F>;

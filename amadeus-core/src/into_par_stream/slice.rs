@@ -12,7 +12,7 @@ use crate::pool::ProcessSend;
 impl_par_dist_rename! {
 	impl<T> IntoParallelStream for [T]
 	where
-		T: Send + 'static,
+		T: Send,
 	{
 		type ParStream = Never;
 		type Item = Never;
@@ -27,7 +27,7 @@ impl_par_dist_rename! {
 
 	impl<'a, T: Clone> IntoParallelStream for &'a [T]
 	where
-		T: Send + 'static,
+		T: Send,
 	{
 		type ParStream = IterParStream<iter::Cloned<slice::Iter<'a, T>>>;
 		type Item = T;

@@ -16,7 +16,7 @@ pub struct Sum<P, B> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item, B> ParallelSink<Item> for Sum<P, B>
 	where
-		B: iter::Sum<P::Output> + iter::Sum<B> + Send + 'static,
+		B: iter::Sum<P::Output> + iter::Sum<B> + Send,
 	{
 		folder_par_sink!(
 			SumFolder<B>,

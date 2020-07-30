@@ -28,11 +28,11 @@ pub struct GroupBy<A, B> {
 impl<A: ParallelPipe<Item, Output = (T, U)>, B: ParallelSink<U>, Item, T, U> ParallelSink<Item>
 	for GroupBy<A, B>
 where
-	T: Eq + Hash + Send + 'static,
-	<B::Pipe as ParallelPipe<U>>::Task: Clone + Send + 'static,
-	B::ReduceA: Clone + Send + 'static,
+	T: Eq + Hash + Send,
+	<B::Pipe as ParallelPipe<U>>::Task: Clone + Send,
+	B::ReduceA: Clone + Send,
 	B::ReduceC: Clone,
-	B::Done: Send + 'static,
+	B::Done: Send,
 {
 	type Done = IndexMap<T, B::Done>;
 	type Pipe = A;
@@ -56,12 +56,12 @@ where
 impl<A: DistributedPipe<Item, Output = (T, U)>, B: DistributedSink<U>, Item, T, U>
 	DistributedSink<Item> for GroupBy<A, B>
 where
-	T: Eq + Hash + ProcessSend + 'static,
-	<B::Pipe as DistributedPipe<U>>::Task: Clone + ProcessSend + 'static,
-	B::ReduceA: Clone + ProcessSend + 'static,
+	T: Eq + Hash + ProcessSend,
+	<B::Pipe as DistributedPipe<U>>::Task: Clone + ProcessSend,
+	B::ReduceA: Clone + ProcessSend,
 	B::ReduceB: Clone,
 	B::ReduceC: Clone,
-	B::Done: ProcessSend + 'static,
+	B::Done: ProcessSend,
 {
 	type Done = IndexMap<T, B::Done>;
 	type Pipe = A;
@@ -115,8 +115,8 @@ impl<P, R, T, U> ReducerProcessSend<(T, U)> for GroupByReducerA<P, R, T, U>
 where
 	P: PipeTask<U>,
 	R: Reducer<P::Output> + Clone,
-	T: Eq + Hash + ProcessSend + 'static,
-	R::Done: ProcessSend + 'static,
+	T: Eq + Hash + ProcessSend,
+	R::Done: ProcessSend,
 {
 	type Done = IndexMap<T, R::Done>;
 }
@@ -124,8 +124,8 @@ impl<P, R, T, U> ReducerSend<(T, U)> for GroupByReducerA<P, R, T, U>
 where
 	P: PipeTask<U>,
 	R: Reducer<P::Output> + Clone,
-	T: Eq + Hash + Send + 'static,
-	R::Done: Send + 'static,
+	T: Eq + Hash + Send,
+	R::Done: Send,
 {
 	type Done = IndexMap<T, R::Done>;
 }
@@ -263,16 +263,16 @@ where
 impl<R, T, U> ReducerProcessSend<IndexMap<T, U>> for GroupByReducerB<R, T, U>
 where
 	R: Reducer<U> + Clone,
-	T: Eq + Hash + ProcessSend + 'static,
-	R::Done: ProcessSend + 'static,
+	T: Eq + Hash + ProcessSend,
+	R::Done: ProcessSend,
 {
 	type Done = IndexMap<T, R::Done>;
 }
 impl<R, T, U> ReducerSend<IndexMap<T, U>> for GroupByReducerB<R, T, U>
 where
 	R: Reducer<U> + Clone,
-	T: Eq + Hash + Send + 'static,
-	R::Done: Send + 'static,
+	T: Eq + Hash + Send,
+	R::Done: Send,
 {
 	type Done = IndexMap<T, R::Done>;
 }

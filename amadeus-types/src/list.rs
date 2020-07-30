@@ -384,7 +384,7 @@ impl<T: Data> ListVec<T> for Vec<T> {
 
 impl<T: Data> FromParallelStream<T> for List<T>
 where
-	T: Send + 'static,
+	T: Send,
 {
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceC = ExtendReducer<Self>;
@@ -396,7 +396,7 @@ where
 
 impl<T: Data> FromDistributedStream<T> for List<T>
 where
-	T: ProcessSend + 'static,
+	T: ProcessSend,
 {
 	type ReduceA = PushReducer<T, Self>;
 	type ReduceB = ExtendReducer<Self>;

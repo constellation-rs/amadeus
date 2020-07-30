@@ -22,9 +22,9 @@ pub struct Fold<P, ID, F, B> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item, ID, F, B> ParallelSink<Item> for Fold<P, ID, F, B>
 	where
-		ID: FnMut<(), Output = B> + Clone + Send + 'static,
-		F: FnMut<(B, Either<P::Output, B>), Output = B> + Clone + Send + 'static,
-		B: Send + 'static,
+		ID: FnMut<(), Output = B> + Clone + Send,
+		F: FnMut<(B, Either<P::Output, B>), Output = B> + Clone + Send,
+		B: Send,
 	{
 		folder_par_sink!(FoldFolder<P::Output, ID, F, B, StepA>, FoldFolder<P::Output, ID, F, B, StepB>, self, FoldFolder::new(self.identity.clone(), self.op.clone()), FoldFolder::new(self.identity, self.op));
 	}
