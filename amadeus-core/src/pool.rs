@@ -20,7 +20,13 @@ pub trait ProcessPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin 
 	where
 		F: traits::FnOnce(&Self::ThreadPool) -> Fut + ProcessSend + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: ProcessSend + 'static;
+		T: ProcessSend + 'static,
+	{
+		#[allow(unsafe_code)]
+		unsafe {
+			self.spawn_unchecked(work)
+		}
+	}
 
 	/// # Safety
 	///
@@ -40,7 +46,13 @@ pub trait ThreadPool: Clone + Send + Sync + RefUnwindSafe + UnwindSafe + Unpin {
 	where
 		F: FnOnce() -> Fut + Send + 'static,
 		Fut: Future<Output = T> + 'static,
-		T: Send + 'static;
+		T: Send + 'static,
+	{
+		#[allow(unsafe_code)]
+		unsafe {
+			self.spawn_unchecked(work)
+		}
+	}
 
 	/// # Safety
 	///

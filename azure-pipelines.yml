@@ -22,8 +22,8 @@ jobs:
         rust_toolchain: nightly
         rust_lint_toolchain: nightly-2020-07-26
         rust_flags: ''
-        rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;constellation aws commoncrawl parquet postgres csv json'
-        rust_features: 'constellation aws commoncrawl parquet postgres csv json'
+        rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;constellation aws commoncrawl parquet postgres csv json bench'
+        rust_features: 'constellation aws commoncrawl parquet postgres csv json bench'
         rust_doc_features: 'constellation aws commoncrawl parquet postgres csv json'
         rust_target_check: ''
         rust_target_build: ''
@@ -31,8 +31,8 @@ jobs:
       matrix:
         windows:
           imageName: 'windows-latest'
-          rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;aws commoncrawl parquet postgres csv json'
-          rust_features: 'aws commoncrawl parquet postgres csv json'
+          rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;aws commoncrawl parquet postgres csv json bench'
+          rust_features: 'aws commoncrawl parquet postgres csv json bench'
           rust_doc_features: 'aws commoncrawl parquet postgres csv json'
           rust_target_run: 'x86_64-pc-windows-msvc'
         mac:
