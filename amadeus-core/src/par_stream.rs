@@ -6,10 +6,14 @@
 mod chain;
 mod cloned;
 mod filter;
+mod filter_map_sync;
 mod flat_map;
+mod flat_map_sync;
 mod identity;
 mod inspect;
+mod join;
 mod map;
+mod map_sync;
 mod sum_type;
 mod update;
 
@@ -28,7 +32,7 @@ use crate::{
 };
 
 pub use self::{
-	chain::*, cloned::*, filter::*, flat_map::*, identity::*, inspect::*, map::*, update::*
+	chain::*, cloned::*, filter::*, filter_map_sync::*, flat_map::*, flat_map_sync::*, identity::*, inspect::*, join::*, map::*, map_sync::*, update::*
 };
 
 #[must_use]
@@ -97,6 +101,28 @@ macro_rules! stream {
 				Self: Sized,
 			{
 				$assert_stream(Filter::new(self, f))
+			}
+
+			#[inline]
+			fn left_join<K, V1, V2>(self, right: impl IntoIterator<Item = (K, V2)>) -> LeftJoin<Self, K, V1, V2>
+			where
+				K: Eq + Hash + Clone + $send + 'static,
+				V1: 'static,
+				V2: Clone + $send + 'static,
+				Self: $stream<Item = (K, V1)> + Sized,
+			{
+				$assert_stream(LeftJoin::new(self, right.into_iter().collect()))
+			}
+
+			#[inline]
+			fn inner_join<K, V1, V2>(self, right: impl IntoIterator<Item = (K, V2)>) -> InnerJoin<Self, K, V1, V2>
+			where
+				K: Eq + Hash + Clone + $send + 'static,
+				V1: 'static,
+				V2: Clone + $send + 'static,
+				Self: $stream<Item = (K, V1)> + Sized,
+			{
+				$assert_stream(InnerJoin::new(self, right.into_iter().collect()))
 			}
 
 			#[inline]
@@ -436,7 +462,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
-		stream.sink(reduce_c.as_mut()).await
+		stream.sink(reduce_c).await
 	}
 
 	async fn pipe<P, ParSink, A>(self, pool: &P, sink: ParSink) -> A
@@ -652,7 +678,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 					let reduce_b = reduce_b.into_async();
 					async move {
 						pin_mut!(reduce_b);
-						stream.sink(reduce_b.as_mut()).await
+						stream.sink(reduce_b).await
 					}
 				}))
 			})
@@ -662,7 +688,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
-		stream.sink(reduce_c.as_mut()).await
+		stream.sink(reduce_c).await
 	}
 
 	async fn pipe<P, DistSink, A>(self, pool: &P, sink: DistSink) -> A
