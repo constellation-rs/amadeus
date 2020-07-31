@@ -21,7 +21,7 @@ use super::par_pipe::*;
 use crate::{pipe::Sink, pool::ProcessSend};
 
 pub use self::{
-	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, fork::*, group_by::*, histogram::*, max::*, pipe::*, sample::*, sum::*, tuple::*
+	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, fork::*, group_by::*, histogram::*, max::*, pipe::*, sample::*, stats::*, sum::*, tuple::*
 };
 
 #[must_use]

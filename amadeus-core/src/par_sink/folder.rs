@@ -85,7 +85,7 @@ where
 	F: FolderSync<Item>,
 {
 	type Done = F::Done;
-	type Async = FolderSyncReducerAsync<Item, F, F::Done>;
+	type Async = FolderSyncReducerAsync<Item, F, F::State>;
 
 	fn into_async(mut self) -> Self::Async {
 		FolderSyncReducerAsync {
@@ -116,7 +116,7 @@ pub struct FolderSyncReducerAsync<Item, F, S> {
 	folder: F,
 	marker: PhantomData<fn() -> Item>,
 }
-impl<Item, F> Sink<Item> for FolderSyncReducerAsync<Item, F, F::Done>
+impl<Item, F> Sink<Item> for FolderSyncReducerAsync<Item, F, F::State>
 where
 	F: FolderSync<Item>,
 {
@@ -132,6 +132,6 @@ where
 		while let Some(item) = ready!(stream.as_mut().poll_next(cx)) {
 			folder.push(state, item);
 		}
-		Poll::Ready(self_.state.take().unwrap())
+		Poll::Ready(folder.done(self_.state.take().unwrap()))
 	}
 }
