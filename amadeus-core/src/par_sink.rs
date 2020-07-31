@@ -15,6 +15,7 @@ mod pipe;
 mod sample;
 mod sum;
 mod tuple;
+mod stats;
 
 use super::par_pipe::*;
 use crate::{pipe::Sink, pool::ProcessSend};
