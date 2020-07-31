@@ -44,15 +44,16 @@ impl<B, Item> FolderSync<Item> for MeanFolder<B, StepA>
 where
     B: iter::Sum<Item> + iter::Sum<B>,
 {
-    type Done = (B, usize);
+    type State = (B, usize);
+    type Done = Self::State;
 
     #[inline(always)]
-    fn zero(&mut self) -> Self::Done {
+    fn zero(&mut self) -> Self::State {
         (iter::empty::<B>().sum(),0)
     }
 
     #[inline(always)]
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
         let zero = iter::empty::<B>().sum();
         let left = mem::replace(&mut state.0, zero);
         let right = iter::once(item).sum::<B>();
@@ -60,6 +61,9 @@ where
         state.0 = B::sum(iter::once(left).chain(iter::once(right)));
         state.1 += 1;
     }
+
+    #[inline(always)]
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
 }
 
 
@@ -68,15 +72,16 @@ impl<B> FolderSync<(B, usize)> for MeanFolder<B, StepB>
 where
     B: iter::Sum<B> 
 {
-    type Done = (B, usize);
+    type State = (B, usize);
+    type Done = Self::State;
 
     #[inline(always)]
-    fn zero(&mut self) -> Self::Done {
+    fn zero(&mut self) -> Self::State {
         (iter::empty().sum(),0)
     }
 
     #[inline(always)]
-	fn push(&mut self, state: &mut Self::Done, item: (B, usize)) {
+	fn push(&mut self, state: &mut Self::State, item: (B, usize)) {
         let zero = iter::empty().sum();
         let left = mem::replace(&mut state.0, zero);
         let right = iter::once(item.0).sum();
@@ -84,4 +89,8 @@ where
         state.0 = B::sum(iter::once(left).chain(iter::once(right)));
         state.1 += 1;
     }
+
+    #[inline(always)]
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
+
 }

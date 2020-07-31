@@ -50,28 +50,35 @@ where
 	ID: FnMut<(), Output = B>,
 	F: FnMut<(B, Either<Item, B>), Output = B>,
 {
-	type Done = B;
+	type State = B;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		self.identity.call_mut(())
 	}
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
 		replace_with_or_abort(state, |state| self.op.call_mut((state, Either::Left(item))))
 	}
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
+
 }
 impl<A, ID, F, Item> FolderSync<Item> for FoldFolder<A, ID, F, Item, StepB>
 where
 	ID: FnMut<(), Output = Item>,
 	F: FnMut<(Item, Either<A, Item>), Output = Item>,
 {
-	type Done = Item;
+	type State = Item;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		self.identity.call_mut(())
 	}
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
 		replace_with_or_abort(state, |state| {
 			self.op.call_mut((state, Either::Right(item)))
 		})
 	}
+	#[inline(always)]
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
+
 }

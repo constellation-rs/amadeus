@@ -60,10 +60,13 @@ mod macros {
 pub(crate) use macros::{folder_dist_sink, folder_par_sink};
 
 pub trait FolderSync<Item> {
+	type State;
 	type Done;
 
-	fn zero(&mut self) -> Self::Done;
-	fn push(&mut self, state: &mut Self::Done, item: Item);
+	fn zero(&mut self) -> Self::State;
+	fn push(&mut self, state: &mut Self::State, item: Item);
+    fn done(&mut self, state: Self::State) -> Self::Done;
+
 }
 
 #[derive(Educe, Serialize, Deserialize, new)]

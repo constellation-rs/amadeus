@@ -20,12 +20,13 @@ where
 	F: FnMut<(A, A), Output = A>,
 	Item: Into<Option<A>>,
 {
-	type Done = Option<A>;
+	type State = Option<A>;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		None
 	}
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
 		if let Some(item) = item.into() {
 			*state = Some(if let Some(state) = state.take() {
 				self.0.call_mut((state, item))
@@ -34,6 +35,8 @@ where
 			});
 		}
 	}
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
+
 }
 
 #[derive(new)]

@@ -39,19 +39,24 @@ impl<Item, B> FolderSync<Item> for SumFolder<B>
 where
 	B: iter::Sum<Item> + iter::Sum<B>,
 {
-	type Done = B;
+	type State = B;
+	type Done = Self::State;
 
 	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
 		iter::empty::<B>().sum()
 	}
 	#[inline(always)]
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
 		let zero = iter::empty::<B>().sum();
 		let left = mem::replace(state, zero);
 		let right = iter::once(item).sum::<B>();
 		*state = B::sum(iter::once(left).chain(iter::once(right)));
 	}
+
+	#[inline(always)]
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
+
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -69,18 +74,23 @@ impl<Item> FolderSync<Item> for SumZeroFolder<Item>
 where
 	Option<Item>: iter::Sum<Item>,
 {
-	type Done = Item;
+	type State = Item;
+	type Done = Self::State;
 
 	#[inline(always)]
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		self.zero.take().unwrap()
 	}
 	#[inline(always)]
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
 		replace_with_or_abort(state, |left| {
 			let right = iter::once(item).sum::<Option<Item>>().unwrap();
 			<Option<Item> as iter::Sum<Item>>::sum(iter::once(left).chain(iter::once(right)))
 				.unwrap()
 		})
 	}
+
+	#[inline(always)]
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
+
 }

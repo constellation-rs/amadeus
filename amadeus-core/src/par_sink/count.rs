@@ -27,14 +27,18 @@ impl_par_dist! {
 pub struct CountFolder;
 
 impl<Item> FolderSync<Item> for CountFolder {
-	type Done = usize;
+	type State = usize;
+	type Done = Self::State;
 
 	#[inline(always)]
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		0
 	}
 	#[inline(always)]
-	fn push(&mut self, state: &mut Self::Done, _item: Item) {
+	fn push(&mut self, state: &mut Self::State, _item: Item) {
 		*state += 1;
 	}
+	#[inline(always)]
+    fn done(&mut self, state: Self::State) -> Self::Done { state }
+
 }
