@@ -1,7 +1,10 @@
+extern crate num;
+
 use derive_new::new;
 use educe::Educe;
 use serde::{Deserialize, Serialize};
 use std::{iter, marker::PhantomData, mem};
+use num::ToPrimitive;
 
 use super::{
 	folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink
@@ -42,10 +45,10 @@ pub struct StepB;
 
 impl<B, Item> FolderSync<Item> for MeanFolder<B, StepA>
 where
-    B: iter::Sum<Item> + iter::Sum<B>,
+    B: iter::Sum<Item> + iter::Sum<B> + ToPrimitive,
 {
     type State = (B, usize);
-    type Done = Self::State;
+    type Done = f64;
 
     #[inline(always)]
     fn zero(&mut self) -> Self::State {
@@ -63,17 +66,21 @@ where
     }
 
     #[inline(always)]
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
+    fn done(&mut self, state: Self::State) -> Self::Done {
+        let sum = state.0;
+        let count = state.1 as f64;
+        B::to_f64(&sum).map(|sum| sum / count).unwrap()
+    }
 }
 
 
 
 impl<B> FolderSync<(B, usize)> for MeanFolder<B, StepB>
 where
-    B: iter::Sum<B> 
+    B: iter::Sum<B> + ToPrimitive,
 {
     type State = (B, usize);
-    type Done = Self::State;
+    type Done = f64;
 
     #[inline(always)]
     fn zero(&mut self) -> Self::State {
@@ -91,6 +98,11 @@ where
     }
 
     #[inline(always)]
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
+    fn done(&mut self, state: Self::State) -> Self::Done { 
+        let sum = state.0;
+        let count = state.1 as f64;
+        B::to_f64(&sum).map(|sum| sum / count).unwrap()
+
+    }
 
 }
