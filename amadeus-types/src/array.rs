@@ -12,6 +12,11 @@ use super::AmadeusOrd;
 /// A Rust type corresponding to the [Bson logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#bson).
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Bson(Vec<u8>);
+impl Bson {
+	pub fn capacity(&self) -> usize {
+		self.0.capacity()
+	}
+}
 impl AmadeusOrd for Bson {
 	fn amadeus_cmp(&self, other: &Self) -> Ordering {
 		Ord::cmp(self, other)
@@ -33,6 +38,11 @@ impl From<Vec<u8>> for Bson {
 /// A Rust type corresponding to the [Json logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#json).
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Json(String);
+impl Json {
+	pub fn capacity(&self) -> usize {
+		self.0.capacity()
+	}
+}
 impl AmadeusOrd for Json {
 	fn amadeus_cmp(&self, other: &Self) -> Ordering {
 		Ord::cmp(self, other)
@@ -57,6 +67,11 @@ impl From<String> for Json {
 /// A Rust type corresponding to the [Enum logical type](https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#enum).
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct Enum(String);
+impl Enum {
+	pub fn capacity(&self) -> usize {
+		self.0.capacity()
+	}
+}
 impl AmadeusOrd for Enum {
 	fn amadeus_cmp(&self, other: &Self) -> Ordering {
 		Ord::cmp(self, other)
