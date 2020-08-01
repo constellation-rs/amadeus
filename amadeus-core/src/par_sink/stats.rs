@@ -16,7 +16,7 @@ pub struct Mean<P> {
 }
 
 impl_par_dist! {
-    impl<P: ParallelPipe<f64>, f64> ParallelSink<f64> for Mean<P> {
+    impl<P: ParallelPipe<Item, Output = f64>, Item> ParallelSink<Item> for Mean<P> {
 		folder_par_sink!(
 			MeanFolder<StepA>,
 			MeanFolder<StepB>,
@@ -38,26 +38,39 @@ pub struct MeanFolder<Step> {
 pub struct StepA;
 pub struct StepB;
 
+#[derive(Serialize, Deserialize, new)]
+struct State {
+    mean: f64,
+    correction: f64,
+    count: u64,
+}
+
 impl FolderSync<f64> for MeanFolder<StepA> {
-    type State = (f64, usize);
+    type State = State;
     type Done = f64;
 
     #[inline(always)]
     fn zero(&mut self) -> Self::State {
-        (0.0,0)
+        State {
+            mean : 0.0,
+            correction : 0.0,
+            count : 0,
+        }
     }
 
     #[inline(always)]
     fn push(&mut self, state: &mut Self::State, item: f64) {
-        state.0 += item;
-        state.1 += 1;
+        let f =  (item - state.mean) / (state.count as f64);
+        let y = f - state.correction;
+        let t = state.mean + y;
+        state.correction = (t - state.mean) - y;
+        state.mean = t;
+        state.count += 1;
     }
 
     #[inline(always)]
     fn done(&mut self, state: Self::State) -> Self::Done {
-        let sum = state.0;
-        let count = state.1 as f64;
-        return sum / count
+        state.mean
     }
 }
 
@@ -65,26 +78,31 @@ impl FolderSync<f64> for MeanFolder<StepA> {
 
 
 impl FolderSync<(f64, usize)> for MeanFolder<StepB> {
-    type State = (f64, usize);
+    type State = State;
     type Done = f64;
 
     #[inline(always)]
     fn zero(&mut self) -> Self::State {
-        (0.0,0)
+        State {
+            mean : 0.0,
+            correction : 0.0,
+            count : 0,
+        }
     }
 
     #[inline(always)]
-	fn push(&mut self, state: &mut Self::State, item: (f64, usize)) {
-        state.0 += item.0;
-        state.1 += 1;
+	fn push(&mut self, state: &mut Self::State, item: f64) {
+        let f =  (item - state.mean) / (state.count as f64);
+        let y = f - state.correction;
+        let t = state.mean + y;
+        state.correction = (t - state.mean) - y;
+        state.mean = t;
+        state.count += 1;
     }
 
     #[inline(always)]
     fn done(&mut self, state: Self::State) -> Self::Done { 
-        let sum = state.0;
-        let count = state.1 as f64;
-        return sum / count;
-
+        state.mean
     }
 
 }
