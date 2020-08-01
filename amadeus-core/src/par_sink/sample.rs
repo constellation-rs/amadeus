@@ -1,10 +1,10 @@
 #![allow(clippy::type_complexity)]
 
+use amadeus_streaming::{HyperLogLogMagnitude, SampleUnstable as SASampleUnstable, Top};
 use derive_new::new;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
-use streaming_algorithms::{HyperLogLogMagnitude, SampleUnstable as SASampleUnstable, Top};
 
 use super::{
 	folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink, SumFolder, SumZeroFolder

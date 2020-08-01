@@ -296,7 +296,7 @@ macro_rules! stream {
 			#[inline]
 			async fn most_frequent<P>(
 				self, pool: &P, n: usize, probability: f64, tolerance: f64,
-			) -> ::streaming_algorithms::Top<Self::Item, usize>
+			) -> ::amadeus_streaming::Top<Self::Item, usize>
 			where
 				P: $pool,
 				Self::Item: Hash + Eq + Clone + $send + 'static,
@@ -313,7 +313,7 @@ macro_rules! stream {
 			#[inline]
 			async fn most_distinct<P, A, B>(
 				self, pool: &P, n: usize, probability: f64, tolerance: f64, error_rate: f64,
-			) -> ::streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>
+			) -> ::amadeus_streaming::Top<A, amadeus_streaming::HyperLogLogMagnitude<B>>
 			where
 				P: $pool,
 				Self: $stream<Item = (A, B)> + Sized,
@@ -337,7 +337,7 @@ macro_rules! stream {
 			#[inline]
 			async fn sample_unstable<P>(
 				self, pool: &P, samples: usize,
-			) -> ::streaming_algorithms::SampleUnstable<Self::Item>
+			) -> ::amadeus_streaming::SampleUnstable<Self::Item>
 			where
 				P: $pool,
 				Self::Item: $send + 'static,
