@@ -8,8 +8,8 @@ keywords = ["streaming-algorithm", "probabilistic", "sketch", "data-structure", 
 description = """
 SIMD-accelerated implementations of various streaming algorithms, including Count–min sketch, Top k, HyperLogLog, Reservoir sampling.
 """
-repository = "https://github.com/alecmocatta/amadeus"
-homepage = "https://github.com/alecmocatta/amadeus"
+repository = "https://github.com/constellation-rs/amadeus"
+homepage = "https://github.com/constellation-rs/amadeus"
 documentation = "https://docs.rs/amadeus"
 readme = "README.md"
 edition = "2018"

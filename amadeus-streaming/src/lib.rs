@@ -8,10 +8,6 @@
 
 // SIMD-accelerated implementations of various [streaming algorithms](https://en.wikipedia.org/wiki/Streaming_algorithm).
 //
-// <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
-// <a href="https://crates.io/crates/amadeus_streaming">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/alecmocatta/amadeus_streaming">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213236-subprojects">💬&nbsp;&nbsp;Chat</a>
-// </strong></p>
-//
 // This library is a work in progress. PRs are very welcome! Currently implemented algorithms include:
 //
 //  * Count–min sketch
