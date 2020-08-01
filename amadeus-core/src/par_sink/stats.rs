@@ -39,9 +39,12 @@ pub struct StepA;
 pub struct StepB;
 
 #[derive(Serialize, Deserialize, new)]
-struct State {
+pub struct State {
+    #[new(default)]
     mean: f64,
+    #[new(default)]
     correction: f64,
+    #[new(default)]
     count: u64,
 }
 
@@ -51,21 +54,17 @@ impl FolderSync<f64> for MeanFolder<StepA> {
 
     #[inline(always)]
     fn zero(&mut self) -> Self::State {
-        State {
-            mean : 0.0,
-            correction : 0.0,
-            count : 0,
-        }
+        State::new()
     }
 
     #[inline(always)]
     fn push(&mut self, state: &mut Self::State, item: f64) {
+        state.count += 1;
         let f =  (item - state.mean) / (state.count as f64);
         let y = f - state.correction;
         let t = state.mean + y;
         state.correction = (t - state.mean) - y;
         state.mean = t;
-        state.count += 1;
     }
 
     #[inline(always)]
@@ -77,27 +76,20 @@ impl FolderSync<f64> for MeanFolder<StepA> {
 
 
 
-impl FolderSync<(f64, usize)> for MeanFolder<StepB> {
+impl FolderSync<State> for MeanFolder<StepB> {
     type State = State;
     type Done = f64;
 
     #[inline(always)]
     fn zero(&mut self) -> Self::State {
-        State {
-            mean : 0.0,
-            correction : 0.0,
-            count : 0,
-        }
+        State::new()
     }
 
     #[inline(always)]
-	fn push(&mut self, state: &mut Self::State, item: f64) {
-        let f =  (item - state.mean) / (state.count as f64);
-        let y = f - state.correction;
-        let t = state.mean + y;
-        state.correction = (t - state.mean) - y;
-        state.mean = t;
-        state.count += 1;
+	fn push(&mut self, state: &mut Self::State, item: State) {
+        state.correction = todo!();
+        state.mean = ((state.mean * state.count as f64) + (item.mean * item.count as f64)) / ((state.count + item.count) as f64);
+        state.count += item.count;
     }
 
     #[inline(always)]
