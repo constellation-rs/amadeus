@@ -72,6 +72,7 @@ where
 			});
 		}
 	}
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }

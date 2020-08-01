@@ -47,8 +47,9 @@ where
 	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		*state.entry(item).or_insert(0) += 1;
 	}
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
 impl<B> FolderSync<HashMap<B, usize>> for HistogramFolder<B, StepB>
 where
@@ -77,8 +78,9 @@ where
 				.collect()
 		})
 	}
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
 impl<B> FolderSync<Vec<(B, usize)>> for HistogramFolder<B, StepB>
 where
@@ -106,6 +108,7 @@ where
 		})
 	}
 	#[inline(always)]
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }

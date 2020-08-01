@@ -65,8 +65,7 @@ pub trait FolderSync<Item> {
 
 	fn zero(&mut self) -> Self::State;
 	fn push(&mut self, state: &mut Self::State, item: Item);
-    fn done(&mut self, state: Self::State) -> Self::Done;
-
+	fn done(&mut self, state: Self::State) -> Self::Done;
 }
 
 #[derive(Educe, Serialize, Deserialize, new)]

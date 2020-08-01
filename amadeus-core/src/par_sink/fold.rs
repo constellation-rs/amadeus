@@ -59,8 +59,9 @@ where
 	fn push(&mut self, state: &mut Self::State, item: Item) {
 		replace_with_or_abort(state, |state| self.op.call_mut((state, Either::Left(item))))
 	}
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
 impl<A, ID, F, Item> FolderSync<Item> for FoldFolder<A, ID, F, Item, StepB>
 where
@@ -79,6 +80,7 @@ where
 		})
 	}
 	#[inline(always)]
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }

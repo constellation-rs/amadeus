@@ -47,8 +47,9 @@ impl<Item> FolderSync<Item> for SampleUnstableFolder {
 	fn push(&mut self, state: &mut Self::State, item: Item) {
 		state.push(item, &mut thread_rng())
 	}
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
 
 #[derive(new)]
@@ -95,8 +96,9 @@ where
 	fn push(&mut self, state: &mut Self::State, item: Item) {
 		state.push(item, &1)
 	}
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
 
 #[derive(new)]
@@ -152,6 +154,7 @@ where
 	fn push(&mut self, state: &mut Self::State, item: (A, B)) {
 		state.push(item.0, &item.1)
 	}
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }

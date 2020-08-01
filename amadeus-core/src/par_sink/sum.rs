@@ -55,8 +55,9 @@ where
 	}
 
 	#[inline(always)]
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -91,6 +92,7 @@ where
 	}
 
 	#[inline(always)]
-    fn done(&mut self, state: Self::State) -> Self::Done { state }
-
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
