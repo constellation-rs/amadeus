@@ -8,8 +8,8 @@ mod macros {
 		($combiner:ty, $self:ident, $init:expr) => {
 			type Done = <Self::ReduceC as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done>>::Done;
 			type Pipe = P;
-			type ReduceA = FolderSyncReducer<P::Output, $combiner>;
-			type ReduceC = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done, $combiner>;
+			type ReduceA = FolderSyncReducer<P::Output, $combiner, crate::par_sink::Inter>;
+			type ReduceC = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done, $combiner, crate::par_sink::Final>;
 
 			fn reducers($self) -> (P, Self::ReduceA, Self::ReduceC) {
 				let init = $init;
@@ -26,9 +26,9 @@ mod macros {
 		($combiner:ty, $self:ident, $init:expr) => {
 			type Done = <Self::ReduceC as $crate::par_sink::Reducer<<Self::ReduceB as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done>>::Done>>::Done;
 			type Pipe = P;
-			type ReduceA = FolderSyncReducer<P::Output, $combiner>;
-			type ReduceB = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done, $combiner>;
-			type ReduceC = FolderSyncReducer<<Self::ReduceB as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done>>::Done, $combiner>;
+			type ReduceA = FolderSyncReducer<P::Output, $combiner, crate::par_sink::Inter>;
+			type ReduceB = FolderSyncReducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done, $combiner, crate::par_sink::Inter>;
+			type ReduceC = FolderSyncReducer<<Self::ReduceB as $crate::par_sink::Reducer<<Self::ReduceA as $crate::par_sink::Reducer<P::Output>>::Done>>::Done, $combiner, crate::par_sink::Final>;
 
 			fn reducers($self) -> (P, Self::ReduceA, Self::ReduceB, Self::ReduceC) {
 				let init = $init;

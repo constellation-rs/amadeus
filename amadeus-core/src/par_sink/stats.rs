@@ -18,7 +18,7 @@ pub struct Mean<P, B> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item, B> ParallelSink<Item> for Mean<P, B>
 	where
-		B: iter::Sum<P::Output> + iter::Sum<B> + Send + 'static,
+		B: iter::Sum<P::Output> + iter::Sum<B> + ToPrimitive + Send + 'static,
 	{
 		folder_par_sink!(
 			MeanFolder<B, StepA>,
@@ -46,7 +46,7 @@ where
 	B: iter::Sum<Item> + iter::Sum<B> + ToPrimitive,
 {
 	type State = (B, usize);
-	type Done = f64;
+	type Done = Self::State;
 
 	#[inline(always)]
 	fn zero(&mut self) -> Self::State {
@@ -65,9 +65,7 @@ where
 
 	#[inline(always)]
 	fn done(&mut self, state: Self::State) -> Self::Done {
-		let sum = state.0;
-		let count = state.1 as f64;
-		B::to_f64(&sum).map(|sum| sum / count).unwrap()
+		state
 	}
 }
 
