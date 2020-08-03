@@ -229,6 +229,18 @@ macro_rules! stream {
 			}
 
 			#[inline]
+			async fn mean<P>(self, pool: &P) -> f64
+			where
+				P: $pool,
+				Self::Item: 'static,
+				Self::Task: 'static,
+				Self: Sized,
+			{
+				self.pipe(pool, $pipe::<Self::Item>::mean(Identity))
+				.await
+			}
+
+			#[inline]
 			async fn min<P>(self, pool: &P) -> Option<Self::Item>
 			where
 				P: $pool,

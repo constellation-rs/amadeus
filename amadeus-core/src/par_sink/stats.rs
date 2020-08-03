@@ -1,5 +1,3 @@
-extern crate num;
-
 use derive_new::new;
 use educe::Educe;
 use serde::{Deserialize, Serialize};
@@ -14,7 +12,8 @@ pub struct Mean<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Item, Output = f64>, Item> ParallelSink<Item> for Mean<P> {
+	impl<P: ParallelPipe<Item, Output = f64>, Item> ParallelSink<Item> for Mean<P>
+		{
 		folder_par_sink!(
 			MeanFolder<StepA>,
 			MeanFolder<StepB>,
