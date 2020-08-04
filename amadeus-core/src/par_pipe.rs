@@ -215,7 +215,7 @@ macro_rules! pipe {
 			#[inline]
 			fn mean(self) -> Mean<Self>
 			where
-			Self: $pipe<Item =f64> + Sized, 
+			Self: $pipe<Input, Output = f64> + Sized,
 			{
 				$assert_sink(Mean::new(self))
 			}

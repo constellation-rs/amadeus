@@ -234,7 +234,7 @@ macro_rules! stream {
 				P: $pool,
 				Self::Item: 'static,
 				Self::Task: 'static,
-				Self: Sized,
+				Self: $stream<Item = f64> + Sized,
 			{
 				self.pipe(pool, $pipe::<Self::Item>::mean(Identity))
 				.await
