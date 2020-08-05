@@ -287,6 +287,14 @@ macro_rules! pipe {
 			}
 
 			#[inline]
+			fn stddev(self) -> StdDev<Self>
+			where
+			Self: $pipe<Input, Output = f64> + Sized,
+			{
+				$assert_sink(StdDev::new(self))
+			}
+
+			#[inline]
 			fn all<F>(self, f: F) -> All<Self, F>
 			where
 				F: $fns::FnMut(Self::Output) -> bool + Clone + $send + 'static,
