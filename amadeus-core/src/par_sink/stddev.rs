@@ -45,6 +45,8 @@ pub struct SDState {
 	count: u64,
 	#[new(default)]
 	value: Vec<f64>,
+	#[new(default)]
+	sd: f64,
 }
 
 impl FolderSync<f64> for SDFolder<StepA> {
@@ -70,14 +72,13 @@ impl FolderSync<f64> for SDFolder<StepA> {
 
 	#[inline(always)]
 	fn done(&mut self, state: Self::State) -> Self::Done {
-		let mut variance_sum = Vec::new();
-		for value in state.value {
-			let v = value - state.mean;
-			variance_sum.push(v.powi(2));
-		}
-
-		let variance = variance_sum.iter().sum::<f64>() / state.count as f64;
-		let sd = variance.sqrt();
+		let variance_sum = state
+			.value
+			.iter()
+			.map(|x| (x - state.mean).powi(2))
+			.collect::<Vec<f64>>();
+		let state_variance = variance_sum.iter().sum::<f64>() / state.count as f64;
+		let sd = state_variance.sqrt();
 		sd
 	}
 }
@@ -98,21 +99,31 @@ impl FolderSync<SDState> for SDFolder<StepB> {
 			/ ((state.count + item.count) as f64);
 		state.mean = ((state.mean * state.count as f64) + (item.mean * item.count as f64))
 			/ ((state.count + item.count) as f64);
-		state.count += item.count;
 
-		state.value = item.value;
+		let state_variance_sum = state
+			.value
+			.iter()
+			.map(|x| (x - state.mean).powi(2))
+			.collect::<Vec<f64>>();
+		let state_variance = state_variance_sum.iter().sum::<f64>() / state.count as f64;
+		let state_sd = state_variance.sqrt();
+
+		let item_variance_sum = item
+			.value
+			.iter()
+			.map(|x| (x - item.mean).powi(2))
+			.collect::<Vec<f64>>();
+		let item_variance = item_variance_sum.iter().sum::<f64>() / item.count as f64;
+		let item_sd = item_variance.sqrt();
+
+		state.sd = ((state.count as f64 - 1.0) * state_sd + (item.count as f64 - 1.0) * item_sd)
+			/ ((state.count as f64 + item.count as f64) - 2.0);
+
+		state.count += item.count;
 	}
 
 	#[inline(always)]
 	fn done(&mut self, state: Self::State) -> Self::Done {
-		let mut variance_sum = Vec::new();
-		for value in state.value {
-			let v = value - state.mean;
-			variance_sum.push(v.powi(2));
-		}
-
-		let variance = variance_sum.iter().sum::<f64>() / state.count as f64;
-		let sd = variance.sqrt();
-		sd
+		state.sd
 	}
 }

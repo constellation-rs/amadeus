@@ -37,7 +37,6 @@ sum = { version = "0.1", features = ["futures", "serde"] }
 tokio = { version = "0.2", features = ["blocking", "rt-core"] }
 walkdir = "2.2"
 widestring = "0.4"
-num = "0.3.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"
