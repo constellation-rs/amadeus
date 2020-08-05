@@ -178,6 +178,16 @@ macro_rules! pipe {
 			}
 
 			#[inline]
+			fn sort_n_by<F>(self, n: usize, cmp: F) -> Sort<Self, F>
+			where
+				F: $fns::Fn(&Self::Output, &Self::Output) -> Ordering + Clone + $send + 'static,
+				Self::Output: Clone + $send + 'static,
+				Self: Sized,
+			{
+				$assert_sink(Sort::new(self, cmp, n))
+			}
+
+			#[inline]
 			fn count(self) -> Count<Self>
 			where
 				Self: Sized,

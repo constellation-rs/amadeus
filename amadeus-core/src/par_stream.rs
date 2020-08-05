@@ -178,6 +178,19 @@ macro_rules! stream {
 			}
 
 			#[inline]
+			async fn sort_n_by<P, F>(self, pool: &P, n: usize, cmp: F) -> ::amadeus_streaming::Sort<Self::Item, F>
+			where
+				P: $pool,
+				F: $fns::Fn(&Self::Item, &Self::Item) -> Ordering + Clone + $send + 'static,
+				Self::Item: Clone + $send + 'static,
+				Self::Task: 'static,
+				Self: Sized,
+			{
+				self.pipe(pool, $pipe::<Self::Item>::sort_n_by(Identity, n, cmp))
+					.await
+			}
+
+			#[inline]
 			async fn count<P>(self, pool: &P) -> usize
 			where
 				P: $pool,

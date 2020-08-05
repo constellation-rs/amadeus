@@ -28,6 +28,8 @@
 // As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
 #![doc(html_root_url = "https://docs.rs/amadeus-streaming/0.3.7")]
+#![cfg_attr(nightly, feature(map_first_last))]
+#![cfg_attr(nightly, feature(unboxed_closures))]
 #![warn(
 	missing_copy_implementations,
 	missing_debug_implementations,
@@ -59,12 +61,14 @@ mod distinct;
 mod linked_list;
 mod ordered_linked_list;
 mod sample;
+mod sort;
 mod top;
 mod traits;
 
 pub use count_min::*;
 pub use distinct::*;
 pub use sample::*;
+pub use sort::*;
 pub use top::*;
 pub use traits::*;
 

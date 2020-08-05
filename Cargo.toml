@@ -88,9 +88,6 @@ incremental = false
 lto = true
 # panic = "abort" # this is disallowed by cargo currently
 
-[patch.crates-io]
-serde_closure = { git = "https://github.com/alecmocatta/serde_closure", branch = "nameable" }
-
 [[example]]
 name = "cloudfront_logs"
 required-features = ["aws"]
