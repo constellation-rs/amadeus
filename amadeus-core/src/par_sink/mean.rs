@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 use super::{folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink};
+use crate::util::u64_to_f64;
 
 #[derive(new)]
 #[must_use]
@@ -57,7 +58,7 @@ impl FolderSync<f64> for MeanFolder<StepA> {
 	#[inline(always)]
 	fn push(&mut self, state: &mut Self::State, item: f64) {
 		state.count += 1;
-		let f = (item - state.mean) / (state.count as f64);
+		let f = (item - state.mean) / (u64_to_f64(state.count));
 		let y = f - state.correction;
 		let t = state.mean + y;
 		state.correction = (t - state.mean) - y;
@@ -81,11 +82,11 @@ impl FolderSync<State> for MeanFolder<StepB> {
 
 	#[inline(always)]
 	fn push(&mut self, state: &mut Self::State, item: State) {
-		state.correction = ((state.correction * state.count as f64)
-			+ (item.correction * item.count as f64))
-			/ ((state.count + item.count) as f64);
-		state.mean = ((state.mean * state.count as f64) + (item.mean * item.count as f64))
-			/ ((state.count + item.count) as f64);
+		state.correction = (state.correction * u64_to_f64(state.count))
+			+ (item.correction * u64_to_f64(item.count)) / u64_to_f64(state.count + item.count);
+		state.mean = ((state.mean * u64_to_f64(state.count))
+			+ (item.mean * u64_to_f64(item.count)))
+			/ u64_to_f64(state.count + item.count);
 		state.count += item.count;
 	}
 
