@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-derive"
-version = "0.3.7"
+version = "0.4.0"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]

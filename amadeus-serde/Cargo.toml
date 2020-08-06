@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-serde"
-version = "0.3.7"
+version = "0.4.0"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.3.7", path = "../amadeus-core" }
-amadeus-types = { version = "=0.3.7", path = "../amadeus-types" }
+amadeus-core = { version = "=0.4.0", path = "../amadeus-core" }
+amadeus-types = { version = "=0.4.0", path = "../amadeus-types" }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 csv = "1.0"
 educe = "0.4"

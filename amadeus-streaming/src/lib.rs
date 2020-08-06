@@ -27,7 +27,7 @@
 //
 // As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
-#![doc(html_root_url = "https://docs.rs/amadeus-streaming/0.3.7")]
+#![doc(html_root_url = "https://docs.rs/amadeus-streaming/0.4.0")]
 #![cfg_attr(nightly, feature(map_first_last))]
 #![cfg_attr(nightly, feature(unboxed_closures))]
 #![warn(
