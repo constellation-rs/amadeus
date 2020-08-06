@@ -275,9 +275,9 @@ mod pool {
 		};
 
 		#[tokio::test]
-		async fn spawn_pinned_() {
+		async fn spawn_pinned() {
 			const TASKS: usize = 1000;
-			const ITERS: usize = 1000;
+			const ITERS: usize = 200;
 			const THREADS: usize = 4;
 			let pool = Pool::new(THREADS);
 			let count = Arc::new(AtomicUsize::new((1..TASKS).sum()));
