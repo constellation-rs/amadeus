@@ -37,7 +37,7 @@ rustversion = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
 snap = "1.0"
-sum = { version = "0.1.7", default-features = false, features = ["futures", "serde", "2", "3"]  }
+sum = { version = "0.1.7", default-features = false, features = ["2", "3"]  }
 thrift = "0.13"
 zstd = { version = "0.5", features = ["wasm"] }
 
