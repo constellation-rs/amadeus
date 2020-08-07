@@ -43,9 +43,9 @@ async fn commoncrawl() {
 			u32,
 			u32,
 			std::collections::HashSet<u32>,
-			streaming_algorithms::Top<u32,usize>,
-			streaming_algorithms::Top<usize,streaming_algorithms::HyperLogLogMagnitude<Vec<u8>>>,
-			streaming_algorithms::SampleUnstable<u32>,
+			amadeus_streaming::Top<u32,usize>,
+			amadeus_streaming::Top<usize,amadeus_streaming::HyperLogLogMagnitude<Vec<u8>>>,
+			amadeus_streaming::SampleUnstable<u32>,
 		),
 	) = webpages.par_stream().map(|webpage:Result<_,_>|webpage.unwrap())
 		.fork(

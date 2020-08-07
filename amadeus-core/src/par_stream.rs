@@ -6,10 +6,14 @@
 mod chain;
 mod cloned;
 mod filter;
+mod filter_map_sync;
 mod flat_map;
+mod flat_map_sync;
 mod identity;
 mod inspect;
+mod join;
 mod map;
+mod map_sync;
 mod sum_type;
 mod update;
 
@@ -28,7 +32,7 @@ use crate::{
 };
 
 pub use self::{
-	chain::*, cloned::*, filter::*, flat_map::*, identity::*, inspect::*, map::*, update::*
+	chain::*, cloned::*, filter::*, filter_map_sync::*, flat_map::*, flat_map_sync::*, identity::*, inspect::*, join::*, map::*, map_sync::*, update::*
 };
 
 #[must_use]
@@ -100,6 +104,28 @@ macro_rules! stream {
 			}
 
 			#[inline]
+			fn left_join<K, V1, V2>(self, right: impl IntoIterator<Item = (K, V2)>) -> LeftJoin<Self, K, V1, V2>
+			where
+				K: Eq + Hash + Clone + $send + 'static,
+				V1: 'static,
+				V2: Clone + $send + 'static,
+				Self: $stream<Item = (K, V1)> + Sized,
+			{
+				$assert_stream(LeftJoin::new(self, right.into_iter().collect()))
+			}
+
+			#[inline]
+			fn inner_join<K, V1, V2>(self, right: impl IntoIterator<Item = (K, V2)>) -> InnerJoin<Self, K, V1, V2>
+			where
+				K: Eq + Hash + Clone + $send + 'static,
+				V1: 'static,
+				V2: Clone + $send + 'static,
+				Self: $stream<Item = (K, V1)> + Sized,
+			{
+				$assert_stream(InnerJoin::new(self, right.into_iter().collect()))
+			}
+
+			#[inline]
 			fn chain<C>(self, chain: C) -> Chain<Self, C::$xxx>
 			where
 				C: $into_stream<Item = Self::Item>,
@@ -148,6 +174,19 @@ macro_rules! stream {
 				Self: Sized,
 			{
 				self.pipe(pool, $pipe::<Self::Item>::histogram(Identity))
+					.await
+			}
+
+			#[inline]
+			async fn sort_n_by<P, F>(self, pool: &P, n: usize, cmp: F) -> ::amadeus_streaming::Sort<Self::Item, F>
+			where
+				P: $pool,
+				F: $fns::Fn(&Self::Item, &Self::Item) -> Ordering + Clone + $send + 'static,
+				Self::Item: Clone + $send + 'static,
+				Self::Task: 'static,
+				Self: Sized,
+			{
+				self.pipe(pool, $pipe::<Self::Item>::sort_n_by(Identity, n, cmp))
 					.await
 			}
 
@@ -282,7 +321,7 @@ macro_rules! stream {
 			#[inline]
 			async fn most_frequent<P>(
 				self, pool: &P, n: usize, probability: f64, tolerance: f64,
-			) -> ::streaming_algorithms::Top<Self::Item, usize>
+			) -> ::amadeus_streaming::Top<Self::Item, usize>
 			where
 				P: $pool,
 				Self::Item: Hash + Eq + Clone + $send + 'static,
@@ -299,7 +338,7 @@ macro_rules! stream {
 			#[inline]
 			async fn most_distinct<P, A, B>(
 				self, pool: &P, n: usize, probability: f64, tolerance: f64, error_rate: f64,
-			) -> ::streaming_algorithms::Top<A, streaming_algorithms::HyperLogLogMagnitude<B>>
+			) -> ::amadeus_streaming::Top<A, amadeus_streaming::HyperLogLogMagnitude<B>>
 			where
 				P: $pool,
 				Self: $stream<Item = (A, B)> + Sized,
@@ -323,7 +362,7 @@ macro_rules! stream {
 			#[inline]
 			async fn sample_unstable<P>(
 				self, pool: &P, samples: usize,
-			) -> ::streaming_algorithms::SampleUnstable<Self::Item>
+			) -> ::amadeus_streaming::SampleUnstable<Self::Item>
 			where
 				P: $pool,
 				Self::Item: $send + 'static,
@@ -448,7 +487,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
-		stream.sink(reduce_c.as_mut()).await
+		stream.sink(reduce_c).await
 	}
 
 	async fn pipe<P, ParSink, A>(self, pool: &P, sink: ParSink) -> A
@@ -664,7 +703,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 					let reduce_b = reduce_b.into_async();
 					async move {
 						pin_mut!(reduce_b);
-						stream.sink(reduce_b.as_mut()).await
+						stream.sink(reduce_b).await
 					}
 				}))
 			})
@@ -674,7 +713,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
-		stream.sink(reduce_c.as_mut()).await
+		stream.sink(reduce_c).await
 	}
 
 	async fn pipe<P, DistSink, A>(self, pool: &P, sink: DistSink) -> A

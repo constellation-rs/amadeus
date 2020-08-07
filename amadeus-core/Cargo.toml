@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-core"
-version = "0.3.7"
+version = "0.4.0"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -8,8 +8,8 @@ keywords = ["amadeus", "distributed", "data-science", "data", "logs"]
 description = """
 Harmonious distributed data analysis in Rust.
 """
-repository = "https://github.com/alecmocatta/amadeus"
-homepage = "https://github.com/alecmocatta/amadeus"
+repository = "https://github.com/constellation-rs/amadeus"
+homepage = "https://github.com/constellation-rs/amadeus"
 documentation = "https://docs.rs/amadeus"
 readme = "README.md"
 edition = "2018"
@@ -19,6 +19,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+amadeus-streaming = { version = "=0.4.0", path = "../amadeus-streaming" }
 async-trait = "0.1"
 derive-new = "0.5"
 educe = "0.4"
@@ -26,13 +27,13 @@ either = { version = "1.5", features = ["serde"] }
 futures = "0.3"
 indexmap = { version = "1.5", features = ["serde-1"] }
 itertools = "0.9"
+multimap = "0.8"
 owned_chars = "0.3"
 pin-project = "0.4"
 rand = "0.7"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
-streaming_algorithms = "0.3"
 sum = { version = "0.1", features = ["futures", "serde"] }
 tokio = { version = "0.2", features = ["blocking", "rt-core"] }
 walkdir = "2.2"

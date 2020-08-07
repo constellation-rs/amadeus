@@ -82,6 +82,28 @@ macro_rules! pipe {
 				$assert_pipe(Cloned::new(self))
 			}
 
+			#[inline]
+			fn left_join<K, V1, V2>(self, right: impl IntoIterator<Item = (K, V2)>) -> LeftJoin<Self, K, V1, V2>
+			where
+				K: Eq + Hash + Clone + $send + 'static,
+				V1: 'static,
+				V2: Clone + $send + 'static,
+				Self: $pipe<Input, Output = (K, V1)> + Sized,
+			{
+				$assert_pipe(LeftJoin::new(self, right.into_iter().collect()))
+			}
+
+			#[inline]
+			fn inner_join<K, V1, V2>(self, right: impl IntoIterator<Item = (K, V2)>) -> InnerJoin<Self, K, V1, V2>
+			where
+				K: Eq + Hash + Clone + $send + 'static,
+				V1: 'static,
+				V2: Clone + $send + 'static,
+				Self: $pipe<Input, Output = (K, V1)> + Sized,
+			{
+				$assert_pipe(InnerJoin::new(self, right.into_iter().collect()))
+			}
+
 			// #[must_use]
 			// fn chain<C>(self, chain: C) -> Chain<Self, C::Iter>
 			// where
@@ -153,6 +175,16 @@ macro_rules! pipe {
 				Self: Sized,
 			{
 				$assert_sink(Histogram::new(self))
+			}
+
+			#[inline]
+			fn sort_n_by<F>(self, n: usize, cmp: F) -> Sort<Self, F>
+			where
+				F: $fns::Fn(&Self::Output, &Self::Output) -> Ordering + Clone + $send + 'static,
+				Self::Output: Clone + $send + 'static,
+				Self: Sized,
+			{
+				$assert_sink(Sort::new(self, cmp, n))
 			}
 
 			#[inline]

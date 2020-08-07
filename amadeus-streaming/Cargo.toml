@@ -1,0 +1,32 @@
+[package]
+name = "amadeus-streaming"
+version = "0.4.0"
+license = "Apache-2.0"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["data-structures", "algorithms", "science"]
+keywords = ["streaming-algorithm", "probabilistic", "sketch", "data-structure", "hyperloglog"]
+description = """
+SIMD-accelerated implementations of various streaming algorithms, including Count–min sketch, Top k, HyperLogLog, Reservoir sampling.
+"""
+repository = "https://github.com/constellation-rs/amadeus"
+homepage = "https://github.com/constellation-rs/amadeus"
+documentation = "https://docs.rs/amadeus"
+readme = "README.md"
+edition = "2018"
+
+[badges]
+azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "26" }
+maintenance = { status = "actively-developed" }
+
+[features]
+nightly = ["packed_simd"]
+
+[dependencies]
+packed_simd = { version = "0.3", features = ["into_bits"], optional = true }
+rand = { version = "0.7", features = ["small_rng"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_closure = "0.3"
+twox-hash = "1.1"
+
+[build-dependencies]
+rustversion = "1.0"
