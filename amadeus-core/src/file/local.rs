@@ -21,7 +21,9 @@ use {
 };
 
 use super::{Directory, File, Page, Partition};
-use crate::util::{f64_to_u64, u64_to_f64, IoError, ResultExpand};
+#[cfg(target_arch = "wasm32")]
+use crate::util::{f64_to_u64, u64_to_f64};
+use crate::util::{IoError, ResultExpand};
 
 #[async_trait(?Send)]
 impl<F> File for Vec<F>
