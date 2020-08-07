@@ -53,13 +53,10 @@ where
 			let right = iter::once(item).sum::<B>();
 			B::sum(iter::once(left).chain(iter::once(right)))
 		})
-<<<<<<< HEAD
 	}
 	#[inline(always)]
 	fn done(&mut self, state: Self::State) -> Self::Done {
 		state
-=======
->>>>>>> f6f11fb77069268bde3b58750268a6560081669b
 	}
 }
 
