@@ -1,8 +1,8 @@
 use derive_new::new;
 use educe::Educe;
-use replace_with::replace_with_or_abort;
+use replace_with::{replace_with, replace_with_or_abort};
 use serde::{Deserialize, Serialize};
-use std::{iter, marker::PhantomData, mem};
+use std::{iter, marker::PhantomData};
 
 use super::{folder_par_sink, FolderSync, FolderSyncReducer, ParallelPipe, ParallelSink};
 
@@ -44,14 +44,15 @@ where
 
 	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
-		iter::empty::<B>().sum()
+		B::sum(iter::empty::<B>())
 	}
 	#[inline(always)]
-	fn push(&mut self, state: &mut Self::State, item: Item) {
-		let zero = iter::empty::<B>().sum();
-		let left = mem::replace(state, zero);
-		let right = iter::once(item).sum::<B>();
-		*state = B::sum(iter::once(left).chain(iter::once(right)));
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
+		let default = || B::sum(iter::empty::<B>());
+		replace_with(state, default, |left| {
+			let right = iter::once(item).sum::<B>();
+			B::sum(iter::once(left).chain(iter::once(right)))
+		})
 	}
 
 	#[inline(always)]
@@ -79,11 +80,11 @@ where
 	type Done = Self::State;
 
 	#[inline(always)]
-	fn zero(&mut self) -> Self::State {
+	fn zero(&mut self) -> Self::Done {
 		self.zero.take().unwrap()
 	}
 	#[inline(always)]
-	fn push(&mut self, state: &mut Self::State, item: Item) {
+	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		replace_with_or_abort(state, |left| {
 			let right = iter::once(item).sum::<Option<Item>>().unwrap();
 			<Option<Item> as iter::Sum<Item>>::sum(iter::once(left).chain(iter::once(right)))
