@@ -45,8 +45,6 @@ pub struct SDState {
 	pre_variance: f64,
 	#[new(default)]
 	variance: f64,
-	#[new(default)]
-	sd: f64,
 }
 
 impl FolderSync<f64> for SDFolder<StepA> {
@@ -67,16 +65,18 @@ impl FolderSync<f64> for SDFolder<StepA> {
 			diff * diff / (u64_to_f64(state.count) * (u64_to_f64(state.count) - 1.0));
 		if state.count > 1 {
 			state.variance = state.pre_variance / u64_to_f64(state.count) - 1.0;
-			state.sd = state.variance.sqrt()
 		} else {
 			state.variance = f64::NAN;
-			state.sd = f64::NAN
 		}
 	}
 
 	#[inline(always)]
 	fn done(&mut self, state: Self::State) -> Self::Done {
-		state.sd
+		if state.count > 1 {
+			state.variance.sqrt()
+		} else {
+			f64::NAN
+		}
 	}
 }
 
@@ -91,8 +91,8 @@ impl FolderSync<SDState> for SDFolder<StepB> {
 
 	#[inline(always)]
 	fn push(&mut self, state: &mut Self::State, item: SDState) {
-		state.sd = ((u64_to_f64(state.count) - 1.0) * state.sd
-			+ (u64_to_f64(item.count) - 1.0) * item.sd)
+		state.variance = ((u64_to_f64(state.count) - 1.0) * state.variance
+			+ (u64_to_f64(item.count) - 1.0) * item.variance)
 			/ ((u64_to_f64(state.count) + u64_to_f64(item.count)) - 2.0);
 
 		state.count += item.count;
@@ -100,6 +100,6 @@ impl FolderSync<SDState> for SDFolder<StepB> {
 
 	#[inline(always)]
 	fn done(&mut self, state: Self::State) -> Self::Done {
-		state.sd
+		state.variance.sqrt()
 	}
 }
