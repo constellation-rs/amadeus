@@ -216,6 +216,30 @@ macro_rules! stream {
 			}
 
 			#[inline]
+			async fn mean<P>(self, pool: &P) -> f64
+			where
+				P: $pool,
+				Self::Item: 'static,
+				Self::Task: 'static,
+				Self: $stream<Item = f64> + Sized,
+			{
+				self.pipe(pool, $pipe::<Self::Item>::mean(Identity))
+				.await
+			}
+
+			#[inline]
+			async fn stddev<P>(self, pool: &P) -> f64
+			where
+				P: $pool,
+				Self::Item: 'static,
+				Self::Task: 'static,
+				Self: $stream<Item = f64> + Sized,
+			{
+				self.pipe(pool, $pipe::<Self::Item>::stddev(Identity))
+				.await
+			}
+
+			#[inline]
 			async fn combine<P, F>(self, pool: &P, f: F) -> Option<Self::Item>
 			where
 				P: $pool,
@@ -265,18 +289,6 @@ macro_rules! stream {
 			{
 				self.pipe(pool, $pipe::<Self::Item>::max_by_key(Identity, f))
 					.await
-			}
-
-			#[inline]
-			async fn mean<P>(self, pool: &P) -> f64
-			where
-				P: $pool,
-				Self::Item: 'static,
-				Self::Task: 'static,
-				Self: $stream<Item = f64> + Sized,
-			{
-				self.pipe(pool, $pipe::<Self::Item>::mean(Identity))
-				.await
 			}
 
 			#[inline]

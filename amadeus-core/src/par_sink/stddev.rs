@@ -13,7 +13,7 @@ pub struct StdDev<P> {
 }
 
 impl_par_dist! {
-	impl<P: ParallelPipe<Item, Output = f64>, Item, > ParallelSink<Item> for StdDev<P>	{
+	impl<P: ParallelPipe<Item, Output = f64>, Item, > ParallelSink<Item> for StdDev<P> {
 		folder_par_sink!(
 			SDFolder<StepA>,
 			SDFolder<StepB>,
@@ -27,7 +27,6 @@ impl_par_dist! {
 #[derive(Educe, Serialize, Deserialize, new)]
 #[educe(Clone)]
 #[serde(bound = "")]
-
 pub struct SDFolder<Step> {
 	marker: PhantomData<fn() -> Step>,
 }
@@ -40,7 +39,7 @@ pub struct SDState {
 	#[new(default)]
 	count: u64,
 	#[new(default)]
-	sum: f64,
+	mean: f64,
 	#[new(default)]
 	variance: f64,
 }
@@ -56,16 +55,13 @@ impl FolderSync<f64> for SDFolder<StepA> {
 
 	#[inline(always)]
 	fn push(&mut self, state: &mut Self::State, item: f64) {
+		// Taken from https://docs.rs/streaming-stats/0.2.3/src/stats/online.rs.html#64-103
+		let q_prev = state.variance * u64_to_f64(state.count);
+		let mean_prev = state.mean;
 		state.count += 1;
-		state.sum += item;
-		if state.count > 1 {
-			let diff = u64_to_f64(state.count) * item - state.sum;
-			state.variance +=
-				diff * diff / (u64_to_f64(state.count) * (u64_to_f64(state.count) - 1.0));
-			state.variance /= u64_to_f64(state.count) - 1.0;
-		} else {
-			state.variance = f64::NAN;
-		}
+		let count = u64_to_f64(state.count);
+		state.mean += (item - state.mean) / count;
+		state.variance = (q_prev + (item - mean_prev) * (item - state.mean)) / count;
 	}
 
 	#[inline(always)]
@@ -85,11 +81,14 @@ impl FolderSync<SDState> for SDFolder<StepB> {
 
 	#[inline(always)]
 	fn push(&mut self, state: &mut Self::State, item: SDState) {
-		state.variance = ((u64_to_f64(state.count) - 1.0) * state.variance
-			+ (u64_to_f64(item.count) - 1.0) * item.variance)
-			/ ((u64_to_f64(state.count) + u64_to_f64(item.count)) - 2.0);
-		state.sum += item.sum;
+		let (s1, s2) = (u64_to_f64(state.count), u64_to_f64(item.count));
+		let meandiffsq = (state.mean - item.mean) * (state.mean - item.mean);
+		let mean = ((s1 * state.mean) + (s2 * item.mean)) / (s1 + s2);
+		let var = (((s1 * state.variance) + (s2 * item.variance)) / (s1 + s2))
+			+ ((s1 * s2 * meandiffsq) / ((s1 + s2) * (s1 + s2)));
 		state.count += item.count;
+		state.mean = mean;
+		state.variance = var;
 	}
 
 	#[inline(always)]

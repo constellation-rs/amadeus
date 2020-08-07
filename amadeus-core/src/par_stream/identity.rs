@@ -134,6 +134,16 @@ mod workaround {
 		}
 
 		#[inline]
+		pub fn mean(self) -> Mean<Self> {
+			Mean::new(self)
+		}
+
+		#[inline]
+		pub fn stddev(self) -> StdDev<Self> {
+			StdDev::new(self)
+		}
+
+		#[inline]
 		pub fn combine<F>(self, f: F) -> Combine<Self, F>
 		where
 			F: Clone + Send + 'static,
@@ -160,11 +170,6 @@ mod workaround {
 			F: Clone + Send + 'static,
 		{
 			MaxByKey::new(self, f)
-		}
-
-		#[inline]
-		pub fn mean(self) -> Mean<Self> {
-			Mean::new(self)
 		}
 
 		#[inline]
@@ -205,11 +210,6 @@ mod workaround {
 		#[inline]
 		pub fn sample_unstable(self, samples: usize) -> SampleUnstable<Self> {
 			SampleUnstable::new(self, samples)
-		}
-
-		#[inline]
-		pub fn stddev(self) -> StdDev<Self> {
-			StdDev::new(self)
 		}
 
 		#[inline]

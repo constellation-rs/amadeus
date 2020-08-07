@@ -205,6 +205,22 @@ macro_rules! pipe {
 			}
 
 			#[inline]
+			fn mean(self) -> Mean<Self>
+			where
+				Self: $pipe<Input, Output = f64> + Sized,
+			{
+				$assert_sink(Mean::new(self))
+			}
+
+			#[inline]
+			fn stddev(self) -> StdDev<Self>
+			where
+				Self: $pipe<Input, Output = f64> + Sized,
+			{
+				$assert_sink(StdDev::new(self))
+			}
+
+			#[inline]
 			fn combine<F>(self, f: F) -> Combine<Self, F>
 			where
 				F: $fns::FnMut(Self::Output, Self::Output) -> Self::Output + Clone + $send + 'static,
@@ -242,14 +258,6 @@ macro_rules! pipe {
 				Self: Sized,
 			{
 				$assert_sink(MaxByKey::new(self, f))
-			}
-
-			#[inline]
-			fn mean(self) -> Mean<Self>
-			where
-			Self: $pipe<Input, Output = f64> + Sized,
-			{
-				$assert_sink(Mean::new(self))
 			}
 
 			#[inline]
@@ -316,14 +324,6 @@ macro_rules! pipe {
 				Self: Sized,
 			{
 				$assert_sink(SampleUnstable::new(self, samples))
-			}
-
-			#[inline]
-			fn stddev(self) -> StdDev<Self>
-			where
-			Self: $pipe<Input, Output = f64> + Sized,
-			{
-				$assert_sink(StdDev::new(self))
 			}
 
 			#[inline]

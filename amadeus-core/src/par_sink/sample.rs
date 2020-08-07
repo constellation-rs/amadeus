@@ -91,13 +91,17 @@ impl<Item, F> FolderSync<Item> for SortFolder<F>
 where
 	F: traits::Fn(&Item, &Item) -> Ordering + Clone,
 {
-	type Done = SASort<Item, F>;
+	type State = SASort<Item, F>;
+	type Done = Self::State;
 
 	fn zero(&mut self) -> Self::Done {
 		SASort::new(self.f.clone(), self.n)
 	}
 	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		state.push(item)
+	}
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }
 
