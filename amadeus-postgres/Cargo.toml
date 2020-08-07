@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-postgres"
-version = "0.4.0"
+version = "0.4.1"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,8 +19,8 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-core = { version = "=0.4.0", path = "../amadeus-core" }
-amadeus-types = { version = "=0.4.0", path = "../amadeus-types" }
+amadeus-core = { version = "=0.4.1", path = "../amadeus-core" }
+amadeus-types = { version = "=0.4.1", path = "../amadeus-types" }
 bytes = "0.5"
 chrono = { version = "0.4", default-features = false }
 educe = "0.4"
@@ -29,7 +29,7 @@ pin-project = "0.4"
 postgres = { package = "tokio-postgres", version = "0.5", features = ["with-chrono-0_4"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
-sum = "0.1"
+sum = { version = "0.1.7", default-features = false }
 tokio = "0.2"
 
 [build-dependencies]
