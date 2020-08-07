@@ -41,13 +41,17 @@ pub struct SampleUnstableFolder {
 }
 
 impl<Item> FolderSync<Item> for SampleUnstableFolder {
-	type Done = SASampleUnstable<Item>;
+	type State = SASampleUnstable<Item>;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		SASampleUnstable::new(self.samples)
 	}
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
 		state.push(item, &mut thread_rng())
+	}
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }
 
@@ -87,13 +91,17 @@ impl<Item, F> FolderSync<Item> for SortFolder<F>
 where
 	F: traits::Fn(&Item, &Item) -> Ordering + Clone,
 {
-	type Done = SASort<Item, F>;
+	type State = SASort<Item, F>;
+	type Done = Self::State;
 
 	fn zero(&mut self) -> Self::Done {
 		SASort::new(self.f.clone(), self.n)
 	}
 	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		state.push(item)
+	}
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }
 
@@ -132,13 +140,17 @@ impl<Item> FolderSync<Item> for MostFrequentFolder
 where
 	Item: Clone + Hash + Eq + Send + 'static,
 {
-	type Done = Top<Item, usize>;
+	type State = Top<Item, usize>;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		Top::new(self.n, self.probability, self.tolerance, ())
 	}
-	fn push(&mut self, state: &mut Self::Done, item: Item) {
+	fn push(&mut self, state: &mut Self::State, item: Item) {
 		state.push(item, &1)
+	}
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }
 
@@ -186,12 +198,16 @@ where
 	A: Clone + Hash + Eq + Send + 'static,
 	B: Hash + 'static,
 {
-	type Done = Top<A, HyperLogLogMagnitude<B>>;
+	type State = Top<A, HyperLogLogMagnitude<B>>;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		Top::new(self.n, self.probability, self.tolerance, self.error_rate)
 	}
-	fn push(&mut self, state: &mut Self::Done, item: (A, B)) {
+	fn push(&mut self, state: &mut Self::State, item: (A, B)) {
 		state.push(item.0, &item.1)
+	}
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }

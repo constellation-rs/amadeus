@@ -21,6 +21,8 @@ use {
 };
 
 use super::{Directory, File, Page, Partition};
+#[cfg(target_arch = "wasm32")]
+use crate::util::{f64_to_u64, u64_to_f64};
 use crate::util::{IoError, ResultExpand};
 
 #[async_trait(?Send)]
@@ -357,28 +359,6 @@ impl LocalFile {
 		let buf = buf.to_owned();
 		spawn_blocking(move || FileExt::seek_write(&self_.file, &buf, pos)).map(Result::unwrap)
 	}
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(
-	clippy::cast_possible_truncation,
-	clippy::cast_sign_loss,
-	clippy::cast_precision_loss
-)]
-fn u64_to_f64(x: u64) -> f64 {
-	assert_eq!(x, x as f64 as u64);
-	x as f64
-}
-#[cfg(target_arch = "wasm32")]
-#[allow(
-	clippy::cast_possible_truncation,
-	clippy::cast_sign_loss,
-	clippy::cast_precision_loss,
-	clippy::float_cmp
-)]
-fn f64_to_u64(x: f64) -> u64 {
-	assert_eq!(x, x as u64 as f64);
-	x as u64
 }
 
 #[cfg(target_arch = "wasm32")]

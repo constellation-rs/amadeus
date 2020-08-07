@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, Fork, GroupBy, Histogram, Inspect, Map, Max, MaxBy, MaxByKey, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, Pipe, PipeTask, SampleUnstable, Sum, Update
+	All, Any, Collect, Combine, Count, Filter, FlatMap, Fold, ForEach, Fork, GroupBy, Histogram, Inspect, Map, Max, MaxBy, MaxByKey, Mean, Min, MinBy, MinByKey, MostDistinct, MostFrequent, ParallelPipe, Pipe, PipeTask, SampleUnstable, StdDev, Sum, Update
 };
 
 // TODO: add type parameter to Identity when type the type system includes HRTB in the ParallelPipe impl https://github.com/dtolnay/ghost/
@@ -131,6 +131,16 @@ mod workaround {
 			B: iter::Sum<B> + Send + 'static,
 		{
 			Sum::new(self)
+		}
+
+		#[inline]
+		pub fn mean(self) -> Mean<Self> {
+			Mean::new(self)
+		}
+
+		#[inline]
+		pub fn stddev(self) -> StdDev<Self> {
+			StdDev::new(self)
 		}
 
 		#[inline]

@@ -39,7 +39,8 @@ impl<Item, B> FolderSync<Item> for SumFolder<B>
 where
 	B: iter::Sum<Item> + iter::Sum<B>,
 {
-	type Done = B;
+	type State = B;
+	type Done = Self::State;
 
 	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
@@ -52,6 +53,10 @@ where
 			let right = iter::once(item).sum::<B>();
 			B::sum(iter::once(left).chain(iter::once(right)))
 		})
+	}
+	#[inline(always)]
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }
 
@@ -70,7 +75,8 @@ impl<Item> FolderSync<Item> for SumZeroFolder<Item>
 where
 	Option<Item>: iter::Sum<Item>,
 {
-	type Done = Item;
+	type State = Item;
+	type Done = Self::State;
 
 	#[inline(always)]
 	fn zero(&mut self) -> Self::Done {
@@ -83,5 +89,10 @@ where
 			<Option<Item> as iter::Sum<Item>>::sum(iter::once(left).chain(iter::once(right)))
 				.unwrap()
 		})
+	}
+
+	#[inline(always)]
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }

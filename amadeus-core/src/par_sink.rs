@@ -11,8 +11,10 @@ mod fork;
 mod group_by;
 mod histogram;
 mod max;
+mod mean;
 mod pipe;
 mod sample;
+mod stddev;
 mod sum;
 mod tuple;
 
@@ -20,7 +22,7 @@ use super::par_pipe::*;
 use crate::{pipe::Sink, pool::ProcessSend};
 
 pub use self::{
-	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, fork::*, group_by::*, histogram::*, max::*, pipe::*, sample::*, sum::*, tuple::*
+	all::*, any::*, collect::*, combine::*, combiner::*, count::*, fold::*, folder::*, for_each::*, fork::*, group_by::*, histogram::*, max::*, mean::*, pipe::*, sample::*, stddev::*, sum::*, tuple::*
 };
 
 #[must_use]

@@ -38,25 +38,30 @@ impl<Item> FolderSync<Item> for HistogramFolder<Item, StepA>
 where
 	Item: Hash + Ord,
 {
-	type Done = HashMap<Item, usize>;
+	type State = HashMap<Item, usize>;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		HashMap::new()
 	}
 	fn push(&mut self, state: &mut Self::Done, item: Item) {
 		*state.entry(item).or_insert(0) += 1;
+	}
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }
 impl<B> FolderSync<HashMap<B, usize>> for HistogramFolder<B, StepB>
 where
 	B: Hash + Ord,
 {
-	type Done = Vec<(B, usize)>;
+	type State = Vec<(B, usize)>;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		Vec::new()
 	}
-	fn push(&mut self, state: &mut Self::Done, b: HashMap<B, usize>) {
+	fn push(&mut self, state: &mut Self::State, b: HashMap<B, usize>) {
 		let mut b = b.into_iter().collect::<Vec<_>>();
 		b.sort_by(|a, b| a.0.cmp(&b.0));
 		replace_with_or_default(state, |state| {
@@ -73,17 +78,21 @@ where
 				.collect()
 		})
 	}
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
+	}
 }
 impl<B> FolderSync<Vec<(B, usize)>> for HistogramFolder<B, StepB>
 where
 	B: Hash + Ord,
 {
-	type Done = Vec<(B, usize)>;
+	type State = Vec<(B, usize)>;
+	type Done = Self::State;
 
-	fn zero(&mut self) -> Self::Done {
+	fn zero(&mut self) -> Self::State {
 		Vec::new()
 	}
-	fn push(&mut self, state: &mut Self::Done, b: Vec<(B, usize)>) {
+	fn push(&mut self, state: &mut Self::State, b: Vec<(B, usize)>) {
 		replace_with_or_default(state, |state| {
 			state
 				.into_iter()
@@ -97,5 +106,9 @@ where
 				})
 				.collect()
 		})
+	}
+	#[inline(always)]
+	fn done(&mut self, state: Self::State) -> Self::Done {
+		state
 	}
 }
