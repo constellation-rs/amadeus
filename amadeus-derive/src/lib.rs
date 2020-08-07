@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. This macro is re-exposed as [`amadeus::data::Data`](https://docs.rs/amadeus/0.3/amadeus/data/derive.Data.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.3.7")]
+#![doc(html_root_url = "https://docs.rs/amadeus-derive/0.4.0")]
 #![recursion_limit = "400"]
 #![warn(
 	missing_copy_implementations,
@@ -600,7 +600,11 @@ fn impl_struct(
 		}
 
 		#[automatically_derived]
-		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {}
+		impl #impl_generics __::Data for #name #ty_generics #where_clause_with_data {
+			fn heap(&self) -> usize {
+				#(__::Data::heap(&self.#field_names1) + )* 0
+			}
+		}
 
 		#[automatically_derived]
 		impl #impl_generics __::AmadeusOrd for #name #ty_generics #where_clause_with_data {

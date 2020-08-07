@@ -1,5 +1,7 @@
 mod filter;
+mod filter_map_sync;
 mod flat_map;
+mod flat_map_sync;
 mod flatten;
 mod map;
 
@@ -10,7 +12,7 @@ use std::{
 	marker::PhantomData, mem, ops::DerefMut, pin::Pin, task::{Context, Poll}
 };
 
-pub use self::{filter::*, flat_map::*, flatten::*, map::*};
+pub use self::{filter::*, filter_map_sync::*, flat_map::*, flat_map_sync::*, flatten::*, map::*};
 
 // Sink takes Input as an input parameter rather than associated type to accept
 // for<'a> &'a T, but this might not be necessary in future?

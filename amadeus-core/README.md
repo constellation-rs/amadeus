@@ -1,3 +1,3 @@
 # amadeus-core
 
-This subcrate of the [`amadeus`](https://github.com/alecmocatta/amadeus) project includes fundamental definitions including `DistributedIterator` and `ProcessPool`.
+This subcrate of the [`amadeus`](https://github.com/constellation-rs/amadeus) project includes fundamental definitions including `DistributedIterator` and `ProcessPool`.

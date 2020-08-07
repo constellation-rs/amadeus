@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::Ordering, collections::HashMap, fmt::Debug, hash::{BuildHasher, Hash, Hasher}
+	borrow::Cow, cmp::Ordering, collections::HashMap, fmt::Debug, hash::{BuildHasher, Hash, Hasher}, mem
 };
 
 #[cfg(feature = "parquet")]
@@ -35,6 +35,10 @@ pub trait Data:
 	+ Send
 	+ 'static
 {
+	fn size(&self) -> usize {
+		mem::size_of::<Self>() + self.heap()
+	}
+	fn heap(&self) -> usize;
 	fn cast<D: Data>(self) -> Result<D, CastError> {
 		self.into().downcast().map_err(|_| CastError)
 	}
@@ -57,29 +61,129 @@ pub struct CastError;
 // 	}
 // }
 
-impl<T> Data for Option<T> where T: Data {}
-impl<T> Data for Box<T> where T: Data {}
-impl<T> Data for List<T> where T: Data {}
+impl<T> Data for Option<T>
+where
+	T: Data,
+{
+	fn heap(&self) -> usize {
+		self.as_ref().map_or(0, Data::heap)
+	}
+}
+impl<T> Data for Box<T>
+where
+	T: Data,
+{
+	fn heap(&self) -> usize {
+		mem::size_of::<T>() + (**self).heap()
+	}
+}
+impl<T> Data for List<T>
+where
+	T: Data,
+{
+	fn heap(&self) -> usize {
+		todo!()
+		// self.capacity() * mem::size_of::<T>() + self.iter()
+	}
+}
 impl<K, V, S> Data for HashMap<K, V, S>
 where
 	K: Hash + Eq + Data,
 	V: Data,
 	S: BuildHasher + Clone + Default + Send + 'static,
 {
+	fn heap(&self) -> usize {
+		self.capacity() * mem::size_of::<(K, V)>()
+			+ self.iter().map(|(k, v)| k.heap() + v.heap()).sum::<usize>()
+	}
 }
 
 macro_rules! impl_data {
 	($($t:ty)*) => ($(
-		impl Data for $t {}
+		impl Data for $t {
+			fn heap(&self) -> usize {
+				0
+			}
+		}
 	)*);
 }
-impl_data!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 String Bson Json Enum Decimal Group Date DateWithoutTimezone Time TimeWithoutTimezone DateTime DateTimeWithoutTimezone Timezone Value Webpage<'static> Url IpAddr);
+impl_data!(bool u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 Decimal Group Date DateWithoutTimezone Time TimeWithoutTimezone DateTime DateTimeWithoutTimezone Timezone IpAddr);
+
+macro_rules! impl_data {
+	($($t:ty)*) => ($(
+		impl Data for $t {
+			fn heap(&self) -> usize {
+				self.capacity()
+			}
+		}
+	)*);
+}
+impl_data!(String Bson Json Enum);
+
+impl Data for Url {
+	fn heap(&self) -> usize {
+		self.as_str().len()
+	}
+}
+impl Data for Webpage<'static> {
+	fn heap(&self) -> usize {
+		self.url.heap()
+			+ if let Cow::Owned(slice) = &self.contents {
+				slice.capacity()
+			} else {
+				0
+			}
+	}
+}
+
+impl Data for Value {
+	fn heap(&self) -> usize {
+		match self {
+			Self::Bool(value) => value.heap(),
+			Self::U8(value) => value.heap(),
+			Self::I8(value) => value.heap(),
+			Self::U16(value) => value.heap(),
+			Self::I16(value) => value.heap(),
+			Self::U32(value) => value.heap(),
+			Self::I32(value) => value.heap(),
+			Self::U64(value) => value.heap(),
+			Self::I64(value) => value.heap(),
+			Self::F32(value) => value.heap(),
+			Self::F64(value) => value.heap(),
+			Self::Date(value) => value.heap(),
+			Self::DateWithoutTimezone(value) => value.heap(),
+			Self::Time(value) => value.heap(),
+			Self::TimeWithoutTimezone(value) => value.heap(),
+			Self::DateTime(value) => value.heap(),
+			Self::DateTimeWithoutTimezone(value) => value.heap(),
+			Self::Timezone(value) => value.heap(),
+			Self::Decimal(value) => value.heap(),
+			Self::Bson(value) => value.heap(),
+			Self::String(value) => value.heap(),
+			Self::Json(value) => value.heap(),
+			Self::Enum(value) => value.heap(),
+			Self::Url(value) => value.heap(),
+			Self::Webpage(value) => value.heap(),
+			Self::IpAddr(value) => value.heap(),
+			Self::List(value) => value.heap(),
+			Self::Map(value) => value.heap(),
+			Self::Group(value) => value.heap(),
+			Self::Option(value) => value
+				.as_ref()
+				.map_or(0, |value| value.as_value(|value| value.heap())),
+		}
+	}
+}
 
 // Implement Record for common array lengths.
 macro_rules! array {
 	($($i:tt)*) => {$(
-		impl Data for [u8; $i] {}
-		// TODO: impl<T> Data for [T; $i] where T: Data {}
+		impl Data for [u8; $i] {
+			fn heap(&self) -> usize {
+				0
+			}
+		}
+		// TODO: fix parquet then impl<T> Data for [T; $i] where T: Data {}
 	)*};
 }
 amadeus_types::array!(array);
@@ -87,7 +191,11 @@ amadeus_types::array!(array);
 // Implement Record on tuples up to length 12.
 macro_rules! tuple {
 	($len:tt $($t:ident $i:tt)*) => {
-		impl<$($t,)*> Data for ($($t,)*) where $($t: Data,)* {}
+		impl<$($t,)*> Data for ($($t,)*) where $($t: Data,)* {
+			fn heap(&self) -> usize {
+				$(self.$i.heap() + )* 0
+			}
+		}
 	};
 }
 amadeus_types::tuple!(tuple);

@@ -12,7 +12,7 @@ use super::{
 	util::{assert_sync_and_send, OnDrop, Panicked, RoundRobin, Synchronize}, ThreadPool
 };
 
-#[serde_closure::desugar]
+#[cfg_attr(not(nightly), serde_closure::desugar)]
 type Request = st::Box<dyn st::sc::FnOnce(&ThreadPool) -> LocalBoxFuture<'static, Response> + Send>;
 type Response = Box<dyn st::Any + Send>;
 

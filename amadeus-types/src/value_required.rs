@@ -2,7 +2,7 @@
 //! Parquet value.
 
 use std::{
-	cmp::Ordering, collections::HashMap, hash::{Hash, Hasher}
+	cmp::Ordering, collections::HashMap, hash::{Hash, Hasher}, mem, ptr
 };
 
 use super::{
@@ -76,6 +76,48 @@ pub enum ValueRequired {
 	Map(HashMap<Value, Value>),
 	/// Struct, child elements are tuples of field-value pairs.
 	Group(Group),
+}
+
+impl ValueRequired {
+	pub fn as_value<R>(&self, f: impl FnOnce(&Value) -> R) -> R {
+		#[allow(unsafe_code)]
+		let value = mem::ManuallyDrop::new(unsafe {
+			match self {
+				Self::Bool(value) => Value::Bool(ptr::read(value)),
+				Self::U8(value) => Value::U8(ptr::read(value)),
+				Self::I8(value) => Value::I8(ptr::read(value)),
+				Self::U16(value) => Value::U16(ptr::read(value)),
+				Self::I16(value) => Value::I16(ptr::read(value)),
+				Self::U32(value) => Value::U32(ptr::read(value)),
+				Self::I32(value) => Value::I32(ptr::read(value)),
+				Self::U64(value) => Value::U64(ptr::read(value)),
+				Self::I64(value) => Value::I64(ptr::read(value)),
+				Self::F32(value) => Value::F32(ptr::read(value)),
+				Self::F64(value) => Value::F64(ptr::read(value)),
+				Self::Date(value) => Value::Date(ptr::read(value)),
+				Self::DateWithoutTimezone(value) => Value::DateWithoutTimezone(ptr::read(value)),
+				Self::Time(value) => Value::Time(ptr::read(value)),
+				Self::TimeWithoutTimezone(value) => Value::TimeWithoutTimezone(ptr::read(value)),
+				Self::DateTime(value) => Value::DateTime(ptr::read(value)),
+				Self::DateTimeWithoutTimezone(value) => {
+					Value::DateTimeWithoutTimezone(ptr::read(value))
+				}
+				Self::Timezone(value) => Value::Timezone(ptr::read(value)),
+				Self::Decimal(value) => Value::Decimal(ptr::read(value)),
+				Self::Bson(value) => Value::Bson(ptr::read(value)),
+				Self::String(value) => Value::String(ptr::read(value)),
+				Self::Json(value) => Value::Json(ptr::read(value)),
+				Self::Enum(value) => Value::Enum(ptr::read(value)),
+				Self::Url(value) => Value::Url(ptr::read(value)),
+				Self::Webpage(value) => Value::Webpage(ptr::read(value)),
+				Self::IpAddr(value) => Value::IpAddr(ptr::read(value)),
+				Self::List(value) => Value::List(ptr::read(value)),
+				Self::Map(value) => Value::Map(ptr::read(value)),
+				Self::Group(value) => Value::Group(ptr::read(value)),
+			}
+		});
+		f(&value)
+	}
 }
 
 #[allow(clippy::derive_hash_xor_eq)]
