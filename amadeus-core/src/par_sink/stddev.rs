@@ -70,6 +70,7 @@ impl FolderSync<f64> for SDFolder<StepA> {
 			state.sd = state.variance.sqrt()
 		} else {
 			state.variance = f64::NAN;
+			state.sd = f64::NAN
 		}
 	}
 
