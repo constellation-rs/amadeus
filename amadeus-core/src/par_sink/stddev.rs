@@ -92,7 +92,7 @@ impl FolderSync<SDState> for SDFolder<StepB> {
 		state.variance = ((u64_to_f64(state.count) - 1.0) * state.variance
 			+ (u64_to_f64(item.count) - 1.0) * item.variance)
 			/ ((u64_to_f64(state.count) + u64_to_f64(item.count)) - 2.0);
-
+		state.sum += item.sum;
 		state.count += item.count;
 	}
 
