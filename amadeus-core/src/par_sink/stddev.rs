@@ -70,11 +70,7 @@ impl FolderSync<f64> for SDFolder<StepA> {
 
 	#[inline(always)]
 	fn done(&mut self, state: Self::State) -> Self::Done {
-		if state.count > 1 {
-			state.variance.sqrt()
-		} else {
-			f64::NAN
-		}
+		state.variance.sqrt()
 	}
 }
 
