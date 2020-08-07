@@ -1,0 +1,44 @@
+[package]
+name = "amadeus-ml"
+version = "0.4.0"
+license = "Apache-2.0"
+authors = ["Alec Mocatta <alec@mocatta.net>", "Maciej Kula <maciej.kula@gmail.com>"]
+categories = ["data-structures", "algorithms", "science"]
+keywords = ["streaming-algorithm", "probabilistic", "sketch", "data-structure", "hyperloglog"]
+description = """
+A low-overhead, define-by-run autodifferentiation library.
+"""
+repository = "https://github.com/constellation-rs/amadeus"
+homepage = "https://github.com/constellation-rs/amadeus"
+documentation = "https://docs.rs/amadeus"
+readme = "README.md"
+edition = "2018"
+
+[badges]
+azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "26" }
+maintenance = { status = "actively-developed" }
+
+[features]
+fast-math = []
+
+[dependencies]
+ndarray = { version = "0.11.0", features = ["serde-1"] }
+rand = { version = "0.5.0", features = ["serde1"] }
+smallvec = { version = "0.5.0", features = ["serde"] }
+itertools = "0.7.3"
+rayon = "1.0.0"
+serde = { version = "1", features = ["derive", "rc"] }
+hibitset = "0.5.0"
+
+[build-dependencies]
+rustversion = "1.0"
+
+[dev-dependencies]
+# ndarray = { version = "0.11.0", features = ["blas", "serde-1"] }
+# blas-src = { version = "0.1.2", default-features = false, features = ["openblas"] }
+# openblas-src = { version = "0.5.6", default-features = false, features = ["static"] }
+criterion = "0.2.3"
+
+[[bench]]
+name = "benchmark"
+harness = false

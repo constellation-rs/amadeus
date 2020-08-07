@@ -41,6 +41,7 @@ amadeus-derive = { version = "=0.4.0", path = "amadeus-derive" }
 amadeus-types = { version = "=0.4.0", path = "amadeus-types" }
 amadeus-aws = { version = "=0.4.0", path = "amadeus-aws", optional = true }
 amadeus-commoncrawl = { version = "=0.4.0", path = "amadeus-commoncrawl", optional = true }
+amadeus-ml = { version = "=0.4.0", path = "amadeus-ml" }
 amadeus-parquet = { version = "=0.4.0", path = "amadeus-parquet", optional = true }
 amadeus-postgres = { version = "=0.4.0", path = "amadeus-postgres", optional = true }
 amadeus-serde = { version = "=0.4.0", path = "amadeus-serde", optional = true }
