@@ -42,8 +42,6 @@ pub struct SDState {
 	#[new(default)]
 	sum: f64,
 	#[new(default)]
-	pre_variance: f64,
-	#[new(default)]
 	variance: f64,
 }
 
@@ -60,11 +58,11 @@ impl FolderSync<f64> for SDFolder<StepA> {
 	fn push(&mut self, state: &mut Self::State, item: f64) {
 		state.count += 1;
 		state.sum += item;
-		let diff = u64_to_f64(state.count) * item - state.sum;
-		state.pre_variance +=
-			diff * diff / (u64_to_f64(state.count) * (u64_to_f64(state.count) - 1.0));
 		if state.count > 1 {
-			state.variance = state.pre_variance / u64_to_f64(state.count) - 1.0;
+			let diff = u64_to_f64(state.count) * item - state.sum;
+			state.variance +=
+				diff * diff / (u64_to_f64(state.count) * (u64_to_f64(state.count) - 1.0));
+			state.variance /= u64_to_f64(state.count) - 1.0;
 		} else {
 			state.variance = f64::NAN;
 		}
