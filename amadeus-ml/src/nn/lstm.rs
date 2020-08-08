@@ -4,8 +4,11 @@
 //! then applying it to your inputs:
 //!
 //! ```
-//! # use amadeus_ml::{nn::{lstm, xavier_normal}, Arr, HogwildParameter, InputNode, Node, ParameterNode, Variable};
+//! # use amadeus_ml::{nn::{lstm, xavier_normal}, InputNode};
 //! #
+//! # // Overflows with 1MiB stack (default on Windows), so we spawn a thread which uses Rust's
+//! # // [2MiB](https://github.com/rust-lang/rust/blob/c989ac132a81503ceaaa1054da0a3a8c5c305ef0/library/std/src/sys/windows/thread.rs#L13)
+//! # std::thread::spawn(|| {
 //! let input_dim = 10;
 //! let hidden_dim = 5;
 //!
@@ -15,12 +18,12 @@
 //!
 //! // Construct the input nodes.
 //! let input: Vec<_> = (0..200)
-//!                      .map(|_| InputNode::new(xavier_normal(1, input_dim))).collect();
+//!     .map(|_| InputNode::new(xavier_normal(1, input_dim))).collect();
 //!
 //! // Construct an LSTM with 200 steps of recursion.
 //! let mut hidden = lstm.forward(&input);
 //!
-//! let mut last_hidden = hidden.last_mut().unwrap();
+//! let last_hidden = hidden.last_mut().unwrap();
 //!
 //! // Run as usual.
 //! last_hidden.forward();
@@ -29,6 +32,7 @@
 //!
 //! // Reset the hidden state between sequences
 //! lstm.reset_state();
+//! # }).join().unwrap();
 //! ```
 
 use serde::{Deserialize, Serialize};

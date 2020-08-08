@@ -131,18 +131,23 @@ pub trait Node: fmt::Debug + 'static {
 impl Node for Rc<dyn Node<Value = Arr, InputGradient = Arr>> {
 	type Value = Arr;
 	type InputGradient = Arr;
+	#[inline(always)]
 	fn forward(&self) {
 		(**self).forward()
 	}
+	#[inline(always)]
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
 		(**self).backward(gradient)
 	}
+	#[inline(always)]
 	fn value(&self) -> Bor<Self::Value> {
 		(**self).value()
 	}
+	#[inline(always)]
 	fn needs_gradient(&self) -> bool {
 		(**self).needs_gradient()
 	}
+	#[inline(always)]
 	fn clear(&self) {
 		(**self).clear()
 	}
