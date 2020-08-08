@@ -146,7 +146,7 @@ impl SynchronizationBarrierCore {
 	}
 
 	fn register_thread(&self) -> usize {
-		self.start_barrier.increment_num_threads();
+		let _ = self.start_barrier.increment_num_threads();
 		let thread_num = self.end_barrier.increment_num_threads();
 
 		self.thread_queue.lock().unwrap().push_back(thread_num);
@@ -155,8 +155,8 @@ impl SynchronizationBarrierCore {
 	}
 
 	fn deregister_thread(&self, thread_id: usize) {
-		self.start_barrier.decrement_num_threads();
-		self.end_barrier.decrement_num_threads();
+		let _ = self.start_barrier.decrement_num_threads();
+		let _ = self.end_barrier.decrement_num_threads();
 
 		self.thread_queue
 			.lock()
@@ -177,11 +177,11 @@ impl SynchronizationBarrierCore {
 	}
 
 	fn start_wait(&self) {
-		self.start_barrier.wait();
+		let _ = self.start_barrier.wait();
 	}
 
 	fn end_wait(&self) {
-		self.end_barrier.wait();
+		let _ = self.end_barrier.wait();
 	}
 }
 

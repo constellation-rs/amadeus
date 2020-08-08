@@ -18,9 +18,7 @@
 //! backpropagates through it.
 //!
 //! ```rust
-//! # extern crate rand;
-//! # extern crate wyrm;
-//! # use wyrm::*;
+//! # use amadeus_ml::*;
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
@@ -40,10 +38,8 @@
 //! go through several epochs of learning:
 //!
 //! ```rust
-//! # extern crate rand;
-//! # extern crate wyrm;
-//! # use wyrm::*;
-//! # use wyrm::optim::*;
+//! # use amadeus_ml::*;
+//! # use amadeus_ml::optim::*;
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
@@ -78,13 +74,10 @@
 //! parameters, then building a per-thread copy of the model:
 //!
 //! ```rust
-//! # extern crate rand;
-//! # extern crate wyrm;
-//! # extern crate rayon;
 //! # use std::sync::Arc;
 //! # use rayon::prelude::*;
-//! # use wyrm::*;
-//! # use wyrm::optim::*;
+//! # use amadeus_ml::*;
+//! # use amadeus_ml::optim::*;
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
@@ -135,8 +128,29 @@
 //!
 //! Enable the `fast-math` option to use fast approximations to transcendental functions.
 //! This should give substantial speed gains in networks that are `exp`, `ln`, or `tanh`-heavy.
-#![deny(missing_docs, missing_debug_implementations)]
-#![allow(clippy::unreadable_literal, clippy::redundant_field_names)]
+
+#![doc(html_root_url = "https://docs.rs/amadeus-ml/0.4.0")]
+#![warn(
+	missing_debug_implementations,
+	missing_docs,
+	trivial_casts,
+	trivial_numeric_casts,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	clippy::pedantic
+)]
+// from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
+#![allow(
+	clippy::cast_precision_loss,
+	clippy::doc_markdown,
+	clippy::float_cmp,
+	clippy::if_not_else,
+	clippy::inline_always,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::unsafe_derive_deserialize
+)]
 
 mod fast_approx;
 pub mod nn;
@@ -144,12 +158,15 @@ mod nodes;
 mod numerics;
 pub mod optim;
 
+use approx::AbsDiffEq;
 use itertools::Itertools;
 use std::{
-	cell::RefCell, clone::Clone, ops::{Add, Deref, Div, Mul, Neg, Sub}, rc::Rc
+	cell::RefCell, clone::Clone, ops::{Add, Div, Mul, Neg, Sub}, rc::Rc
 };
 
-use nodes::*;
+use nodes::{
+	AddNode, ConcatenateNode, DivNode, DotNode, ExpNode, IndexNode, LogNode, LogSoftmaxNode, MulNode, NegNode, ReluNode, SigmoidNode, SliceNode, SoftmaxNode, SquareNode, SubNode, SumNode, TanhNode, TransposeNode, VectorDotNode
+};
 
 pub use nodes::{Bor, HogwildParameter, IndexInputNode, InputNode, Node, ParameterNode};
 pub use numerics::simd_dot;
@@ -180,9 +197,9 @@ fn merge_parameters(
 	xs.iter()
 		.merge_join_by(ys.iter(), |x, y| x.as_ptr().cmp(&y.as_ptr()))
 		.map(|either| match either {
-			itertools::EitherOrBoth::Left(x) => x,
-			itertools::EitherOrBoth::Right(x) => x,
-			itertools::EitherOrBoth::Both(x, _) => x,
+			itertools::EitherOrBoth::Left(x)
+			| itertools::EitherOrBoth::Right(x)
+			| itertools::EitherOrBoth::Both(x, _) => x,
 		})
 		.cloned()
 		.collect()
@@ -265,10 +282,7 @@ where
 	/// Box the variable, erasing its specific type. Use to manage the complexity
 	/// of variable types in deep computation graphs.
 	pub fn boxed(&self) -> Variable<Rc<dyn Node<Value = Arr, InputGradient = Arr>>> {
-		Variable::new(
-			Rc::new(self.node.clone() as Rc<dyn Node<Value = Arr, InputGradient = Arr>>),
-			self.parameters.clone(),
-		)
+		Variable::new(Rc::new(self.node.clone()), self.parameters.clone())
 	}
 
 	/// Run the backward pass through the subgraph terminating at this node.
@@ -292,9 +306,9 @@ where
 	/// Clip the value. Useful for clipping losses.
 	pub fn clip(&mut self, min: f32, max: f32) {
 		let bor_value = self.node.value();
-		let value: &Arr = bor_value.deref();
+		let value: *const Arr = &*bor_value;
 		#[allow(clippy::cast_ref_to_mut)]
-		let value = unsafe { &mut *(value as *const Arr as *mut Arr) };
+		let value = unsafe { &mut *(value as *mut Arr) };
 
 		value
 			.as_slice_mut()
@@ -444,7 +458,7 @@ impl Variable<ParameterNode> {
 	}
 
 	fn as_ptr(&self) -> *const ParameterNode {
-		self.node.deref() as *const ParameterNode
+		&*self.node
 	}
 
 	/// Row-wise indexing of this parameter node. Primiarily used
@@ -476,7 +490,7 @@ where
 
 impl<'value> DataInput<&'value Arr> for Variable<ParameterNode> {
 	fn set_value(&self, value: &Arr) {
-		let param_value = unsafe { &mut *(self.node.value.deref().value.as_ptr()) };
+		let param_value = unsafe { &mut *(self.node.value.value.as_ptr()) };
 		param_value.assign(value)
 	}
 }
@@ -533,7 +547,7 @@ macro_rules! impl_arithmetic_op {
 		{
 			type Output = Variable<$node<LHS, InputNode>>;
 			fn $fn(self, other: f32) -> Self::Output {
-				let constant = InputNode::new(self.value().deref() * 0.0 + other);
+				let constant = InputNode::new(&*self.value() * 0.0 + other);
 
 				Variable::new(
 					Rc::new($node::new(self.node, constant.node)),
@@ -550,7 +564,7 @@ macro_rules! impl_arithmetic_op {
 		{
 			type Output = Variable<$node<InputNode, RHS>>;
 			fn $fn(self, other: Variable<RHS>) -> Self::Output {
-				let constant = InputNode::new(other.value().deref() * 0.0 + self);
+				let constant = InputNode::new(&*other.value() * 0.0 + self);
 
 				Variable::new(
 					Rc::new($node::new(constant.node, other.node)),
@@ -633,7 +647,7 @@ where
 /// Assert two arrays are within `tol` of each other.
 pub fn assert_close(x: &Arr, y: &Arr, tol: f32) {
 	assert!(
-		x.all_close(y, tol),
+		x.abs_diff_eq(y, tol),
 		"{:#?} not within {} of {:#?}",
 		x,
 		tol,
@@ -684,7 +698,7 @@ mod tests {
 		let y = ParameterNode::new(random_matrix(1, 1));
 
 		let z = x + y;
-		let z = z.clone() + z.clone();
+		let z = z.clone() + z;
 
 		assert_eq!(z.parameters().len(), 2);
 	}
@@ -705,7 +719,7 @@ mod tests {
 		let mut x = ParameterNode::new(random_matrix(1, 1));
 		let mut y = ParameterNode::new(random_matrix(1, 1));
 		let z = x.clone() - (y.clone() - x.clone());
-		let mut z = z.clone() * 2.0 + z.clone().sigmoid();
+		let mut z = z.clone() * 2.0 + z.sigmoid();
 
 		let (difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&difference, &gradient, TOLERANCE);
@@ -717,7 +731,7 @@ mod tests {
 		let mut x = ParameterNode::new(random_matrix(10, 10));
 		let mut y = ParameterNode::new(random_matrix(10, 10));
 		let z = x.clone() * y.clone();
-		let mut z = z.clone() + z.clone();
+		let mut z = z.clone() + z;
 
 		let (difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&difference, &gradient, TOLERANCE);
@@ -728,7 +742,7 @@ mod tests {
 	fn div_finite_difference() {
 		let mut x = ParameterNode::new(random_matrix(1, 1));
 		let y = ParameterNode::new(random_matrix(1, 1));
-		let mut z = (x.clone() + x.clone()) / y.clone();
+		let mut z = (x.clone() + x.clone()) / y;
 
 		let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -738,7 +752,7 @@ mod tests {
 		let mut x = ParameterNode::new(random_matrix(10, 5));
 		let mut y = ParameterNode::new(random_matrix(10, 5));
 		let z = x.vector_dot(&y);
-		let mut z = z.clone() + z.clone();
+		let mut z = z.clone() + z;
 
 		let (difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&difference, &gradient, TOLERANCE);
@@ -762,8 +776,8 @@ mod tests {
 	fn dot_accumulation_finite_difference() {
 		let mut x = ParameterNode::new(random_matrix(10, 5));
 		let mut y = ParameterNode::new(random_matrix(5, 10));
-		let z = x.clone().dot(&y);
-		let mut v = z.clone() * z.clone();
+		let z = x.dot(&y);
+		let mut v = z.clone() * z;
 
 		let (difference, gradient) = finite_difference(&mut x, &mut v);
 		assert_close(&difference, &gradient, TOLERANCE);
@@ -840,7 +854,7 @@ mod tests {
 	fn sigmoid_finite_difference() {
 		let mut x = ParameterNode::new(random_matrix(10, 5));
 		let z = (x.clone() + x.clone()).sigmoid();
-		let mut z = z.clone() + z.clone();
+		let mut z = z.clone() + z;
 
 		let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -876,7 +890,7 @@ mod tests {
 		let mut z = (x.clone() + x.clone()).log_softmax();
 		let v = (x.clone() + x.clone()).softmax().ln();
 
-		assert_close(v.value().deref(), z.value().deref(), TOLERANCE);
+		assert_close(&*v.value(), &*z.value(), TOLERANCE);
 
 		let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&finite_difference, &gradient, TOLERANCE);
@@ -885,7 +899,7 @@ mod tests {
 	fn sparse_categorical_cross_entropy_finite_difference() {
 		let mut x = ParameterNode::new(random_matrix(1, 10));
 		let z = x.clone() + x.clone();
-		let idx = IndexInputNode::new(&vec![0][..]);
+		let idx = IndexInputNode::new(&[0][..]);
 		let mut loss = nn::losses::sparse_categorical_crossentropy(&z, &idx);
 
 		let (finite_difference, gradient) = finite_difference(&mut x, &mut loss);
@@ -898,10 +912,10 @@ mod tests {
 		//let v = x.clone() + y.clone();
 
 		let z = x.stack(&y, ndarray::Axis(0));
-		let mut z = z.clone().sigmoid() * z.clone().relu();
+		let mut z = z.sigmoid() * z.relu();
 
-		assert_eq!(z.value().rows(), 20);
-		assert_eq!(z.value().cols(), 5);
+		assert_eq!(z.value().nrows(), 20);
+		assert_eq!(z.value().ncols(), 5);
 
 		let (difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&difference, &gradient, TOLERANCE);
@@ -917,8 +931,8 @@ mod tests {
 
 		let mut z = x.stack(&y, ndarray::Axis(1)).sigmoid();
 
-		assert_eq!(z.value().rows(), 10);
-		assert_eq!(z.value().cols(), 10);
+		assert_eq!(z.value().nrows(), 10);
+		assert_eq!(z.value().ncols(), 10);
 
 		let (difference, gradient) = finite_difference(&mut x, &mut z);
 		assert_close(&difference, &gradient, TOLERANCE);
@@ -934,12 +948,12 @@ mod tests {
 		let x_1 = x.slice(s![.., 10..20]);
 		let x_2 = x.slice(s![.., 20..30]);
 
-		assert_eq!(x_0.value().rows(), 10);
-		assert_eq!(x_0.value().cols(), 10);
-		assert_eq!(x_1.value().rows(), 10);
-		assert_eq!(x_1.value().cols(), 10);
-		assert_eq!(x_2.value().rows(), 10);
-		assert_eq!(x_2.value().cols(), 10);
+		assert_eq!(x_0.value().nrows(), 10);
+		assert_eq!(x_0.value().ncols(), 10);
+		assert_eq!(x_1.value().nrows(), 10);
+		assert_eq!(x_1.value().ncols(), 10);
+		assert_eq!(x_2.value().nrows(), 10);
+		assert_eq!(x_2.value().ncols(), 10);
 
 		let mut z = (x_0 + x_1 + x_2).sigmoid();
 
@@ -977,11 +991,11 @@ mod tests {
 		let optimizer = Adagrad::new().learning_rate(0.5);
 
 		for _ in 0..num_epochs {
-			let _x = arr2(&[[rand::thread_rng().gen()]]);
-			let _y = 0.5 * &_x + 0.2;
+			let x_ = arr2(&[[rand::thread_rng().gen()]]);
+			let y_ = 0.5 * &x_ + 0.2;
 
-			x.set_value(&_x);
-			y.set_value(&_y);
+			x.set_value(&x_);
+			y.set_value(&y_);
 
 			loss.forward();
 			loss.backward(1.0);
@@ -1019,15 +1033,15 @@ mod tests {
 		let optimizer = SGD::new().learning_rate(0.1);
 
 		for _ in 0..num_epochs {
-			let _x = arr2(&[[
+			let x_ = arr2(&[[
 				rand::thread_rng().gen(),
 				rand::thread_rng().gen(),
 				rand::thread_rng().gen(),
 			]]);
-			let _y = &_x.dot(&coefficients) + 5.0;
+			let y_ = &x_.dot(&coefficients) + 5.0;
 
-			x.set_value(&_x);
-			y.set_value(&_y);
+			x.set_value(&x_);
+			y.set_value(&y_);
 
 			loss.forward();
 			loss.backward(1.0);
@@ -1070,7 +1084,7 @@ mod tests {
 		let v_vec = v_embedding.index(&v_index);
 
 		let y_hat = u_vec.vector_dot(&v_vec);
-		let mut loss = (output.clone() - y_hat.clone()).square();
+		let mut loss = (output.clone() - y_hat).square();
 
 		let num_epochs = 200;
 		let optimizer = Adagrad::new().learning_rate(0.1);
@@ -1130,7 +1144,7 @@ mod tests {
 				let v_vec = v_embedding.index(&v_index);
 
 				let y_hat = u_vec.vector_dot(&v_vec);
-				let mut loss = (output.clone() - y_hat.clone()).square();
+				let mut loss = (output.clone() - y_hat).square();
 
 				let num_epochs = 100;
 
@@ -1200,7 +1214,7 @@ mod tests {
 				let v_vec = v_embedding.index(&v_index);
 
 				let y_hat = u_vec.vector_dot(&v_vec);
-				let mut loss = (output.clone() - y_hat.clone()).square();
+				let mut loss = (output.clone() - y_hat).square();
 
 				let num_epochs = 100;
 

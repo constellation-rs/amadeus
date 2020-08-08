@@ -62,6 +62,7 @@ impl Adam {
 	}
 
 	fn param_fields<'par>(&self, value: &'par Arc<HogwildParameter>) -> AdamParameters<'par> {
+		let _ = self;
 		AdamParameters {
 			value: unsafe { value.value_mut() },
 			m: unsafe { value.squared_gradient_mut() },
@@ -70,6 +71,7 @@ impl Adam {
 		}
 	}
 
+	#[allow(clippy::trivially_copy_pass_by_ref)]
 	#[inline(always)]
 	fn update(&self, value: &mut f32, gradient: f32, m: &mut f32, v: &mut f32, t: &i32) {
 		// Apply L2 to gradient.
@@ -108,9 +110,9 @@ impl Adam {
 			}
 		} else {
 			for (row_idx, ref grad) in sink.sparse_iter() {
-				let mut value_row = param.value.subview_mut(Axis(0), row_idx);
-				let mut m_row = param.m.subview_mut(Axis(0), row_idx);
-				let mut v_row = param.v.subview_mut(Axis(0), row_idx);
+				let mut value_row = param.value.index_axis_mut(Axis(0), row_idx);
+				let mut m_row = param.m.index_axis_mut(Axis(0), row_idx);
+				let mut v_row = param.v.index_axis_mut(Axis(0), row_idx);
 
 				for (value, &gradient, m, v) in izip!(
 					value_row.as_slice_mut().unwrap(),

@@ -46,7 +46,7 @@ impl SGD {
 	) {
 		let param_value = unsafe { param.value_mut() };
 		let learning_rate = self.learning_rate;
-		let sink = sink.deref_mut();
+		let sink = &mut *sink;
 
 		if let Some((min, max)) = self.clamp {
 			sink.clamp(min, max);
@@ -56,7 +56,7 @@ impl SGD {
 			param_value.scaled_add(-self.learning_rate, sink.gradient());
 		} else {
 			for (row_idx, grad) in sink.sparse_iter() {
-				let param_row = param_value.subview_mut(Axis(0), row_idx);
+				let param_row = param_value.index_axis_mut(Axis(0), row_idx);
 
 				numerics::map_add_assign_slice(
 					param_row.into_slice().unwrap(),

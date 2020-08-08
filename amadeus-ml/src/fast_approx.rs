@@ -1,5 +1,5 @@
 // Direct translations from
-// https://github.com/etheory/fastapprox/blob/master/fastapprox/src/fastlog.h
+// https://github.com/romeric/fastapprox/blob/master/fastapprox/src/fastlog.h
 
 /*=====================================================================*
  *                   Copyright (C) 2011 Paul Mineiro                   *
@@ -41,6 +41,8 @@
  * Contact: Paul Mineiro <paul@mineiro.com>                            *
  *=====================================================================*/
 
+#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+
 use std::f32;
 
 #[repr(C)]
@@ -60,7 +62,7 @@ pub fn fastlog2(x: f32) -> f32 {
 	unsafe {
 		let vx = FloatUint { f: x };
 		let mx = UintFloat {
-			i: (vx.i & 0x007FFFFF) | 0x3f000000,
+			i: (vx.i & 0x007F_FFFF) | 0x3f00_0000,
 		};
 		let mut y = vx.i as f32;
 		y *= 1.192_092_9e-7;

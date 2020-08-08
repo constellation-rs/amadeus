@@ -4,7 +4,7 @@ use ndarray::Axis;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{
-	cell::{Cell, Ref, RefCell}, fmt, ops::{AddAssign, Deref, DerefMut}, rc::Rc, sync::Arc
+	cell::{Cell, Ref, RefCell}, convert::TryInto, fmt, ops::{AddAssign, Deref}, rc::Rc, sync::Arc
 };
 
 use super::{clamp, Arr, Variable};
@@ -94,15 +94,15 @@ impl<'value, T: 'value> Deref for Bor<'value, T> {
 	type Target = T;
 	fn deref(&self) -> &T {
 		match *self {
-			Bor::RefGuard(ref val) => val.deref(),
-			Bor::Reference(ref val) => val.deref(),
+			Bor::RefGuard(ref val) => &*val,
+			Bor::Reference(ref val) => &*val,
 		}
 	}
 }
 
 impl<'value, T: 'value + fmt::Display> fmt::Display for Bor<'value, T> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", self.deref())
+		write!(f, "{}", &**self)
 	}
 }
 
@@ -132,19 +132,19 @@ impl Node for Rc<dyn Node<Value = Arr, InputGradient = Arr>> {
 	type Value = Arr;
 	type InputGradient = Arr;
 	fn forward(&self) {
-		self.deref().forward()
+		(**self).forward()
 	}
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-		self.deref().backward(gradient)
+		(**self).backward(gradient)
 	}
 	fn value(&self) -> Bor<Self::Value> {
-		self.deref().value()
+		(**self).value()
 	}
 	fn needs_gradient(&self) -> bool {
-		self.deref().needs_gradient()
+		(**self).needs_gradient()
 	}
 	fn clear(&self) {
-		self.deref().clear()
+		(**self).clear()
 	}
 }
 
@@ -165,8 +165,8 @@ where
 {
 	pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
 		let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
-		let value = lhs.value().deref() + rhs.value().deref();
-		let gradient = rhs.value().deref() * 0.0;
+		let value = &*lhs.value() + &*rhs.value();
+		let gradient = &*rhs.value() * 0.0;
 
 		AddNode {
 			value: RefCell::new(value),
@@ -222,11 +222,11 @@ where
 		match self.counter.backward() {
 			BackwardAction::Set => {
 				let mut operand_gradient = self.gradient.borrow_mut();
-				operand_gradient.slice_assign(gradient.deref());
+				operand_gradient.slice_assign(&**gradient);
 			}
 			BackwardAction::Increment => {
 				let mut operand_gradient = self.gradient.borrow_mut();
-				operand_gradient.slice_add_assign(gradient.deref());
+				operand_gradient.slice_add_assign(&**gradient);
 			}
 		}
 
@@ -335,7 +335,7 @@ fn row_wise_stack_gradient(gradient: &Arr, lhs: &mut Arr, rhs: &mut Arr, op: &Ba
 
 #[derive(Debug)]
 pub struct ConcatenateNode<LHS, RHS> {
-	axis: ndarray::Axis,
+	axis: Axis,
 	value: RefCell<Arr>,
 	lhs_gradient: RefCell<Arr>,
 	rhs_gradient: RefCell<Arr>,
@@ -350,17 +350,14 @@ where
 	LHS: Node<Value = Arr>,
 	RHS: Node<Value = Arr>,
 {
-	pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>, axis: ndarray::Axis) -> Self {
+	pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>, axis: Axis) -> Self {
 		let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
 
-		let value = ndarray::stack(
-			axis,
-			&[lhs.value().deref().view(), rhs.value().deref().view()],
-		)
-		.expect("Unable to concatenate arrays.");
+		let value = ndarray::stack(axis, &[lhs.value().view(), rhs.value().view()])
+			.expect("Unable to concatenate arrays.");
 
-		let lhs_gradient = lhs.value().deref() * 0.0;
-		let rhs_gradient = rhs.value().deref() * 0.0;
+		let lhs_gradient = &*lhs.value() * 0.0;
+		let rhs_gradient = &*rhs.value() * 0.0;
 
 		ConcatenateNode {
 			axis,
@@ -397,13 +394,9 @@ where
 
 		match self.axis {
 			// Vertically
-			ndarray::Axis(0) => {
-				row_wise_stack(self_value.deref_mut(), lhs_value.deref(), rhs_value.deref())
-			}
+			Axis(0) => row_wise_stack(&mut *self_value, &*lhs_value, &*rhs_value),
 			// Horizontally
-			ndarray::Axis(1) => {
-				column_wise_stack(self_value.deref_mut(), lhs_value.deref(), rhs_value.deref())
-			}
+			Axis(1) => column_wise_stack(&mut *self_value, &*lhs_value, &*rhs_value),
 			// Not allowed
 			_ => panic!("Stacking tensors not allowed."),
 		}
@@ -414,16 +407,16 @@ where
 			let mut rhs_grad = self.rhs_gradient.borrow_mut();
 
 			match self.axis {
-				ndarray::Axis(0) => row_wise_stack_gradient(
+				Axis(0) => row_wise_stack_gradient(
 					gradient,
-					lhs_grad.deref_mut(),
-					rhs_grad.deref_mut(),
+					&mut *lhs_grad,
+					&mut *rhs_grad,
 					&self.counter.backward(),
 				),
-				ndarray::Axis(1) => column_wise_stack_gradient(
+				Axis(1) => column_wise_stack_gradient(
 					gradient,
-					lhs_grad.deref_mut(),
-					rhs_grad.deref_mut(),
+					&mut *lhs_grad,
+					&mut *rhs_grad,
 					&self.counter.backward(),
 				),
 				_ => panic!("Stacking tensors not allowed."),
@@ -473,13 +466,13 @@ where
 		let value = {
 			let val = lhs.value();
 			let sliced = val.slice(slice);
-			let mut value = Arr::zeros((sliced.rows(), sliced.cols()));
+			let mut value = Arr::zeros((sliced.nrows(), sliced.ncols()));
 			value.assign(&sliced);
 
 			value
 		};
 
-		let lhs_gradient = lhs.value().deref() * 0.0;
+		let lhs_gradient = &*lhs.value() * 0.0;
 
 		SliceNode {
 			slice: *slice,
@@ -515,13 +508,13 @@ where
 				self.lhs_gradient
 					.borrow_mut()
 					.slice_mut(&self.slice)
-					.assign(gradient.deref());
+					.assign(&*gradient);
 			}
 			BackwardAction::Increment => {
 				self.lhs_gradient
 					.borrow_mut()
 					.slice_mut(&self.slice)
-					.add_assign(gradient.deref());
+					.add_assign(&**gradient);
 			}
 		}
 
@@ -612,12 +605,14 @@ impl GradientAccumulator {
 	}
 
 	pub fn add_sparse_row(&mut self, idx: usize, grad: &ndarray::ArrayView<f32, ndarray::Ix1>) {
-		if self.sparse_index.add(idx as u32) {
+		if self.sparse_index.add(idx.try_into().unwrap()) {
 			self.gradient
-				.subview_mut(Axis(0), idx)
+				.index_axis_mut(Axis(0), idx)
 				.slice_add_assign(grad);
 		} else {
-			self.gradient.subview_mut(Axis(0), idx).slice_assign(grad);
+			self.gradient
+				.index_axis_mut(Axis(0), idx)
+				.slice_assign(grad);
 		}
 
 		self.sparse = true;
@@ -631,7 +626,7 @@ impl GradientAccumulator {
 
 		idx.into_iter().map(move |idx| {
 			let idx = idx as usize;
-			(idx, grad.subview(Axis(0), idx))
+			(idx, grad.index_axis(Axis(0), idx))
 		})
 	}
 
@@ -657,7 +652,7 @@ impl GradientAccumulator {
 		} else {
 			let mut grad = &self.gradient * 0.0;
 			for (idx, row) in self.sparse_iter() {
-				grad.subview_mut(Axis(0), idx).slice_assign(&row);
+				grad.index_axis_mut(Axis(0), idx).slice_assign(&row);
 			}
 			grad
 		}
@@ -677,7 +672,7 @@ impl GradientAccumulator {
 			unimplemented!();
 			// for (idx, row) in self.sparse_iter() {
 			// 	self.gradient
-			// 		.subview_mut(Axis(0), idx)
+			// 		.index_axis_mut(Axis(0), idx)
 			// 		.fast_slice_mut()
 			// 		.iter_mut()
 			// 		.for_each(|x| *x = clamp(*x, min, max));
@@ -692,7 +687,7 @@ pub trait GradientSink<T> {
 
 impl<'a, 'b> GradientSink<&'a Ref<'b, Arr>> for GradientAccumulator {
 	fn accumulate_gradient(&mut self, gradient: &Ref<Arr>) {
-		self.add_dense(gradient.deref());
+		self.add_dense(gradient);
 	}
 }
 
@@ -704,7 +699,7 @@ impl<'a> GradientSink<&'a Arr> for GradientAccumulator {
 
 impl<'a> GradientSink<&'a mut Arr> for GradientAccumulator {
 	fn accumulate_gradient(&mut self, gradient: &'a mut Arr) {
-		self.add_dense(gradient.deref());
+		self.add_dense(gradient);
 	}
 }
 
@@ -757,7 +752,7 @@ impl HogwildParameter {
 	pub fn new(value: Arr) -> Self {
 		let squared_gradients = &value * 0.0;
 		let moments = &value * 0.0;
-		let shape = (value.rows(), value.cols());
+		let shape = (value.nrows(), value.ncols());
 
 		HogwildParameter {
 			shape,
@@ -805,8 +800,8 @@ impl ParameterNode {
 			// This method can be called in multiple threads, so borrowing
 			// (even immutably) will read to borrow failures.
 			(
-				(*value.value.as_ptr()).rows(),
-				(*value.value.as_ptr()).cols(),
+				(*value.value.as_ptr()).nrows(),
+				(*value.value.as_ptr()).ncols(),
 			)
 		};
 
@@ -821,7 +816,7 @@ impl ParameterNode {
 	/// Create a new parameter node. The parameters held by this node
 	/// cannot be shared and optimized in parallel.
 	pub fn new(value: Arr) -> Variable<Self> {
-		let shape = (value.rows(), value.cols());
+		let shape = (value.nrows(), value.ncols());
 
 		let node = Rc::new(ParameterNode {
 			value: Arc::new(HogwildParameter::new(value)),
@@ -845,7 +840,7 @@ impl Node for ParameterNode {
 		self.gradient.borrow_mut().accumulate_gradient(gradient);
 	}
 	fn value(&self) -> Bor<Self::Value> {
-		Bor::Reference(unsafe { &*(self.value.value.as_ptr() as *const Arr) })
+		Bor::Reference(unsafe { &*self.value.value.as_ptr() })
 	}
 	fn needs_gradient(&self) -> bool {
 		true
@@ -875,10 +870,10 @@ where
 {
 	pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
 		let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
-		let value = lhs.value().deref() - rhs.value().deref();
+		let value = &*lhs.value() - &*rhs.value();
 
-		let rhs_gradient = rhs.value().deref() * 0.0;
-		let lhs_gradient = lhs.value().deref() * 0.0;
+		let rhs_gradient = &*rhs.value() * 0.0;
+		let lhs_gradient = &*lhs.value() * 0.0;
 
 		SubNode {
 			value: RefCell::new(value),
@@ -909,11 +904,7 @@ where
 
 		let mut dest = self.value.borrow_mut();
 
-		numerics::sub(
-			self.lhs.value().deref(),
-			self.rhs.value().deref(),
-			dest.deref_mut(),
-		);
+		numerics::sub(&*self.lhs.value(), &*self.rhs.value(), &mut *dest);
 	}
 
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -937,10 +928,10 @@ where
 			}
 			BackwardAction::Increment => {
 				let mut rhs_gradient = self.rhs_gradient.borrow_mut();
-				rhs_gradient.slice_sub_assign(gradient.deref());
+				rhs_gradient.slice_sub_assign(&**gradient);
 
 				let mut lhs_gradient = self.lhs_gradient.borrow_mut();
-				lhs_gradient.slice_add_assign(gradient.deref());
+				lhs_gradient.slice_add_assign(&**gradient);
 			}
 		}
 
@@ -982,7 +973,7 @@ where
 {
 	pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
 		let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
-		let value = lhs.value().deref() * rhs.value().deref();
+		let value = &*lhs.value() * &*rhs.value();
 
 		let lhs_gradient = &value * 0.0;
 		let rhs_gradient = &value * 0.0;
@@ -1016,45 +1007,25 @@ where
 
 		let mut dest = self.value.borrow_mut();
 
-		numerics::mul(
-			self.lhs.value().deref(),
-			self.rhs.value().deref(),
-			dest.deref_mut(),
-		);
+		numerics::mul(&*self.lhs.value(), &*self.rhs.value(), &mut *dest);
 	}
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
 		match self.counter.backward() {
 			BackwardAction::Set => {
 				let mut lhs_gradient = self.lhs_gradient.borrow_mut();
 
-				numerics::mul(
-					self.rhs.value().deref(),
-					gradient.deref(),
-					lhs_gradient.deref_mut(),
-				);
+				numerics::mul(&*self.rhs.value(), &*gradient, &mut *lhs_gradient);
 
 				let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-				numerics::mul(
-					self.lhs.value().deref(),
-					gradient.deref(),
-					rhs_gradient.deref_mut(),
-				);
+				numerics::mul(&*self.lhs.value(), &*gradient, &mut *rhs_gradient);
 			}
 			BackwardAction::Increment => {
 				let mut lhs_gradient = self.lhs_gradient.borrow_mut();
 				let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-				numerics::increment_mul(
-					self.rhs.value().deref(),
-					gradient.deref(),
-					lhs_gradient.deref_mut(),
-				);
-				numerics::increment_mul(
-					self.lhs.value().deref(),
-					gradient.deref(),
-					rhs_gradient.deref_mut(),
-				);
+				numerics::increment_mul(&*self.rhs.value(), &*gradient, &mut *lhs_gradient);
+				numerics::increment_mul(&*self.lhs.value(), &*gradient, &mut *rhs_gradient);
 			}
 		}
 
@@ -1096,7 +1067,7 @@ where
 {
 	pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
 		let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
-		let value = lhs.value().deref() / rhs.value().deref();
+		let value = &*lhs.value() / &*rhs.value();
 
 		let lhs_gradient = &value * 0.0;
 		let rhs_gradient = &value * 0.0;
@@ -1130,11 +1101,7 @@ where
 
 		let mut dest = self.value.borrow_mut();
 
-		numerics::div(
-			self.lhs.value().deref(),
-			self.rhs.value().deref(),
-			dest.deref_mut(),
-		);
+		numerics::div(&*self.lhs.value(), &*self.rhs.value(), &mut *dest);
 	}
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
 		match self.counter.backward() {
@@ -1142,11 +1109,7 @@ where
 				let mut lhs_gradient = self.lhs_gradient.borrow_mut();
 				let rhs_value = self.rhs.value();
 
-				numerics::div(
-					gradient.deref(),
-					rhs_value.deref(),
-					lhs_gradient.deref_mut(),
-				);
+				numerics::div(&*gradient, &*rhs_value, &mut *lhs_gradient);
 
 				let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
@@ -1164,11 +1127,7 @@ where
 				let mut lhs_gradient = self.lhs_gradient.borrow_mut();
 				let rhs_value = self.rhs.value();
 
-				numerics::increment_div(
-					gradient.deref(),
-					rhs_value.deref(),
-					lhs_gradient.deref_mut(),
-				);
+				numerics::increment_div(&*gradient, &*rhs_value, &mut *lhs_gradient);
 
 				let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
@@ -1226,11 +1185,11 @@ where
 {
 	pub fn new(lhs: Rc<LHS>, rhs: Rc<RHS>) -> Self {
 		let needs_gradient = lhs.needs_gradient() || rhs.needs_gradient();
-		let value = lhs.value().dot(rhs.value().deref());
+		let value = lhs.value().dot(&*rhs.value());
 		let gradient = &value * 0.0;
 
-		let lhs_gradient = lhs.value().deref() * 0.0;
-		let rhs_gradient = rhs.value().deref() * 0.0;
+		let lhs_gradient = &*lhs.value() * 0.0;
+		let rhs_gradient = &*rhs.value() * 0.0;
 
 		DotNode {
 			value: RefCell::new(value),
@@ -1263,22 +1222,20 @@ where
 
 		numerics::mat_mul(
 			1.0,
-			self.lhs.value().deref(),
-			self.rhs.value().deref(),
+			&*self.lhs.value(),
+			&*self.rhs.value(),
 			0.0,
-			self.value.borrow_mut().deref_mut(),
+			&mut *self.value.borrow_mut(),
 		);
 	}
 
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
 		match self.counter.backward() {
 			BackwardAction::Set => {
-				self.gradient.borrow_mut().slice_assign(gradient.deref());
+				self.gradient.borrow_mut().slice_assign(&**gradient);
 			}
 			BackwardAction::Increment => {
-				self.gradient
-					.borrow_mut()
-					.slice_add_assign(gradient.deref());
+				self.gradient.borrow_mut().slice_add_assign(&**gradient);
 			}
 		}
 
@@ -1292,20 +1249,8 @@ where
 				let mut lhs_gradient = self.lhs_gradient.borrow_mut();
 				let mut rhs_gradient = self.rhs_gradient.borrow_mut();
 
-				numerics::mat_mul(
-					1.0,
-					gradient.deref(),
-					&rhs_value.t(),
-					0.0,
-					&mut lhs_gradient,
-				);
-				numerics::mat_mul(
-					1.0,
-					&lhs_value.t(),
-					gradient.deref(),
-					0.0,
-					&mut rhs_gradient,
-				);
+				numerics::mat_mul(1.0, &*gradient, &rhs_value.t(), 0.0, &mut lhs_gradient);
+				numerics::mat_mul(1.0, &lhs_value.t(), &*gradient, 0.0, &mut rhs_gradient);
 			}
 
 			self.lhs.backward(&self.lhs_gradient.borrow());
@@ -1365,17 +1310,17 @@ where
 				lhs_value
 					.genrows()
 					.into_iter()
-					.map(|x| x.into_slice().unwrap()),
+					.map(|x| x.to_slice().unwrap()),
 				rhs_value
 					.genrows()
 					.into_iter()
-					.map(|x| x.into_slice().unwrap())
+					.map(|x| x.to_slice().unwrap())
 			) {
 				*result = numerics::simd_dot(lhs, rhs);
 			}
 
-			let lhs_gradient = lhs_value.deref() * 0.0;
-			let rhs_gradient = rhs_value.deref() * 0.0;
+			let lhs_gradient = &*lhs_value * 0.0;
+			let rhs_gradient = &*rhs_value * 0.0;
 
 			(value, lhs_gradient, rhs_gradient, needs_gradient)
 		};
@@ -1416,11 +1361,11 @@ where
 			lhs_value
 				.genrows()
 				.into_iter()
-				.map(|x| x.into_slice().unwrap()),
+				.map(|x| x.to_slice().unwrap()),
 			rhs_value
 				.genrows()
 				.into_iter()
-				.map(|x| x.into_slice().unwrap())
+				.map(|x| x.to_slice().unwrap())
 		) {
 			*result = numerics::simd_dot(lhs, rhs);
 		}
@@ -1443,7 +1388,7 @@ where
 					rhs_value
 						.genrows()
 						.into_iter()
-						.map(|x| x.into_slice().unwrap()),
+						.map(|x| x.to_slice().unwrap()),
 					gradient.as_slice().unwrap()
 				) {
 					numerics::simd_scaled_assign(backward_row, rhs_row, gradient)
@@ -1456,7 +1401,7 @@ where
 					lhs_value
 						.genrows()
 						.into_iter()
-						.map(|x| x.into_slice().unwrap()),
+						.map(|x| x.to_slice().unwrap()),
 					gradient.as_slice().unwrap()
 				) {
 					numerics::simd_scaled_assign(backward_row, lhs_row, gradient)
@@ -1474,7 +1419,7 @@ where
 					rhs_value
 						.genrows()
 						.into_iter()
-						.map(|x| x.into_slice().unwrap()),
+						.map(|x| x.to_slice().unwrap()),
 					gradient.as_slice().unwrap()
 				) {
 					numerics::simd_scaled_add(backward_row, rhs_row, gradient)
@@ -1487,7 +1432,7 @@ where
 					lhs_value
 						.genrows()
 						.into_iter()
-						.map(|x| x.into_slice().unwrap()),
+						.map(|x| x.to_slice().unwrap()),
 					gradient.as_slice().unwrap()
 				) {
 					numerics::simd_scaled_add(backward_row, lhs_row, gradient)
@@ -1560,7 +1505,7 @@ where
 
 		let mut dest = self.value.borrow_mut();
 
-		dest.assign(self.operand.value().deref());
+		dest.assign(&*self.operand.value());
 		dest.map_inplace(|x| *x = x.powi(2));
 	}
 
@@ -1650,7 +1595,7 @@ where
 
 		let mut dest = self.value.borrow_mut();
 
-		dest.assign(self.operand.value().deref());
+		dest.assign(&*self.operand.value());
 		dest.map_inplace(|x| *x = numerics::ln(*x));
 	}
 
@@ -1739,9 +1684,7 @@ where
 		self.operand.forward();
 
 		let mut dest = self.value.borrow_mut();
-		numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
-			numerics::tanh(x)
-		});
+		numerics::map_assign(&mut *dest, &*self.operand.value(), numerics::tanh);
 	}
 
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -1801,7 +1744,7 @@ where
 	T: Node<Value = Arr>,
 {
 	pub fn new(operand: Rc<T>) -> Self {
-		let value = operand.value().deref().map(|&x| numerics::sigmoid(x));
+		let value = operand.value().map(|&x| numerics::sigmoid(x));
 		let gradient = &value * 0.0;
 		let needs_gradient = operand.needs_gradient();
 
@@ -1831,9 +1774,7 @@ where
 		{
 			let mut dest = self.value.borrow_mut();
 
-			numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
-				numerics::sigmoid(x)
-			});
+			numerics::map_assign(&mut *dest, &*self.operand.value(), numerics::sigmoid);
 		}
 	}
 
@@ -1844,7 +1785,7 @@ where
 
 				numerics::map_assign_binary(
 					&mut operand_gradient,
-					self.value.borrow().deref(),
+					&*self.value.borrow(),
 					gradient,
 					|sigmoid, grad| grad * sigmoid * (1.0 - sigmoid),
 				);
@@ -1854,7 +1795,7 @@ where
 
 				numerics::map_inplace_assign_binary(
 					&mut operand_gradient,
-					self.value.borrow().deref(),
+					&*self.value.borrow(),
 					gradient,
 					|dest, sigmoid, grad| *dest += grad * sigmoid * (1.0 - sigmoid),
 				);
@@ -1896,10 +1837,7 @@ where
 	T: Node<Value = Arr>,
 {
 	pub fn new(operand: Rc<T>) -> Self {
-		let value = operand
-			.value()
-			.deref()
-			.map(|&x| if x < 0.0 { 0.0 } else { x });
+		let value = operand.value().map(|&x| if x < 0.0 { 0.0 } else { x });
 		let gradient = &value * 0.0;
 		let needs_gradient = operand.needs_gradient();
 
@@ -1928,7 +1866,7 @@ where
 
 		let mut dest = self.value.borrow_mut();
 
-		numerics::map_assign(dest.deref_mut(), self.operand.value().deref(), |x| {
+		numerics::map_assign(&mut *dest, &*self.operand.value(), |x| {
 			if x < 0.0 {
 				0.0
 			} else {
@@ -1944,7 +1882,7 @@ where
 
 				numerics::map_assign_binary(
 					&mut operand_gradient,
-					self.value.borrow().deref(),
+					&*self.value.borrow(),
 					gradient,
 					|x, grad| if x <= 0.0 { 0.0 } else { grad },
 				);
@@ -1954,7 +1892,7 @@ where
 
 				numerics::map_inplace_assign_binary(
 					&mut operand_gradient,
-					self.value.borrow().deref(),
+					&*self.value.borrow(),
 					gradient,
 					|dest, x, grad| *dest += if x <= 0.0 { 0.0 } else { grad },
 				);
@@ -1996,7 +1934,7 @@ where
 	T: Node<Value = Arr>,
 {
 	pub fn new(operand: Rc<T>) -> Self {
-		let value = -operand.value().deref();
+		let value = -&*operand.value();
 		let gradient = &value * 0.0;
 		let needs_gradient = operand.needs_gradient();
 
@@ -2026,7 +1964,7 @@ where
 
 		let mut dest = self.value.borrow_mut();
 
-		dest.assign(self.operand.value().deref());
+		dest.assign(&*self.operand.value());
 		dest.map_inplace(|x| *x = -*x);
 	}
 
@@ -2084,7 +2022,7 @@ where
 	OP: Node<Value = Arr>,
 {
 	pub fn new(operand: Rc<OP>) -> Self {
-		let value = operand.value().deref().map(|&x| numerics::exp(x));
+		let value = operand.value().map(|&x| numerics::exp(x));
 		let gradient = &value * 0.0;
 		let needs_gradient = operand.needs_gradient();
 
@@ -2112,7 +2050,7 @@ where
 		self.operand.forward();
 		let mut dest = self.value.borrow_mut();
 
-		dest.assign(self.operand.value().deref());
+		dest.assign(&*self.operand.value());
 		dest.map_inplace(|x| *x = numerics::exp(*x));
 	}
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
@@ -2170,10 +2108,10 @@ where
 {
 	pub fn new(operand: Rc<OP>) -> Self {
 		let needs_gradient = operand.needs_gradient();
-		let mut value = Arr::zeros((operand.value().cols(), operand.value().rows()));
+		let mut value = Arr::zeros((operand.value().ncols(), operand.value().nrows()));
 		value.assign(&operand.value().t());
 		let value = RefCell::new(value);
-		let gradient = RefCell::new(operand.value().deref() * 0.0);
+		let gradient = RefCell::new(&*operand.value() * 0.0);
 
 		TransposeNode {
 			value,
@@ -2248,7 +2186,6 @@ where
 		let value = {
 			let max = operand
 				.value()
-				.deref()
 				.as_slice()
 				.unwrap()
 				.iter()
@@ -2287,7 +2224,7 @@ where
 
 		self.operand.forward();
 		let mut dest = self.value.borrow_mut();
-		dest.slice_assign(self.operand.value().deref());
+		dest.slice_assign(&*self.operand.value());
 
 		let max = self
 			.operand
@@ -2334,9 +2271,9 @@ where
 			numerics::mat_mul(
 				1.0,
 				gradient,
-				jacobian.deref_mut(),
+				&*jacobian,
 				beta,
-				self.operand_gradient.borrow_mut().deref_mut(),
+				&mut *self.operand_gradient.borrow_mut(),
 			);
 		}
 
@@ -2374,7 +2311,7 @@ where
 	pub fn new(operand: Rc<OP>) -> Self {
 		let value = {
 			let operand_value = operand.value();
-			let operand_slice = operand_value.deref().as_slice().unwrap();
+			let operand_slice = operand_value.as_slice().unwrap();
 			let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
 
 			let denominator = max
@@ -2384,7 +2321,7 @@ where
 					.sum::<f32>()
 					.ln();
 
-			operand_value.deref() - denominator
+			&*operand_value - denominator
 		};
 
 		let gradient = &value * 0.0;
@@ -2420,10 +2357,10 @@ where
 
 		self.operand.forward();
 		let mut dest = self.value.borrow_mut();
-		dest.assign(self.operand.value().deref());
+		dest.assign(&*self.operand.value());
 
 		let operand_value = self.operand.value();
-		let operand_slice = operand_value.deref().as_slice().unwrap();
+		let operand_slice = operand_value.as_slice().unwrap();
 		let max = operand_slice.iter().fold(std::f32::MIN, |x, y| x.max(*y));
 
 		let denominator = max + numerics::softmax_exp_sum(operand_slice, max).ln();
@@ -2498,7 +2435,7 @@ where
 			value
 		};
 
-		let gradient = operand.value().deref() * 0.0;
+		let gradient = &*operand.value() * 0.0;
 		let needs_gradient = operand.needs_gradient();
 
 		SumNode {
@@ -2649,19 +2586,19 @@ impl Node for IndexNode<ParameterNode> {
 		);
 
 		for (&idx, mut row) in idx_value.iter().zip(arr_value.genrows_mut()) {
-			let new_val = operand_value.subview(Axis(0), idx);
+			let new_val = operand_value.index_axis(Axis(0), idx);
 
 			row.slice_assign(&new_val);
 		}
 	}
 
 	fn backward(&self, gradient: &Ref<Self::InputGradient>) {
-		self.counter.backward();
+		let _ = self.counter.backward();
 		self.operand
 			.gradient
 			.borrow_mut()
-			.accumulate_gradient((&self.index_value.borrow()[..], gradient.deref()));
-		self.counter.recurse_backward();
+			.accumulate_gradient((&self.index_value.borrow()[..], &**gradient));
+		let _ = self.counter.recurse_backward();
 	}
 
 	fn value(&self) -> Bor<Self::Value> {
@@ -2687,7 +2624,7 @@ mod tests {
 	#[test]
 	fn test_sub_counter() {
 		let x = ParameterNode::new(nn::xavier_normal(1, 1));
-		let y = x.clone() - x.clone();
+		let y = x.clone() - x;
 
 		let mut z = y.clone() + y.clone() + y.clone();
 

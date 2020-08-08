@@ -4,19 +4,15 @@
 //! then applying it to your inputs:
 //!
 //! ```rust
-//! # extern crate rand;
-//! # extern crate wyrm;
-//! # extern crate ndarray;
 //! # use std::sync::Arc;
 //! # use std::rc::Rc;
 //! #
-//! # use wyrm::{HogwildParameter, InputNode, Node, ParameterNode};
+//! # use amadeus_ml::{HogwildParameter, InputNode, Node, ParameterNode};
 //! #
-//! # use wyrm::nn::xavier_normal;
-//! # use wyrm::nn::lstm;
+//! # use amadeus_ml::nn::xavier_normal;
+//! # use amadeus_ml::nn::lstm;
 //! #
-//! # use wyrm::{Arr, Variable};
-//! # fn main() {
+//! # use amadeus_ml::{Arr, Variable};
 //! let input_dim = 10;
 //! let hidden_dim = 5;
 //!
@@ -40,7 +36,6 @@
 //!
 //! // Reset the hidden state between sequences
 //! lstm.reset_state();
-//! # }
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -48,7 +43,7 @@ use std::{rc::Rc, sync::Arc};
 
 use super::uniform;
 use crate::{
-	nodes::{self, HogwildParameter, Node, ParameterNode}, Arr, DataInput, Variable
+	nodes::{HogwildParameter, InputNode, Node, ParameterNode}, Arr, DataInput, Variable
 };
 
 /// Holds shared parameters for an LSTM cell.
@@ -60,17 +55,17 @@ pub struct Parameters {
 	input_dim: usize,
 	hidden_dim: usize,
 
-	forget_weights: Arc<nodes::HogwildParameter>,
-	forget_biases: Arc<nodes::HogwildParameter>,
+	forget_weights: Arc<HogwildParameter>,
+	forget_biases: Arc<HogwildParameter>,
 
-	update_gate_weights: Arc<nodes::HogwildParameter>,
-	update_gate_biases: Arc<nodes::HogwildParameter>,
+	update_gate_weights: Arc<HogwildParameter>,
+	update_gate_biases: Arc<HogwildParameter>,
 
-	update_value_weights: Arc<nodes::HogwildParameter>,
-	update_value_biases: Arc<nodes::HogwildParameter>,
+	update_value_weights: Arc<HogwildParameter>,
+	update_value_biases: Arc<HogwildParameter>,
 
-	output_gate_weights: Arc<nodes::HogwildParameter>,
-	output_gate_biases: Arc<nodes::HogwildParameter>,
+	output_gate_weights: Arc<HogwildParameter>,
+	output_gate_biases: Arc<HogwildParameter>,
 }
 
 impl Clone for Parameters {
@@ -270,8 +265,8 @@ impl Cell {
 #[derive(Debug)]
 pub struct Layer {
 	cell: Cell,
-	state: Variable<nodes::InputNode>,
-	hidden: Variable<nodes::InputNode>,
+	state: Variable<InputNode>,
+	hidden: Variable<InputNode>,
 }
 
 impl Layer {
@@ -280,8 +275,8 @@ impl Layer {
 
 		Layer {
 			cell,
-			state: nodes::InputNode::new(Arr::zeros((1, hidden_dim))),
-			hidden: nodes::InputNode::new(Arr::zeros((1, hidden_dim))),
+			state: InputNode::new(Arr::zeros((1, hidden_dim))),
+			hidden: InputNode::new(Arr::zeros((1, hidden_dim))),
 		}
 	}
 	/// Construct an LSTM layer over given inputs, returning the emitted
@@ -316,21 +311,18 @@ impl Layer {
 
 #[cfg(test)]
 mod tests {
-	use std::ops::Deref;
+	use approx::AbsDiffEq;
 
 	use super::*;
 	use crate::{
-		finite_difference, nn::{losses::sparse_categorical_crossentropy, xavier_normal}, optim::{Adam, Optimizer}
+		finite_difference, nn::{losses::sparse_categorical_crossentropy, xavier_normal}, nodes::{IndexInputNode, InputNode}, optim::{Adam, Optimizer}
 	};
-
-	use nodes::InputNode;
-	use DataInput;
 
 	const TOLERANCE: f32 = 0.2;
 
 	fn assert_close(x: &Arr, y: &Arr, tol: f32) {
 		assert!(
-			x.all_close(y, tol),
+			x.abs_diff_eq(y, tol),
 			"{:#?} not within {} of {:#?}",
 			x,
 			tol,
@@ -342,8 +334,7 @@ mod tests {
 		let pi_str = include_str!("pi.txt");
 		pi_str
 			.chars()
-			.filter_map(|x| x.to_digit(10))
-			.map(|x| x as usize)
+			.map(|x| x.to_digit(10).unwrap() as usize)
 			.take(num)
 			.collect()
 	}
@@ -370,7 +361,7 @@ mod tests {
 
 		let mut params = hidden.parameters().to_owned();
 
-		for x in params.iter_mut() {
+		for x in &mut params {
 			let (difference, gradient) = finite_difference(x, hidden);
 			assert_close(&difference, &gradient, TOLERANCE);
 		}
@@ -432,10 +423,10 @@ mod tests {
 
 		let final_layer = ParameterNode::new(xavier_normal(hidden_dim, num_digits));
 		let embeddings = ParameterNode::new(xavier_normal(num_digits, input_dim));
-		let y = nodes::IndexInputNode::new(&vec![0]);
+		let y = IndexInputNode::new(&[0]);
 
 		let inputs: Vec<_> = (0..sequence_length)
-			.map(|_| nodes::IndexInputNode::new(&vec![0]))
+			.map(|_| IndexInputNode::new(&[0]))
 			.collect();
 		let embeddings: Vec<_> = inputs
 			.iter()
@@ -460,12 +451,7 @@ mod tests {
 			correct = 0;
 			total = 0;
 
-			for i in 0..(digits.len() - sequence_length - 1) {
-				let digit_chunk = &digits[i..(i + sequence_length + 1)];
-				if digit_chunk.len() < sequence_length + 1 {
-					break;
-				}
-
+			for digit_chunk in digits.windows(sequence_length + 1) {
 				for (&digit, input) in digit_chunk[..digit_chunk.len() - 1].iter().zip(&inputs) {
 					input.set_value(digit);
 				}
@@ -481,7 +467,7 @@ mod tests {
 				optimizer.step(loss.parameters());
 				loss.zero_gradient();
 
-				if target_digit == predicted_label(prediction.value().deref()) {
+				if target_digit == predicted_label(&*prediction.value()) {
 					correct += 1;
 				}
 

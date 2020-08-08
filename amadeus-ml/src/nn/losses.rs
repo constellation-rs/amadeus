@@ -2,7 +2,7 @@
 
 use itertools::izip;
 use std::{
-	cell::{Ref, RefCell}, ops::Deref, rc::Rc
+	cell::{Ref, RefCell}, rc::Rc
 };
 
 use crate::{
@@ -43,7 +43,7 @@ where
 {
 	pub(crate) fn new(operand: Rc<LHS>, y: Rc<IndexInputNode>) -> Self {
 		assert!(
-			operand.value().rows() == 1,
+			operand.value().nrows() == 1,
 			"Minibatches not supported: rows must be 1."
 		);
 
@@ -63,7 +63,7 @@ where
 		let mut loss_value = Arr::zeros((1, 1));
 		loss_value.fill(scalar_loss);
 
-		let gradient = operand.value().deref() * 0.0;
+		let gradient = &*operand.value() * 0.0;
 		let needs_gradient = operand.needs_gradient();
 
 		SparseCategoricalCrossentropyNode {
@@ -100,10 +100,10 @@ where
 
 		let softmax_value = self.log_softmax.value();
 		debug_assert!(
-			softmax_value.rows() == 1,
+			softmax_value.nrows() == 1,
 			"Minibatches not supported: rows must be 1."
 		);
-		let softmax_slice = softmax_value.deref().as_slice().unwrap();
+		let softmax_slice = softmax_value.as_slice().unwrap();
 
 		let mut loss_value = 0.0;
 

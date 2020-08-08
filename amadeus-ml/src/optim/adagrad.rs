@@ -77,8 +77,8 @@ impl Adagrad {
 			}
 		} else {
 			for (row_idx, grad) in sink.sparse_iter() {
-				let mut param_row = param_value.subview_mut(Axis(0), row_idx);
-				let mut squared_row = squared_gradient.subview_mut(Axis(0), row_idx);
+				let mut param_row = param_value.index_axis_mut(Axis(0), row_idx);
+				let mut squared_row = squared_gradient.index_axis_mut(Axis(0), row_idx);
 
 				for (value, &gradient, squared_gradient) in izip!(
 					param_row.fast_slice_mut(),

@@ -195,23 +195,23 @@ pub fn mat_mul<S1, S2, S3>(
 	S2: Data<Elem = f32>,
 	S3: DataMut<Elem = f32>,
 {
-	match (lhs.rows(), rhs.cols()) {
+	match (lhs.nrows(), rhs.ncols()) {
 		(_, 1) => {
 			general_mat_vec_mul(
 				alpha,
 				lhs,
-				&rhs.subview(Axis(1), 0),
+				&rhs.index_axis(Axis(1), 0),
 				beta,
-				&mut out.subview_mut(Axis(1), 0),
+				&mut out.index_axis_mut(Axis(1), 0),
 			);
 		}
 		(1, _) => {
 			general_mat_vec_mul(
 				alpha,
 				&rhs.t(),
-				&lhs.subview(Axis(0), 0),
+				&lhs.index_axis(Axis(0), 0),
 				beta,
-				&mut out.subview_mut(Axis(0), 0),
+				&mut out.index_axis_mut(Axis(0), 0),
 			);
 		}
 		_ => {
@@ -408,7 +408,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use rand::{self, Rng};
+	use approx::AbsDiffEq;
+	use rand::Rng;
 
 	use super::*;
 	use crate::nn;
@@ -509,14 +510,14 @@ mod tests {
 				.map(|_| rand::thread_rng().gen())
 				.collect::<Vec<f32>>();
 
-			let _dot = dot(&xs[..], &ys[..]);
-			let _unrolled_dot = unrolled_dot(&xs[..], &ys[..]);
-			let _simd_dot = simd_dot(&xs[..], &ys[..]);
+			let dot = dot(&xs[..], &ys[..]);
+			let unrolled_dot = unrolled_dot(&xs[..], &ys[..]);
+			let simd_dot = simd_dot(&xs[..], &ys[..]);
 
 			let epsilon = 1e-5;
 
-			assert!((_dot - _unrolled_dot).abs() < epsilon);
-			assert!((_dot - _simd_dot).abs() < epsilon, "{} {}", _dot, _simd_dot);
+			assert!((dot - unrolled_dot).abs() < epsilon);
+			assert!((dot - simd_dot).abs() < epsilon, "{} {}", dot, simd_dot);
 		}
 	}
 
@@ -539,7 +540,7 @@ mod tests {
 	#[allow(dead_code)]
 	fn assert_close(x: &Arr, y: &Arr, tol: f32) {
 		assert!(
-			x.all_close(y, tol),
+			x.abs_diff_eq(y, tol),
 			"{:#?} not within {} of {:#?}",
 			x,
 			tol,

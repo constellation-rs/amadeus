@@ -1,16 +1,11 @@
+#![allow(clippy::many_single_char_names)]
+
+use criterion::{criterion_group, criterion_main, Criterion};
+use rayon::prelude::*;
 use std::sync::Arc;
 
-#[macro_use]
-extern crate criterion;
-extern crate rayon;
-extern crate wyrm;
-
-use rayon::prelude::*;
-
-use criterion::Criterion;
-
-use wyrm::{
-	nn::{lstm, xavier_normal}, DataInput, HogwildParameter, ParameterNode, SGD
+use amadeus_ml::{
+	nn::{lstm, xavier_normal}, optim::{Optimizer, SGD}, DataInput, HogwildParameter, ParameterNode
 };
 
 fn bench_node_reuse(c: &mut Criterion) {
@@ -20,7 +15,7 @@ fn bench_node_reuse(c: &mut Criterion) {
 		let x = ParameterNode::new(xavier_normal(1, dim));
 		let y = ParameterNode::new(xavier_normal(dim, 10));
 		let v = x.dot(&y);
-		let z = v.clone() + v.clone() + v.clone() + v.clone();
+		let z = v.clone() + v.clone() + v.clone() + v;
 
 		b.iter(|| {
 			z.forward();
@@ -60,7 +55,7 @@ fn bench_matrix_multiply(c: &mut Criterion) {
 // 		let x = vec![1.0; 32];
 // 		let max = 1.0;
 
-// 		b.iter(|| x.iter().map(|&x| wyrm::exp(x - max)).sum::<f32>().ln())
+// 		b.iter(|| x.iter().map(|&x| amadeus_ml::exp(x - max)).sum::<f32>().ln())
 // 	})
 // }
 
@@ -194,15 +189,15 @@ fn bench_lstm(c: &mut Criterion) {
 		let input_dim = 16;
 		let hidden_dim = 32;
 
-		let lstm_params = lstm::Parameters::new(input_dim, hidden_dim);
+		let lstm_params = lstm::Parameters::new(input_dim, hidden_dim, &mut rand::thread_rng());
 		let lstm = lstm_params.build();
 
-		let final_layer = wyrm::ParameterNode::new(xavier_normal(hidden_dim, num_digits));
-		let embeddings = wyrm::ParameterNode::new(xavier_normal(num_digits, input_dim));
-		let y = wyrm::IndexInputNode::new(&vec![0]);
+		let final_layer = amadeus_ml::ParameterNode::new(xavier_normal(hidden_dim, num_digits));
+		let embeddings = amadeus_ml::ParameterNode::new(xavier_normal(num_digits, input_dim));
+		let y = amadeus_ml::IndexInputNode::new(&[0]);
 
 		let inputs: Vec<_> = (0..sequence_length)
-			.map(|_| wyrm::IndexInputNode::new(&vec![0]))
+			.map(|_| amadeus_ml::IndexInputNode::new(&[0]))
 			.collect();
 		let embeddings: Vec<_> = inputs
 			.iter()
@@ -213,8 +208,8 @@ fn bench_lstm(c: &mut Criterion) {
 		let hidden = hidden_states.last().unwrap();
 
 		let prediction = hidden.dot(&final_layer);
-		let mut loss = wyrm::nn::losses::sparse_categorical_crossentropy(&prediction, &y);
-		let mut optimizer = SGD::new(0.05, loss.parameters());
+		let mut loss = amadeus_ml::nn::losses::sparse_categorical_crossentropy(&prediction, &y);
+		let optimizer = SGD::new();
 
 		let digits = pi_digits(100);
 
@@ -235,7 +230,7 @@ fn bench_lstm(c: &mut Criterion) {
 				loss.forward();
 				loss.backward(1.0);
 
-				optimizer.step();
+				optimizer.step(loss.parameters());
 				loss.zero_gradient();
 			}
 		})
