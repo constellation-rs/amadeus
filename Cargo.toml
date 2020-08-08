@@ -30,10 +30,12 @@ parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
 postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
+ml = ["amadeus-ml"]
+ml-openblas = ["amadeus-ml/openblas"]
 bench = ["serde-csv", "once_cell", "arrow-parquet", "rayon"]
 
 [package.metadata.docs.rs]
-features = ["constellation", "aws", "commoncrawl", "parquet", "postgres", "csv", "json"]
+features = ["constellation", "aws", "commoncrawl", "parquet", "postgres", "csv", "json", "ml"]
 
 [dependencies]
 amadeus-core = { version = "=0.4.1", path = "amadeus-core" }
@@ -41,7 +43,7 @@ amadeus-derive = { version = "=0.4.1", path = "amadeus-derive" }
 amadeus-types = { version = "=0.4.1", path = "amadeus-types" }
 amadeus-aws = { version = "=0.4.1", path = "amadeus-aws", optional = true }
 amadeus-commoncrawl = { version = "=0.4.1", path = "amadeus-commoncrawl", optional = true }
-amadeus-ml = { version = "=0.4.1", path = "amadeus-ml" }
+amadeus-ml = { version = "=0.4.1", path = "amadeus-ml", optional = true }
 amadeus-parquet = { version = "=0.4.1", path = "amadeus-parquet", optional = true }
 amadeus-postgres = { version = "=0.4.1", path = "amadeus-postgres", optional = true }
 amadeus-serde = { version = "=0.4.1", path = "amadeus-serde", optional = true }
@@ -50,7 +52,7 @@ async-channel = "1.1"
 bincode = { version = "1.3", optional = true }
 constellation-rs = { version = "0.2.0-alpha.2", default-features = false, optional = true }
 derive-new = "0.5"
-event-listener = "=2.3.1" # https://github.com/stjepang/event-listener/issues/9
+event-listener = "2.3.3"
 futures = "0.3"
 num_cpus = "1.13"
 pin-project = "0.4"

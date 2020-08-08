@@ -1,3 +1,13 @@
+//! Harmonious distributed data processing & analysis in Rust.
+//!
+//! <p style="font-family: 'Fira Sans',sans-serif;padding:0.3em 0"><strong>
+//! <a href="https://crates.io/crates/amadeus">📦&nbsp;&nbsp;Crates.io</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://github.com/constellation-rs/amadeus">📑&nbsp;&nbsp;GitHub</a>&nbsp;&nbsp;│&nbsp;&nbsp;<a href="https://constellation.zulipchat.com/#narrow/stream/213231-amadeus">💬&nbsp;&nbsp;Chat</a>
+//! </strong></p>
+//!
+//! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
+//!
+//! ---
+//!
 //! A reverse mode, define-by-run, low-overhead autodifferentiation library.
 //!
 //! # Features
@@ -17,12 +27,13 @@
 //! The following defines a univariate linear regression model, then
 //! backpropagates through it.
 //!
-//! ```rust
+//! ```
 //! # use amadeus_ml::*;
+//! #
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
-//! # fn main() {
+//! #
 //! let slope = ParameterNode::new(random_matrix(1, 1));
 //! let intercept = ParameterNode::new(random_matrix(1, 1));
 //!
@@ -31,19 +42,18 @@
 //!
 //! let y_hat = slope.clone() * x.clone() + intercept.clone();
 //! let mut loss = (y.clone() - y_hat).square();
-//! # }
 //! ```
 //!
 //! To optimize the parameters, create an optimizer object and
 //! go through several epochs of learning:
 //!
-//! ```rust
-//! # use amadeus_ml::*;
-//! # use amadeus_ml::optim::*;
+//! ```
+//! # use amadeus_ml::{*, optim::*};
+//! #
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
-//! # fn main() {
+//! #
 //! # let slope = ParameterNode::new(random_matrix(1, 1));
 //! # let intercept = ParameterNode::new(random_matrix(1, 1));
 //! # let x = InputNode::new(random_matrix(1, 1));
@@ -67,21 +77,21 @@
 //!
 //!     optimizer.step(loss.parameters());
 //! }
-//! # }
 //! ```
 //!
 //! You can use `rayon` to fit your model in parallel, by first creating a set of shared
 //! parameters, then building a per-thread copy of the model:
 //!
-//! ```rust
-//! # use std::sync::Arc;
+//! ```
 //! # use rayon::prelude::*;
-//! # use amadeus_ml::*;
-//! # use amadeus_ml::optim::*;
+//! # use std::sync::Arc;
+//! #
+//! # use amadeus_ml::{*, optim::*};
+//! #
 //! # fn random_matrix(rows: usize, cols: usize) -> Arr {
 //! #      Arr::zeros((rows, cols)).map(|_| rand::random::<f32>())
 //! # }
-//! # fn main() {
+//! #
 //! let slope_param = Arc::new(HogwildParameter::new(random_matrix(1, 1)));
 //! let intercept_param = Arc::new(HogwildParameter::new(random_matrix(1, 1)));
 //! let num_epochs = 10;
@@ -111,18 +121,12 @@
 //!                optimizer.step(loss.parameters());
 //!            }
 //!        });
-//! # }
 //! ```
 //!
 //! ## BLAS support
-//! You should enable BLAS support to get (much) better performance out of matrix-multiplication-heavy
-//! workloads. To do so, add the following to your `Cargo.toml`:
 //!
-//! ```text
-//! ndarray = { version = "0.11.0", features = ["blas", "serde-1"] }
-//! blas-src = { version = "0.1.2", default-features = false, features = ["openblas"] }
-//! openblas-src = { version = "0.5.6", default-features = false, features = ["cblas"] }
-//! ```
+//! You should enable BLAS support to get (much) better performance out of matrix-multiplication-heavy
+//! workloads. To do so, enable the `openblas` feature.
 //!
 //! ## Fast numerics
 //!

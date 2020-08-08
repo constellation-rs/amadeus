@@ -3,16 +3,9 @@
 //! You can create an LSTM layer by first initializing its parameters,
 //! then applying it to your inputs:
 //!
-//! ```rust
-//! # use std::sync::Arc;
-//! # use std::rc::Rc;
+//! ```
+//! # use amadeus_ml::{nn::{lstm, xavier_normal}, Arr, HogwildParameter, InputNode, Node, ParameterNode, Variable};
 //! #
-//! # use amadeus_ml::{HogwildParameter, InputNode, Node, ParameterNode};
-//! #
-//! # use amadeus_ml::nn::xavier_normal;
-//! # use amadeus_ml::nn::lstm;
-//! #
-//! # use amadeus_ml::{Arr, Variable};
 //! let input_dim = 10;
 //! let hidden_dim = 5;
 //!
