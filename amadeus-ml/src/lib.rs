@@ -890,10 +890,10 @@ mod tests {
 		let mut z = (x.clone() + x.clone()).log_softmax();
 		let v = (x.clone() + x.clone()).softmax().ln();
 
-		assert_close(&*v.value(), &*z.value(), TOLERANCE);
+		assert_close(&*v.value(), &*z.value(), TOLERANCE * 4.0);
 
 		let (finite_difference, gradient) = finite_difference(&mut x, &mut z);
-		assert_close(&finite_difference, &gradient, TOLERANCE);
+		assert_close(&finite_difference, &gradient, TOLERANCE * 4.0);
 	}
 	#[test]
 	fn sparse_categorical_cross_entropy_finite_difference() {
@@ -1200,7 +1200,7 @@ mod tests {
 		let optimizer = SGD::new();
 
 		let losses: Vec<f32> = optimizer
-			.synchronized(rayon::current_num_threads())
+			.synchronized(2.min(rayon::current_num_threads()))
 			.into_par_iter()
 			.map(|optimizer| {
 				let u_embedding = ParameterNode::shared(u_parameters.clone());
@@ -1248,6 +1248,6 @@ mod tests {
 
 		let sum_loss: f32 = losses.iter().sum();
 
-		assert!(sum_loss / (losses.len() as f32) < 1e-3);
+		assert!(sum_loss / (losses.len() as f32) < 1e-2);
 	}
 }
