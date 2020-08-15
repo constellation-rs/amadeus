@@ -82,6 +82,9 @@ wasm-bindgen-test = "0.3"
 [build-dependencies]
 rustversion = "1.0"
 
+[patch.crates-io]
+tokio = {git = "https://github.com/tokio-rs/tokio", branch = "v0.2.x"}
+
 [profile.bench]
 codegen-units = 1
 debug = 2

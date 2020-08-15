@@ -21,12 +21,13 @@
 	clippy::pedantic,
 )]
 #![allow(
-	clippy::module_name_repetitions,
-	clippy::similar_names,
 	clippy::if_not_else,
-	clippy::must_use_candidate,
+	clippy::inline_always,
 	clippy::missing_errors_doc,
-	clippy::missing_safety_doc
+	clippy::missing_safety_doc,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::similar_names
 )]
 #![deny(unsafe_code)]
 
