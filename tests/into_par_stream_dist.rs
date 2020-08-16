@@ -1,10 +1,41 @@
+#[cfg(feature = "constellation")]
+use constellation::*;
 use either::Either;
+use std::time::{Duration, SystemTime};
 
 use amadeus::dist::prelude::*;
 
-#[tokio::main]
-async fn main() {
-	let pool = ThreadPool::new(None).unwrap();
+fn main() {
+	if cfg!(miri) {
+		return;
+	}
+	#[cfg(feature = "constellation")]
+	init(Resources::default());
+
+	tokio::runtime::Builder::new()
+		.threaded_scheduler()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(async {
+			let thread_pool_time = {
+				let thread_pool = ThreadPool::new(None).unwrap();
+				run(&thread_pool).await
+			};
+			#[cfg(feature = "constellation")]
+			let process_pool_time = {
+				let process_pool = ProcessPool::new(None, None, Resources::default()).unwrap();
+				run(&process_pool).await
+			};
+			#[cfg(not(feature = "constellation"))]
+			let process_pool_time = "-";
+
+			println!("in {:?} {:?}", thread_pool_time, process_pool_time);
+		})
+}
+
+async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
+	let start = SystemTime::now();
 
 	<&[usize] as IntoDistributedStream>::into_dist_stream(&[1, 2, 3])
 		.map(FnMut!(|a: usize| a))
@@ -32,4 +63,6 @@ async fn main() {
 	}
 	let sum: usize = slice.iter().cloned().dist().sum(&pool).await;
 	assert_eq!(sum, slice.iter().sum::<usize>());
+
+	start.elapsed().unwrap()
 }

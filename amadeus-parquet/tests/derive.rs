@@ -307,7 +307,7 @@ fn get_test_file(file_name: &str) -> fs::File {
 }
 
 fn get_test_path(file_name: &str) -> PathBuf {
-	let mut pathbuf = env::current_dir().unwrap();
+	let mut pathbuf = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()); // https://github.com/rust-lang/miri/issues/1514 env::current_dir().unwrap();
 	pathbuf.push(PathBuf::from_str("../amadeus-testing/parquet").unwrap());
 	pathbuf.push(file_name);
 	pathbuf

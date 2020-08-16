@@ -10,6 +10,9 @@ use tokio::time::delay_for as sleep;
 use amadeus::dist::prelude::*;
 
 fn main() {
+	if cfg!(miri) {
+		return;
+	}
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 

@@ -631,12 +631,7 @@ impl<T: DataType> DeltaBitPackEncoder<T> {
 		// Write min delta
 		self.bit_writer.put_zigzag_vlq_int(min_delta)?;
 
-		// Slice to store bit width for each mini block
-		// apply unsafe allocation to avoid double mutable borrow
-		let mini_block_widths: &mut [u8] = unsafe {
-			let tmp_slice = self.bit_writer.get_next_byte_ptr(self.num_mini_blocks)?;
-			slice::from_raw_parts_mut(tmp_slice.as_ptr() as *mut u8, self.num_mini_blocks)
-		};
+		let offset = self.bit_writer.skip(self.num_mini_blocks)?;
 
 		for i in 0..self.num_mini_blocks {
 			// Find how many values we need to encode - either block size or whatever
@@ -653,13 +648,13 @@ impl<T: DataType> DeltaBitPackEncoder<T> {
 			}
 
 			// Compute bit width to store (max_delta - min_delta)
-			let bit_width = num_required_bits(self.subtract_u64(max_delta, min_delta));
-			mini_block_widths[i] = bit_width as u8;
+			let bit_width = num_required_bits(Self::subtract_u64(max_delta, min_delta));
+			self.bit_writer.buffer_set(offset + i, bit_width as u8);
 
 			// Encode values in current mini block using min_delta and bit_width
 			for j in 0..n {
 				let packed_value =
-					self.subtract_u64(self.deltas[i * self.mini_block_size + j], min_delta);
+					Self::subtract_u64(self.deltas[i * self.mini_block_size + j], min_delta);
 				self.bit_writer.put_value(packed_value, bit_width)?;
 			}
 
@@ -691,7 +686,7 @@ impl<T: DataType> Encoder<T> for DeltaBitPackEncoder<T> {
 		let mut idx;
 		// Define values to encode, initialize state
 		if self.total_values == 0 {
-			self.first_value = self.as_i64(values, 0);
+			self.first_value = Self::as_i64(values, 0);
 			self.current_value = self.first_value;
 			idx = 1;
 		} else {
@@ -702,8 +697,8 @@ impl<T: DataType> Encoder<T> for DeltaBitPackEncoder<T> {
 
 		// Write block
 		while idx < values.len() {
-			let value = self.as_i64(values, idx);
-			self.deltas[self.values_in_block] = self.subtract(value, self.current_value);
+			let value = Self::as_i64(values, idx);
+			self.deltas[self.values_in_block] = Self::subtract(value, self.current_value);
 			self.current_value = value;
 			idx += 1;
 			self.values_in_block += 1;
@@ -750,11 +745,11 @@ trait DeltaBitPackEncoderConversion<T: DataType> {
 	// Method should panic if type is not supported, otherwise no-op
 	fn assert_supported_type();
 
-	fn as_i64(&self, values: &[T::Type], index: usize) -> i64;
+	fn as_i64(values: &[T::Type], index: usize) -> i64;
 
-	fn subtract(&self, left: i64, right: i64) -> i64;
+	fn subtract(left: i64, right: i64) -> i64;
 
-	fn subtract_u64(&self, left: i64, right: i64) -> u64;
+	fn subtract_u64(left: i64, right: i64) -> u64;
 }
 
 impl<T: DataType> DeltaBitPackEncoderConversion<T> for DeltaBitPackEncoder<T> {
@@ -764,17 +759,17 @@ impl<T: DataType> DeltaBitPackEncoderConversion<T> for DeltaBitPackEncoder<T> {
 	}
 
 	#[inline]
-	default fn as_i64(&self, _values: &[T::Type], _index: usize) -> i64 {
+	default fn as_i64(_values: &[T::Type], _index: usize) -> i64 {
 		0
 	}
 
 	#[inline]
-	default fn subtract(&self, _left: i64, _right: i64) -> i64 {
+	default fn subtract(_left: i64, _right: i64) -> i64 {
 		0
 	}
 
 	#[inline]
-	default fn subtract_u64(&self, _left: i64, _right: i64) -> u64 {
+	default fn subtract_u64(_left: i64, _right: i64) -> u64 {
 		0
 	}
 }
@@ -786,18 +781,18 @@ impl DeltaBitPackEncoderConversion<Int32Type> for DeltaBitPackEncoder<Int32Type>
 	}
 
 	#[inline]
-	fn as_i64(&self, values: &[i32], index: usize) -> i64 {
+	fn as_i64(values: &[i32], index: usize) -> i64 {
 		values[index] as i64
 	}
 
 	#[inline]
-	fn subtract(&self, left: i64, right: i64) -> i64 {
+	fn subtract(left: i64, right: i64) -> i64 {
 		// It is okay for values to overflow, wrapping_sub wrapping around at the boundary
 		(left as i32).wrapping_sub(right as i32) as i64
 	}
 
 	#[inline]
-	fn subtract_u64(&self, left: i64, right: i64) -> u64 {
+	fn subtract_u64(left: i64, right: i64) -> u64 {
 		// Conversion of i32 -> u32 -> u64 is to avoid non-zero left most bytes in int
 		// representation
 		(left as i32).wrapping_sub(right as i32) as u32 as u64
@@ -811,18 +806,18 @@ impl DeltaBitPackEncoderConversion<Int64Type> for DeltaBitPackEncoder<Int64Type>
 	}
 
 	#[inline]
-	fn as_i64(&self, values: &[i64], index: usize) -> i64 {
+	fn as_i64(values: &[i64], index: usize) -> i64 {
 		values[index]
 	}
 
 	#[inline]
-	fn subtract(&self, left: i64, right: i64) -> i64 {
+	fn subtract(left: i64, right: i64) -> i64 {
 		// It is okay for values to overflow, wrapping_sub wrapping around at the boundary
 		left.wrapping_sub(right)
 	}
 
 	#[inline]
-	fn subtract_u64(&self, left: i64, right: i64) -> u64 {
+	fn subtract_u64(left: i64, right: i64) -> u64 {
 		left.wrapping_sub(right) as u64
 	}
 }

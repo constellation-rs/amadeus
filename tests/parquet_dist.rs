@@ -9,6 +9,9 @@ use std::{
 use amadeus::dist::prelude::*;
 
 fn main() {
+	if cfg!(miri) {
+		return;
+	}
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 

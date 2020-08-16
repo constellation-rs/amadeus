@@ -18,6 +18,9 @@ use std::time::{Duration, SystemTime};
 use amadeus::{data::Webpage, dist::prelude::*};
 
 fn main() {
+	if cfg!(miri) {
+		return;
+	}
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 

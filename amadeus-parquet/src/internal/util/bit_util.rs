@@ -248,6 +248,11 @@ impl BitWriter {
 	}
 
 	#[inline]
+	pub fn buffer_set(&mut self, offset: usize, val: u8) {
+		self.buffer[offset] = val;
+	}
+
+	#[inline]
 	pub fn bytes_written(&self) -> usize {
 		self.byte_offset - self.start + ceil(self.bit_offset as i64, 8) as usize
 	}

@@ -15,7 +15,8 @@ use std::time::{Duration, SystemTime};
 
 use amadeus::{data::Webpage, prelude::*};
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
 async fn commoncrawl() {
 	let start = SystemTime::now();
 

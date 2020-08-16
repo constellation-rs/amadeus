@@ -7,6 +7,7 @@ use amadeus::prelude::*;
 use amadeus_core::pool::ThreadPool;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn single_threaded() {
 	let start = SystemTime::now();
 

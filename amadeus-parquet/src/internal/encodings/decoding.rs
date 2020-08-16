@@ -192,7 +192,7 @@ impl<T: DataType> Decoder<T> for PlainDecoder<T> {
 			return Err(eof_err!("Not enough bytes to decode"));
 		}
 		let raw_buffer: &mut [u8] =
-			unsafe { from_raw_parts_mut(buffer.as_ptr() as *mut u8, bytes_to_decode) };
+			unsafe { from_raw_parts_mut(buffer.as_mut_ptr() as *mut u8, bytes_to_decode) };
 		raw_buffer.copy_from_slice(data.range(self.start, bytes_to_decode).as_ref());
 		self.start += bytes_to_decode;
 		self.num_values -= num_values;

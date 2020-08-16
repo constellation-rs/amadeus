@@ -7,7 +7,8 @@ use tokio::time::delay_for as sleep;
 
 use amadeus::dist::prelude::*;
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
 async fn threads() {
 	let start = SystemTime::now();
 

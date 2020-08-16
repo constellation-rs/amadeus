@@ -22,7 +22,7 @@ use crate::internal::data_type::AsBytes;
 /// Computes hash value for `data`, with a seed value `seed`.
 /// The data type `T` must implement the `AsBytes` trait.
 pub fn hash<T: AsBytes>(data: &T, seed: u32) -> u32 {
-	#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+	#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(miri)))]
 	{
 		if is_x86_feature_detected!("sse4.2") {
 			return unsafe { crc32_hash(data, seed) };
@@ -87,7 +87,7 @@ fn murmur_hash2_64a<T: AsBytes>(data: &T, seed: u64) -> u64 {
 }
 
 /// CRC32 hash implementation using SSE4 instructions. Borrowed from Impala.
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(miri)))]
 #[target_feature(enable = "sse4.2")]
 unsafe fn crc32_hash<T: AsBytes>(data: &T, seed: u32) -> u32 {
 	#[cfg(target_arch = "x86")]
@@ -142,7 +142,7 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+	#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(miri)))]
 	fn test_crc32() {
 		if is_x86_feature_detected!("sse4.2") {
 			unsafe {

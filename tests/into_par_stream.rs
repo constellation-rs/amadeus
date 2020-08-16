@@ -2,7 +2,8 @@ use either::Either;
 
 use amadeus::prelude::*;
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
 async fn into_par_stream() {
 	let pool = &ThreadPool::new(None).unwrap();
 

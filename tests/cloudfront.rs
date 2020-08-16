@@ -3,7 +3,8 @@
 use amadeus::prelude::*;
 use std::time::SystemTime;
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
 async fn cloudfront() {
 	let pool = &ThreadPool::new(None).unwrap();
 

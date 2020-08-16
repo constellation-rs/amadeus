@@ -4,6 +4,9 @@ use constellation::*;
 use std::time::{Duration, SystemTime};
 
 fn main() {
+	if cfg!(miri) {
+		return;
+	}
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
