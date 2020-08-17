@@ -4,7 +4,8 @@ use std::{path::PathBuf, time::SystemTime};
 
 use amadeus::prelude::*;
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
 async fn json() {
 	let start = SystemTime::now();
 

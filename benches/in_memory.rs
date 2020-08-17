@@ -64,6 +64,7 @@ fn run<F>(b: &mut Bencher, bytes: u64, mut task: impl FnMut() -> F)
 where
 	F: Future<Output = ()>,
 {
+	let _ = rayon::ThreadPoolBuilder::new().build_global();
 	RT.enter(|| {
 		let _ = Lazy::force(&POOL);
 		b.bytes = bytes;

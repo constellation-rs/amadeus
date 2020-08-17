@@ -19,7 +19,7 @@ use std::{env, fs, io::Write, path::PathBuf, str::FromStr};
 
 /// Returns path to the test parquet file in 'data' directory
 pub fn get_test_path(file_name: &str) -> PathBuf {
-	let mut pathbuf = env::current_dir().unwrap();
+	let mut pathbuf = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()); // https://github.com/rust-lang/miri/issues/1514 env::current_dir().unwrap();
 	pathbuf.push(PathBuf::from_str("../amadeus-testing/parquet").unwrap());
 	pathbuf.push(file_name);
 	pathbuf
@@ -37,7 +37,7 @@ pub fn get_test_file(file_name: &str) -> fs::File {
 /// Returns file handle for a temp file in 'target' directory with a provided content
 pub fn get_temp_file(file_name: &str, content: &[u8]) -> fs::File {
 	// build tmp path to a file in "./testdata"
-	let mut path_buf = env::current_dir().unwrap();
+	let mut path_buf = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()); // https://github.com/rust-lang/miri/issues/1514 env::current_dir().unwrap();
 	path_buf.push("testdata");
 	fs::create_dir_all(&path_buf).unwrap();
 	path_buf.push(file_name);

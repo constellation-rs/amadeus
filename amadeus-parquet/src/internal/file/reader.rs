@@ -788,6 +788,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)] // as strerror_r isn't implemented in miri
 	fn test_file_reader_try_from() {
 		// Valid file path
 		let test_file = get_test_file("alltypes_plain.parquet");
@@ -1098,6 +1099,7 @@ mod tests {
 	// Benches
 
 	#[bench]
+	#[cfg_attr(miri, ignore)]
 	fn record_reader_10k(bench: &mut Bencher) {
 		let file = get_test_file("10k-v2.parquet");
 		let len = file.metadata().unwrap().len();
@@ -1113,6 +1115,7 @@ mod tests {
 	}
 
 	#[bench]
+	#[cfg_attr(miri, ignore)]
 	fn record_reader_10k_typed(bench: &mut Bencher) {
 		let file = get_test_file("10k-v2.parquet");
 		let len = file.metadata().unwrap().len();
@@ -1129,6 +1132,7 @@ mod tests {
 	}
 
 	#[bench]
+	#[cfg_attr(miri, ignore)]
 	fn record_reader_stock_simulated(bench: &mut Bencher) {
 		let file = get_test_file("stock_simulated.parquet");
 		let len = file.metadata().unwrap().len();
@@ -1184,6 +1188,7 @@ mod tests {
 	}
 
 	#[bench]
+	#[cfg_attr(miri, ignore)]
 	fn record_reader_stock_simulated_column(bench: &mut Bencher) {
 		// WARNING THIS BENCH IS INTENDED FOR THIS DATA FILE ONLY
 		// COPY OR CHANGE THE DATA FILE MAY NOT WORK AS YOU WISH

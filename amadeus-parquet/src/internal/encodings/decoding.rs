@@ -192,7 +192,7 @@ impl<T: DataType> Decoder<T> for PlainDecoder<T> {
 			return Err(eof_err!("Not enough bytes to decode"));
 		}
 		let raw_buffer: &mut [u8] =
-			unsafe { from_raw_parts_mut(buffer.as_ptr() as *mut u8, bytes_to_decode) };
+			unsafe { from_raw_parts_mut(buffer.as_mut_ptr() as *mut u8, bytes_to_decode) };
 		raw_buffer.copy_from_slice(data.range(self.start, bytes_to_decode).as_ref());
 		self.start += bytes_to_decode;
 		self.num_values -= num_values;
@@ -1489,6 +1489,7 @@ mod tests {
 	macro_rules! plain {
 		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $pty:expr, $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mem_tracker = Rc::new(MemTracker::new());
 				let mut encoder =
@@ -1508,6 +1509,7 @@ mod tests {
 		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $pty:expr,
 	   $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mem_tracker = Rc::new(MemTracker::new());
 				let mut encoder = DictEncoder::<$ty>::new(Rc::new(col_desc(0, $pty)), mem_tracker);
@@ -1536,6 +1538,7 @@ mod tests {
 	macro_rules! delta_bit_pack {
 		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mut encoder = DeltaBitPackEncoder::<$ty>::new();
 

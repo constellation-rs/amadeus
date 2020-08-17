@@ -274,7 +274,8 @@ mod pool {
 			atomic::{AtomicUsize, Ordering}, Arc
 		};
 
-		#[tokio::test]
+		#[tokio::test(threaded_scheduler)]
+		#[cfg_attr(miri, ignore)]
 		async fn spawn_pinned() {
 			const TASKS: usize = 1000;
 			const ITERS: usize = 200;

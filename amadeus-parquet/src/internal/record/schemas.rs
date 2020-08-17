@@ -31,7 +31,7 @@
 //! ```
 
 use fxhash::FxBuildHasher;
-use linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use std::{
 	fmt::{self, Debug, Display}, marker::PhantomData, mem, str::FromStr
 };
@@ -1782,6 +1782,7 @@ mod tests {
 	use amadeus_types::Value;
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn schema_printing() {
 		let _schema: RootSchema<Value> = "message org.apache.impala.ComplexTypesTbl {
             REQUIRED int64 ID (INT_64);

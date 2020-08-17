@@ -1,3 +1,4 @@
+#![type_length_limit = "1572864"]
 #![allow(
 	clippy::cognitive_complexity,
 	clippy::type_complexity,
@@ -8,7 +9,8 @@ use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 use amadeus::prelude::*;
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
 async fn parquet() {
 	let start = SystemTime::now();
 

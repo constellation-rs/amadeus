@@ -3,7 +3,8 @@ use std::{panic, panic::AssertUnwindSafe, time::SystemTime};
 
 use amadeus::prelude::*;
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
 async fn panic() {
 	let start = SystemTime::now();
 

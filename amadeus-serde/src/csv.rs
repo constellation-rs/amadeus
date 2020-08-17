@@ -1,5 +1,3 @@
-#![allow(clippy::unsafe_derive_deserialize)] // https://github.com/rust-lang/rust-clippy/issues/5789
-
 use csv::Error as InternalCsvError;
 use educe::Educe;
 use futures::{pin_mut, stream, AsyncReadExt, FutureExt, Stream, StreamExt};

@@ -84,34 +84,31 @@ impl Synchronize {
 			wake: Mutex::new(Vec::new()),
 		}
 	}
-	pub(crate) fn synchronize<'a, F>(&'a self, f: F) -> impl Future<Output = ()> + 'a
+	pub(crate) async fn synchronize<F>(&self, f: F)
 	where
-		F: Future<Output = ()> + 'a,
-		Self: 'a,
+		F: Future<Output = ()>,
 	{
-		async move {
-			let nonce = self.nonce.load(Ordering::SeqCst);
-			if !self.running.compare_and_swap(false, true, Ordering::SeqCst) {
-				let on_drop = OnDrop::new(|| self.running.store(false, Ordering::SeqCst));
-				f.await;
-				on_drop.cancel();
-				let _ = self.nonce.fetch_add(1, Ordering::SeqCst);
-				self.running.store(false, Ordering::SeqCst);
-				for waker in mem::replace(&mut *self.wake.lock().unwrap(), Vec::new()) {
-					waker.wake();
-				}
-				return;
+		let nonce = self.nonce.load(Ordering::SeqCst);
+		if !self.running.compare_and_swap(false, true, Ordering::SeqCst) {
+			let on_drop = OnDrop::new(|| self.running.store(false, Ordering::SeqCst));
+			f.await;
+			on_drop.cancel();
+			let _ = self.nonce.fetch_add(1, Ordering::SeqCst);
+			self.running.store(false, Ordering::SeqCst);
+			for waker in mem::replace(&mut *self.wake.lock().unwrap(), Vec::new()) {
+				waker.wake();
 			}
-			future::poll_fn(|cx| {
-				self.wake.lock().unwrap().push(cx.waker().clone());
-				if nonce != self.nonce.load(Ordering::SeqCst) {
-					Poll::Ready(())
-				} else {
-					Poll::Pending
-				}
-			})
-			.await
+			return;
 		}
+		future::poll_fn(|cx| {
+			self.wake.lock().unwrap().push(cx.waker().clone());
+			if nonce != self.nonce.load(Ordering::SeqCst) {
+				Poll::Ready(())
+			} else {
+				Poll::Pending
+			}
+		})
+		.await
 	}
 }
 

@@ -1,5 +1,5 @@
 use fxhash::FxBuildHasher;
-use linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use std::collections::HashMap;
 
 use amadeus_types::{Bson, Date, DateTime, Decimal, Enum, Group, Json, List, Time, Value};

@@ -737,6 +737,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_values() {
 		for width in 1..MAX_WIDTH + 1 {
 			test_rle_values(width, 1, -1);
@@ -801,8 +802,8 @@ mod tests {
 	#[test]
 	fn test_random() {
 		let seed_len = 32;
-		let niters = 50;
-		let ngroups = 1000;
+		let niters = if !cfg!(miri) { 50 } else { 1 };
+		let ngroups = if !cfg!(miri) { 1000 } else { 200 };
 		let max_group_size = 15;
 		let mut values = vec![];
 

@@ -4,6 +4,9 @@ use constellation::*;
 use std::time::{Duration, SystemTime};
 
 fn main() {
+	if cfg!(miri) {
+		return;
+	}
 	#[cfg(feature = "constellation")]
 	init(Resources::default());
 
@@ -41,35 +44,35 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 	.await
 	.unwrap();
 
-	let ((), (count, count2, (), list, sorted)): ((), (usize, usize, (), List<CloudfrontRow>, _)) =
-		rows.clone()
-			.dist_stream()
-			.fork(
-				pool,
-				Identity.for_each(FnMut!(|x: Result<CloudfrontRow, _>| {
-					let _x = x.unwrap();
-					// println!("{:?}", x.url);
-				})),
-				(
-					Identity.map(FnMut!(|_: &_| ())).count(),
-					Identity.count(),
-					Identity.for_each(FnMut!(|_: &_| ())),
-					Identity
-						.cloned()
-						.map(FnMut!(|x: Result<_, _>| x.unwrap()))
-						.collect(),
-					Identity
-						.cloned()
-						.map(FnMut!(|x: Result<_, _>| x.unwrap()))
-						.sort_n_by(
-							100,
-							Fn!(|a: &CloudfrontRow, b: &CloudfrontRow| a
-								.remote_ip
-								.cmp(&b.remote_ip)),
-						),
-				),
-			)
-			.await;
+	let ((), (count, count2, (), list)): ((), (usize, usize, (), List<CloudfrontRow>)) = rows
+		.clone()
+		.dist_stream()
+		.fork(
+			pool,
+			Identity.for_each(FnMut!(|x: Result<CloudfrontRow, _>| {
+				let _x = x.unwrap();
+				// println!("{:?}", x.url);
+			})),
+			(
+				Identity.map(FnMut!(|_: &_| ())).count(),
+				Identity.count(),
+				Identity.for_each(FnMut!(|_: &_| ())),
+				Identity
+					.cloned()
+					.map(FnMut!(|x: Result<_, _>| x.unwrap()))
+					.collect(),
+				// Identity
+				// 	.cloned()
+				// 	.map(FnMut!(|x: Result<_, _>| x.unwrap()))
+				// 	.sort_n_by(
+				// 		100,
+				// 		Fn!(|a: &CloudfrontRow, b: &CloudfrontRow| a
+				// 			.remote_ip
+				// 			.cmp(&b.remote_ip)),
+				// 	),
+			),
+		)
+		.await;
 	assert_eq!(count, count2);
 	assert_eq!(count, 207_928);
 
@@ -82,7 +85,7 @@ async fn run<P: amadeus_core::pool::ProcessPool>(pool: &P) -> Duration {
 		.await;
 	assert_eq!(count3, 207_928);
 
-	println!("{:#?}", sorted);
+	// println!("{:#?}", sorted);
 
 	start.elapsed().unwrap()
 }

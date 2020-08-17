@@ -1,5 +1,3 @@
-#![allow(clippy::unsafe_derive_deserialize)]
-
 use ::serde::{Deserialize, Serialize};
 use derive_new::new;
 use futures::Stream;
@@ -208,6 +206,7 @@ where
 	}
 }
 
+#[allow(clippy::unsafe_derive_deserialize)]
 #[pin_project]
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]

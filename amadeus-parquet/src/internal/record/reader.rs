@@ -24,7 +24,7 @@
 //! that are optional or repeated.
 
 use fxhash::FxBuildHasher;
-use linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use std::{
 	collections::HashMap, convert::TryInto, error::Error, marker::PhantomData, mem, sync::Arc
 };
@@ -948,7 +948,7 @@ where
 mod tests {
 	use super::*;
 
-	use linked_hash_map::LinkedHashMap;
+	use hashlink::LinkedHashMap;
 	use std::{collections::HashMap, sync::Arc};
 
 	use crate::internal::{
@@ -1034,6 +1034,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_nulls() {
 		let rows = test_file_reader_rows::<Group>("nulls.snappy.parquet", None).unwrap();
 
@@ -1076,6 +1077,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_nulls_typed() {
 		type RowTyped = (Option<(Option<i32>,)>,);
 
@@ -1096,6 +1098,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_nonnullable() {
 		let rows = test_file_reader_rows::<Group>("nonnullable.impala.parquet", None).unwrap();
 
@@ -1143,6 +1146,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_nonnullable_typed() {
 		type RowTyped = (
 			i64,
@@ -1178,6 +1182,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_nullable() {
 		let rows = test_file_reader_rows::<Group>("nullable.impala.parquet", None).unwrap();
 
@@ -1532,6 +1537,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_nullable_typed() {
 		type RowTyped = (
 			Option<i64>,
@@ -1672,6 +1678,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_projection() {
 		let _schema = "
 		  message spark_schema {
@@ -1717,6 +1724,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_projection_map() {
 		let _schema = "
 		  message spark_schema {
@@ -1798,6 +1806,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_file_reader_rows_projection_list() {
 		let _schema = "
 		  message spark_schema {
