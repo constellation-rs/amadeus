@@ -1008,6 +1008,7 @@ mod tests {
 	const TEST_SET_SIZE: usize = 1024;
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_get_encoders() {
 		// supported encodings
 		create_and_check_encoder::<Int32Type>(Encoding::Plain, None);
@@ -1038,6 +1039,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_bool() {
 		BoolType::test(Encoding::Plain, TEST_SET_SIZE, -1);
 		BoolType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
@@ -1045,6 +1047,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_i32() {
 		Int32Type::test(Encoding::Plain, TEST_SET_SIZE, -1);
 		Int32Type::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
@@ -1052,6 +1055,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_i64() {
 		Int64Type::test(Encoding::Plain, TEST_SET_SIZE, -1);
 		Int64Type::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
@@ -1059,24 +1063,28 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_i96() {
 		Int96Type::test(Encoding::Plain, TEST_SET_SIZE, -1);
 		Int96Type::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_float() {
 		FloatType::test(Encoding::Plain, TEST_SET_SIZE, -1);
 		FloatType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_double() {
 		DoubleType::test(Encoding::Plain, TEST_SET_SIZE, -1);
 		DoubleType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_byte_array() {
 		ByteArrayType::test(Encoding::Plain, TEST_SET_SIZE, -1);
 		ByteArrayType::test(Encoding::PlainDictionary, TEST_SET_SIZE, -1);
@@ -1085,6 +1093,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_fixed_lenbyte_array() {
 		FixedLenByteArrayType::test(Encoding::Plain, TEST_SET_SIZE, 100);
 		FixedLenByteArrayType::test(Encoding::PlainDictionary, TEST_SET_SIZE, 100);
@@ -1092,6 +1101,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_dict_encoded_size() {
 		fn run_test<T: DataType>(type_length: i32, values: &[T::Type], expected_size: usize) {
 			let mut encoder = create_test_dict_encoder::<T>(type_length);
@@ -1116,6 +1126,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_estimated_data_encoded_size() {
 		fn run_test<T: DataType>(
 			encoding: Encoding, type_length: i32, values: &[T::Type], initial_size: usize,
@@ -1176,6 +1187,7 @@ mod tests {
 
 	// See: https://github.com/sunchao/parquet-rs/issues/47
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_issue_47() {
 		let mut encoder = create_test_encoder::<ByteArrayType>(0, Encoding::DeltaByteArray);
 		let mut decoder = create_test_decoder::<ByteArrayType>(0, Encoding::DeltaByteArray);
@@ -1378,6 +1390,7 @@ mod tests {
 	macro_rules! plain {
 		($fname:ident, $batch_size:expr, $ty:ident, $pty:expr, $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mem_tracker = Rc::new(MemTracker::new());
 				let encoder =
@@ -1391,6 +1404,7 @@ mod tests {
 	macro_rules! dict {
 		($fname:ident, $batch_size:expr, $ty:ident, $pty:expr, $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mem_tracker = Rc::new(MemTracker::new());
 				let encoder = DictEncoder::<$ty>::new(Rc::new(col_desc(0, $pty)), mem_tracker);
@@ -1403,6 +1417,7 @@ mod tests {
 	macro_rules! delta_bit_pack {
 		($fname:ident, $batch_size:expr, $ty:ident, $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let encoder = DeltaBitPackEncoder::<$ty>::new();
 				let (bytes, values) = $gen_data_fn($batch_size);

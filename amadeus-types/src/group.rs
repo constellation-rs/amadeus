@@ -1,7 +1,7 @@
 //! Implement [`Record`] for [`Group`] aka [`Row`].
 
 use fxhash::FxBuildHasher;
-use linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
 	cmp::Ordering, fmt::{self, Debug}, ops::Index, slice::SliceIndex, str, sync::Arc

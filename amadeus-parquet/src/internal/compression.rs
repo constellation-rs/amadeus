@@ -290,26 +290,31 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_codec_snappy() {
 		test_codec(CodecType::Snappy);
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_codec_gzip() {
 		test_codec(CodecType::Gzip);
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_codec_brotli() {
 		test_codec(CodecType::Brotli);
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_codec_lz4() {
 		test_codec(CodecType::Lz4);
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_codec_zstd() {
 		test_codec(CodecType::Zstd);
 	}
@@ -350,6 +355,7 @@ mod tests {
 	macro_rules! compress {
 		($fname:ident, $codec:expr, $col_idx:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mut codec = create_codec($codec).unwrap().unwrap();
 				let data = get_pages_bytes($col_idx);
@@ -366,6 +372,7 @@ mod tests {
 	macro_rules! decompress {
 		($fname:ident, $codec:expr, $col_idx:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let compressed_pages = {
 					let mut codec = create_codec($codec).unwrap().unwrap();

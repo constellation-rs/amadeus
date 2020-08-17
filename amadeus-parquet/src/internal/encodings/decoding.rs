@@ -1489,6 +1489,7 @@ mod tests {
 	macro_rules! plain {
 		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $pty:expr, $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mem_tracker = Rc::new(MemTracker::new());
 				let mut encoder =
@@ -1508,6 +1509,7 @@ mod tests {
 		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $pty:expr,
 	   $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mem_tracker = Rc::new(MemTracker::new());
 				let mut encoder = DictEncoder::<$ty>::new(Rc::new(col_desc(0, $pty)), mem_tracker);
@@ -1536,6 +1538,7 @@ mod tests {
 	macro_rules! delta_bit_pack {
 		($fname:ident, $num_values:expr, $batch_size:expr, $ty:ident, $gen_data_fn:expr) => {
 			#[bench]
+			#[cfg_attr(miri, ignore)]
 			fn $fname(bench: &mut Bencher) {
 				let mut encoder = DeltaBitPackEncoder::<$ty>::new();
 

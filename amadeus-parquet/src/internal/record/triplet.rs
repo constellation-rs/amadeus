@@ -328,6 +328,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_triplet_required_column() {
 		let path = vec!["ID"];
 		let values = vec![Value::I64(8)];
@@ -343,6 +344,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_triplet_optional_column() {
 		let path = vec!["nested_struct", "A"];
 		let values = vec![Value::I32(1), Value::I32(7)];
@@ -358,6 +360,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_triplet_optional_list_column() {
 		let path = vec!["a", "list", "element", "list", "element", "list", "element"];
 		let values = vec![
@@ -389,6 +392,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_triplet_optional_map_column() {
 		let path = vec!["a", "key_value", "value", "key_value", "key"];
 		let values = vec![

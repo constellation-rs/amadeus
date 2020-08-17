@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#![cfg(not(miri))]
 #![allow(clippy::type_complexity)]
 
 use std::{collections::HashMap, env, fs, path::PathBuf, str::FromStr};

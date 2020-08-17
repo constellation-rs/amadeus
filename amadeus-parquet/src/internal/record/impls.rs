@@ -1,4 +1,4 @@
-use linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use std::{
 	any::type_name, collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::{BuildHasher, Hash}, marker::PhantomData, string::FromUtf8Error, sync::Arc
 };
@@ -8,8 +8,6 @@ use amadeus_types::{
 	Bson, Data, Date, DateTime, DateTimeWithoutTimezone, DateWithoutTimezone, Decimal, Enum, Group, IpAddr, Json, List, Time, TimeWithoutTimezone, Timezone, Url, Value, Webpage
 };
 
-#[cfg(debug_assertions)]
-use crate::internal::schema::parser::parse_message_type;
 use crate::internal::{
 	basic::{LogicalType, Repetition, Type as PhysicalType}, column::reader::ColumnReader, data_type::{
 		BoolType, ByteArrayType, DoubleType, FixedLenByteArrayType, FloatType, Int32Type, Int64Type, Int96, Int96Type
@@ -1112,6 +1110,8 @@ where
 				.map(|(name, schema_)| {
 					#[cfg(debug_assertions)]
 					{
+						use crate::internal::schema::parser::parse_message_type;
+
 						// Check parsing and printing by round-tripping both typed and untyped and checking correctness.
 						// TODO: do with predicates also
 
