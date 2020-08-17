@@ -256,6 +256,7 @@ mod test {
 	use std::time;
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn abc() {
 		let mut rng =
 			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
@@ -339,6 +340,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn top_hll() {
 		let mut rng =
 			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);

@@ -223,6 +223,7 @@ mod test {
 	use std::collections::HashMap;
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn sample_without_replacement() {
 		let total = 6;
 		let samples = 2;
@@ -242,6 +243,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn sample_unstable() {
 		let total = 6;
 		let samples = 2;

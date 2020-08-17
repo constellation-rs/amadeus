@@ -634,6 +634,7 @@ mod test {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn push() {
 		let actual = 100_000.0;
 		let p = 0.05;
