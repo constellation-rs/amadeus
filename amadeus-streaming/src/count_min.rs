@@ -262,6 +262,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg_attr(miri, ignore)]
 	fn test_increment_multi() {
 		let mut cms = CountMinSketch64::<u64>::new(0.99, 2.0 / 100.0, ());
 		for i in 0..1_000_000 {
