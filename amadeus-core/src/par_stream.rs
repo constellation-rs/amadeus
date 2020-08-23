@@ -23,10 +23,10 @@ use futures::{future, pin_mut, stream::StreamExt as _, Stream};
 use indexmap::IndexMap;
 use serde_closure::{traits, FnOnce};
 use std::{
-	cmp::Ordering, hash::Hash, iter, ops, pin::Pin, task::{Context, Poll}, vec
+	cmp::Ordering, hash::Hash, iter, ops, panic, pin::Pin, task::{Context, Poll}, vec
 };
 
-use super::{par_pipe::*, par_sink::*};
+use super::{async_drop::FuturesUnordered, par_pipe::*, par_sink::*};
 use crate::{
 	into_par_stream::{IntoDistributedStream, IntoParallelStream}, pipe::{Sink, StreamExt}, pool::{ProcessPool, ProcessSend, ThreadPool}
 };
@@ -490,9 +490,9 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 				};
 				pool.spawn(spawn)
 			})
-			.collect::<futures::stream::FuturesUnordered<_>>();
+			.collect::<FuturesUnordered<_>>();
 		let stream = handles.map(|item| {
-			item.unwrap_or_else(|err| panic!("Amadeus: task '<unnamed>' panicked at '{}'", err))
+			item.unwrap_or_else(|err| panic::resume_unwind(err))// panic!("Amadeus: task '<unnamed>' panicked at '{}'", err))
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
@@ -571,9 +571,9 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 				#[allow(unsafe_code)]
 				unsafe { pool.spawn_unchecked(spawn) }
 			})
-			.collect::<futures::stream::FuturesUnordered<_>>();
+			.collect::<FuturesUnordered<_>>();
 		let stream = handles.map(|item| {
-			item.unwrap_or_else(|err| panic!("Amadeus: task '<unnamed>' panicked at '{}'", err))
+			item.unwrap_or_else(|err| panic::resume_unwind(err))// panic!("Amadeus: task '<unnamed>' panicked at '{}'", err))
 		});
 		let reduce_c = reduce_c.into_async();
 		pin_mut!(reduce_c);
@@ -774,11 +774,11 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 							#[allow(unsafe_code)]
 							unsafe{pool.spawn_unchecked(spawn)}
 						})
-						.collect::<futures::stream::FuturesUnordered<_>>();
+						.collect::<FuturesUnordered<_>>();
 
 					let stream = handles.map(|item| {
 						item.unwrap_or_else(|err| {
-							panic!("Amadeus: task '<unnamed>' panicked at '{}'", err)
+							panic::resume_unwind(err)// panic!("Amadeus: task '<unnamed>' panicked at '{}'", err)
 						})
 					});
 					let reduce_b = reduce_b.into_async();
@@ -791,7 +791,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 				#[allow(unsafe_code)]
 				unsafe { pool.spawn_unchecked(spawn) }
 			})
-			.collect::<futures::stream::FuturesUnordered<_>>();
+			.collect::<FuturesUnordered<_>>();
 		let stream = handles.map(|item| {
 			item.unwrap_or_else(|err| panic!("Amadeus: task '<unnamed>' panicked at '{}'", err))
 		});

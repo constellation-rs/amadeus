@@ -2,7 +2,7 @@ use derive_new::new;
 use futures::TryFutureExt;
 use pin_project::pin_project;
 use std::{
-	future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc, task::{Context, Poll}
+	any::Any, future::Future, io, panic::{RefUnwindSafe, UnwindSafe}, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -12,7 +12,9 @@ use {
 	futures::{future, FutureExt}, std::panic::AssertUnwindSafe
 };
 
-use super::util::{assert_sync_and_send, Panicked};
+use amadeus_core::async_drop::PinnedAsyncDrop;
+
+use super::util::assert_sync_and_send;
 
 const DEFAULT_TASKS_PER_CORE: usize = 100;
 
@@ -48,7 +50,7 @@ impl ThreadPool {
 	}
 	pub fn spawn<F, Fut, T>(
 		&self, task: F,
-	) -> JoinGuard<impl Future<Output = Result<T, Panicked>> + Send>
+	) -> JoinGuard<impl Future<Output = Result<T, Box<dyn Any + Send>>> + PinnedAsyncDrop + Send>
 	where
 		F: FnOnce() -> Fut + Send + 'static,
 		Fut: Future<Output = T> + 'static,
@@ -59,8 +61,7 @@ impl ThreadPool {
 			self.0
 				.pool
 				.spawn_pinned(task)
-				.map_err(JoinError::into_panic)
-				.map_err(Panicked::from),
+				.map_err(JoinError::into_panic),
 		);
 		#[cfg(target_arch = "wasm32")]
 		{
@@ -76,7 +77,7 @@ impl ThreadPool {
 	#[allow(unsafe_code)]
 	pub unsafe fn spawn_unchecked<'a, F, Fut, T>(
 		&self, task: F,
-	) -> JoinGuard<impl Future<Output = Result<T, Panicked>> + Send + 'a>
+	) -> JoinGuard<impl Future<Output = Result<T, Box<dyn Any + Send>>> + PinnedAsyncDrop + Send + 'a>
 	where
 		F: FnOnce() -> Fut + Send + 'a,
 		Fut: Future<Output = T> + 'a,
@@ -87,8 +88,7 @@ impl ThreadPool {
 			self.0
 				.pool
 				.spawn_pinned_unchecked(task)
-				.map_err(JoinError::into_panic)
-				.map_err(Panicked::from),
+				.map_err(JoinError::into_panic),
 		);
 		#[cfg(target_arch = "wasm32")]
 		{
@@ -131,19 +131,7 @@ impl RefUnwindSafe for ThreadPool {}
 
 #[pin_project]
 #[derive(new)]
-pub struct JoinGuard<F>(#[pin] F)
-where
-	F: Future;
-#[cfg(not(target_arch = "wasm32"))]
-impl<F> JoinGuard<pool::JoinGuard<F>>
-where
-	F: Future,
-{
-	#[inline(always)]
-	pub fn cancel<'a>(self: Pin<&'a mut Self>) -> impl Future<Output = ()> + 'a {
-		self.project().0.cancel()
-	}
-}
+pub struct JoinGuard<F>(#[pin] F);
 impl<F> Future for JoinGuard<F>
 where
 	F: Future,
@@ -153,6 +141,14 @@ where
 	#[inline(always)]
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		self.project().0.poll(cx)
+	}
+}
+impl<F> PinnedAsyncDrop for JoinGuard<F>
+where
+	F: Future + PinnedAsyncDrop,
+{
+	fn poll_drop_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+		self.project().0.poll_drop_ready(cx)
 	}
 }
 
@@ -174,6 +170,8 @@ mod pool {
 	use tokio::{
 		runtime::Handle, task, task::{JoinError, JoinHandle, LocalSet}
 	};
+
+	use amadeus_core::async_drop::PinnedAsyncDrop;
 
 	type Request = Box<dyn FnOnce() -> Box<dyn Future<Output = Response>> + Send>;
 	type Response = Result<Result<Box<dyn Any + Send>, Box<dyn Any + Send>>, Aborted>;
@@ -230,6 +228,7 @@ mod pool {
 					});
 					let (sender_, receiver) = bounded::<RemoteHandle<Response>>(1);
 					sender.send((task, sender_)).await.unwrap();
+					drop(sender);
 					let res = receiver.recv().await;
 					let res = res.unwrap().await;
 					#[allow(deprecated)]
@@ -271,6 +270,7 @@ mod pool {
 						mem::transmute(task);
 					let (sender_, receiver) = bounded::<RemoteHandle<Response>>(1);
 					sender.send((task, sender_)).await.unwrap();
+					drop(sender);
 					let res = receiver.recv().await;
 					let res = res.unwrap().await;
 					#[allow(deprecated)]
@@ -311,18 +311,6 @@ mod pool {
 		fn new(f: F, abort_handle: AbortHandle) -> Self {
 			Self(f.fuse(), abort_handle)
 		}
-		#[inline(always)]
-		pub(crate) fn cancel<'a>(mut self: Pin<&'a mut Self>) -> impl Future<Output = ()> + 'a {
-			futures::future::poll_fn(move |cx| {
-				self.1.abort();
-				let self_ = self.as_mut().project().0;
-				if !self_.is_terminated() {
-					self_.poll(cx).map(drop)
-				} else {
-					Poll::Ready(())
-				}
-			})
-		}
 	}
 	impl<F> Future for JoinGuard<F>
 	where
@@ -335,17 +323,25 @@ mod pool {
 			self.project().0.poll(cx)
 		}
 	}
+	impl<F> PinnedAsyncDrop for JoinGuard<F>
+	where
+		F: Future,
+	{
+		fn poll_drop_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+			if !self.0.is_terminated() {
+				self.project().0.poll(cx).map(drop)
+			} else {
+				Poll::Ready(())
+			}
+		}
+	}
 	#[pinned_drop]
 	impl<F> PinnedDrop for JoinGuard<F>
 	where
 		F: Future,
 	{
 		fn drop(self: Pin<&mut Self>) {
-			let self_ = self.project();
-			self_.1.abort();
-			if !self_.0.is_terminated() {
-				let _ = task::block_in_place(|| Handle::current().block_on(self_.0));
-			}
+			assert!(self.0.is_terminated());
 		}
 	}
 
