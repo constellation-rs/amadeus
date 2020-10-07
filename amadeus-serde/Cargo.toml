@@ -25,7 +25,7 @@ chrono = { version = "0.4", default-features = false, features = ["serde"] }
 csv = "1.0"
 educe = "0.4"
 futures = "0.3"
-hashlink = "0.5"
+hashlink = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"
 serde_closure = "0.3"
