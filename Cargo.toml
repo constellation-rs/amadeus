@@ -56,7 +56,7 @@ pin-project = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
 serde_traitobject = { version = "0.2", optional = true }
-tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "blocking"] }
+tokio = { version = "0.3", features = ["rt-threaded", "rt-util", "blocking"] }
 
 # Move to dev-dependencies once fixed: https://github.com/rust-lang/cargo/issues/1596
 arrow-parquet = { package = "parquet", version = "1.0", default-features = false, features = ["brotli", "flate2", "lz4", "snap"], optional = true }
@@ -74,7 +74,7 @@ doc-comment = "0.3"
 either = { version = "1.5", features = ["serde"] }
 rand = "0.7"
 serde_json = "1.0"
-tokio = { version = "0.2", features = ["macros", "time"] }
+tokio = { version = "0.3", features = ["macros", "time"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
