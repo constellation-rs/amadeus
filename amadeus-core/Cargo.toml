@@ -30,7 +30,7 @@ itertools = "0.9"
 multimap = "0.8"
 owned_chars = "0.3"
 pin-project = "0.4"
-rand = "0.7"
+rand = "0.8"
 replace_with = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
