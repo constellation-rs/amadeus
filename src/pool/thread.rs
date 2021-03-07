@@ -36,10 +36,6 @@ impl ThreadPool {
         };
 
         let tasks_per_core = tasks_per_core.unwrap_or(DEFAULT_TASKS_PER_CORE);
-
-        println!("Logical cores: {}", logical_cores);
-        println!("Tasks per core: {}", tasks_per_core);
-
         #[cfg(not(target_arch = "wasm32"))]
 		let pool = Pool::new(logical_cores);
 		Ok(ThreadPool(Arc::new(ThreadPoolInner {
