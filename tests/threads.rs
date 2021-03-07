@@ -1,7 +1,8 @@
 use futures::future::join_all;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::{
-	convert::TryInto, time::{Duration, SystemTime}
+	convert::TryInto, time::{Duration, SystemTime},
+    collections::HashSet,
 };
 use tokio::time::delay_for as sleep;
 
@@ -12,7 +13,7 @@ use amadeus::dist::prelude::*;
 async fn threads() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 	let parallel = 1000;
 
 	join_all((0..parallel).map(|i| async move {
@@ -28,4 +29,26 @@ async fn threads() {
 	.await;
 
 	println!("in {:?}", start.elapsed().unwrap());
+}
+
+#[tokio::test(threaded_scheduler)]
+#[cfg_attr(miri, ignore)]
+async fn user_set_core_count() {
+    let num_cores = 4;
+
+    let pool = &ThreadPool::new(Some(1), Some(num_cores)).unwrap();
+    let parallel = 1000;
+
+    let ret = join_all((0..parallel).map(|_| async move {
+        pool
+            .spawn(move || async move {
+                format!("{:?}", std::thread::current().id())
+            })
+            .await.unwrap()
+    })).await;
+
+    let unique_thread_ids: HashSet<String> = ret.into_iter().collect();
+
+    println!("Number of cores used: {}", unique_thread_ids.len());
+    assert_eq!(unique_thread_ids.len(), num_cores);
 }

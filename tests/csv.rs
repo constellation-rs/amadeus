@@ -9,7 +9,7 @@ use amadeus::prelude::*;
 async fn csv() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct GameDerived {

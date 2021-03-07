@@ -9,7 +9,7 @@ use amadeus::prelude::*;
 async fn json() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 	let tasks = 100;
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]

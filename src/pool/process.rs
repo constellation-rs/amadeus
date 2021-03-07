@@ -130,7 +130,7 @@ impl ProcessPoolInner {
 							let receiver = Receiver::<Option<Request>>::new(parent);
 							let sender = Sender::<Result<Response, Panicked>>::new(parent);
 
-							let thread_pool = ThreadPool::new(tasks_per_core).unwrap();
+							let thread_pool = ThreadPool::new(tasks_per_core, None).unwrap();
 
 							while let Some(work) = receiver.recv().await.unwrap() {
 								let ret = panic::catch_unwind(panic::AssertUnwindSafe(|| {

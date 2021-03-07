@@ -44,7 +44,7 @@ async fn csv() {
 	let timer = web_sys::window().unwrap().performance().unwrap();
 	let start = timer.now();
 
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	#[derive(Data, Clone, PartialEq, PartialOrd, Debug)]
 	struct GameDerived {
