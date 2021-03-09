@@ -26,9 +26,9 @@ struct ThreadPoolInner {
 #[derive(Debug)]
 pub struct ThreadPool(Arc<ThreadPoolInner>);
 impl ThreadPool {
-	pub fn new(tasks_per_core: Option<usize>, num_cores: Option<usize>) -> io::Result<Self> {
-        let logical_cores = if let Some(cores) = num_cores {
-          cores
+	pub fn new(tasks_per_core: Option<usize>, cores: Option<usize>) -> io::Result<Self> {
+        let logical_cores = if let Some(num_cores) = cores {
+            num_cores
         } else if !cfg!(target_arch = "wasm32") {
             num_cpus::get()
         } else {

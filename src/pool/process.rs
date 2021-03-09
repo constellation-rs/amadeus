@@ -113,7 +113,7 @@ struct ProcessPoolInner {
 impl ProcessPoolInner {
 	#[allow(clippy::double_parens)] // TODO: work out what's triggering this
 	fn new(
-		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
+		processes: Option<usize>, cores: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
 	) -> Result<Self, SpawnError> {
 		let processes = processes.unwrap_or(3); // TODO!
 		let mut processes_vec = Vec::with_capacity(processes);
@@ -130,7 +130,7 @@ impl ProcessPoolInner {
 							let receiver = Receiver::<Option<Request>>::new(parent);
 							let sender = Sender::<Result<Response, Panicked>>::new(parent);
 
-							let thread_pool = ThreadPool::new(tasks_per_core, None).unwrap();
+							let thread_pool = ThreadPool::new(tasks_per_core, cores).unwrap();
 
 							while let Some(work) = receiver.recv().await.unwrap() {
 								let ret = panic::catch_unwind(panic::AssertUnwindSafe(|| {
@@ -334,10 +334,11 @@ pub struct ProcessPool(Arc<ProcessPoolInner>);
 #[cfg_attr(not(nightly), serde_closure::desugar)]
 impl ProcessPool {
 	pub fn new(
-		processes: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
+		processes: Option<usize>, cores: Option<usize>, tasks_per_core: Option<usize>, resources: Resources,
 	) -> Result<Self, SpawnError> {
 		Ok(Self(Arc::new(ProcessPoolInner::new(
 			processes,
+            cores,
 			tasks_per_core,
 			resources,
 		)?)))

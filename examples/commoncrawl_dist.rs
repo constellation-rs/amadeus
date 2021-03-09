@@ -44,7 +44,7 @@ fn main() {
 			// Accept the number of processes at the command line, defaulting to the maximum available
 			let processes = env::args().nth(1).and_then(|arg| arg.parse::<usize>().ok());
 
-			let pool = ProcessPool::new(processes, None, Resources::default()).unwrap();
+			let pool = ProcessPool::new(processes, None, None, Resources::default()).unwrap();
 
 			let webpages = CommonCrawl::new("CC-MAIN-2020-24").await.unwrap();
 
