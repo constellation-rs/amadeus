@@ -79,6 +79,7 @@ mod wrap {
 		Row: ParquetData,
 	{
 		partitions: Vec<File::Partition>,
+        row_predicate: Option<Row::Predicate>,
 		marker: PhantomData<fn() -> Row>,
 	}
 	impl<F, Row> Parquet<F, Row>
@@ -86,9 +87,10 @@ mod wrap {
 		F: File,
 		Row: ParquetData + 'static,
 	{
-		pub async fn new(file: F) -> Result<Self, <Self as Source>::Error> {
+		pub async fn new(file: F, row_predicate: Option<Row::Predicate>) -> Result<Self, <Self as Source>::Error> {
 			Ok(Self {
 				partitions: file.partitions().await.map_err(ParquetError::File)?,
+                row_predicate,
 				marker: PhantomData,
 			})
 		}
@@ -115,6 +117,8 @@ mod wrap {
 		}
 		#[allow(clippy::let_and_return)]
 		fn dist_stream(self) -> Self::DistStream {
+            let predicate = self.row_predicate.clone();
+
 			self.partitions
 				.into_dist_stream()
 				.flat_map(FnMut!(|partition: F::Partition| async move {

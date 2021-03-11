@@ -300,6 +300,7 @@ fn impl_struct(
 			#visibility struct #reader_name #impl_generics #where_clause_with_parquet_data {
 				#(#field_names1: <#field_types1 as __::ParquetData>::Reader,)*
 			}
+			#[derive(Clone, Debug)]
 			#visibility struct #predicate_name #impl_generics #where_clause_with_parquet_data {
 				#(#field_names1: __::Option<<#field_types1 as __::ParquetData>::Predicate>,)*
 			}

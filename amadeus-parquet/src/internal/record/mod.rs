@@ -154,7 +154,7 @@ pub trait ParquetData: Data + Sized {
 	// Clone + PartialEq + Debug + 'static
 	type Schema: Schema;
 	type Reader: Reader<Item = Self>;
-	type Predicate;
+	type Predicate: Clone + Debug;
 
 	/// Parse a [`Type`] into `Self::Schema`, using `repetition` instead of
 	/// `Type::get_basic_info().repetition()`. A `repetition` of `None` denotes a root
