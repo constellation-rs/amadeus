@@ -213,9 +213,9 @@ where
 }
 
 #[cfg(not(nightly))]
-type Output<Row> = Pin<Box<dyn Stream<Item = Result<Row, PostgresError>> + Send>>;
+type Output<Row: PostgresData> = Pin<Box<dyn Stream<Item = Result<Row, PostgresError>> + Send>>;
 #[cfg(nightly)]
-type Output<Row> = impl Stream<Item = Result<Row, PostgresError>> + Send;
+type Output<Row: PostgresData> = impl Stream<Item = Result<Row, PostgresError>> + Send;
 
 FnMutNamed! {
 	pub type Closure<Row> = |self|(config, tables)=> (ConnectParams, Vec<PostgresSelect>)| -> Output<Row>

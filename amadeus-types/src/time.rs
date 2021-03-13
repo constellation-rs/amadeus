@@ -199,7 +199,7 @@ impl Timezone {
 				_ => None,
 			},
 		}
-		.map(|tz| tz.name())
+		.map(Tz::name)
 	}
 	/// Makes a new Timezone for the Eastern Hemisphere with given timezone difference. The negative seconds means the Western Hemisphere.
 	pub fn from_offset(seconds: i32) -> Option<Self> {
