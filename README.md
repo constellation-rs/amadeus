@@ -98,7 +98,7 @@ struct LogLine {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let pool = ThreadPool::new(None)?;
+    let pool = ThreadPool::new(None, None)?;
 
     let rows = Parquet::new(ParquetDirectory::new(S3Directory::new_with(
         AwsRegion::UsEast1,
@@ -133,7 +133,7 @@ use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let pool = ThreadPool::new(None)?;
+    let pool = ThreadPool::new(None, None)?;
 
     let rows = Parquet::new(ParquetDirectory::new(S3Directory::new_with(
         AwsRegion::UsEast1,
@@ -169,7 +169,7 @@ use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let pool = ThreadPool::new(None)?;
+    let pool = ThreadPool::new(None, None)?;
 
     let rows = Parquet::new(ParquetDirectory::new(S3Directory::new_with(
         AwsRegion::UsEast1,
@@ -215,7 +215,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .unwrap()
         .block_on(async {
-            let pool = ProcessPool::new(None, None, Resources::default())?;
+            let pool = ProcessPool::new(None, None, None, Resources::default())?;
 
             let rows = Parquet::new(ParquetDirectory::new(S3Directory::new_with(
                 AwsRegion::UsEast1,

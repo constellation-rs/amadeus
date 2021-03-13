@@ -20,7 +20,7 @@ use amadeus::{data::Webpage, prelude::*};
 async fn commoncrawl() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	let webpages = CommonCrawl::new("CC-MAIN-2020-24").await.unwrap();
 	let _ = webpages

@@ -19,7 +19,7 @@ static RT: Lazy<Runtime> = Lazy::new(|| {
 		.build()
 		.unwrap()
 });
-static POOL: Lazy<ThreadPool> = Lazy::new(|| ThreadPool::new(None).unwrap());
+static POOL: Lazy<ThreadPool> = Lazy::new(|| ThreadPool::new(None, None).unwrap());
 
 #[bench]
 fn vec(b: &mut Bencher) {

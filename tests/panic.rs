@@ -8,7 +8,7 @@ use amadeus::prelude::*;
 async fn panic() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	let res = AssertUnwindSafe((0i32..1_000).into_par_stream().for_each(pool, |i| {
 		if i == 500 {

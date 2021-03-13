@@ -2,7 +2,7 @@ use amadeus::prelude::*;
 
 #[tokio::main]
 async fn main() {
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	let rows = Cloudfront::new_with(
 		AwsRegion::UsEast1,
