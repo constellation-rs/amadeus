@@ -26,7 +26,8 @@ fn main() {
 			};
 			#[cfg(feature = "constellation")]
 			let process_pool_time = {
-				let process_pool = ProcessPool::new(None, None, None, Resources::default()).unwrap();
+				let process_pool =
+					ProcessPool::new(None, None, None, Resources::default()).unwrap();
 				run(&process_pool).await
 			};
 			#[cfg(not(feature = "constellation"))]

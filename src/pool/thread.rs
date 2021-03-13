@@ -17,8 +17,8 @@ const DEFAULT_TASKS_PER_CORE: usize = 100;
 
 #[derive(Debug)]
 struct ThreadPoolInner {
-	logical_cores: usize,
-	tasks_per_core: usize,
+	threads: usize,
+	tasks: usize,
 	#[cfg(not(target_arch = "wasm32"))]
 	pool: Pool,
 }
@@ -26,27 +26,27 @@ struct ThreadPoolInner {
 #[derive(Debug)]
 pub struct ThreadPool(Arc<ThreadPoolInner>);
 impl ThreadPool {
-	pub fn new(tasks_per_core: Option<usize>, cores: Option<usize>) -> io::Result<Self> {
-        let logical_cores = if let Some(num_cores) = cores {
-            num_cores
-        } else if !cfg!(target_arch = "wasm32") {
-            num_cpus::get()
-        } else {
-            1
-        };
+	pub fn new(threads: Option<usize>, tasks: Option<usize>) -> io::Result<Self> {
+		let threads = if let Some(threads) = threads {
+			threads
+		} else if !cfg!(target_arch = "wasm32") {
+			num_cpus::get()
+		} else {
+			1
+		};
 
-        let tasks_per_core = tasks_per_core.unwrap_or(DEFAULT_TASKS_PER_CORE);
-        #[cfg(not(target_arch = "wasm32"))]
-		let pool = Pool::new(logical_cores);
+		let tasks = tasks.unwrap_or(DEFAULT_TASKS_PER_CORE);
+		#[cfg(not(target_arch = "wasm32"))]
+		let pool = Pool::new(threads);
 		Ok(ThreadPool(Arc::new(ThreadPoolInner {
-			logical_cores,
-			tasks_per_core,
+			threads,
+			tasks,
 			#[cfg(not(target_arch = "wasm32"))]
 			pool,
 		})))
 	}
 	pub fn threads(&self) -> usize {
-		self.0.logical_cores * self.0.tasks_per_core
+		self.0.threads * self.0.tasks
 	}
 	pub fn spawn<F, Fut, T>(&self, task: F) -> impl Future<Output = Result<T, Panicked>> + Send
 	where
