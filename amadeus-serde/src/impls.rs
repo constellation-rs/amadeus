@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_lines)]
 
-use hashlink::LinkedHashMap;
+use hashlink::linked_hash_map::LinkedHashMap;
 use recycle::VecExt;
 use serde::{
 	de::{self, MapAccess, SeqAccess, Visitor}, ser::{SerializeSeq, SerializeStruct, SerializeTupleStruct}, Deserializer, Serializer

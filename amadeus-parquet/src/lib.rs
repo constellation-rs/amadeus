@@ -60,7 +60,9 @@ mod wrap {
 		file::{Directory, File, Page, Partition, PathBuf}, into_par_stream::IntoDistributedStream, par_stream::DistributedStream, util::{DistParStream, ResultExpandIter}, Source
 	};
 
-	pub use internal::record::ParquetData;
+	pub use internal::record::{
+		predicates::{GroupPredicate, ValuePredicate}, ParquetData
+	};
 
 	#[doc(hidden)]
 	pub mod derive {
@@ -79,7 +81,7 @@ mod wrap {
 		Row: ParquetData,
 	{
 		partitions: Vec<File::Partition>,
-        row_predicate: Option<Row::Predicate>,
+		row_predicate: Option<Row::Predicate>,
 		marker: PhantomData<fn() -> Row>,
 	}
 	impl<F, Row> Parquet<F, Row>
@@ -87,10 +89,12 @@ mod wrap {
 		F: File,
 		Row: ParquetData + 'static,
 	{
-		pub async fn new(file: F, row_predicate: Option<Row::Predicate>) -> Result<Self, <Self as Source>::Error> {
+		pub async fn new(
+			file: F, row_predicate: Option<Row::Predicate>,
+		) -> Result<Self, <Self as Source>::Error> {
 			Ok(Self {
 				partitions: file.partitions().await.map_err(ParquetError::File)?,
-                row_predicate,
+				row_predicate,
 				marker: PhantomData,
 			})
 		}
@@ -117,38 +121,45 @@ mod wrap {
 		}
 		#[allow(clippy::let_and_return)]
 		fn dist_stream(self) -> Self::DistStream {
-            let predicate = self.row_predicate.clone();
+			let predicate = self.row_predicate;
 
 			self.partitions
 				.into_dist_stream()
-				.flat_map(FnMut!(|partition: F::Partition| async move {
-					Ok(stream::iter(
-						partition
-							.pages()
-							.await
-							.map_err(ParquetError::Partition)?
-							.into_iter(),
-					)
-					.flat_map(|page| {
-						async move {
-							let mut buf = Vec::with_capacity(10 * 1024 * 1024);
-							let reader = Page::reader(page);
-							pin_mut!(reader);
-							let buf = PassError::new(
-								reader.read_to_end(&mut buf).await.map(|_| Cursor::new(buf)),
-							);
-							Ok(stream::iter(
-								SerializedFileReader::new(buf)?.get_row_iter::<Row>(None)?,
-							))
-						}
-						.map(ResultExpandIter::new)
-						.flatten_stream()
-					})
-					.map(|row: Result<Result<Row, _>, Self::Error>| Ok(row??)))
-				}
-				.map(ResultExpandIter::new)
-				.flatten_stream()
-				.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))))
+				.flat_map(FnMut!(move |partition: F::Partition| {
+					let predicate = predicate.clone();
+
+					async move {
+						Ok(stream::iter(
+							partition
+								.pages()
+								.await
+								.map_err(ParquetError::Partition)?
+								.into_iter(),
+						)
+						.flat_map(move |page| {
+							let predicate = predicate.clone();
+							async move {
+								let mut buf = Vec::with_capacity(10 * 1024 * 1024);
+								let reader = Page::reader(page);
+								pin_mut!(reader);
+								let buf = PassError::new(
+									reader.read_to_end(&mut buf).await.map(|_| Cursor::new(buf)),
+								);
+
+								Ok(stream::iter(
+									SerializedFileReader::new(buf)?
+										.get_row_iter::<Row>(predicate)?,
+								))
+							}
+							.map(ResultExpandIter::new)
+							.flatten_stream()
+						})
+						.map(|row: Result<Result<Row, _>, Self::Error>| Ok(row??)))
+					}
+					.map(ResultExpandIter::new)
+					.flatten_stream()
+					.map(|row: Result<Result<Row, Self::Error>, Self::Error>| Ok(row??))
+				}))
 		}
 	}
 

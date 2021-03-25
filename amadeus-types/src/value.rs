@@ -3,7 +3,7 @@
 #![allow(clippy::type_complexity)]
 
 use fxhash::FxBuildHasher;
-use hashlink::LinkedHashMap;
+use hashlink::linked_hash_map::LinkedHashMap;
 use recycle::VecExt;
 use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use std::{

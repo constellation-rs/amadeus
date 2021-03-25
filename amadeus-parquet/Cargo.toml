@@ -29,7 +29,7 @@ educe = "0.4"
 flate2 = { version = "1.0.2", features = ["rust_backend"], default-features = false }
 futures = "0.3"
 fxhash = "0.2"
-hashlink = "0.5"
+hashlink = { version = "0.6", features = ["serde_impl"] }
 lz-fear = "0.1"
 num-bigint = "0.3"
 quick-error = "1.2.2"

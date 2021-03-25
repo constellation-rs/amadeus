@@ -47,6 +47,7 @@ mod schemas;
 mod triplet;
 pub mod types;
 
+use serde::{Deserialize, Serialize};
 use std::{
 	collections::HashMap, fmt::{self, Debug}
 };
@@ -65,7 +66,8 @@ pub use schemas::RootSchema;
 mod predicate {
 	/// This is for forward compatibility when Predicate pushdown and dynamic schemas are
 	/// implemented.
-	#[derive(Clone, Debug)]
+	use serde::{Deserialize, Serialize};
+	#[derive(Clone, Debug, Serialize, Deserialize)]
 	pub struct Predicate;
 }
 pub(crate) use self::predicate::Predicate;
@@ -154,7 +156,7 @@ pub trait ParquetData: Data + Sized {
 	// Clone + PartialEq + Debug + 'static
 	type Schema: Schema;
 	type Reader: Reader<Item = Self>;
-	type Predicate: Clone + Debug;
+	type Predicate: Clone + Debug + Serialize + for<'de> Deserialize<'de> + Send + 'static;
 
 	/// Parse a [`Type`] into `Self::Schema`, using `repetition` instead of
 	/// `Type::get_basic_info().repetition()`. A `repetition` of `None` denotes a root
