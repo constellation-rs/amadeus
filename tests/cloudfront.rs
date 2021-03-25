@@ -6,7 +6,7 @@ use std::time::SystemTime;
 #[tokio::test(threaded_scheduler)]
 #[cfg_attr(miri, ignore)]
 async fn cloudfront() {
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	let start = SystemTime::now();
 

@@ -5,7 +5,7 @@ use amadeus::prelude::*;
 #[tokio::test(threaded_scheduler)]
 #[cfg_attr(miri, ignore)]
 async fn into_par_stream() {
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	<&[usize] as IntoParallelStream>::into_par_stream(&[1, 2, 3])
 		.map(|a: usize| a)
