@@ -31,7 +31,7 @@ fn assert_columns_in_row<T>(
 
 fn get_row_predicate(column_names: Vec<String>) -> Option<ValuePredicate> {
 	Some(ValuePredicate::Group(Some(GroupPredicate::new(
-		column_names.into_iter().zip(None.into_iter()),
+		column_names.into_iter().map(|x| (x, None)),
 	))))
 }
 
@@ -40,7 +40,7 @@ fn get_row_predicate(column_names: Vec<String>) -> Option<ValuePredicate> {
 async fn dynamic_reads() {
 	let start = SystemTime::now();
 
-	let pool = &ThreadPool::new(None).unwrap();
+	let pool = &ThreadPool::new(None, None).unwrap();
 
 	let column_names = vec!["uri".to_string(), "location".to_string()];
 
