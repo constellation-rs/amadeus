@@ -19,6 +19,8 @@ fn assert_columns_in_row<T>(
 	let row_group = row_unwrapped.clone().into_group().ok().unwrap();
 	let field_names = row_group.field_names().unwrap();
 
+	assert_eq!(expected_column_names.len(), field_names.len());
+
 	// Adds extra side check to make sure that order is also maintained.
 	for (expected_column_name, (actual_column_name, _)) in
 		expected_column_names.iter().zip(field_names.iter())
