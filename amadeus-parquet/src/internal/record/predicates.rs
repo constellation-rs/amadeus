@@ -1,10 +1,11 @@
-use hashlink::linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use amadeus_types::{Bson, Date, DateTime, Decimal, Enum, Group, Json, List, Time, Value};
 
 use crate::internal::record::ParquetData;
+use fxhash::FxBuildHasher;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /// Predicate for [`Group`]s
@@ -22,7 +23,7 @@ impl<K, V> MapPredicate<K, V> {
 /// Predicate for [`Group`]s
 pub struct GroupPredicate(
 	/// Map of field names to predicates for the fields in the group
-	pub(super) LinkedHashMap<String, Option<<Value as ParquetData>::Predicate>>,
+	pub(super) LinkedHashMap<String, Option<<Value as ParquetData>::Predicate>, FxBuildHasher>,
 );
 impl GroupPredicate {
 	pub fn new<I>(fields: I) -> Self

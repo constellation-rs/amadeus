@@ -24,7 +24,7 @@
 //! that are optional or repeated.
 
 use fxhash::FxBuildHasher;
-use hashlink::linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use std::{
 	collections::HashMap, convert::TryInto, error::Error, marker::PhantomData, mem, sync::Arc
 };
@@ -948,7 +948,7 @@ where
 mod tests {
 	use super::*;
 
-	use hashlink::linked_hash_map::LinkedHashMap;
+	use hashlink::LinkedHashMap;
 	use std::{collections::HashMap, sync::Arc};
 
 	use crate::internal::{

@@ -1,4 +1,4 @@
-use hashlink::linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use std::{
 	any::type_name, collections::HashMap, convert::{TryFrom, TryInto}, fmt, hash::{BuildHasher, Hash}, marker::PhantomData, string::FromUtf8Error, sync::Arc
 };

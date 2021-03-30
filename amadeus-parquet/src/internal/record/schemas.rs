@@ -31,7 +31,7 @@
 //! ```
 
 use fxhash::FxBuildHasher;
-use hashlink::linked_hash_map::LinkedHashMap;
+use hashlink::LinkedHashMap;
 use std::{
 	fmt::{self, Debug, Display}, marker::PhantomData, mem, str::FromStr
 };
