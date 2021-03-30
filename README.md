@@ -130,27 +130,27 @@ This is typed, so faster, and it goes an analytics step further also, prints top
 ```rust
 use amadeus::prelude::*;
 use std::error::Error;
+use amadeus::helpers::{FilterNullsAndDoubleUnwrap, GetFieldFromValue};
+use amadeus::amadeus_parquet::get_row_predicate;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let pool = ThreadPool::new(None, None)?;
 
+    let column_name = "uri".to_string();
+    
     let rows = Parquet::new(ParquetDirectory::new(S3Directory::new_with(
         AwsRegion::UsEast1,
         "us-east-1.data-analytics",
         "cflogworkshop/optimized/cf-accesslogs/",
         AwsCredentials::Anonymous,
-    )), None)
+    )), get_row_predicate(vec![column_name.clone()]))
     .await?;
 
     let top_pages = rows
         .par_stream()
-        .map(|row: Result<Value, _>| {
-            let row = row.ok()?.into_group().ok()?;
-            row.get("uri")?.clone().into_url().ok()
-        })
-        .filter(|row| row.is_some())
-        .map(Option::unwrap)
+        .get_field_from_value::<Option<String>>(column_name.clone())
+        .filter_nulls_and_double_unwrap()
         .most_frequent(&pool, 100, 0.99, 0.002)
         .await;
 
