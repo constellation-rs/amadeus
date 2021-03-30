@@ -73,6 +73,12 @@ mod wrap {
 		};
 	}
 
+	pub fn get_row_predicate(column_names: Vec<String>) -> Option<ValuePredicate> {
+		Some(ValuePredicate::Group(Some(GroupPredicate::new(
+			column_names.into_iter().map(|x| (x, None)),
+		))))
+	}
+
 	#[derive(Educe)]
 	#[educe(Clone, Debug)]
 	pub struct Parquet<File, Row>

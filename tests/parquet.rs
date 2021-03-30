@@ -8,9 +8,7 @@
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 use amadeus::prelude::*;
-
-use amadeus::amadeus_parquet::GroupPredicate;
-use amadeus_parquet::ValuePredicate;
+use amadeus_parquet::get_row_predicate;
 
 fn assert_columns_in_row<T>(
 	expected_column_names: &Vec<String>, row: Result<Value, T>,
@@ -29,12 +27,6 @@ fn assert_columns_in_row<T>(
 	}
 
 	Ok(row_unwrapped)
-}
-
-fn get_row_predicate(column_names: Vec<String>) -> Option<ValuePredicate> {
-	Some(ValuePredicate::Group(Some(GroupPredicate::new(
-		column_names.into_iter().map(|x| (x, None)),
-	))))
 }
 
 #[tokio::test(threaded_scheduler)]
