@@ -31,9 +31,11 @@
 	clippy::inline_always,
 	clippy::option_option,
 	clippy::default_trait_access,
-	clippy::filter_map,
 	clippy::wildcard_imports,
-	clippy::needless_pass_by_value
+	clippy::needless_pass_by_value,
+	clippy::unnecessary_wraps,
+	clippy::missing_panics_doc,
+	clippy::let_underscore_drop
 )]
 #![deny(unsafe_code)]
 

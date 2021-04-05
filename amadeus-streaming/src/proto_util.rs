@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 const WIRE_TYPE_VAR_INT: u32 = 0;
 const PRECISION_OR_NUM_BUCKETS_FIELD_NUMBER: u32 = 3;
 pub const PRECISION_OR_NUM_BUCKETS_TAG: u32 =
@@ -56,7 +58,7 @@ pub fn compute_uint32_size_no_tag(value: u32) -> usize {
 
 pub fn compute_int32_size_no_tag(value: i32) -> usize {
 	if value >= 0 {
-		compute_uint32_size_no_tag(value as u32)
+		compute_uint32_size_no_tag(value.try_into().unwrap())
 	} else {
 		// Must sign-extend.
 		MAX_VAR_INT_SIZE
@@ -75,7 +77,7 @@ pub fn compute_uint64_size_no_tag(value: i64) -> usize {
 	if value < 0_i64 {
 		10
 	} else {
-		let mut value = value as u64;
+		let mut value: u64 = value.try_into().unwrap();
 		// ... leaving us with 8 remaining, which we can divide and conquer
 		let mut n = 2;
 		if value & (!0_u64 << 35) != 0_u64 {

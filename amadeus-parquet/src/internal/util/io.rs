@@ -69,9 +69,6 @@ impl<R: ParquetReader> Seek for BufReader<R> {
 			SeekFrom::Current(n) => n,
 			SeekFrom::End(n) => self.len as i64 + n - self.offset as i64,
 		};
-		#[cfg(not(nightly))]
-		let _ = self.inner.seek(SeekFrom::Current(offset))?;
-		#[cfg(nightly)]
 		self.inner.seek_relative(offset)?;
 		self.offset = (self.offset as i64 + offset) as u64;
 		Ok(self.offset)

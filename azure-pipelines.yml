@@ -20,12 +20,12 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: nightly
-        rust_lint_toolchain: nightly-2020-08-17
+        rust_lint_toolchain: nightly-2021-05-20
         rust_flags: ''
-        rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;constellation aws commoncrawl parquet postgres csv json bench'
-        rust_features_miri: 'aws commoncrawl parquet postgres csv json'
-        rust_features: 'constellation aws commoncrawl parquet postgres csv json bench'
-        rust_doc_features: 'constellation aws commoncrawl parquet postgres csv json'
+        rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;protobuf;constellation aws commoncrawl parquet postgres csv json protobuf bench'
+        rust_features_miri: 'aws commoncrawl parquet postgres csv json protobuf'
+        rust_features: 'constellation aws commoncrawl parquet postgres csv json protobuf bench'
+        rust_doc_features: 'constellation aws commoncrawl parquet postgres csv json protobuf'
         rust_target_check: ''
         rust_target_build: ''
         rust_target_run: ''
@@ -43,9 +43,9 @@ jobs:
           rust_target_run: 'x86_64-apple-darwin'
         windows:
           imageName: 'windows-latest'
-          rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;aws commoncrawl parquet postgres csv json bench'
-          rust_features: 'aws commoncrawl parquet postgres csv json bench'
-          rust_doc_features: 'aws commoncrawl parquet postgres csv json'
+          rust_features_clippy: ';aws;commoncrawl;parquet;postgres;csv;json;aws commoncrawl parquet postgres csv json protobuf bench'
+          rust_features: 'aws commoncrawl parquet postgres csv json protobuf bench'
+          rust_doc_features: 'aws commoncrawl parquet postgres csv json protobuf'
           rust_target_run: 'x86_64-pc-windows-msvc'
 
   - template: rust-n.yml@templates
@@ -53,7 +53,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: stable
-        rust_lint_toolchain: nightly-2020-08-17
+        rust_lint_toolchain: nightly-2021-05-20
         rust_flags: ''
         rust_features_clippy: ';aws;commoncrawl;postgres;csv;json;aws commoncrawl postgres csv json'
         rust_features: 'aws commoncrawl postgres csv json'
@@ -79,7 +79,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: nightly
-        rust_lint_toolchain: nightly-2020-08-17
+        rust_lint_toolchain: nightly-2021-05-20
         rust_flags: ''
         rust_packages: '-p amadeus-core -p amadeus-derive -p amadeus-parquet -p amadeus-serde -p amadeus-types -p amadeus'
         rust_features_clippy: ';parquet;csv;json;parquet csv json'
@@ -104,7 +104,7 @@ jobs:
       endpoint: alecmocatta
       default:
         rust_toolchain: stable nightly
-        rust_lint_toolchain: nightly-2020-08-17
+        rust_lint_toolchain: nightly-2021-05-20
         rust_flags: ''
         rust_packages: '-p amadeus-core -p amadeus-derive -p amadeus-serde -p amadeus-types -p amadeus'
         rust_features_clippy: ';csv;json;csv json'

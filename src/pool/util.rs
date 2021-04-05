@@ -89,13 +89,17 @@ impl Synchronize {
 		F: Future<Output = ()>,
 	{
 		let nonce = self.nonce.load(Ordering::SeqCst);
-		if !self.running.compare_and_swap(false, true, Ordering::SeqCst) {
+		if self
+			.running
+			.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+			.is_ok()
+		{
 			let on_drop = OnDrop::new(|| self.running.store(false, Ordering::SeqCst));
 			f.await;
 			on_drop.cancel();
 			let _ = self.nonce.fetch_add(1, Ordering::SeqCst);
 			self.running.store(false, Ordering::SeqCst);
-			for waker in mem::replace(&mut *self.wake.lock().unwrap(), Vec::new()) {
+			for waker in mem::take(&mut *self.wake.lock().unwrap()) {
 				waker.wake();
 			}
 			return;

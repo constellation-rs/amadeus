@@ -109,7 +109,7 @@ impl ThreadPool {
 			wasm_bindgen_futures::spawn_local(remote);
 			Guard::new(remote_handle.map_ok(|t| {
 				let t: *mut dyn Send = Box::into_raw(t);
-				*Box::from_raw(t as *mut T)
+				*Box::from_raw(t.cast::<T>())
 			}))
 		}
 	}
@@ -261,7 +261,7 @@ mod pool {
 				#[allow(deprecated)]
 				res.map(|t| {
 					let t: *mut dyn Any = Box::into_raw(t);
-					*Box::from_raw(t as *mut T)
+					*Box::from_raw(t.cast())
 				})
 				.map_err(JoinError::panic)
 			}

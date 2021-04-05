@@ -78,8 +78,8 @@ where
 		K: Borrow<Q>,
 		C: for<'a> ops::AddAssign<&'a V> + IntersectPlusUnionIsPlus,
 	{
+		let offsets = self.offsets(key);
 		if !<C as IntersectPlusUnionIsPlus>::VAL {
-			let offsets = self.offsets(key);
 			self.offsets
 				.iter_mut()
 				.zip(offsets)
@@ -102,7 +102,6 @@ where
 				});
 			lowest
 		} else {
-			let offsets = self.offsets(key);
 			C::intersect(
 				self.counters
 					.iter_mut()

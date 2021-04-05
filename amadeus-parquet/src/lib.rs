@@ -7,10 +7,9 @@
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
 #![doc(html_root_url = "https://docs.rs/amadeus-parquet/0.4.2")]
-#![cfg_attr(nightly, feature(bufreader_seek_relative))]
 #![cfg_attr(nightly, feature(read_initializer))]
 #![cfg_attr(nightly, feature(specialization))]
-#![cfg_attr(nightly, feature(type_alias_impl_trait))]
+#![cfg_attr(nightly, feature(min_type_alias_impl_trait))]
 #![cfg_attr(nightly, feature(test))]
 #![warn(
 	// missing_copy_implementations,

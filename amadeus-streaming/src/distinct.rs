@@ -51,7 +51,7 @@ use protobuf::CodedOutputStream;
 
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::{self, Ordering}, convert::{identity, TryFrom}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
+	cmp::{self, Ordering}, convert::{identity, TryFrom, TryInto}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
 use twox_hash::XxHash;
 
@@ -380,7 +380,9 @@ where
 		stream
 			.write_uint32_no_tag(proto_util::HYPERLOGLOGPLUS_UNIQUE_STATE_TAG)
 			.unwrap();
-		stream.write_uint32_no_tag(hll_size as u32).unwrap();
+		stream
+			.write_uint32_no_tag(hll_size.try_into().unwrap())
+			.unwrap();
 
 		stream
 			.write_uint32_no_tag(proto_util::PRECISION_OR_NUM_BUCKETS_TAG)
@@ -388,7 +390,9 @@ where
 		stream.write_int32_no_tag(i32::from(self.p)).unwrap();
 
 		stream.write_uint32_no_tag(proto_util::DATA_TAG).unwrap();
-		stream.write_uint32_no_tag(self.m.len() as u32).unwrap();
+		stream
+			.write_uint32_no_tag(self.m.len().try_into().unwrap())
+			.unwrap();
 		stream.write_raw_bytes(&self.m).unwrap();
 
 		stream.flush().unwrap();
@@ -405,7 +409,7 @@ where
 
 		let data_length = self.m.len();
 		size += proto_util::compute_uint32_size_no_tag(proto_util::DATA_TAG);
-		size += proto_util::compute_uint32_size_no_tag(data_length as u32);
+		size += proto_util::compute_uint32_size_no_tag(data_length.try_into().unwrap());
 		size += data_length;
 
 		size
@@ -416,7 +420,7 @@ where
 	}
 
 	fn get_alpha(p: u8) -> f64 {
-		assert!(4 <= p && p <= 16);
+		assert!((4..=16).contains(&p));
 		match p {
 			4 => 0.673,
 			5 => 0.697,
