@@ -1,4 +1,12 @@
-#![allow(non_snake_case, clippy::type_complexity, irrefutable_let_patterns, clippy::new_without_default, unused_mut, unreachable_code, clippy::too_many_arguments)]
+#![allow(
+	non_snake_case,
+	clippy::type_complexity,
+	irrefutable_let_patterns,
+	clippy::new_without_default,
+	unused_mut,
+	unreachable_code,
+	clippy::too_many_arguments
+)]
 
 use derive_new::new;
 use futures::{pin_mut, ready, stream, Stream, StreamExt};
