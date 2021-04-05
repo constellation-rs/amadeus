@@ -7,7 +7,7 @@
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
 #![doc(html_root_url = "https://docs.rs/amadeus-commoncrawl/0.4.2")]
-#![cfg_attr(nightly, feature(type_alias_impl_trait))]
+#![cfg_attr(nightly, feature(min_type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -22,7 +22,9 @@
 #![allow(
 	clippy::doc_markdown,
 	clippy::inline_always,
-	clippy::missing_errors_doc
+	clippy::missing_errors_doc,
+	clippy::missing_panics_doc,
+	clippy::let_underscore_drop
 )]
 #![deny(unsafe_code)]
 

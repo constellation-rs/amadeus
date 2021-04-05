@@ -28,7 +28,8 @@
 	clippy::wildcard_imports,
 	clippy::default_trait_access,
 	clippy::inline_always,
-	clippy::too_many_lines
+	clippy::too_many_lines,
+	clippy::missing_panics_doc
 )]
 #![deny(unsafe_code)]
 

@@ -10,7 +10,7 @@
 #![cfg_attr(nightly, feature(bufreader_seek_relative))]
 #![cfg_attr(nightly, feature(read_initializer))]
 #![cfg_attr(nightly, feature(specialization))]
-#![cfg_attr(nightly, feature(type_alias_impl_trait))]
+#![cfg_attr(nightly, feature(min_type_alias_impl_trait))]
 #![cfg_attr(nightly, feature(test))]
 #![warn(
 	// missing_copy_implementations,

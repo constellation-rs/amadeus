@@ -31,7 +31,7 @@ impl OsString {
 	pub fn to_string_lossy(&self) -> String {
 		self.buf.to_string_lossy()
 	}
-	pub fn display<'a>(&'a self) -> impl fmt::Display + 'a {
+	pub fn display(&self) -> impl fmt::Display + '_ {
 		struct Display<'a>(&'a OsString);
 		impl<'a> fmt::Display for Display<'a> {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -160,15 +160,14 @@ impl PathBuf {
 	pub fn iter<'a>(&'a self) -> impl Iterator<Item = &OsString> + 'a {
 		self.components.iter()
 	}
-	pub fn display<'a>(&'a self) -> impl fmt::Display + 'a {
+	pub fn display(&self) -> impl fmt::Display + '_ {
 		struct Display<'a>(&'a PathBuf);
 		impl<'a> fmt::Display for Display<'a> {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				let mut res: fmt::Result = self
 					.0
 					.iter()
-					.map(|component| write!(f, "{}/", component.to_string_lossy()))
-					.collect();
+					.try_for_each(|component| write!(f, "{}/", component.to_string_lossy()));
 				if let Some(file_name) = self.0.file_name() {
 					res = res.and_then(|()| write!(f, "{}", file_name.to_string_lossy()));
 				}

@@ -306,7 +306,7 @@ impl<S: ?Sized + Sink<Item> + Unpin, St: ?Sized + Stream<Item = Item> + Unpin, I
 		let items = &mut **self_.items;
 		let mut given_all = false;
 		let stream = stream::poll_fn(|cx| match Pin::new(&mut *items).poll_next(cx) {
-			x @ Poll::Ready(Some(_)) | x @ Poll::Pending => x,
+			x @ (Poll::Ready(Some(_)) | Poll::Pending) => x,
 			Poll::Ready(None) => {
 				given_all = true;
 				Poll::Pending

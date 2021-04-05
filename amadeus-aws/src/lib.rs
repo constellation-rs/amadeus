@@ -7,7 +7,7 @@
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
 #![doc(html_root_url = "https://docs.rs/amadeus-aws/0.4.2")]
-#![cfg_attr(nightly, feature(type_alias_impl_trait))]
+#![cfg_attr(nightly, feature(min_type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -26,7 +26,9 @@
 	clippy::must_use_candidate,
 	clippy::type_repetition_in_bounds,
 	clippy::filter_map,
-	clippy::missing_errors_doc
+	clippy::missing_errors_doc,
+	clippy::missing_panics_doc,
+	clippy::let_underscore_drop
 )]
 #![deny(unsafe_code)]
 

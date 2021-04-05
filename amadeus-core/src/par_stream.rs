@@ -23,7 +23,7 @@ use futures::{future, pin_mut, stream::StreamExt as _, Stream};
 use indexmap::IndexMap;
 use serde_closure::{traits, FnOnce};
 use std::{
-	cmp::Ordering, hash::Hash, iter, ops, pin::Pin, task::{Context, Poll}, vec
+	cmp::Ordering, hash::Hash, iter, ops, pin::Pin, task::{Context, Poll}
 };
 
 use super::{par_pipe::*, par_sink::*};
@@ -434,7 +434,7 @@ stream!(ParallelStream ParallelPipe ParallelSink FromParallelStream IntoParallel
 		let self_ = self;
 		pin_mut!(self_);
 		// TODO: don't buffer tasks before sending. requires changes to ThreadPool
-		let mut tasks = (0..pool.threads()).map(|_| vec![]).collect::<Vec<_>>();
+		let mut tasks = (0..pool.threads()).map(|_| Vec::new()).collect::<Vec<_>>();
 		let mut allocated = 0;
 		'a: loop {
 			for i in 0..tasks.len() {
@@ -597,7 +597,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 		let self_ = self;
 		pin_mut!(self_);
 		// TODO: don't buffer tasks before sending. requires changes to ProcessPool
-		let mut tasks = (0..pool.processes()).map(|_| vec![]).collect::<Vec<_>>();
+		let mut tasks = (0..pool.processes()).map(|_| Vec::new()).collect::<Vec<_>>();
 		let mut allocated = 0;
 		'a: loop {
 			for i in 0..tasks.len() {
@@ -647,7 +647,7 @@ stream!(DistributedStream DistributedPipe DistributedSink FromDistributedStream 
 				pool.spawn(FnOnce!(move |pool: &P::ThreadPool| {
 					let mut process_tasks = tasks.into_iter();
 
-					let mut tasks = (0..pool.threads()).map(|_| vec![]).collect::<Vec<_>>();
+					let mut tasks = (0..pool.threads()).map(|_| Vec::new()).collect::<Vec<_>>();
 					let mut allocated = 0;
 					'a: loop {
 						for i in 0..tasks.len() {
