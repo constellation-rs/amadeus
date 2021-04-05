@@ -36,7 +36,8 @@
 	clippy::needless_pass_by_value,
 	clippy::unnecessary_wraps,
 	clippy::missing_panics_doc,
-	clippy::let_underscore_drop
+	clippy::let_underscore_drop,
+	clippy::unnested_or_patterns
 )]
 #![deny(unsafe_code)]
 

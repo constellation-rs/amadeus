@@ -281,38 +281,38 @@ mod test {
 
 	#[derive(Serialize, Deserialize)]
 	#[serde(bound = "")]
-	struct HLL<V>(HyperLogLog<V>);
-	impl<V: Hash> Ord for HLL<V> {
+	struct Hll<V>(HyperLogLog<V>);
+	impl<V: Hash> Ord for Hll<V> {
 		#[inline(always)]
 		fn cmp(&self, other: &Self) -> cmp::Ordering {
 			self.0.len().partial_cmp(&other.0.len()).unwrap()
 		}
 	}
-	impl<V: Hash> PartialOrd for HLL<V> {
+	impl<V: Hash> PartialOrd for Hll<V> {
 		#[inline(always)]
 		fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
 			self.0.len().partial_cmp(&other.0.len())
 		}
 	}
-	impl<V: Hash> PartialEq for HLL<V> {
+	impl<V: Hash> PartialEq for Hll<V> {
 		#[inline(always)]
 		fn eq(&self, other: &Self) -> bool {
 			self.0.len().eq(&other.0.len())
 		}
 	}
-	impl<V: Hash> Eq for HLL<V> {}
-	impl<V: Hash> Clone for HLL<V> {
+	impl<V: Hash> Eq for Hll<V> {}
+	impl<V: Hash> Clone for Hll<V> {
 		fn clone(&self) -> Self {
 			Self(self.0.clone())
 		}
 	}
-	impl<V: Hash> New for HLL<V> {
+	impl<V: Hash> New for Hll<V> {
 		type Config = f64;
 		fn new(config: &Self::Config) -> Self {
 			Self(New::new(config))
 		}
 	}
-	impl<V: Hash> Intersect for HLL<V> {
+	impl<V: Hash> Intersect for Hll<V> {
 		fn intersect<'a>(iter: impl Iterator<Item = &'a Self>) -> Option<Self>
 		where
 			Self: Sized + 'a,
@@ -320,22 +320,22 @@ mod test {
 			Intersect::intersect(iter.map(|x| &x.0)).map(Self)
 		}
 	}
-	impl<'a, V: Hash> UnionAssign<&'a HLL<V>> for HLL<V> {
+	impl<'a, V: Hash> UnionAssign<&'a Hll<V>> for Hll<V> {
 		fn union_assign(&mut self, rhs: &'a Self) {
 			self.0.union_assign(&rhs.0)
 		}
 	}
-	impl<'a, V: Hash> ops::AddAssign<&'a V> for HLL<V> {
+	impl<'a, V: Hash> ops::AddAssign<&'a V> for Hll<V> {
 		fn add_assign(&mut self, rhs: &'a V) {
 			self.0.add_assign(rhs)
 		}
 	}
-	impl<V: Hash> Debug for HLL<V> {
+	impl<V: Hash> Debug for Hll<V> {
 		fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 			self.0.fmt(fmt)
 		}
 	}
-	impl<V> IntersectPlusUnionIsPlus for HLL<V> {
+	impl<V> IntersectPlusUnionIsPlus for Hll<V> {
 		const VAL: bool = <HyperLogLog<V> as IntersectPlusUnionIsPlus>::VAL;
 	}
 
@@ -344,7 +344,7 @@ mod test {
 	fn top_hll() {
 		let mut rng =
 			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
-		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.00408);
+		let mut top = Top::<String, Hll<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.00408);
 		// let mut x = HashMap::new();
 		for _ in 0..5_000 {
 			let (a, b) = (rng.gen_range(0, 2) == 0, rng.gen_range(0, 2) == 0);
@@ -373,7 +373,7 @@ mod test {
 
 		let mut rng =
 			rand::rngs::SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
-		let mut top = Top::<String, HLL<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.05);
+		let mut top = Top::<String, Hll<String>>::new(1000, 0.99, 2.0 / 1000.0, 0.05);
 		// let mut x = HashMap::new();
 		for _ in 0..5_000_000 {
 			let (a, b) = (rng.gen_range(0, 2) == 0, rng.gen_range(0, 2) == 0);
