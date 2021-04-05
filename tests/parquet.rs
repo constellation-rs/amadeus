@@ -8,10 +8,9 @@
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 use amadeus::prelude::*;
-use amadeus_parquet::get_row_predicate;
 
 fn assert_columns_in_row<T>(
-	expected_column_names: &Vec<String>, row: Result<Value, T>,
+	expected_column_names: &[String], row: Result<Value, T>,
 ) -> Result<Value, T> {
 	let row_unwrapped = row.ok().unwrap();
 	let row_group = row_unwrapped.clone().into_group().ok().unwrap();
@@ -38,20 +37,17 @@ async fn dynamic_reads() {
 
 	let column_names = vec!["uri".to_string(), "location".to_string()];
 
-	#[cfg(feature = "aws")]
-	{
-		let rows = Parquet::<_, Value>::new(vec![
-            S3File::new_with(AwsRegion::UsEast1, "us-east-1.data-analytics", "cflogworkshop/optimized/cf-accesslogs/year=2018/month=11/day=02/part-00176-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet", AwsCredentials::Anonymous),
-        ], get_row_predicate(column_names.clone())).await.unwrap();
+	let rows = Parquet::<_, Value>::new(vec![
+            PathBuf::from("amadeus-testing/parquet/cf-accesslogs/year=2018/month=11/day=02/part-00176-17868f39-cd99-4b60-bb48-8daf9072122e.c000.snappy.parquet"),
+        ], amadeus_parquet::get_row_predicate(column_names.clone())).await.unwrap();
 
-		assert_eq!(
-			rows.par_stream()
-				.map(move |row: Result<Value, _>| assert_columns_in_row(&column_names, row))
-				.count(pool)
-				.await,
-			4172
-		);
-	}
+	assert_eq!(
+		rows.par_stream()
+			.map(move |row: Result<Value, _>| assert_columns_in_row(&column_names, row))
+			.count(pool)
+			.await,
+		4172
+	);
 
 	println!("in {:?}", start.elapsed().unwrap());
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity, clippy::option_option)]
+
 use crate::par_stream::{Filter, Map};
 use amadeus_core::par_stream::ParallelStream;
 
@@ -17,8 +19,7 @@ where
 	fn filter_nulls_and_unwrap(
 		self,
 	) -> Map<Filter<T, OptionFilterNullHandler>, fn(Option<O>) -> O> {
-		self.filter(OptionFilterNullHandler {})
-			.map(|unwrapped_value: Option<O>| unwrapped_value.unwrap())
+		self.filter(OptionFilterNullHandler {}).map(Option::unwrap)
 	}
 }
 
