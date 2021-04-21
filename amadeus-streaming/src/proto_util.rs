@@ -100,8 +100,7 @@ pub fn compute_int64_size_no_tag(value: i64) -> usize {
 #[cfg(test)]
 mod test {
 	use crate::proto_util::{
-		compute_enum_size_no_tag, compute_int32_size_no_tag, compute_int64_size_no_tag,
-		compute_uint32_size_no_tag,
+		compute_enum_size_no_tag, compute_int32_size_no_tag, compute_int64_size_no_tag, compute_uint32_size_no_tag
 	};
 
 	#[test]

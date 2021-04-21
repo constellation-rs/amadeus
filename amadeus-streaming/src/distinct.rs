@@ -47,12 +47,7 @@
 use protobuf::CodedOutputStream;
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::{self, Ordering},
-	convert::{identity, TryFrom},
-	fmt,
-	hash::{Hash, Hasher},
-	marker::PhantomData,
-	ops::{self, Range},
+	cmp::{self, Ordering}, convert::{identity, TryFrom}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
 };
 use twox_hash::XxHash;
 
