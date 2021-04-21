@@ -44,12 +44,17 @@
 // https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.rdd.RDD countApproxDistinct
 // is_x86_feature_detected ?
 
+use protobuf::CodedOutputStream;
 use serde::{Deserialize, Serialize};
 use std::{
-	cmp::{self, Ordering}, convert::{identity, TryFrom}, fmt, hash::{Hash, Hasher}, marker::PhantomData, ops::{self, Range}
+	cmp::{self, Ordering},
+	convert::{identity, TryFrom},
+	fmt,
+	hash::{Hash, Hasher},
+	marker::PhantomData,
+	ops::{self, Range},
 };
 use twox_hash::XxHash;
-use protobuf::CodedOutputStream;
 
 use super::{f64_to_u8, u64_to_f64, usize_to_f64};
 use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
@@ -345,44 +350,59 @@ where
 
 		// We use the NoTag write methods for consistency with the parsing functions and for
 		// consistency with the variable-length writes where we can't use any convenience function.
-		stream.write_uint32_no_tag(crate::proto_util::TYPE_TAG)
+		stream
+			.write_uint32_no_tag(crate::proto_util::TYPE_TAG)
 			.expect("proto serialization failed");
-		stream.write_enum_no_tag(crate::proto_util::AGGREGATION_TYPE)
+		stream
+			.write_enum_no_tag(crate::proto_util::AGGREGATION_TYPE)
 			.expect("proto serialization failed");
 
-		stream.write_uint32_no_tag(crate::proto_util::NUM_VALUES_TAG)
+		stream
+			.write_uint32_no_tag(crate::proto_util::NUM_VALUES_TAG)
 			.expect("proto serialization failed");
 		// Should be the number of values inserted into this HLL, but BigQuery doesn't really care and this
 		// implementation doesn't maintain this value.
-		stream.write_int64_no_tag(0)
+		stream
+			.write_int64_no_tag(0)
 			.expect("proto serialization failed");
 
-		stream.write_uint32_no_tag(crate::proto_util::ENCODING_VERSION_TAG)
+		stream
+			.write_uint32_no_tag(crate::proto_util::ENCODING_VERSION_TAG)
 			.expect("proto serialization failed");
-		stream.write_int32_no_tag(crate::proto_util::HYPERLOGLOG_PLUS_PLUS_ENCODING_VERSION)
+		stream
+			.write_int32_no_tag(crate::proto_util::HYPERLOGLOG_PLUS_PLUS_ENCODING_VERSION)
 			.expect("proto serialization failed");
 
-		stream.write_uint32_no_tag(crate::proto_util::VALUE_TYPE_TAG)
+		stream
+			.write_uint32_no_tag(crate::proto_util::VALUE_TYPE_TAG)
 			.expect("proto serialization failed");
-		stream.write_enum_no_tag(crate::proto_util::BYTES_OR_UTF8_STRING_TYPE)
+		stream
+			.write_enum_no_tag(crate::proto_util::BYTES_OR_UTF8_STRING_TYPE)
 			.expect("proto serialization failed");
 
 		let hll_size = self.serialized_hll_size();
-		stream.write_uint32_no_tag(crate::proto_util::HYPERLOGLOGPLUS_UNIQUE_STATE_TAG)
+		stream
+			.write_uint32_no_tag(crate::proto_util::HYPERLOGLOGPLUS_UNIQUE_STATE_TAG)
 			.expect("proto serialization failed");
-		stream.write_uint32_no_tag(hll_size as u32)
-			.expect("proto serialization failed");
-
-		stream.write_uint32_no_tag(crate::proto_util::PRECISION_OR_NUM_BUCKETS_TAG)
-			.expect("proto serialization failed");
-		stream.write_int32_no_tag(self.p as i32)
+		stream
+			.write_uint32_no_tag(hll_size as u32)
 			.expect("proto serialization failed");
 
-		stream.write_uint32_no_tag(crate::proto_util::DATA_TAG)
+		stream
+			.write_uint32_no_tag(crate::proto_util::PRECISION_OR_NUM_BUCKETS_TAG)
 			.expect("proto serialization failed");
-		stream.write_uint32_no_tag(self.m.len() as u32)
+		stream
+			.write_int32_no_tag(self.p as i32)
 			.expect("proto serialization failed");
-		stream.write_raw_bytes(&self.m)
+
+		stream
+			.write_uint32_no_tag(crate::proto_util::DATA_TAG)
+			.expect("proto serialization failed");
+		stream
+			.write_uint32_no_tag(self.m.len() as u32)
+			.expect("proto serialization failed");
+		stream
+			.write_raw_bytes(&self.m)
 			.expect("proto serialization failed");
 
 		stream.flush().expect("proto serialization failed");
@@ -393,7 +413,9 @@ where
 	fn serialized_hll_size(&self) -> usize {
 		let mut size = 0_usize;
 
-		size += crate::proto_util::compute_uint32_size_no_tag(crate::proto_util::PRECISION_OR_NUM_BUCKETS_TAG);
+		size += crate::proto_util::compute_uint32_size_no_tag(
+			crate::proto_util::PRECISION_OR_NUM_BUCKETS_TAG,
+		);
 		size += crate::proto_util::compute_int32_size_no_tag(self.p as i32);
 
 		let data_length = self.m.len();

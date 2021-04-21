@@ -60,11 +60,11 @@ mod count_min;
 mod distinct;
 mod linked_list;
 mod ordered_linked_list;
+mod proto_util;
 mod sample;
 mod sort;
 mod top;
 mod traits;
-mod proto_util;
 
 pub use count_min::*;
 pub use distinct::*;
