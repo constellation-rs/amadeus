@@ -51,7 +51,7 @@ pub fn compute_uint32_size_no_tag(value: u32) -> usize {
 	if value & (!0 << 28) == 0 {
 		return 4;
 	}
-	return 5;
+	5
 }
 
 pub fn compute_int32_size_no_tag(value: i32) -> usize {
@@ -73,24 +73,24 @@ pub fn compute_uint64_size_no_tag(value: i64) -> usize {
 		return 1;
 	}
 	if value < 0_i64 {
-		return 10;
+		10
+	} else {
+		let mut value = value as u64;
+		// ... leaving us with 8 remaining, which we can divide and conquer
+		let mut n = 2;
+		if value & (!0_u64 << 35) != 0_u64 {
+			n += 4;
+			value >>= 28;
+		}
+		if value & (!0_u64 << 21) != 0_u64 {
+			n += 2;
+			value >>= 14;
+		}
+		if value & (!0_u64 << 14) != 0_u64 {
+			n += 1;
+		}
+		n
 	}
-
-	let mut value = value as u64;
-	// ... leaving us with 8 remaining, which we can divide and conquer
-	let mut n = 2;
-	if value & (!0_u64 << 35) != 0_u64 {
-		n += 4;
-		value >>= 28;
-	}
-	if value & (!0_u64 << 21) != 0_u64 {
-		n += 2;
-		value >>= 14;
-	}
-	if value & (!0_u64 << 14) != 0_u64 {
-		n += 1;
-	}
-	n
 }
 
 pub fn compute_int64_size_no_tag(value: i64) -> usize {
@@ -108,10 +108,10 @@ mod test {
 		assert_eq!(1, compute_uint32_size_no_tag(0));
 		assert_eq!(1, compute_uint32_size_no_tag(10));
 		assert_eq!(1, compute_uint32_size_no_tag(100));
-		assert_eq!(2, compute_uint32_size_no_tag(1000));
-		assert_eq!(2, compute_uint32_size_no_tag(10000));
-		assert_eq!(3, compute_uint32_size_no_tag(100000));
-		assert_eq!(3, compute_uint32_size_no_tag(1000000));
+		assert_eq!(2, compute_uint32_size_no_tag(1_000));
+		assert_eq!(2, compute_uint32_size_no_tag(10_000));
+		assert_eq!(3, compute_uint32_size_no_tag(100_000));
+		assert_eq!(3, compute_uint32_size_no_tag(1_000_000));
 	}
 
 	#[test]
@@ -119,11 +119,11 @@ mod test {
 		assert_eq!(1, compute_int32_size_no_tag(0));
 		assert_eq!(1, compute_int32_size_no_tag(10));
 		assert_eq!(1, compute_int32_size_no_tag(100));
-		assert_eq!(2, compute_int32_size_no_tag(1000));
-		assert_eq!(2, compute_int32_size_no_tag(10000));
-		assert_eq!(3, compute_int32_size_no_tag(100000));
-		assert_eq!(3, compute_int32_size_no_tag(1000000));
-		assert_eq!(10, compute_int32_size_no_tag(-1000000));
+		assert_eq!(2, compute_int32_size_no_tag(1_000));
+		assert_eq!(2, compute_int32_size_no_tag(10_000));
+		assert_eq!(3, compute_int32_size_no_tag(100_000));
+		assert_eq!(3, compute_int32_size_no_tag(1_000_000));
+		assert_eq!(10, compute_int32_size_no_tag(-1_000_000));
 	}
 
 	#[test]
@@ -136,9 +136,9 @@ mod test {
 	#[test]
 	fn test_compute_int64_size_no_tag() {
 		assert_eq!(1, compute_int64_size_no_tag(0));
-		assert_eq!(3, compute_int64_size_no_tag(100000));
-		assert_eq!(4, compute_int64_size_no_tag(123456789));
-		assert_eq!(10, compute_int64_size_no_tag(-100000));
-		assert_eq!(10, compute_int64_size_no_tag(-1000000));
+		assert_eq!(3, compute_int64_size_no_tag(100_000));
+		assert_eq!(4, compute_int64_size_no_tag(123_456_789));
+		assert_eq!(10, compute_int64_size_no_tag(-100_000));
+		assert_eq!(10, compute_int64_size_no_tag(-1_000_000));
 	}
 }
