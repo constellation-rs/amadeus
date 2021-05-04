@@ -65,7 +65,7 @@ mod sort;
 mod top;
 mod traits;
 
-#[cfg(feature = "ser-proto")]
+#[cfg(feature = "protobuf")]
 mod proto_util;
 
 pub use count_min::*;

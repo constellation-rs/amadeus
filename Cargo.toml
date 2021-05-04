@@ -30,6 +30,7 @@ parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
 postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]
+protobuf = ["amadeus-streaming/protobuf"]
 bench = ["serde-csv", "once_cell", "arrow-parquet", "rayon"]
 
 [package.metadata.docs.rs]
