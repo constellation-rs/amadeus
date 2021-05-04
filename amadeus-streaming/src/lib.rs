@@ -65,6 +65,9 @@ mod sort;
 mod top;
 mod traits;
 
+#[cfg(feature = "protobuf")]
+mod proto_util;
+
 pub use count_min::*;
 pub use distinct::*;
 pub use sample::*;
