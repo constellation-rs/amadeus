@@ -167,7 +167,6 @@ impl<I, T, E, U> ParallelStream for IntoStream<I, U>
 where
 	I: ParallelStream<Item = Result<T, E>>,
 	T: Into<U>,
-	U: 'static,
 {
 	type Item = Result<U, E>;
 	type Task = IntoTask<I::Task, U>;
@@ -188,7 +187,6 @@ impl<I, T, E, U> DistributedStream for IntoStream<I, U>
 where
 	I: DistributedStream<Item = Result<T, E>>,
 	T: Into<U>,
-	U: 'static,
 {
 	type Item = Result<U, E>;
 	type Task = IntoTask<I::Task, U>;

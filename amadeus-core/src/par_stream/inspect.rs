@@ -22,7 +22,7 @@ pub struct Inspect<P, F> {
 impl_par_dist! {
 	impl<P: ParallelStream, F> ParallelStream for Inspect<P, F>
 	where
-		F: for<'a> FnMut<(&'a P::Item,), Output = ()> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Item,), Output = ()> + Clone + Send,
 	{
 		type Item = P::Item;
 		type Task = InspectTask<P::Task, F>;
@@ -44,7 +44,7 @@ impl_par_dist! {
 
 	impl<P: ParallelPipe<Input>, F, Input> ParallelPipe<Input> for Inspect<P, F>
 	where
-		F: for<'a> FnMut<(&'a P::Output,), Output = ()> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = ()> + Clone + Send,
 	{
 		type Output = P::Output;
 		type Task = InspectTask<P::Task, F>;

@@ -50,8 +50,8 @@ pub struct Combine<P, F> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item, F> ParallelSink<Item> for Combine<P, F>
 	where
-		F: FnMut<(P::Output, P::Output), Output = P::Output> + Clone + Send + 'static,
-		P::Output: Send + 'static,
+		F: FnMut<(P::Output, P::Output), Output = P::Output> + Clone + Send,
+		P::Output: Send,
 	{
 		combiner_par_sink!(ReduceFn<F, P::Output>, self, ReduceFn::new(self.f));
 	}

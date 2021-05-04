@@ -91,6 +91,7 @@ macro_rules! rename {
 	);
 }
 
+pub mod async_drop;
 pub mod file;
 pub mod into_par_stream;
 pub mod misc_serde;

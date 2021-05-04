@@ -22,7 +22,7 @@ pub struct Any<P, F> {
 
 impl<P: ParallelPipe<Item>, Item, F> ParallelSink<Item> for Any<P, F>
 where
-	F: FnMut<(P::Output,), Output = bool> + Clone + Send + 'static,
+	F: FnMut<(P::Output,), Output = bool> + Clone + Send,
 {
 	type Done = bool;
 	type Pipe = P;
@@ -35,7 +35,7 @@ where
 }
 impl<P: DistributedPipe<Item>, Item, F> DistributedSink<Item> for Any<P, F>
 where
-	F: FnMut<(P::Output,), Output = bool> + Clone + ProcessSend + 'static,
+	F: FnMut<(P::Output,), Output = bool> + Clone + ProcessSend,
 {
 	type Done = bool;
 	type Pipe = P;

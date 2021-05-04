@@ -20,7 +20,7 @@ pub struct Filter<P, F> {
 impl_par_dist! {
 	impl<P: ParallelStream, F> ParallelStream for Filter<P, F>
 	where
-		F: for<'a> FnMut<(&'a P::Item,), Output = bool> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Item,), Output = bool> + Clone + Send,
 	{
 		type Item = P::Item;
 		type Task = FilterTask<P::Task, F>;
@@ -42,7 +42,7 @@ impl_par_dist! {
 
 	impl<P: ParallelPipe<Input>, F, Input> ParallelPipe<Input> for Filter<P, F>
 	where
-		F: for<'a> FnMut<(&'a P::Output,), Output = bool> + Clone + Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = bool> + Clone + Send,
 	{
 		type Output = P::Output;
 		type Task = FilterTask<P::Task, F>;

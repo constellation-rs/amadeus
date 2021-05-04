@@ -100,14 +100,14 @@ where
 impl<Item, F> ReducerProcessSend<Item> for FolderSyncReducer<Item, F, Inter>
 where
 	F: FolderSync<Item>,
-	F::State: ProcessSend + 'static,
+	F::State: ProcessSend,
 {
 	type Done = F::State;
 }
 impl<Item, F> ReducerSend<Item> for FolderSyncReducer<Item, F, Inter>
 where
 	F: FolderSync<Item>,
-	F::State: Send + 'static,
+	F::State: Send,
 {
 	type Done = F::State;
 }
@@ -130,14 +130,14 @@ where
 impl<Item, F> ReducerProcessSend<Item> for FolderSyncReducer<Item, F, Final>
 where
 	F: FolderSync<Item>,
-	F::Done: ProcessSend + 'static,
+	F::Done: ProcessSend,
 {
 	type Done = F::Done;
 }
 impl<Item, F> ReducerSend<Item> for FolderSyncReducer<Item, F, Final>
 where
 	F: FolderSync<Item>,
-	F::Done: Send + 'static,
+	F::Done: Send,
 {
 	type Done = F::Done;
 }

@@ -14,7 +14,7 @@ pub struct Max<P> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Max<P>
 	where
-		P::Output: Ord + Send + 'static,
+		P::Output: Ord + Send,
 	{
 		combiner_par_sink!(combine::Max<P::Output>, self, combine::Max::new());
 	}
@@ -31,9 +31,8 @@ impl_par_dist! {
 	where
 		F: for<'a, 'b> FnMut<(&'a P::Output, &'b P::Output), Output = Ordering>
 			+ Clone
-			+ Send
-			+ 'static,
-		P::Output: Send + 'static,
+			+ Send,
+		P::Output: Send,
 	{
 		combiner_par_sink!(combine::MaxBy<P::Output,F>, self, combine::MaxBy::new(self.f));
 	}
@@ -48,9 +47,9 @@ pub struct MaxByKey<P, F> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item, F, B> ParallelSink<Item> for MaxByKey<P, F>
 	where
-		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send + 'static,
-		B: Ord + 'static,
-		P::Output: Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send,
+		B: Ord,
+		P::Output: Send,
 	{
 		combiner_par_sink!(combine::MaxByKey<P::Output,F, B>, self, combine::MaxByKey::new(self.f));
 	}
@@ -64,7 +63,7 @@ pub struct Min<P> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Min<P>
 	where
-		P::Output: Ord + Send + 'static,
+		P::Output: Ord + Send,
 	{
 		combiner_par_sink!(combine::Min<P::Output>, self, combine::Min::new());
 	}
@@ -81,9 +80,8 @@ impl_par_dist! {
 	where
 		F: for<'a, 'b> FnMut<(&'a P::Output, &'b P::Output), Output = Ordering>
 			+ Clone
-			+ Send
-			+ 'static,
-		P::Output: Send + 'static,
+			+ Send,
+		P::Output: Send,
 	{
 		combiner_par_sink!(combine::MinBy<P::Output,F>, self, combine::MinBy::new(self.f));
 	}
@@ -98,9 +96,9 @@ pub struct MinByKey<P, F> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item, F, B> ParallelSink<Item> for MinByKey<P, F>
 	where
-		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send + 'static,
-		B: Ord + 'static,
-		P::Output: Send + 'static,
+		F: for<'a> FnMut<(&'a P::Output,), Output = B> + Clone + Send,
+		B: Ord,
+		P::Output: Send,
 	{
 		combiner_par_sink!(combine::MinByKey<P::Output,F, B>, self, combine::MinByKey::new(self.f));
 	}

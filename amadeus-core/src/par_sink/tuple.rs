@@ -213,10 +213,10 @@ macro_rules! impl_tuple {
 				}
 			}
 		}
-		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerProcessSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Done: ProcessSend + 'static,)* {
+		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerProcessSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Done: ProcessSend,)* {
 			type Done = ($($t::Done,)*);
 		}
-		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Done: Send + 'static,)* {
+		impl<$($t: Reducer<$s>,)* $($s,)*> ReducerSend<$enum<$($s,)*>> for $reducea<$($t,)*> where $($t::Done: Send,)* {
 			type Done = ($($t::Done,)*);
 		}
 		#[pin_project]

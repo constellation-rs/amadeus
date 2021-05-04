@@ -18,7 +18,7 @@ pub struct Histogram<P> {
 impl_par_dist! {
 	impl<P: ParallelPipe<Item>, Item> ParallelSink<Item> for Histogram<P>
 	where
-		P::Output: Hash + Ord + Send + 'static,
+		P::Output: Hash + Ord + Send,
 	{
 		folder_par_sink!(HistogramFolder<P::Output, StepA>, HistogramFolder<P::Output, StepB>, self, HistogramFolder::new(), HistogramFolder::new());
 	}

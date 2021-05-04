@@ -20,7 +20,7 @@ pub struct MapSync<P, F> {
 impl_par_dist! {
 	impl<P: ParallelStream, F, R> ParallelStream for MapSync<P, F>
 	where
-		F: FnMut<(P::Item,), Output = R> + Clone + Send + 'static,
+		F: FnMut<(P::Item,), Output = R> + Clone + Send,
 	{
 		type Item = R;
 		type Task = MapSyncTask<P::Task, F>;
@@ -42,7 +42,7 @@ impl_par_dist! {
 
 	impl<P: ParallelPipe<Input>, F, R, Input> ParallelPipe<Input> for MapSync<P, F>
 	where
-		F: FnMut<(P::Output,), Output = R> + Clone + Send + 'static,
+		F: FnMut<(P::Output,), Output = R> + Clone + Send,
 	{
 		type Output = R;
 		type Task = MapSyncTask<P::Task, F>;

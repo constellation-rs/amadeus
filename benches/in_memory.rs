@@ -30,7 +30,7 @@ fn vec(b: &mut Bencher) {
 	run(b, bytes, || async {
 		assert_eq!(
 			rows.par_stream()
-				.map(|x| x as u64)
+				.map(|&x| x as u64)
 				.sum::<_, u64>(&*POOL)
 				.await,
 			sum

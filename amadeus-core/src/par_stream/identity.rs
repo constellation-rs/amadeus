@@ -46,7 +46,7 @@ mod workaround {
 		#[inline]
 		pub fn inspect<F>(self, f: F) -> Inspect<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			Inspect::new(self, f)
 		}
@@ -54,7 +54,7 @@ mod workaround {
 		#[inline]
 		pub fn update<T, F>(self, f: F) -> Update<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			Update::new(self, f)
 		}
@@ -62,7 +62,7 @@ mod workaround {
 		#[inline]
 		pub fn map<F>(self, f: F) -> Map<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			Map::new(self, f)
 		}
@@ -70,7 +70,7 @@ mod workaround {
 		#[inline]
 		pub fn flat_map<F>(self, f: F) -> FlatMap<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			FlatMap::new(self, f)
 		}
@@ -78,7 +78,7 @@ mod workaround {
 		#[inline]
 		pub fn filter<F>(self, f: F) -> Filter<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			Filter::new(self, f)
 		}
@@ -95,7 +95,7 @@ mod workaround {
 		#[inline]
 		pub fn for_each<F>(self, f: F) -> ForEach<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			ForEach::new(self, f)
 		}
@@ -103,9 +103,9 @@ mod workaround {
 		#[inline]
 		pub fn fold<ID, F, B>(self, identity: ID, op: F) -> Fold<Self, ID, F, B>
 		where
-			ID: traits::FnMut() -> B + Clone + Send + 'static,
-			F: Clone + Send + 'static,
-			B: Send + 'static,
+			ID: traits::FnMut() -> B + Clone + Send,
+			F: Clone + Send,
+			B: Send,
 		{
 			Fold::new(self, identity, op)
 		}
@@ -128,7 +128,7 @@ mod workaround {
 		#[inline]
 		pub fn sum<B>(self) -> Sum<Self, B>
 		where
-			B: iter::Sum<B> + Send + 'static,
+			B: iter::Sum<B> + Send,
 		{
 			Sum::new(self)
 		}
@@ -146,7 +146,7 @@ mod workaround {
 		#[inline]
 		pub fn combine<F>(self, f: F) -> Combine<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			Combine::new(self, f)
 		}
@@ -159,7 +159,7 @@ mod workaround {
 		#[inline]
 		pub fn max_by<F>(self, f: F) -> MaxBy<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			MaxBy::new(self, f)
 		}
@@ -167,7 +167,7 @@ mod workaround {
 		#[inline]
 		pub fn max_by_key<F>(self, f: F) -> MaxByKey<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			MaxByKey::new(self, f)
 		}
@@ -180,7 +180,7 @@ mod workaround {
 		#[inline]
 		pub fn min_by<F>(self, f: F) -> MinBy<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			MinBy::new(self, f)
 		}
@@ -188,7 +188,7 @@ mod workaround {
 		#[inline]
 		pub fn min_by_key<F>(self, f: F) -> MinByKey<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			MinByKey::new(self, f)
 		}
@@ -215,7 +215,7 @@ mod workaround {
 		#[inline]
 		pub fn all<F>(self, f: F) -> All<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			All::new(self, f)
 		}
@@ -223,7 +223,7 @@ mod workaround {
 		#[inline]
 		pub fn any<F>(self, f: F) -> Any<Self, F>
 		where
-			F: Clone + Send + 'static,
+			F: Clone + Send,
 		{
 			Any::new(self, f)
 		}

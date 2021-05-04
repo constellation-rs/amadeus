@@ -28,9 +28,8 @@ impl_par_dist! {
 	impl<P, K, V1, V2> ParallelStream for LeftJoin<P, K, V1, V2>
 	where
 		P: ParallelStream<Item = (K, V1)>,
-		K: Eq + Hash + Clone + Send + 'static,
-		V1: 'static,
-		V2: Clone + Send + 'static,
+		K: Eq + Hash + Clone + Send,
+		V2: Clone + Send,
 	{
 		type Item = (K, V1, ImplIter<V2>);
 		type Task = <MapSync<P, LeftJoinClosure<K, V1, V2>> as ParallelStream>::Task;
@@ -46,9 +45,8 @@ impl_par_dist! {
 	impl<P, K, V1, V2, Input> ParallelPipe<Input> for LeftJoin<P, K, V1, V2>
 	where
 		P: ParallelPipe<Input, Output = (K, V1)>,
-		K: Eq + Hash + Clone + Send + 'static,
-		V1: 'static,
-		V2: Clone + Send + 'static,
+		K: Eq + Hash + Clone + Send,
+		V2: Clone + Send,
 	{
 		type Output = (K, V1, ImplIter<V2>);
 		type Task = <MapSync<P, LeftJoinClosure<K, V1, V2>> as ParallelPipe<Input>>::Task;
@@ -85,9 +83,8 @@ impl_par_dist! {
 	impl<P, K, V1, V2> ParallelStream for InnerJoin<P, K, V1, V2>
 	where
 		P: ParallelStream<Item = (K, V1)>,
-		K: Eq + Hash + Clone + Send + 'static,
-		V1: 'static,
-		V2: Clone + Send + 'static,
+		K: Eq + Hash + Clone + Send,
+		V2: Clone + Send,
 	{
 		type Item = (K, ImplIter<V1>, ImplIter<V2>);
 		type Task = <FilterMapSync<P, InnerJoinClosure<K, V1, V2>> as ParallelStream>::Task;
@@ -103,9 +100,9 @@ impl_par_dist! {
 	impl<P, K, V1, V2, Input> ParallelPipe<Input> for InnerJoin<P, K, V1, V2>
 	where
 		P: ParallelPipe<Input, Output = (K, V1)>,
-		K: Eq + Hash + Clone + Send + 'static,
-		V1: 'static,
-		V2: Clone + Send + 'static,
+		K: Eq + Hash + Clone + Send,
+
+		V2: Clone + Send,
 	{
 		type Output = (K, ImplIter<V1>, ImplIter<V2>);
 		type Task = <FilterMapSync<P, InnerJoinClosure<K, V1, V2>> as ParallelPipe<Input>>::Task;

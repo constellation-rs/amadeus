@@ -28,7 +28,7 @@ impl_par_dist_rename! {
 
 	impl<I: Iterator> ParallelStream for IterParStream<I>
 	where
-		I::Item: Send + 'static,
+		I::Item: Send,
 	{
 		type Item = I::Item;
 		type Task = IterStreamTask<I::Item>;
@@ -76,7 +76,7 @@ impl_par_dist_rename! {
 	impl<Idx> IntoParallelStream for Range<Idx>
 	where
 		Self: Iterator,
-		<Self as Iterator>::Item: Send + 'static,
+		<Self as Iterator>::Item: Send,
 	{
 		type ParStream = IterParStream<Self>;
 		type Item = <Self as Iterator>::Item;
@@ -93,7 +93,7 @@ impl_par_dist_rename! {
 	impl<Idx> IntoParallelStream for RangeFrom<Idx>
 	where
 		Self: Iterator,
-		<Self as Iterator>::Item: Send + 'static,
+		<Self as Iterator>::Item: Send,
 	{
 		type ParStream = IterParStream<Self>;
 		type Item = <Self as Iterator>::Item;
@@ -110,7 +110,7 @@ impl_par_dist_rename! {
 	impl<Idx> IntoParallelStream for RangeInclusive<Idx>
 	where
 		Self: Iterator,
-		<Self as Iterator>::Item: Send + 'static,
+		<Self as Iterator>::Item: Send,
 	{
 		type ParStream = IterParStream<Self>;
 		type Item = <Self as Iterator>::Item;

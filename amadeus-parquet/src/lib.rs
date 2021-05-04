@@ -84,7 +84,7 @@ mod wrap {
 	impl<F, Row> Parquet<F, Row>
 	where
 		F: File,
-		Row: ParquetData + 'static,
+		Row: ParquetData,
 	{
 		pub async fn new(file: F) -> Result<Self, <Self as Source>::Error> {
 			Ok(Self {
@@ -96,7 +96,7 @@ mod wrap {
 	impl<F, Row> Source for Parquet<F, Row>
 	where
 		F: File,
-		Row: ParquetData + 'static,
+		Row: ParquetData,
 	{
 		type Item = Row;
 		#[allow(clippy::type_complexity)]
