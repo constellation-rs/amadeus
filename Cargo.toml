@@ -26,7 +26,7 @@ maintenance = { status = "actively-developed" }
 constellation = ["bincode", "constellation-rs", "serde_traitobject"]
 aws = ["amadeus-aws"]
 commoncrawl = ["amadeus-commoncrawl"]
-parquet = ["amadeus-parquet", "amadeus-derive/parquet"]
+parquet = ["amadeus-parquet", "amadeus-derive/parquet", "amadeus-serde", "amadeus-derive/serde"]
 postgres = ["amadeus-postgres", "amadeus-derive/postgres"]
 csv = ["amadeus-serde", "amadeus-derive/serde"]
 json = ["amadeus-serde", "amadeus-derive/serde"]

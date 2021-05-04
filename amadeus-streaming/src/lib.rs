@@ -53,7 +53,9 @@
 	clippy::float_cmp,
 	clippy::unsafe_derive_deserialize,
 	clippy::must_use_candidate,
-	clippy::unused_self
+	clippy::unused_self,
+	clippy::missing_panics_doc,
+	clippy::let_underscore_drop
 )]
 
 mod count_min;

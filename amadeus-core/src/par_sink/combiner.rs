@@ -1,4 +1,8 @@
-#![allow(unused_imports, clippy::single_component_path_imports, clippy::option_if_let_else)]
+#![allow(
+	unused_imports,
+	clippy::single_component_path_imports,
+	clippy::option_if_let_else
+)]
 
 use super::FolderSync;
 

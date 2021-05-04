@@ -33,9 +33,8 @@ where
 			if let Some(s) = self_.next.as_mut().as_pin_mut() {
 				if let Some(item) = ready!(s.poll_next(cx)) {
 					break Some(item);
-				} else {
-					self_.next.set(None);
 				}
+				self_.next.set(None);
 			} else if let Some(s) = ready!(self_.pipe.as_mut().poll_next(cx)) {
 				self_.next.set(Some(self_.f.call_mut((s,))));
 			} else {
@@ -61,9 +60,8 @@ where
 			if let Some(s) = self_.next.as_mut().as_pin_mut() {
 				if let Some(item) = ready!(s.poll_next(cx)) {
 					break Some(item);
-				} else {
-					self_.next.set(None);
 				}
+				self_.next.set(None);
 			} else if let Some(s) = ready!(self_.pipe.as_mut().poll_next(cx, stream.as_mut())) {
 				self_.next.set(Some(self_.f.call_mut((s,))));
 			} else {

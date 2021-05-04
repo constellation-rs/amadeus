@@ -63,7 +63,7 @@ struct StockSimulated {
 fn parquet_10k(b: &mut Bencher) {
 	let file = "amadeus-testing/parquet/10k-v2.parquet"; // 669,034 bytes
 	run(b, file, || async {
-		let rows = Parquet::<_, TenKayVeeTwo>::new(PathBuf::from(file))
+		let rows = Parquet::<_, TenKayVeeTwo>::new(PathBuf::from(file), None)
 			.await
 			.unwrap();
 		assert_eq!(
@@ -80,7 +80,7 @@ fn parquet_10k(b: &mut Bencher) {
 fn parquet_stock(b: &mut Bencher) {
 	let file = "amadeus-testing/parquet/stock_simulated.parquet"; // 1,289,419 bytes
 	run(b, file, || async {
-		let rows = Parquet::<_, StockSimulated>::new(PathBuf::from(file))
+		let rows = Parquet::<_, StockSimulated>::new(PathBuf::from(file), None)
 			.await
 			.unwrap();
 		assert_eq!(

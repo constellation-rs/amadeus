@@ -33,9 +33,9 @@ macro_rules! read_num_bytes {
 		let mut data: $ty = Default::default();
 		unsafe {
 			::std::ptr::copy_nonoverlapping($src.as_ptr(), &mut data as *mut $ty as *mut u8, $size);
-			}
+		}
 		data
-		}};
+	}};
 }
 
 /// Converts value `val` of type `T` to a byte vector, by reading `num_bytes` from `val`.

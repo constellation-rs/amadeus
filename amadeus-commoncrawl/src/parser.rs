@@ -53,10 +53,7 @@ impl<'a> fmt::Debug for Record<'a> {
 		//     write!(form, "\n").unwrap();
 		// }
 		writeln!(form, "Content Length:{}", self.content.len()).unwrap();
-		let s = match str::from_utf8(self.content) {
-			Ok(s) => s,
-			Err(_) => "Could not convert",
-		};
+		let s = str::from_utf8(self.content).unwrap_or("Could not convert");
 		writeln!(form, "Content :{:?}", s).unwrap();
 		writeln!(form)
 	}

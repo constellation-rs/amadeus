@@ -72,8 +72,8 @@ macro_rules! statistics_enum_func {
 			Statistics::Double(ref typed) => typed.$func(),
 			Statistics::ByteArray(ref typed) => typed.$func(),
 			Statistics::FixedLenByteArray(ref typed) => typed.$func(),
-			}
-		}};
+		}
+	}};
 }
 
 /// Converts Thrift definition into `Statistics`.
