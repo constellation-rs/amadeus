@@ -25,7 +25,7 @@ async-compression = { version = "0.3.3", features = ["gzip", "futures-bufread"] 
 futures = "0.3"
 nom = "4.2.3"
 pin-project = "0.4"
-reqwest = "0.10"
+reqwest = "0.11"
 reqwest_resume = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_closure = "0.3"
