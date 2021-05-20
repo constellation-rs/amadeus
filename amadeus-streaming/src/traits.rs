@@ -46,7 +46,7 @@ impl Intersect for u8 {
 	where
 		Self: Sized + 'a,
 	{
-		iter.cloned().min()
+		iter.copied().min()
 	}
 }
 impl Intersect for u16 {
@@ -54,7 +54,7 @@ impl Intersect for u16 {
 	where
 		Self: Sized + 'a,
 	{
-		iter.cloned().min()
+		iter.copied().min()
 	}
 }
 impl Intersect for u32 {
@@ -62,7 +62,7 @@ impl Intersect for u32 {
 	where
 		Self: Sized + 'a,
 	{
-		iter.cloned().min()
+		iter.copied().min()
 	}
 }
 impl Intersect for u64 {
@@ -70,7 +70,7 @@ impl Intersect for u64 {
 	where
 		Self: Sized + 'a,
 	{
-		iter.cloned().min()
+		iter.copied().min()
 	}
 }
 impl Intersect for usize {
@@ -78,7 +78,7 @@ impl Intersect for usize {
 	where
 		Self: Sized + 'a,
 	{
-		iter.cloned().min()
+		iter.copied().min()
 	}
 }
 

@@ -194,7 +194,7 @@ mod btree_set {
 		}
 		fn trivial_ord_mut(&mut self) -> &mut std::collections::BTreeSet<TrivialOrd<Node<T, F>>> {
 			let set: *mut std::collections::BTreeSet<Node<T, F>> = &mut self.set;
-			let set: *mut std::collections::BTreeSet<TrivialOrd<Node<T, F>>> = set as _;
+			let set: *mut std::collections::BTreeSet<TrivialOrd<Node<T, F>>> = set.cast();
 			// Sound due to repr(transparent)
 			unsafe { &mut *set }
 		}
@@ -208,7 +208,7 @@ mod btree_set {
 		}
 		pub fn remove(&mut self, value: &T) -> Option<T> {
 			let value: *const T = value;
-			let value: *const TrivialOrd<T> = value as _;
+			let value: *const TrivialOrd<T> = value.cast();
 			let value = unsafe { &*value };
 			self.set.take(value).map(|node| node.t)
 		}
@@ -298,7 +298,7 @@ mod btree_set {
 	impl<T, F: ?Sized> Borrow<TrivialOrd<T>> for Node<T, F> {
 		fn borrow(&self) -> &TrivialOrd<T> {
 			let self_: *const T = &self.t;
-			let self_: *const TrivialOrd<T> = self_ as _;
+			let self_: *const TrivialOrd<T> = self_.cast();
 			unsafe { &*self_ }
 		}
 	}

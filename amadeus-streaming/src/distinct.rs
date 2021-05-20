@@ -55,6 +55,9 @@ use std::{
 };
 use twox_hash::XxHash;
 
+#[cfg(feature = "protobuf")]
+use std::convert::TryInto;
+
 use super::{f64_to_u8, u64_to_f64, usize_to_f64};
 use crate::traits::{Intersect, IntersectPlusUnionIsPlus, New, UnionAssign};
 
@@ -380,7 +383,9 @@ where
 		stream
 			.write_uint32_no_tag(proto_util::HYPERLOGLOGPLUS_UNIQUE_STATE_TAG)
 			.unwrap();
-		stream.write_uint32_no_tag(hll_size as u32).unwrap();
+		stream
+			.write_uint32_no_tag(hll_size.try_into().unwrap())
+			.unwrap();
 
 		stream
 			.write_uint32_no_tag(proto_util::PRECISION_OR_NUM_BUCKETS_TAG)
@@ -388,7 +393,9 @@ where
 		stream.write_int32_no_tag(i32::from(self.p)).unwrap();
 
 		stream.write_uint32_no_tag(proto_util::DATA_TAG).unwrap();
-		stream.write_uint32_no_tag(self.m.len() as u32).unwrap();
+		stream
+			.write_uint32_no_tag(self.m.len().try_into().unwrap())
+			.unwrap();
 		stream.write_raw_bytes(&self.m).unwrap();
 
 		stream.flush().unwrap();
@@ -405,7 +412,7 @@ where
 
 		let data_length = self.m.len();
 		size += proto_util::compute_uint32_size_no_tag(proto_util::DATA_TAG);
-		size += proto_util::compute_uint32_size_no_tag(data_length as u32);
+		size += proto_util::compute_uint32_size_no_tag(data_length.try_into().unwrap());
 		size += data_length;
 
 		size
@@ -416,7 +423,7 @@ where
 	}
 
 	fn get_alpha(p: u8) -> f64 {
-		assert!(4 <= p && p <= 16);
+		assert!((4..=16).contains(&p));
 		match p {
 			4 => 0.673,
 			5 => 0.697,
@@ -739,8 +746,8 @@ mod test {
 			hll.push(&format!("test-{}", i * 10 + i));
 		}
 
-		assert!(hll.len() > (actual as f64 - (actual as f64 * p * 3.0)));
-		assert!(hll.len() < (actual as f64 + (actual as f64 * p * 3.0)));
+		assert!(hll.len() > (f64::from(actual) - (f64::from(actual) * p * 3.0)));
+		assert!(hll.len() < (f64::from(actual) + (f64::from(actual) * p * 3.0)));
 
 		// Check on bigQuery with the following query: SELECT HLL_COUNT.EXTRACT(FROM_HEX("<hex_value>"))
 		let expected_ser = "087010001802200b8207850418092a800405080409040407050a0407060507040303080304070504090f08060604060503050505030904070506060904040608060505040706040905040706070b090304040609060505070406060508060505070604050404040507050409040502090605050a0505060203050605080a0605060505040404050705050304060506070608070304050306060304080604060a0704060904070804050706080704080409040604060607040d040604060304040503060406070606050308050606050409040707050605070305040707050305070a06070905040506060905050504060804030605050505080703060c03040405040a03070405090303030204030703060407040404050608050504060604050505090404060504050603080705040606060405050405040506060404050308040604080a06040607040606040707080405040505040603050607060508050307060706070305050403040304050504030407080506040407040704050605060a06050b0607030603050406050506030504050705040504090606030504040704030704030805030504050706090407070604070405060307060a08050507070605090407030604040404030706040405040804050306040504040506020505040607060604060808060508030605030604050b04080a0904050506060405060806070606080605040606040606060607";

@@ -39,13 +39,16 @@ async fn user_set_core_count() {
 	let parallel = 1000;
 
 	let ret = join_all((0..parallel).map(|_| async move {
-		pool.spawn(move || async move { format!("{:?}", std::thread::current().id()) })
-			.await
-			.unwrap()
+		pool.spawn(move || async {
+			std::thread::sleep(std::time::Duration::from_millis(10));
+			std::thread::current().id()
+		})
+		.await
+		.unwrap()
 	}))
 	.await;
 
-	let unique_thread_ids: HashSet<String> = ret.into_iter().collect();
+	let unique_thread_ids: HashSet<_> = ret.into_iter().collect();
 
 	println!("Number of cores used: {}", unique_thread_ids.len());
 	assert_eq!(unique_thread_ids.len(), num_cores);

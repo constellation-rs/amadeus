@@ -1,6 +1,6 @@
 hard_tabs = true
 imports_layout = "Horizontal"
-merge_imports = true
+imports_granularity = "Crate"
 fn_args_layout = "Compressed"
 use_field_init_shorthand = true
 

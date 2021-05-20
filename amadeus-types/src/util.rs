@@ -14,11 +14,11 @@ pub(crate) trait IteratorExt: Iterator {
 		loop {
 			let x = match self.next() {
 				None => {
-					if other.next().is_none() {
-						return Ordering::Equal;
+					return if other.next().is_none() {
+						Ordering::Equal
 					} else {
-						return Ordering::Less;
-					}
+						Ordering::Less
+					};
 				}
 				Some(val) => val,
 			};
@@ -45,11 +45,11 @@ pub(crate) trait IteratorExt: Iterator {
 		loop {
 			let x = match self.next() {
 				None => {
-					if other.next().is_none() {
-						return Some(Ordering::Equal);
+					return if other.next().is_none() {
+						Some(Ordering::Equal)
 					} else {
-						return Some(Ordering::Less);
-					}
+						Some(Ordering::Less)
+					};
 				}
 				Some(val) => val,
 			};

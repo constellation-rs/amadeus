@@ -1,4 +1,12 @@
-#![allow(non_snake_case, clippy::type_complexity, irrefutable_let_patterns, clippy::new_without_default, unused_mut, unreachable_code, clippy::too_many_arguments)]
+#![allow(
+	non_snake_case,
+	clippy::type_complexity,
+	irrefutable_let_patterns,
+	clippy::new_without_default,
+	unused_mut,
+	unreachable_code,
+	clippy::too_many_arguments
+)]
 
 use derive_new::new;
 use futures::{pin_mut, ready, stream, Stream, StreamExt};
@@ -100,6 +108,7 @@ macro_rules! impl_tuple {
 			type Output = $enum<$($i::Output,)*>;
 			type Task = ($($i::Task,)*);
 
+			#[allow(clippy::unused_unit)]
 			fn task(&self) -> Self::Task {
 				($(self.$num.task(),)*)
 			}
@@ -111,6 +120,7 @@ macro_rules! impl_tuple {
 			type Output = $enum<$($i::Output,)*>;
 			type Task = ($($i::Task,)*);
 
+			#[allow(clippy::unused_unit)]
 			fn task(&self) -> Self::Task {
 				($(self.$num.task(),)*)
 			}

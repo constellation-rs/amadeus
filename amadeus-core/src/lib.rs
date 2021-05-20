@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. All functionality is re-exposed in [`amadeus`](https://docs.rs/amadeus/0.3/amadeus/).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-core/0.4.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-core/0.4.3")]
 #![cfg_attr(nightly, feature(unboxed_closures))]
 #![recursion_limit = "25600"]
 #![warn(
@@ -31,9 +31,12 @@
 	clippy::inline_always,
 	clippy::option_option,
 	clippy::default_trait_access,
-	clippy::filter_map,
 	clippy::wildcard_imports,
-	clippy::needless_pass_by_value
+	clippy::needless_pass_by_value,
+	clippy::unnecessary_wraps,
+	clippy::missing_panics_doc,
+	clippy::let_underscore_drop,
+	clippy::unnested_or_patterns
 )]
 #![deny(unsafe_code)]
 

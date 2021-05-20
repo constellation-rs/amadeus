@@ -27,7 +27,7 @@
 //
 // As these implementations are often in hot code paths, unsafe is used, albeit only when necessary to a) achieve the asymptotically optimal algorithm or b) mitigate an observed bottleneck.
 
-#![doc(html_root_url = "https://docs.rs/amadeus-streaming/0.4.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-streaming/0.4.3")]
 #![cfg_attr(nightly, feature(map_first_last))]
 #![cfg_attr(nightly, feature(unboxed_closures))]
 #![warn(
@@ -53,7 +53,9 @@
 	clippy::float_cmp,
 	clippy::unsafe_derive_deserialize,
 	clippy::must_use_candidate,
-	clippy::unused_self
+	clippy::unused_self,
+	clippy::missing_panics_doc,
+	clippy::let_underscore_drop
 )]
 
 mod count_min;

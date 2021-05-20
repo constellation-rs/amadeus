@@ -1,6 +1,6 @@
 [package]
 name = "amadeus-core"
-version = "0.4.2"
+version = "0.4.3"
 license = "Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["concurrency", "science", "database", "parser-implementations", "text-processing"]
@@ -19,7 +19,7 @@ azure-devops = { project = "alecmocatta/amadeus", pipeline = "tests", build = "2
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-amadeus-streaming = { version = "=0.4.2", path = "../amadeus-streaming" }
+amadeus-streaming = { version = "=0.4.3", path = "../amadeus-streaming" }
 async-trait = "0.1"
 derive-new = "0.5"
 educe = "0.4"

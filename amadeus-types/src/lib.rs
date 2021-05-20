@@ -6,7 +6,7 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::data`](https://docs.rs/amadeus/0.3/amadeus/data/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-types/0.4.2")]
+#![doc(html_root_url = "https://docs.rs/amadeus-types/0.4.3")]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -28,7 +28,8 @@
 	clippy::wildcard_imports,
 	clippy::default_trait_access,
 	clippy::inline_always,
-	clippy::too_many_lines
+	clippy::too_many_lines,
+	clippy::missing_panics_doc
 )]
 #![deny(unsafe_code)]
 

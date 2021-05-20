@@ -6,8 +6,8 @@
 //!
 //! This is a support crate of [Amadeus](https://github.com/constellation-rs/amadeus) and is not intended to be used directly. These types are re-exposed in [`amadeus::source`](https://docs.rs/amadeus/0.3/amadeus/source/index.html).
 
-#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.4.2")]
-#![cfg_attr(nightly, feature(type_alias_impl_trait))]
+#![doc(html_root_url = "https://docs.rs/amadeus-postgres/0.4.3")]
+#![cfg_attr(nightly, feature(min_type_alias_impl_trait))]
 #![warn(
 	// missing_copy_implementations,
 	// missing_debug_implementations,
@@ -24,7 +24,8 @@
 	clippy::similar_names,
 	clippy::if_not_else,
 	clippy::must_use_candidate,
-	clippy::missing_errors_doc
+	clippy::missing_errors_doc,
+	clippy::let_underscore_drop
 )]
 #![deny(unsafe_code)]
 
@@ -160,7 +161,7 @@ impl From<postgres::config::Config> for ConnectParams {
 			password: from.get_password().map(ToOwned::to_owned),
 			dbname: from.get_dbname().map(ToOwned::to_owned),
 			options: from.get_options().map(ToOwned::to_owned),
-			connect_timeout: from.get_connect_timeout().cloned(),
+			connect_timeout: from.get_connect_timeout().copied(),
 		}
 	}
 }
@@ -415,7 +416,7 @@ where
 		}
 		let (head, tail) = buf.split_at(len);
 		*buf = tail;
-		Some(&head[..])
+		Some(head)
 	};
 	T::decode(type_, value)
 }
