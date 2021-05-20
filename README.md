@@ -176,7 +176,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "us-east-1.data-analytics",
         "cflogworkshop/optimized/cf-accesslogs/",
         AwsCredentials::Anonymous,
-    )), None)
+    )))
     .await?;
 
     // Note: this isn't yet implemented!
@@ -222,7 +222,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "us-east-1.data-analytics",
                 "cflogworkshop/optimized/cf-accesslogs/",
                 AwsCredentials::Anonymous,
-            )), None)
+            )))
             .await?;
 
             let top_pages = rows
