@@ -1,0 +1,17 @@
+version: 2
+updates:
+- package-ecosystem: cargo
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: tokio
+    versions:
+    - 1.1.0
+    - 1.2.0
+    - 1.3.0
+    - 1.4.0
+  - dependency-name: nom
+    versions:
+    - 6.1.0
